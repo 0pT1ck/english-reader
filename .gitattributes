@@ -1,0 +1,12 @@
+# Normalise to LF in the repository. Without this, line endings depend on each
+# machine's core.autocrlf setting — which matters once this is checked out on
+# the ARM Linux box as well as on Windows.
+* text=auto eol=lf
+
+# Windows batch files must keep CRLF: cmd can mis-parse LF-only .bat files.
+*.bat text eol=crlf
+
+# Never touch these.
+*.db binary
+*.png binary
+*.jpg binary
