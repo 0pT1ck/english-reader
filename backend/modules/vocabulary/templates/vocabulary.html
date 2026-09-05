@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}词汇{% endblock %}
+
+{% block content %}
+<h1>词汇</h1>
+<p class="subtitle">
+  词典数据与词形还原。下面的分析工具跑的就是文章入库时的那一遍处理——
+  之后阅读、点词、标记全程只是查表，不再做任何语言分析。
+</p>
+
+{% if not stats.imported %}
+<div class="notice">
+  <b>词典还没有导入。</b>分析仍然可用，但每个词都会显示为“词典中没有”。
+  在项目目录下执行导入脚本后刷新本页：
+  <code class="mono">uv run python scripts/import_dictionary.py</code>
+</div>
+{% endif %}
+
+<h2>词典状态</h2>
+<div class="grid">
+  <div class="card stat">
+    <span class="stat-label">词条</span>
+    <span class="stat-value">{{ "{:,}".format(stats.words) }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">词形变化条目</span>
+    <span class="stat-value">{{ "{:,}".format(stats.forms) }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">带词频排名</span>
+    <span class="stat-value">{{ "{:,}".format(stats.with_frequency) }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">义项 <span class="muted">（P1 生成）</span></span>
+    <span class="stat-value">{{ "{:,}".format(stats.senses) }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">词族关系 <span class="muted">（P1 生成）</span></span>
+    <span class="stat-value">{{ "{:,}".format(stats.families) }}</span>
+  </div>
+</div>
+
+{% if stats.by_tag %}
+<h2>大纲覆盖</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>大纲</th><th>词条数</th></tr></thead>
+    <tbody>
+      {% for tag, count in stats.by_tag.items() %}
+      {% if count %}
+      <tr>
+        <td class="nowrap">{{ labels.get(tag, tag) }} <span class="muted mono">{{ tag }}</span></td>
+        <td class="mono">{{ "{:,}".format(count) }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>分析工具</h2>
+<div class="card">
+  <textarea id="text" rows="6" placeholder="粘贴一段英文，看每个词被归到哪个词条。
+试试这句：He left the book on the table, then turned left and saw the leaves falling in Copenhagen."
+    style="width:100%;font:inherit;font-size:0.92rem;padding:0.6rem;border:1px solid var(--rule);border-radius:3px;background:var(--surface);color:var(--ink);resize:vertical"></textarea>
+  <div class="row" style="margin-top:0.7rem">
+    <button class="primary" onclick="runAnalysis()">分析</button>
+    <button onclick="loadSample()">填入示例</button>
+    <span class="muted">示例里 left / saw / leaves 三个词形有歧义，正好用来检验词性消歧是否生效。</span>
+  </div>
+</div>
+
+<div id="result" hidden>
+  <h2>结果</h2>
+  <div class="grid" id="summary"></div>
+
+  <p class="muted" style="margin:1rem 0 0.6rem">
+    <span class="pill INFO">CET-4</span>
+    <span class="pill WARNING">CET-6 / 考研</span>
+    <span class="pill ok">专有名词</span>
+    <span class="pill ERROR">词典中没有</span>
+    　把鼠标停在词上可以看到它的词条、词性与词频。
+  </p>
+  <div class="card" id="rendered" style="line-height:2.1"></div>
+
+  <h2>逐词明细</h2>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th>原形</th><th>词条</th><th>词性</th><th>来源</th><th>大纲</th><th>词频</th><th>释义</th></tr>
+      </thead>
+      <tbody id="tokens"></tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const SAMPLE = "He left the book on the table, then turned left and saw the leaves "
+    + "falling in Copenhagen. The mayor addressed the crowd about a problem the city "
+    + "had failed to address for years, and nationality was no longer a barrier.";
+
+  function loadSample() { document.getElementById('text').value = SAMPLE; }
+
+  function classify(t) {
+    if (!t.is_word) return '';
+    if (t.is_proper_noun) return 'ok';
+    if (!t.in_dictionary) return 'ERROR';
+    const tags = t.tags || '';
+    if (tags.includes('cet6') || tags.includes('ky')) return 'WARNING';
+    if (tags.includes('cet4')) return 'INFO';
+    return '';
+  }
+
+  async function runAnalysis() {
+    const text = document.getElementById('text').value.trim();
+    if (!text) { toast('先粘贴一段英文', true); return; }
+
+    let data;
+    try {
+      data = await api('/vocabulary/analyze', {
+        method: 'POST', body: JSON.stringify({ text }),
+      });
+    } catch (e) { toast(e.message, true); return; }
+
+    const s = data.summary;
+    document.getElementById('summary').innerHTML = [
+      ['句子', s.sentences], ['词数', s.words], ['实词', s.content_words],
+      ['不同词条', s.distinct_lemmas], ['专有名词', s.proper_nouns],
+      ['词典中没有', s.not_in_dictionary],
+    ].map(([label, value]) =>
+      `<div class="card stat"><span class="stat-label">${label}</span>
+       <span class="stat-value">${value}</span></div>`).join('');
+
+    const rendered = document.getElementById('rendered');
+    rendered.innerHTML = '';
+    data.sentences.forEach(sent => {
+      sent.tokens.forEach(t => {
+        const span = document.createElement('span');
+        const cls = classify(t);
+        span.textContent = t.text;
+        if (cls) span.className = 'pill ' + cls;
+        span.style.marginRight = '0.25rem';
+        if (t.is_word) {
+          span.title = `词条：${t.lemma}\n词性：${t.pos}`
+            + (t.frq ? `\n词频排名：${t.frq}` : '')
+            + (t.tags ? `\n大纲：${t.tags}` : '')
+            + (t.translation ? `\n释义：${t.translation.slice(0, 120)}` : '');
+        }
+        rendered.appendChild(span);
+      });
+      rendered.appendChild(document.createElement('br'));
+    });
+
+    const rows = [];
+    data.sentences.forEach(sent => sent.tokens.forEach(t => {
+      if (!t.is_word) return;
+      rows.push(`<tr>
+        <td class="mono">${t.text}</td>
+        <td class="mono">${t.lemma}${t.lemma !== t.text.toLowerCase()
+          ? ' <span class="muted">←</span>' : ''}</td>
+        <td class="mono">${t.pos}</td>
+        <td class="muted mono">${t.lemma_source}</td>
+        <td class="mono">${t.tags || '—'}</td>
+        <td class="mono">${t.frq || '—'}</td>
+        <td>${t.translation ? t.translation.replace(/\n/g, '；').slice(0, 80)
+          : '<span class="muted">词典中没有</span>'}</td>
+      </tr>`);
+    }));
+    document.getElementById('tokens').innerHTML = rows.join('');
+    document.getElementById('result').hidden = false;
+  }
+</script>
+{% endblock %}

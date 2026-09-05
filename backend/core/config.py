@@ -1,0 +1,187 @@
+"""Startup configuration, read from environment variables and `.env`.
+
+This project keeps two kinds of configuration deliberately apart:
+
+* **Startup config** (this module) — filesystem paths, secrets, bind address,
+  outbound proxy. Changing any of these requires a restart anyway, so they live
+  in the environment where a restart is the expected way to apply a change.
+* **Runtime config** (:mod:`backend.core.runtime_config`) — study parameters,
+  Bark URL, log retention. These live in ``learning.db`` and are editable from
+  the admin console without touching the machine.
+
+Architecture rule 6 requires parameters to be configurable rather than
+hardcoded. This split is how that rule is honoured without turning every
+trivial setting into a database round-trip on the hot path.
+
+Terminology note for future maintainers: this codebase uses English identifiers
+throughout, but the design documents (``docs/``) are written in Chinese. Key
+term mappings appear in the module that owns each concept.
+"""
+
+from __future__ import annotations
+
+import secrets
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Project root: backend/core/config.py -> backend/core -> backend -> <root>
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+ENV_FILE = PROJECT_ROOT / ".env"
+
+
+class Settings(BaseSettings):
+    """Values fixed at process start.
+
+    Every field can be overridden with an ``ER_``-prefixed environment variable,
+    e.g. ``ER_PORT=9000``. Values in ``.env`` are read too, which is how the
+    admin secret survives restarts on a machine where nobody wants to manage
+    environment variables by hand.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="ER_",
+        env_file=ENV_FILE,
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    # --- storage -------------------------------------------------------------
+
+    data_dir: Path = Field(
+        default=PROJECT_ROOT / "data",
+        description="Directory holding the three SQLite files. Mounted from the "
+        "host when running in Docker so container rebuilds never touch "
+        "study records.",
+    )
+
+    # --- security ------------------------------------------------------------
+
+    admin_secret: str = Field(
+        default="",
+        description="Password for the admin console. Empty means 'not configured "
+        "yet' — the app generates one on first start and writes it to .env "
+        "rather than shipping a default, because a default admin password on "
+        "something that will later be exposed to the internet is a trap.",
+    )
+
+    # --- network -------------------------------------------------------------
+
+    host: str = Field(default="127.0.0.1")
+    port: int = Field(default=8000)
+
+    proxy_url: str | None = Field(
+        default=None,
+        description="Outbound proxy for LLM APIs, dictionary downloads and Bark "
+        "push. On the development machine this is the local v2rayN mixed port; "
+        "on a cloud server it is usually unset. Never hardcode it — see "
+        "CLAUDE.md, network access.",
+    )
+
+    # --- diagnostics ---------------------------------------------------------
+
+    log_level: str = Field(
+        default="INFO",
+        description="Floor for logs written to disk. DEBUG records are always "
+        "captured in memory regardless, and flushed to disk when an ERROR "
+        "occurs in the same trace — see core.logging.",
+    )
+
+    dev_mode: bool = Field(
+        default=False,
+        description="Enables auto-reload and more verbose error pages. Never "
+        "enable on a deployed instance.",
+    )
+
+    # --- derived paths -------------------------------------------------------
+    #
+    # Three separate SQLite files, not one. The split exists so that a backup is
+    # a single small file: dictionary.db is hundreds of MB and rebuildable,
+    # logs.db is disposable, and learning.db — the only irreplaceable one — stays
+    # in the low megabytes even after a year of daily use.
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def dictionary_db(self) -> Path:
+        """Read-only reference data: ECDICT entries, senses, word families.
+
+        Can be deleted and rebuilt from the import script at any time.
+        """
+        return self.data_dir / "dictionary.db"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def learning_db(self) -> Path:
+        """Everything that would hurt to lose: study state, articles, decisions.
+
+        This is what the admin console's backup button downloads.
+        """
+        return self.data_dir / "learning.db"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def logs_db(self) -> Path:
+        """Technical logs. Rotated and disposable.
+
+        Decision logs do *not* live here — they go to learning.db, because
+        'why did the system pick this article three months ago' has long-term
+        value while 'which HTTP requests happened' does not.
+        """
+        return self.data_dir / "logs.db"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def backup_dir(self) -> Path:
+        """Automatic pre-migration backups of learning.db land here."""
+        return self.data_dir / "backups"
+
+
+def _ensure_admin_secret(settings: Settings) -> tuple[Settings, str | None]:
+    """Generate and persist an admin secret on first run.
+
+    Returns the settings and, when a secret was just created, its plaintext so
+    the caller can show it once at startup.
+
+    Rationale: the user of this project does not read code, so failing to boot
+    with "ER_ADMIN_SECRET is required" would be a dead end. Generating a strong
+    random secret and writing it to ``.env`` keeps the deployment safe by
+    default while still being a single readable line the user can look up.
+    """
+    if settings.admin_secret:
+        return settings, None
+
+    generated = secrets.token_urlsafe(32)
+
+    # Checked before opening: open("a") would create the file, making the size
+    # check meaningless on the very first run.
+    needs_separator = ENV_FILE.exists() and ENV_FILE.stat().st_size > 0
+
+    # Append rather than rewrite: .env may hold other local overrides.
+    with ENV_FILE.open("a", encoding="utf-8") as fh:
+        if needs_separator:
+            fh.write("\n")
+        fh.write("# Generated automatically on first start. Keep this private.\n")
+        fh.write(f"ER_ADMIN_SECRET={generated}\n")
+
+    settings = settings.model_copy(update={"admin_secret": generated})
+    return settings, generated
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Return the process-wide settings, creating directories on first call.
+
+    Cached because these values cannot change without a restart; anything that
+    *should* be changeable at runtime belongs in
+    :mod:`backend.core.runtime_config` instead.
+    """
+    settings = Settings()
+    settings, _ = _ensure_admin_secret(settings)
+
+    settings.data_dir.mkdir(parents=True, exist_ok=True)
+    settings.backup_dir.mkdir(parents=True, exist_ok=True)
+
+    return settings

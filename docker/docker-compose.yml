@@ -1,0 +1,25 @@
+# Deployment on the NanoPi (or any Linux host).
+#
+#   docker compose -f docker/docker-compose.yml up -d --build
+#
+# The data directory is bind-mounted from the host so `docker compose down`,
+# image rebuilds and version upgrades never touch learning.db.
+services:
+  english-reader:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: english-reader
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../data:/app/data
+    environment:
+      # Generated on first start and written to .env if unset. Set it explicitly
+      # here (or in a .env file next to this one) for a deployed instance.
+      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:-}
+      # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server,
+      # set to the LAN proxy when running behind one.
+      ER_PROXY_URL: ${ER_PROXY_URL:-}
+      ER_LOG_LEVEL: ${ER_LOG_LEVEL:-INFO}

@@ -1,0 +1,693 @@
+<title>Phase 0 地基</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #FAFAFC;
+    --surface:     #FFFFFF;
+    --surface-sub: #F2F2F7;
+    --ink:         #1B1D26;
+    --ink-mid:     #4E5364;
+    --ink-soft:    #757B8E;
+    --rule:        #E3E4ED;
+    --rule-soft:   #EDEEF4;
+    --accent:      #37429B;
+    --accent-soft: #E8EAF7;
+    --mark:        #B37A0C;
+    --mark-soft:   #FBF2DE;
+    --stop:        #A33A3A;
+    --stop-soft:   #F7EAEA;
+
+    --f-serif: "Newsreader", Georgia, serif;
+    --f-sans:  "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+               "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+    --f-mix:   "Newsreader", "PingFang SC", "HarmonyOS Sans SC",
+               "Microsoft YaHei", "Noto Sans SC", serif;
+    --f-mono:  "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+    --col: 45rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101119;
+      --surface:     #171922;
+      --surface-sub: #1D202B;
+      --ink:         #E7E8F0;
+      --ink-mid:     #ADB2C4;
+      --ink-soft:    #868CA0;
+      --rule:        #2A2D3B;
+      --rule-soft:   #22252F;
+      --accent:      #98A1EE;
+      --accent-soft: #232741;
+      --mark:        #DFAB49;
+      --mark-soft:   #2C2718;
+      --stop:        #E08585;
+      --stop-soft:   #2E1E1E;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101119;
+    --surface:     #171922;
+    --surface-sub: #1D202B;
+    --ink:         #E7E8F0;
+    --ink-mid:     #ADB2C4;
+    --ink-soft:    #868CA0;
+    --rule:        #2A2D3B;
+    --rule-soft:   #22252F;
+    --accent:      #98A1EE;
+    --accent-soft: #232741;
+    --mark:        #DFAB49;
+    --mark-soft:   #2C2718;
+    --stop:        #E08585;
+    --stop-soft:   #2E1E1E;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 1.5rem 6rem;
+  }
+
+  .wrap { max-width: var(--col); margin: 0 auto; }
+
+  .masthead {
+    padding: 4.5rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  h1 {
+    font-family: var(--f-serif);
+    font-size: clamp(2.4rem, 7.5vw, 3.4rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--f-mix);
+    font-size: 1.18rem;
+    line-height: 1.6;
+    color: var(--ink-mid);
+    margin: 0;
+    max-width: 34rem;
+    text-wrap: pretty;
+  }
+
+  .thesis {
+    font-family: var(--f-mix);
+    font-size: 1rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--accent);
+    max-width: 34rem;
+  }
+
+  .parent {
+    font-size: 0.83rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  .parent a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .parent a:hover { border-bottom-color: var(--accent); }
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 2.5rem 0 0;
+  }
+
+  .fig {
+    background: var(--surface);
+    padding: 1rem 0.9rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .fig-val {
+    font-family: var(--f-mono);
+    font-size: 1.25rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  .fig-val span {
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-left: 0.15em;
+  }
+
+  .fig-key { font-size: 0.76rem; color: var(--ink-soft); line-height: 1.4; }
+
+  section { margin-top: 4rem; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 1.6rem;
+  }
+
+  .sec-mark {
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  h2 {
+    font-family: var(--f-mix);
+    font-size: 1.32rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .sec-note {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  h3 {
+    font-family: var(--f-mix);
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 2rem 0 0.8rem;
+  }
+
+  h3:first-of-type { margin-top: 0; }
+
+  .lede {
+    font-family: var(--f-mix);
+    color: var(--ink-mid);
+    margin: 0 0 1.6rem;
+    max-width: 36rem;
+  }
+
+  p { margin: 0 0 1rem; }
+  p:last-child { margin-bottom: 0; }
+
+  /* decisions table */
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 28rem;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.62rem 0.9rem 0.62rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: baseline;
+    color: var(--ink-mid);
+  }
+
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  td.topic { font-family: var(--f-mono); font-size: 0.82rem; color: var(--accent); }
+
+  /* build list */
+  .builds { display: flex; flex-direction: column; }
+
+  .build {
+    display: grid;
+    grid-template-columns: 2.4rem 1fr;
+    gap: 0 0.9rem;
+    padding: 1rem 0;
+    border-top: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+
+  .build:first-child { border-top: none; padding-top: 0; }
+
+  .build-id {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent);
+  }
+
+  .build-name {
+    font-weight: 600;
+    font-size: 0.97rem;
+    font-family: var(--f-mix);
+    line-height: 1.5;
+  }
+
+  .build p {
+    grid-column: 2;
+    margin: 0.25rem 0 0;
+    color: var(--ink-mid);
+    font-size: 0.92rem;
+  }
+
+  .build p + p { margin-top: 0.5rem; }
+
+  .build-note { color: var(--ink-soft); font-size: 0.86rem; }
+  .build-note b { font-weight: 600; color: var(--ink-mid); }
+
+  /* tree */
+  pre.tree {
+    font-family: var(--f-mono);
+    font-size: 0.8rem;
+    line-height: 1.85;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1.1rem 1.2rem;
+    overflow-x: auto;
+    margin: 0;
+    color: var(--ink-mid);
+  }
+
+  pre.tree b { color: var(--ink); font-weight: 500; }
+  pre.tree i { font-style: normal; color: var(--ink-soft); }
+
+  /* out of scope */
+  .nots { display: flex; flex-direction: column; gap: 0.8rem; }
+
+  .not {
+    display: grid;
+    grid-template-columns: 1.2rem 1fr;
+    gap: 0.7rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .not i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.85rem;
+    color: var(--stop);
+  }
+
+  .not b { font-weight: 600; }
+  .not span { color: var(--ink-mid); }
+
+  /* checklist */
+  .checks {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .check {
+    background: var(--surface);
+    padding: 0.9rem 1.1rem;
+    display: grid;
+    grid-template-columns: 1.8rem 1fr;
+    gap: 0.8rem;
+    align-items: baseline;
+  }
+
+  .check-n {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .check-what { font-size: 0.93rem; }
+  .check-what b {
+    display: block;
+    font-weight: 600;
+    font-size: 0.96rem;
+    font-family: var(--f-mix);
+    margin-bottom: 0.15rem;
+  }
+  .check-what span { color: var(--ink-mid); }
+
+  /* deferred */
+  .deferred {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 1.2rem 1.35rem;
+    background: var(--surface-sub);
+    border-left: 2px solid var(--mark);
+  }
+
+  .deferred div {
+    display: grid;
+    grid-template-columns: 3.2rem 1fr;
+    gap: 0.7rem;
+    font-size: 0.92rem;
+    color: var(--ink-mid);
+    align-items: baseline;
+  }
+
+  .deferred i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    color: var(--mark);
+  }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.86em;
+    background: var(--surface-sub);
+    padding: 0.08em 0.32em;
+    border-radius: 2px;
+  }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--f-mono);
+  }
+
+  @media (max-width: 34rem) {
+    body { padding: 0 1.15rem 4rem; }
+    .masthead { padding-top: 3rem; }
+    .build { grid-template-columns: 1fr; gap: 0; }
+    .build p { grid-column: 1; }
+    .build-id { margin-bottom: 0.2rem; }
+    .check { grid-template-columns: 1fr; gap: 0.2rem; }
+    .deferred div { grid-template-columns: 1fr; gap: 0.15rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 0 · 已完成并验收 · 2026-09-05</div>
+    <h1>地基</h1>
+    <p class="standfirst">搭一套让后面八个 Phase 都能顺畅加功能的骨架，外加词典数据与词形还原。</p>
+    <p class="thesis">P0 的价值不在于做出什么功能，而在于此后每次加功能都不用返工。它做错了，后面八个 Phase 会各痛一遍。</p>
+    <p class="parent">功能设计见 <a href="./english-reader.html">English Reader 设计文档</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">29<span>项</span></div><div class="fig-key">自动检查全过</div></div>
+    <div class="fig"><div class="fig-val">404,011</div><div class="fig-key">词典词条</div></div>
+    <div class="fig"><div class="fig-val">3,849</div><div class="fig-key">CET-4 词</div></div>
+    <div class="fig"><div class="fig-val">5,407</div><div class="fig-key">CET-6 词</div></div>
+    <div class="fig"><div class="fig-val">2<span>个</span></div><div class="fig-key">功能模块</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>八项技术定案</h2>
+      <span class="sec-note">已充分讨论</span>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>议题</th><th>结论</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="topic">语言与框架</td>
+            <td>Python + FastAPI。决定因素是词形还原的精度，附带白送 OpenAPI 契约文档。硬件（4GB / 1TB SSD）让 Python 的劣势全部不成立</td>
+          </tr>
+          <tr>
+            <td class="topic">词典数据源</td>
+            <td>ECDICT——唯一同时提供大纲标签、词频、中文释义、词形变化的开源数据集</td>
+          </tr>
+          <tr>
+            <td class="topic">词形还原</td>
+            <td>spaCy + lemminflect，带词性消歧；ECDICT <code>exchange</code> 字段交叉验证。<b>只在文章入库时跑一次</b>，运行时不碰 NLP</td>
+          </tr>
+          <tr>
+            <td class="topic">数据库</td>
+            <td>SQLite，三个独立文件：<code>dictionary.db</code>（只读可重建）/ <code>learning.db</code>（要备份的全部学习数据）/ <code>logs.db</code>（可丢弃）</td>
+          </tr>
+          <tr>
+            <td class="topic">API 约定</td>
+            <td><code>/v1/client/…</code> 与 <code>/v1/admin/…</code> 完全分离；单向数据流；错误响应带 trace_id；只增不减的兼容规则</td>
+          </tr>
+          <tr>
+            <td class="topic">项目结构</td>
+            <td>模块自包含，<code>core/</code> 提供框架能力，<code>modules/</code> 放功能。git + GitHub 私有仓库，数据文件不进版本控制</td>
+          </tr>
+          <tr>
+            <td class="topic">运行方式</td>
+            <td>开发直接跑 Python，部署用 Docker 多架构镜像。数据库文件挂载宿主机</td>
+          </tr>
+          <tr>
+            <td class="topic">日志</td>
+            <td>技术日志 / 决策日志分离；固定事件名 + trace_id；ERROR 时回溯转储 DEBUG；Bark 通知</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>要建的东西</h2>
+      <span class="sec-note">10 项</span>
+    </div>
+    <p class="lede">前五项是框架能力——它们的存在意义就是让 P1 到 P8 加功能时不必重复造轮子。</p>
+
+    <div class="builds">
+      <div class="build">
+        <span class="build-id">B1</span>
+        <span class="build-name">配置系统</span>
+        <p>所有参数（目标生词率、每日新词上限、生成时间、日志保留天数、代理地址、Bark 链接）集中管理，可从环境变量与配置文件读取，可在管理控制台修改。</p>
+        <p class="build-note"><b>为什么在 P0：</b>后面每个 Phase 都会引入新参数，没有统一入口就会散落成硬编码。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B2</span>
+        <span class="build-name">日志系统</span>
+        <p>结构化日志，五个级别，固定事件名，trace_id 贯穿。技术日志入 <code>logs.db</code> 按天轮转保留 30 天；决策日志入 <code>learning.db</code> 长期保存。DEBUG 平时只在内存滚动，遇 ERROR 自动落盘该 trace 的详细记录。</p>
+        <p class="build-note"><b>为什么在 P0：</b>后补日志意味着回头改所有代码；而且它是此后每个 Phase 的调试依赖。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B3</span>
+        <span class="build-name">事件总线</span>
+        <p>系统在关键节点发出事件，新功能通过订阅接入，不修改原有流程代码。P0 只建机制并跑通一个示例，具体事件由各 Phase 自己定义。</p>
+        <p class="build-note"><b>为什么在 P0：</b>大部分新功能本质上是「在某件事发生时顺便做点什么」，这个机制把接入成本压到最低。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B4</span>
+        <span class="build-name">模块注册机制</span>
+        <p>一个功能模块自带数据表、API 路由、管理页面、后台任务、配置项。在一处登记后自动挂载，无需修改路由表、菜单、任务列表。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B5</span>
+        <span class="build-name">数据库迁移机制</span>
+        <p>版本化迁移脚本按顺序自动应用，<b>升级前自动备份</b> <code>learning.db</code>。</p>
+        <p class="build-note"><b>为什么在 P0：</b><code>learning.db</code> 里是不可再生的真实学习记录，而后面每个 Phase 都要改表结构。没有迁移机制就是每次手动改表，一旦出错数据就没了。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B6</span>
+        <span class="build-name">三个数据库与初始表结构</span>
+        <p>建立三个库，以及 P0 阶段确实需要的表：词条、义项、词族、迁移版本、日志。</p>
+        <p class="build-note"><b>注意边界：</b>义项表和词族表<b>只建结构，不填数据</b>——数据要靠 LLM 批量生成，那是 P1 的事。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B7</span>
+        <span class="build-name">词典数据导入</span>
+        <p>下载 ECDICT，清洗后导入 <code>dictionary.db</code>：拼写、音标、词频排名（BNC / 当代语料）、大纲标签、中文释义、词形变化。建好索引。脚本可重复执行。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B8</span>
+        <span class="build-name">词形还原能力</span>
+        <p>接入 spaCy + lemminflect，输入一段英文，输出每个词的位置、表面形式、词性、词条，并标出专有名词。ECDICT <code>exchange</code> 字段用于交叉验证与兜底。</p>
+        <p class="build-note">这是 P0 完成定义的核心，也是 P1 文章校验的前置依赖。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B9</span>
+        <span class="build-name">API 骨架</span>
+        <p><code>/v1/client/…</code> 与 <code>/v1/admin/…</code> 分离；设备令牌与管理密钥两套认证；统一错误响应（错误码 + 中文说明 + trace_id）；OpenAPI 契约自动生成并可访问。</p>
+        <p class="build-note">P0 只有健康检查和词汇查询两个真实接口，其余是骨架。</p>
+      </div>
+
+      <div class="build">
+        <span class="build-id">B10</span>
+        <span class="build-name">管理控制台骨架</span>
+        <p>服务端渲染，零构建链。P0 阶段包含四页：登录、系统状态、日志查询与导出、数据库备份下载与上传。另含 Bark 配置与测试发送。</p>
+        <p class="build-note"><b>为什么在 P0：</b>它是此后所有 Phase 的诊断通道和备份入口，越早有越省事。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>目录结构</h2>
+    </div>
+
+<pre class="tree"><b>english-reader/</b>
+├── CLAUDE.md              <i>项目约定，每次会话自动加载</i>
+├── docs/                  <i>设计文档与各 Phase 方案</i>
+├── backend/
+│   ├── core/              <i>框架层：配置、日志、事件总线、模块注册、数据库</i>
+│   ├── modules/           <i>功能模块，每个自包含</i>
+│   │   └── vocabulary/    <i>P0 唯一的功能模块：词典与词形还原</i>
+│   ├── admin/             <i>管理控制台模板与静态资源</i>
+│   └── migrations/        <i>版本化迁移脚本</i>
+├── scripts/               <i>一次性脚本：下载与导入词典</i>
+├── data/                  <i>三个数据库文件（不进版本控制）</i>
+└── docker/                <i>部署配置</i></pre>
+
+    <p style="margin-top:1.2rem; color:var(--ink-mid); font-size:0.93rem">新增一个功能就是在 <code>modules/</code> 下加一个目录并登记，其余全不动。这条是 P0 验收项之一，要现场演示。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>P0 明确不做</h2>
+      <span class="sec-note">防止跨 Phase</span>
+    </div>
+    <p class="lede">下列每一项都属于后续 Phase。P0 阶段即使「顺手就能做」也不做。</p>
+
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>文章生成与校验</b>——整条生成管线属于 P1，包括调用 LLM。</span></div>
+      <div class="not"><i>×</i><span><b>义项与词族的数据生成</b>——P0 只建表结构。批量生成要调 LLM，属于 P1。</span></div>
+      <div class="not"><i>×</i><span><b>任何学习逻辑</b>——水平估计、选文、复习调度、难度计算，分属 P3 与 P5。</span></div>
+      <div class="not"><i>×</i><span><b>阅读界面</b>——点词查词、标记生词属于 P2。</span></div>
+      <div class="not"><i>×</i><span><b>今日包与事件上报的业务实现</b>——P0 只定接口形状与认证骨架，实际内容属于 P2。</span></div>
+      <div class="not"><i>×</i><span><b>结构化数据导出</b>——P0 只做整库文件的下载与上传。JSON 导出属于 P6。</span></div>
+      <div class="not"><i>×</i><span><b>真题语料</b>——获取、清洗、义项统计属于 P1。</span></div>
+      <div class="not"><i>×</i><span><b>iOS 客户端</b>——属于 P7。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>验收清单</h2>
+      <span class="sec-note">已通过</span>
+    </div>
+    <p class="lede">已于 2026-09-05 验收通过。自动检查 29 项全过（<code>uv run python scripts/verify_phase0.py</code> 可随时复跑），控制台各页面由本人实际点验。第 8 项部署验证按决定推迟。</p>
+
+    <div class="checks">
+      <div class="check">
+        <span class="check-n">01</span>
+        <span class="check-what"><b>服务能启动</b><span>本机直接运行，健康检查接口返回正常。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">02</span>
+        <span class="check-what"><b>词汇分析可用</b><span>提交一段英文，返回每个词的位置、词条、词性、词频排名、大纲标签，并正确标出专有名词。<code>left</code> / <code>saw</code> / <code>leaves</code> 这批歧义词归类正确。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">03</span>
+        <span class="check-what"><b>契约文档能打开</b><span>浏览器访问 OpenAPI 文档页，接口定义完整可读。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">04</span>
+        <span class="check-what"><b>管理控制台可用</b><span>密码登录、查看系统状态、按条件过滤并导出日志、下载与上传 <code>learning.db</code>。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">05</span>
+        <span class="check-what"><b>Bark 通知能收到</b><span>控制台填入链接后点测试发送，手机收到推送。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">06</span>
+        <span class="check-what"><b>扩展机制经得起验证</b><span>现场新增一个最小功能模块，从建表、加接口、加管理页到自动挂载全程顺畅，不需要修改任何已有模块。<b>这条是 P0 最重要的验收项。</b></span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">07</span>
+        <span class="check-what"><b>迁移机制可用</b><span>执行一次表结构变更，数据完好，且升级前自动生成了备份。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">08</span>
+        <span class="check-what"><b>能在 NanoPi 上跑起来</b><span><b>已推迟</b>——按决定，Docker 部署放到整个项目开发完毕后再做。配置文件已就绪（<code>docker/</code>），不阻塞后续阶段：开发全程在 Windows 本机进行。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">09</span>
+        <span class="check-what"><b>错误可追溯</b><span>故意触发一个错误，响应中带 trace_id，用它能在日志里查到完整链路，且 DEBUG 详情被自动保留。</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>留到后面的问题</h2>
+    </div>
+
+    <div class="deferred">
+      <div><i>P1</i><span><b>词性标注误差的实际影响</b>——<code>Turn left at the corner</code> 中的 <code>left</code> 被标注为动词，因而归到 leave。属小语言模型固有精度，非消歧逻辑问题。待 P1 用真实生成语料统计发生率，再决定是否值得换更大的模型（代价是体积与 ARM 上的速度）</span></div>
+      <div><i>P1</i><span>义项集的粒度标准如何落成可执行的生成提示——中等粒度、按英文概念边界，需要实际跑几批验证一致性</span></div>
+      <div><i>P1</i><span>真题语料的获取与清洗途径，尚无现成资源</span></div>
+      <div><i>P1</i><span>英文释义所用的受限词汇表如何随水平提升重新生成</span></div>
+      <div><i>P2</i><span>今日包的具体字段与事件类型清单</span></div>
+      <div><i>P3</i><span>初始词汇量测试的题量与词频分段</span></div>
+      <div><i>P6</i><span>结构化导出的格式与跨版本兼容策略</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 0 方案</span>
+    <span>2026-09-05</span>
+  </footer>
+
+</div>

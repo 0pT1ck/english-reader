@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}配置{% endblock %}
+
+{% block content %}
+<h1>配置</h1>
+<p class="subtitle">
+  这里的参数改完立即生效，不需要重启。路径、密码、监听地址那类需要重启的设置在
+  <code>.env</code> 文件里。
+</p>
+
+{% set group_titles = {'general': '通用', 'diagnostics': '诊断与通知'} %}
+
+{% for group, specs in groups.items() %}
+<h2>{{ group_titles.get(group, group) }}</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th style="width:30%">设置</th><th style="width:22%">值</th><th>说明</th></tr></thead>
+    <tbody>
+      {% for s in specs %}
+      <tr>
+        <td>
+          <div>{{ s.title }}</div>
+          <div class="muted mono">{{ s.key }}</div>
+        </td>
+        <td>
+          {% if s.value_type == 'bool' %}
+          <select data-key="{{ s.key }}" data-type="bool">
+            <option value="true" {{ 'selected' if s.value else '' }}>启用</option>
+            <option value="false" {{ '' if s.value else 'selected' }}>关闭</option>
+          </select>
+          {% elif s.value_type == 'int' %}
+          <input type="number" data-key="{{ s.key }}" data-type="int" value="{{ s.value }}">
+          {% else %}
+          <input type="text" data-key="{{ s.key }}" data-type="{{ s.value_type }}" value="{{ s.value }}">
+          {% endif %}
+        </td>
+        <td>
+          <div class="muted">{{ s.description }}</div>
+          <div class="muted" style="margin-top:0.2rem">默认：<span class="mono">{{ s.default }}</span></div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+<div class="row" style="margin-top:1.2rem">
+  <button class="primary" onclick="saveAll()">保存修改</button>
+  <button onclick="testPush()">发送测试通知</button>
+  <span class="muted">测试通知用于确认 Bark 地址填对了、网络也走得通。</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Only changed fields are sent, so saving does not rewrite settings the user
+  // never touched — that keeps the "updated_at" column meaningful.
+  const initial = {};
+  document.querySelectorAll('[data-key]').forEach(el => { initial[el.dataset.key] = el.value; });
+
+  function parseValue(el) {
+    if (el.dataset.type === 'bool') return el.value === 'true';
+    if (el.dataset.type === 'int') return parseInt(el.value, 10);
+    if (el.dataset.type === 'float') return parseFloat(el.value);
+    return el.value;
+  }
+
+  async function saveAll() {
+    const changed = [...document.querySelectorAll('[data-key]')]
+      .filter(el => el.value !== initial[el.dataset.key]);
+
+    if (!changed.length) { toast('没有需要保存的修改'); return; }
+
+    let ok = 0;
+    for (const el of changed) {
+      try {
+        await api('/config/' + encodeURIComponent(el.dataset.key), {
+          method: 'PUT',
+          body: JSON.stringify({ value: parseValue(el) }),
+        });
+        initial[el.dataset.key] = el.value;
+        ok++;
+      } catch (e) {
+        toast(el.dataset.key + '：' + e.message, true);
+      }
+    }
+    if (ok) toast('已保存 ' + ok + ' 项');
+  }
+
+  async function testPush() {
+    try {
+      const res = await api('/notifications/test', { method: 'POST' });
+      if (res.sent) toast('已发送，请查看手机');
+      else toast('没有发出去——检查是否已启用、地址是否填写、以及网络是否可达', true);
+    } catch (e) { toast(e.message, true); }
+  }
+</script>
+{% endblock %}

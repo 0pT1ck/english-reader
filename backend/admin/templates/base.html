@@ -1,0 +1,226 @@
+{# Base layout for the admin console.
+
+   Server-rendered with inline CSS and JS on purpose: architecture rule 7 rules
+   out a build chain, so a page is a template plus a route and nothing else.
+   Navigation is assembled from installed modules, so a new module's pages
+   appear here without this file being edited. #}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}管理控制台{% endblock %} · English Reader</title>
+<style>
+  :root {
+    --ground: #FAFAFC; --surface: #FFFFFF; --surface-sub: #F2F2F7;
+    --ink: #1B1D26; --ink-mid: #4E5364; --ink-soft: #757B8E;
+    --rule: #E3E4ED; --rule-soft: #EDEEF4;
+    --accent: #37429B; --accent-soft: #E8EAF7;
+    --warn: #B37A0C; --warn-soft: #FBF2DE;
+    --bad: #A33A3A; --bad-soft: #F7EAEA;
+    --good: #2F7A4F; --good-soft: #E6F3EC;
+    --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --sans: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101119; --surface: #171922; --surface-sub: #1D202B;
+      --ink: #E7E8F0; --ink-mid: #ADB2C4; --ink-soft: #868CA0;
+      --rule: #2A2D3B; --rule-soft: #22252F;
+      --accent: #98A1EE; --accent-soft: #232741;
+      --warn: #DFAB49; --warn-soft: #2C2718;
+      --bad: #E08585; --bad-soft: #2E1E1E;
+      --good: #6BC191; --good-soft: #172A20;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--sans); font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+
+  header.top {
+    border-bottom: 1px solid var(--rule); background: var(--surface);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .top-inner {
+    max-width: 68rem; margin: 0 auto; padding: 0 1.25rem;
+    display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
+  }
+  .brand {
+    font-weight: 600; letter-spacing: -0.01em; padding: 0.9rem 0;
+    white-space: nowrap;
+  }
+  .brand span { color: var(--ink-soft); font-weight: 400; font-size: 0.85rem; }
+  nav { display: flex; gap: 0.25rem; flex-wrap: wrap; margin-right: auto; }
+  nav a {
+    padding: 0.9rem 0.7rem; text-decoration: none; color: var(--ink-mid);
+    font-size: 0.92rem; border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  nav a:hover { color: var(--ink); }
+  nav a.on { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+  .logout { font-size: 0.85rem; color: var(--ink-soft); text-decoration: none; }
+
+  main { max-width: 68rem; margin: 0 auto; padding: 1.75rem 1.25rem 5rem; }
+
+  h1 { font-size: 1.5rem; margin: 0 0 0.35rem; letter-spacing: -0.01em; }
+  h2 { font-size: 1.05rem; margin: 2.25rem 0 0.9rem; letter-spacing: -0.01em; }
+  h2:first-of-type { margin-top: 0.5rem; }
+  .subtitle { color: var(--ink-soft); font-size: 0.9rem; margin: 0 0 1.5rem; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 1.1rem 1.25rem;
+  }
+  .grid { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); }
+
+  .stat { display: flex; flex-direction: column; gap: 0.2rem; }
+  .stat-label { font-size: 0.8rem; color: var(--ink-soft); }
+  .stat-value {
+    font-family: var(--mono); font-size: 1.35rem; font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+  .stat-value small { font-size: 0.75rem; color: var(--ink-soft); font-family: var(--sans); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+  .scroll { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+  th {
+    text-align: left; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--ink-soft); font-weight: 500; padding: 0.6rem 0.8rem;
+    border-bottom: 1px solid var(--rule); white-space: nowrap; background: var(--surface-sub);
+  }
+  td {
+    padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top; color: var(--ink-mid);
+  }
+  tr:last-child td { border-bottom: none; }
+  td.mono, .mono { font-family: var(--mono); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+  td.nowrap { white-space: nowrap; }
+
+  .pill {
+    display: inline-block; font-size: 0.7rem; font-family: var(--mono);
+    padding: 0.1rem 0.4rem; border-radius: 2px; letter-spacing: 0.03em;
+  }
+  .pill.DEBUG    { background: var(--surface-sub); color: var(--ink-soft); }
+  .pill.INFO     { background: var(--accent-soft); color: var(--accent); }
+  .pill.WARNING  { background: var(--warn-soft); color: var(--warn); }
+  .pill.ERROR,
+  .pill.CRITICAL { background: var(--bad-soft); color: var(--bad); }
+  .pill.ok       { background: var(--good-soft); color: var(--good); }
+  .pill.off      { background: var(--surface-sub); color: var(--ink-soft); }
+
+  button, .btn {
+    font: inherit; font-size: 0.88rem; padding: 0.45rem 0.9rem; cursor: pointer;
+    border: 1px solid var(--rule); background: var(--surface); color: var(--ink);
+    border-radius: 3px; text-decoration: none; display: inline-block;
+  }
+  button:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
+  button.primary, .btn.primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+  }
+  button.primary:hover, .btn.primary:hover { opacity: 0.9; color: #fff; }
+  button.danger { color: var(--bad); border-color: var(--rule); }
+  button.danger:hover { border-color: var(--bad); }
+  button:disabled { opacity: 0.5; cursor: default; }
+
+  input[type=text], input[type=password], input[type=number], select {
+    font: inherit; font-size: 0.9rem; padding: 0.42rem 0.6rem;
+    border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--surface); color: var(--ink); width: 100%;
+  }
+  input:focus, select:focus, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+
+  .row { display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--ink-soft); font-size: 0.85rem; }
+
+  .notice {
+    padding: 0.8rem 1rem; border-radius: 3px; font-size: 0.9rem;
+    border-left: 3px solid var(--warn); background: var(--warn-soft); color: var(--ink);
+    margin-bottom: 1.25rem;
+  }
+  .notice.bad { border-left-color: var(--bad); background: var(--bad-soft); }
+  .notice.good { border-left-color: var(--good); background: var(--good-soft); }
+
+  #toast {
+    position: fixed; right: 1rem; bottom: 1rem; z-index: 50;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  #toast div {
+    background: var(--surface); border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+    padding: 0.6rem 0.9rem; border-radius: 3px; font-size: 0.88rem;
+    box-shadow: 0 6px 20px rgba(20,22,35,0.16); max-width: 24rem;
+  }
+  #toast div.bad { border-left-color: var(--bad); }
+
+  details.detail summary { cursor: pointer; color: var(--ink-soft); font-size: 0.82rem; }
+  details.detail pre {
+    font-family: var(--mono); font-size: 0.78rem; white-space: pre-wrap;
+    word-break: break-word; background: var(--surface-sub); padding: 0.6rem;
+    border-radius: 3px; margin: 0.4rem 0 0; color: var(--ink-mid);
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">English Reader <span>管理控制台</span></div>
+    <nav>
+      {% for page in nav %}
+        <a href="{{ page.path }}" class="{{ 'on' if current_path == page.path else '' }}"
+           {% if page.description %}title="{{ page.description }}"{% endif %}>{{ page.title }}</a>
+      {% endfor %}
+    </nav>
+    <a class="logout" href="/admin/logout">退出</a>
+  </div>
+</header>
+
+<main>
+{% block content %}{% endblock %}
+</main>
+
+<div id="toast"></div>
+
+<script>
+  // Minimal helpers. The console talks to the same /v1/admin API anyone else
+  // would — no privileged back channel (see routes.py).
+  function toast(message, bad) {
+    const box = document.createElement('div');
+    if (bad) box.className = 'bad';
+    box.textContent = message;
+    document.getElementById('toast').appendChild(box);
+    setTimeout(() => box.remove(), 4000);
+  }
+
+  async function api(path, options) {
+    const res = await fetch('/v1/admin' + path, Object.assign({
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+    }, options || {}));
+    const text = await res.text();
+    let body = null;
+    try { body = text ? JSON.parse(text) : null; } catch (e) { body = { raw: text }; }
+    if (!res.ok) {
+      const msg = (body && body.error && body.error.message) || ('HTTP ' + res.status);
+      const trace = body && body.error && body.error.trace_id;
+      throw new Error(trace ? msg + '（trace ' + trace + '）' : msg);
+    }
+    return body;
+  }
+
+  function humanBytes(n) {
+    if (!n) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return n.toFixed(i === 0 ? 0 : 1) + ' ' + units[i];
+  }
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

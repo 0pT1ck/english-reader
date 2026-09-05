@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}备份{% endblock %}
+
+{% block content %}
+<h1>备份</h1>
+<p class="subtitle">
+  下载得到的那一个文件，就是你的全部学习数据——进度、掌握状态、水平估计、
+  已生成的文章、决策记录。词典不在里面，它可以随时重新导入。
+</p>
+
+{% if restore_pending %}
+<div class="notice">
+  <b>有一份数据等待恢复。</b>重启服务后生效，替换前会自动备份当前数据。
+</div>
+{% endif %}
+
+<h2>导出</h2>
+<div class="card">
+  <div class="row">
+    <a class="btn primary" href="/v1/admin/backup">下载学习数据</a>
+    <button onclick="snapshot()">在服务器上存一份</button>
+    <span class="muted">当前大小 <b class="mono" data-bytes="{{ learning_size }}">{{ learning_size }}</b></span>
+  </div>
+  <p class="muted" style="margin:0.8rem 0 0">
+    换机器、迁到云服务器，都是拷这一个文件的事。人能读的结构化导出（JSON、可跨版本）
+    留到后面的阶段。
+  </p>
+</div>
+
+<h2>恢复</h2>
+<div class="card">
+  <form id="restore-form">
+    <div class="row">
+      <input type="file" id="restore-file" accept=".db" required>
+      <button class="primary" type="submit">上传并恢复</button>
+    </div>
+  </form>
+  <p class="muted" style="margin:0.8rem 0 0">
+    上传的文件会先校验、暂存，<b>在下次重启时替换</b>。这样做是因为替换一个正在被读写的
+    数据库无法保证安全，而启动时还没有任何连接，是唯一不会出错的时机。
+    当前数据在替换前会自动备份。
+  </p>
+</div>
+
+<h2>服务器上的自动备份</h2>
+<p class="muted" style="margin-top:-0.5rem;margin-bottom:0.9rem">
+  每次数据库结构升级前都会自动存一份，只保留最近 20 份。
+</p>
+<div class="scroll">
+  <table>
+    <thead><tr><th>文件</th><th>大小</th><th>时间</th></tr></thead>
+    <tbody>
+      {% for b in backups %}
+      <tr>
+        <td class="mono">{{ b.name }}</td>
+        <td class="mono nowrap" data-bytes="{{ b.size_bytes }}">{{ b.size_bytes }}</td>
+        <td class="mono nowrap">{{ b.modified.replace('T', ' ') }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">还没有自动备份。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('[data-bytes]').forEach(el => {
+    el.textContent = humanBytes(Number(el.dataset.bytes));
+  });
+
+  async function snapshot() {
+    try {
+      const res = await api('/backup/snapshot', { method: 'POST' });
+      toast('已存到服务器：' + res.path.split(/[\\/]/).pop());
+      setTimeout(() => location.reload(), 800);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  document.getElementById('restore-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const input = document.getElementById('restore-file');
+    if (!input.files.length) return;
+    if (!confirm('恢复后当前的学习数据会被替换（替换前自动备份）。确定吗？')) return;
+
+    const form = new FormData();
+    form.append('file', input.files[0]);
+    try {
+      // No Content-Type header here on purpose: the browser must set the
+      // multipart boundary itself.
+      const res = await fetch('/v1/admin/restore', {
+        method: 'POST', body: form, credentials: 'same-origin',
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error((body.error && body.error.message) || ('HTTP ' + res.status));
+      toast('已接收，重启服务后生效');
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) { toast(e.message, true); }
+  });
+</script>
+{% endblock %}

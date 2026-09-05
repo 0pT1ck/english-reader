@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}状态{% endblock %}
+
+{% block content %}
+<h1>状态</h1>
+<p class="subtitle">服务、数据与已装载模块的概览。出问题时先看这一页。</p>
+
+{% if data.restore_pending %}
+<div class="notice">
+  <b>有一份数据等待恢复。</b>下次重启服务时会替换当前的学习数据，替换前会自动备份。
+</div>
+{% endif %}
+
+<h2>数据库</h2>
+<div class="grid">
+  {% for name, info in data.databases.items() %}
+  <div class="card stat">
+    <span class="stat-label">
+      {{ {'dictionary': '词典（只读，可重建）', 'learning': '学习数据（需备份）', 'logs': '技术日志（可丢弃）'}[name] }}
+    </span>
+    <span class="stat-value" data-bytes="{{ info.size_bytes }}">{{ info.size_bytes }} <small>B</small></span>
+    <span class="muted mono">{{ name }}.db{% if not info.exists %} · 尚未创建{% endif %}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>最近 24 小时日志</h2>
+<div class="grid">
+  {% set levels = ['INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
+  {% for level in levels %}
+  <div class="card stat">
+    <span class="stat-label"><span class="pill {{ level }}">{{ level }}</span></span>
+    <span class="stat-value">{{ data.logs_last_24h.get(level, 0) }}</span>
+  </div>
+  {% endfor %}
+</div>
+<p class="muted" style="margin-top:0.7rem">
+  决策日志累计 <b class="mono">{{ data.decisions_total }}</b> 条，长期保存，不参与轮转。
+  <a href="/admin/logs?view=decisions">查看</a>
+</p>
+
+<h2>已装载模块</h2>
+{% if data.modules %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>名称</th><th>标题</th><th>说明</th></tr></thead>
+    <tbody>
+      {% for m in data.modules %}
+      <tr>
+        <td class="mono nowrap">{{ m.name }}</td>
+        <td class="nowrap">{{ m.title }}</td>
+        <td>{{ m.description }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">还没有任何功能模块。</p>
+{% endif %}
+
+<h2>事件订阅</h2>
+<p class="muted" style="margin-top:-0.5rem;margin-bottom:0.9rem">
+  某个功能悄无声息地不工作时，第一件事是确认它的订阅者是否真的注册上了。
+</p>
+{% if data.event_subscribers %}
+<div class="scroll">
+  <table>
+    <thead><tr><th>事件</th><th>订阅者</th></tr></thead>
+    <tbody>
+      {% for event, handlers in data.event_subscribers.items() %}
+      <tr>
+        <td class="mono nowrap">{{ event }}</td>
+        <td class="mono">{{ handlers | join('，') }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="muted">目前没有事件订阅。</p>
+{% endif %}
+
+<h2>客户端设备</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>ID</th><th>名称</th><th>注册于</th><th>最后活动</th><th>状态</th><th></th></tr></thead>
+    <tbody id="device-rows">
+      {% for d in data.devices %}
+      <tr data-id="{{ d.id }}">
+        <td class="mono">{{ d.id }}</td>
+        <td>{{ d.name }}</td>
+        <td class="mono nowrap">{{ d.created_at }}</td>
+        <td class="mono nowrap">{{ d.last_seen_at or '—' }}</td>
+        <td>
+          {% if d.revoked_at %}<span class="pill off">已吊销</span>
+          {% else %}<span class="pill ok">有效</span>{% endif %}
+        </td>
+        <td class="nowrap">
+          {% if not d.revoked_at %}
+          <button class="danger" onclick="revoke({{ d.id }})">吊销</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">还没有注册任何设备。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="row" style="margin-top:0.9rem">
+  <input type="text" id="device-name" placeholder="设备名称，例如 iPhone" style="max-width:16rem">
+  <button class="primary" onclick="addDevice()">注册设备</button>
+  <span class="muted">令牌只显示一次，请当场保存。</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Sizes are rendered raw by the server and humanised here, so the template
+  // stays free of formatting logic.
+  document.querySelectorAll('[data-bytes]').forEach(el => {
+    el.innerHTML = humanBytes(Number(el.dataset.bytes)).replace(
+      /([\d.]+)\s(\w+)/, '$1 <small>$2</small>');
+  });
+
+  async function addDevice() {
+    const input = document.getElementById('device-name');
+    const name = input.value.trim();
+    if (!name) { toast('请先填写设备名称', true); return; }
+    try {
+      const res = await api('/devices', { method: 'POST', body: JSON.stringify({ name }) });
+      window.prompt('设备令牌（只显示这一次，请立即复制保存）：', res.token);
+      location.reload();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function revoke(id) {
+    if (!confirm('吊销后该设备将无法再访问，确定吗？')) return;
+    try {
+      await api('/devices/' + id, { method: 'DELETE' });
+      toast('已吊销');
+      location.reload();
+    } catch (e) { toast(e.message, true); }
+  }
+</script>
+{% endblock %}

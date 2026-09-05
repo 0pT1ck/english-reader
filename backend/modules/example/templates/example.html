@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}示例{% endblock %}
+
+{% block content %}
+<h1>示例模块</h1>
+<p class="subtitle">
+  这一页存在的唯一目的，是证明加一个功能不需要动任何已有代码。
+</p>
+
+<div class="notice good">
+  <b>这个模块贡献了六样东西，全部只写在它自己的目录里：</b>
+  一张数据表、一个事件订阅、一个 API 接口、这个页面、一项配置，以及上面导航栏里的入口。
+  <code>backend/modules/example/</code> 整个删掉，它们会一起消失，其余部分不受影响。
+</div>
+
+<h2>它观察到的事情</h2>
+<p class="muted" style="margin-top:-0.5rem;margin-bottom:0.9rem">
+  下面每一条都来自订阅「服务启动」这个事件。启动流程里没有任何一行代码知道这个模块的存在——
+  这正是新功能应该有的接入方式。
+</p>
+
+<div class="scroll">
+  <table>
+    <thead><tr><th>时间</th><th>记录</th></tr></thead>
+    <tbody>
+      {% for o in observations %}
+      <tr>
+        <td class="mono nowrap">{{ o.observed.replace('T', ' ') }}</td>
+        <td>{{ o.note }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="2" class="muted">还没有记录。重启一次服务就会出现。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>要加一个真正的功能模块</h2>
+<div class="card">
+  <p style="margin:0 0 0.6rem">
+    复制 <code>backend/modules/example/</code> 整个目录，改个名字，替换内容即可。
+    详细步骤见 <code>backend/modules/README.md</code>。
+  </p>
+  <p class="muted" style="margin:0">
+    模块由目录扫描自动发现，所以没有「别忘了去某个列表里登记一下」这一步——
+    那种步骤迟早会被忘记，也迟早会变成冲突点。
+  </p>
+</div>
+{% endblock %}

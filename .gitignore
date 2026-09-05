@@ -1,0 +1,24 @@
+# Learning data and dictionary — never versioned (size + privacy).
+# learning.db holds irreplaceable study records; back it up via the admin console.
+data/
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Local configuration and secrets
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

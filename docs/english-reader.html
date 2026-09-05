@@ -1,0 +1,1209 @@
+<title>English Reader</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #FAFAFC;
+    --surface:     #FFFFFF;
+    --surface-sub: #F2F2F7;
+    --ink:         #1B1D26;
+    --ink-mid:     #4E5364;
+    --ink-soft:    #757B8E;
+    --rule:        #E3E4ED;
+    --rule-soft:   #EDEEF4;
+    --accent:      #37429B;
+    --accent-soft: #E8EAF7;
+    --mark:        #B37A0C;
+    --mark-soft:   #FBF2DE;
+
+    --f-serif: "Newsreader", Georgia, serif;
+    --f-sans:  "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+               "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+    --f-mix:   "Newsreader", "PingFang SC", "HarmonyOS Sans SC",
+               "Microsoft YaHei", "Noto Sans SC", serif;
+    --f-mono:  "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+    --col: 45rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101119;
+      --surface:     #171922;
+      --surface-sub: #1D202B;
+      --ink:         #E7E8F0;
+      --ink-mid:     #ADB2C4;
+      --ink-soft:    #868CA0;
+      --rule:        #2A2D3B;
+      --rule-soft:   #22252F;
+      --accent:      #98A1EE;
+      --accent-soft: #232741;
+      --mark:        #DFAB49;
+      --mark-soft:   #2C2718;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101119;
+    --surface:     #171922;
+    --surface-sub: #1D202B;
+    --ink:         #E7E8F0;
+    --ink-mid:     #ADB2C4;
+    --ink-soft:    #868CA0;
+    --rule:        #2A2D3B;
+    --rule-soft:   #22252F;
+    --accent:      #98A1EE;
+    --accent-soft: #232741;
+    --mark:        #DFAB49;
+    --mark-soft:   #2C2718;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 1.5rem 6rem;
+  }
+
+  .wrap {
+    max-width: var(--col);
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 4.5rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  h1 {
+    font-family: var(--f-serif);
+    font-size: clamp(2.6rem, 8vw, 3.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--f-mix);
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--ink-mid);
+    margin: 0;
+    max-width: 34rem;
+    text-wrap: pretty;
+  }
+
+  .thesis {
+    font-family: var(--f-mix);
+    font-size: 1.02rem;
+    color: var(--ink);
+    margin: 0;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--accent);
+    max-width: 34rem;
+  }
+
+  /* ---------- key figures ---------- */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 3rem 0 0;
+  }
+
+  .fig {
+    background: var(--surface);
+    padding: 1.1rem 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .fig-val {
+    font-family: var(--f-mono);
+    font-size: 1.35rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  .fig-val span {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-left: 0.15em;
+  }
+
+  .fig-key {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+
+  /* ---------- sections ---------- */
+
+  section {
+    margin-top: 4.5rem;
+  }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 1.75rem;
+  }
+
+  .sec-mark {
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  h2 {
+    font-family: var(--f-mix);
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .sec-note {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  .lede {
+    font-family: var(--f-mix);
+    color: var(--ink-mid);
+    margin: 0 0 1.75rem;
+    max-width: 36rem;
+  }
+
+  /* ---------- premises ---------- */
+
+  .premises {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .premise {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0 0.9rem;
+    align-items: baseline;
+  }
+
+  .premise-n {
+    font-family: var(--f-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mark);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .premise h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    font-family: var(--f-mix);
+  }
+
+  .premise p {
+    grid-column: 2;
+    margin: 0.3rem 0 0;
+    color: var(--ink-mid);
+    font-size: 0.95rem;
+  }
+
+  /* ---------- feature list ---------- */
+
+  .features {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .feat {
+    display: grid;
+    grid-template-columns: 3.1rem 1fr;
+    gap: 0 0.9rem;
+    padding: 1.1rem 0;
+    border-top: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+
+  .feat:first-child { border-top: none; padding-top: 0; }
+
+  .feat-id {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+  }
+
+  .feat-name {
+    font-weight: 600;
+    font-size: 0.98rem;
+    font-family: var(--f-mix);
+    line-height: 1.5;
+  }
+
+  .feat p {
+    grid-column: 2;
+    margin: 0.25rem 0 0;
+    color: var(--ink-mid);
+    font-size: 0.93rem;
+  }
+
+  .feat p + p { margin-top: 0.55rem; }
+
+  .feat-why {
+    color: var(--ink-soft);
+    font-size: 0.87rem;
+  }
+
+  .feat-why b {
+    font-weight: 600;
+    color: var(--ink-mid);
+  }
+
+  /* ---------- gloss (the reader's own gesture) ---------- */
+
+  .g {
+    border-bottom: 1px dashed var(--mark);
+    cursor: help;
+    position: relative;
+    color: inherit;
+  }
+
+  .g::after {
+    content: attr(data-def);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 0.45rem);
+    width: max-content;
+    max-width: min(20rem, 72vw);
+    background: var(--surface);
+    color: var(--ink-mid);
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--mark);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    font-family: var(--f-sans);
+    border-radius: 2px;
+    box-shadow: 0 6px 20px rgba(20, 22, 35, 0.14);
+    opacity: 0;
+    transform: translateY(-3px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .g:hover::after,
+  .g:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .g:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- ladder (progressive hint) ---------- */
+
+  .ladder {
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    margin-top: 0.75rem;
+    grid-column: 2;
+  }
+
+  .rung {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr 5.2rem;
+    gap: 0.8rem;
+    align-items: baseline;
+    padding: 0.7rem 0.9rem;
+    border-top: 1px solid var(--rule-soft);
+    font-size: 0.88rem;
+  }
+
+  .rung:first-child { border-top: none; }
+
+  .rung-n {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rung-grade {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    text-align: right;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+
+  .rung em {
+    font-style: normal;
+    color: var(--ink-mid);
+  }
+
+  /* ---------- params table ---------- */
+
+  .rules {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .rule {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    gap: 0.7rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .rule i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+
+  .rule b { font-weight: 600; }
+  .rule span { color: var(--ink-mid); }
+
+  td.phase {
+    font-family: var(--f-mono);
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  tr.now td { background: var(--accent-soft); }
+
+  tr.done td { color: var(--ink-soft); }
+  tr.done td.phase { color: var(--ink-soft); }
+
+  tr.done td.phase::after {
+    content: "完成";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--ink-soft);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  tr.now td.phase::after {
+    content: "当前";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--accent);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.91rem;
+    min-width: 30rem;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.65rem 0.9rem 0.65rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: baseline;
+    color: var(--ink-mid);
+  }
+
+  td:first-child {
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  td.num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ---------- flow ---------- */
+
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .step {
+    background: var(--surface);
+    padding: 1rem 1.1rem;
+    display: grid;
+    grid-template-columns: 4.6rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+
+  .step-when {
+    font-family: var(--f-mono);
+    font-size: 0.73rem;
+    color: var(--mark);
+    letter-spacing: 0.03em;
+  }
+
+  .step-what { font-size: 0.93rem; }
+
+  .step-what b {
+    display: block;
+    font-weight: 600;
+    font-size: 0.97rem;
+    font-family: var(--f-mix);
+    margin-bottom: 0.15rem;
+  }
+
+  .step-what span { color: var(--ink-mid); }
+
+  /* ---------- out of scope ---------- */
+
+  .excluded {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .ex {
+    display: grid;
+    grid-template-columns: 3.6rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .ex-tag {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    padding: 0.1rem 0.35rem;
+    text-align: center;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .ex b { font-weight: 600; }
+  .ex span { color: var(--ink-soft); }
+
+  /* ---------- open questions ---------- */
+
+  .open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 1.25rem 1.4rem;
+    background: var(--surface-sub);
+    border-left: 2px solid var(--mark);
+  }
+
+  .open div {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    gap: 0.6rem;
+    font-size: 0.93rem;
+    color: var(--ink-mid);
+    align-items: baseline;
+  }
+
+  .open i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--mark);
+  }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--f-mono);
+  }
+
+  @media (max-width: 34rem) {
+    body { padding: 0 1.15rem 4rem; }
+    .masthead { padding-top: 3rem; }
+    .feat, .premise { grid-template-columns: 1fr; gap: 0; }
+    .feat p, .premise p, .ladder { grid-column: 1; }
+    .feat-id, .premise-n { margin-bottom: 0.2rem; }
+    .rung { grid-template-columns: 1.6rem 1fr; }
+    .rung-grade { grid-column: 2; text-align: left; }
+    .step { grid-template-columns: 1fr; gap: 0.25rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">功能设计 · 2026-09-05</div>
+    <h1>English Reader</h1>
+    <p class="standfirst">以阅读为唯一入口的 CET-4 / CET-6 词汇习得系统。单人使用，内容完全按本人的真实阅读表现定制。</p>
+    <p class="thesis">不背单词表。每个词都在文章里第一次遇见，也在文章里被复习；卡片只是塞不进文章时的兜底。</p>
+  </header>
+
+  <div class="figures">
+    <div class="fig">
+      <div class="fig-val">30<span>分钟</span></div>
+      <div class="fig-key">每日投入</div>
+    </div>
+    <div class="fig">
+      <div class="fig-val">3–4<span>篇</span></div>
+      <div class="fig-key">每日文章</div>
+    </div>
+    <div class="fig">
+      <div class="fig-val">3–5<span>%</span></div>
+      <div class="fig-key">目标生词率</div>
+    </div>
+    <div class="fig">
+      <div class="fig-val">12<span>个</span></div>
+      <div class="fig-key">每日新目标词</div>
+    </div>
+    <div class="fig">
+      <div class="fig-val">~7<span>个月</span></div>
+      <div class="fig-key">CET-4 → CET-6</div>
+    </div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§0</span>
+      <h2>设计前提</h2>
+      <span class="sec-note">决定了后面所有取舍</span>
+    </div>
+
+    <div class="premises">
+      <div class="premise">
+        <span class="premise-n">01</span>
+        <h3>词汇薄弱，但语法扎实</h3>
+        <p>因此只在<b>词汇维度</b>降低难度，句法复杂度始终对齐 CET 真题——长难句、从句嵌套、学术议论文体全部保留。分级读物那种同时简化句式的材料一律排除：它们读着幼稚，且句式结构无法迁移到考试和真实阅读。</p>
+      </div>
+      <div class="premise">
+        <span class="premise-n">02</span>
+        <h3>孤立记忆无效</h3>
+        <p>每个词的完整生命周期——第一次遇见、每一次复习、每一次检验——都必须绑定真实语境。系统存储的最小单位因此不是词条，而是<span class="g" data-def="某个词，在某篇文章的某一句里出现，以及当时的反应：标记了、查了词、还是什么都没做。">遇见记录</span>。</p>
+      </div>
+      <div class="premise">
+        <span class="premise-n">03</span>
+        <h3>单用户系统</h3>
+        <p>不需要为陌生用户做通用难度分级。每一篇文章都可以为唯一的这个人当天的词汇状态量身定制，这是通用产品做不到、也不划算做的事。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§A</span>
+      <h2>水平评估</h2>
+      <span class="sec-note">5 项</span>
+    </div>
+    <p class="lede">系统必须始终知道「现在的词汇量在哪」，否则无法决定下一篇文章的难度。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">A1</span>
+        <span class="feat-name">初始词汇量测试</span>
+        <p>首次使用时的冷启动。按词频分段抽样出题，并混入不存在的假词以识别蒙混作答，约 40 题得出初始词汇量估计。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">A2</span>
+        <span class="feat-name">持续水平估计</span>
+        <p>每读完一篇文章，把「哪些词被标记、哪些没有」当作一批观测数据，持续更新词汇量估计。词的难度先验取自词频排名——越低频的词越难。</p>
+        <p class="feat-why"><b>用途：</b>有了这个估计，任意一篇候选文章对本人的预期生词率都能提前算出来，选文因此变成一个可计算的问题。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">A3</span>
+        <span class="feat-name">真题定期校准</span>
+        <p>CET-4 / CET-6 / 考研历年阅读真题作为客观标尺，定期插入，检验估计是否随时间偏移。生成的文章无法自证难度，真题可以。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">A4</span>
+        <span class="feat-name">假性认识修正</span>
+        <p>「没标记」不等于「认识」——可能是懒得标、靠上下文猜对了，眼熟但说不出意思，或者<b>认错了义项</b>。最后一种最隐蔽：读到 <span class="g" data-def="你默认它是「地址」，扫过去还觉得自己读懂了，其实这句话在说「着手解决问题」。">address</span> 一眼扫过、心里默认是「地址」，读完还觉得懂了，其实理解完全错了。读后抽查（§D）一旦发现这类词，反向下调估计。</p>
+        <p class="feat-why"><b>为什么必须有：</b>不修正的话，估计会被系统性高估，推送的文章越来越难，最终导致放弃。这是整个自适应机制最脆弱的一环。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">A5</span>
+        <span class="feat-name">隐式信号采集</span>
+        <p>除显式标记外，「点击查词但没标记」「在某句停留异常久」等行为也作为掌握度的弱信号计入，降权处理。日常只要「不认识就点一下」，数据就在积累，标记因此可以是可选动作。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§B</span>
+      <h2>内容供给</h2>
+      <span class="sec-note">6 项</span>
+    </div>
+    <p class="lede">「词汇受限但句法不降级」的材料现实中基本不存在，只能生成。真题则作为校准锚点。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">B1</span>
+        <span class="feat-name">按约束生成文章</span>
+        <p>日常文章由 AI 按硬约束生成：限定可用词汇范围、指定必须包含的新目标词与到期复习词、句法复杂度对齐 CET 真题、指定主题与体裁、指定长度。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B2</span>
+        <span class="feat-name">生成结果本地校验</span>
+        <p>生成模型不会遵守词汇限制，也不知道自己违规了。因此每篇产出必须逐词核验：还原词形 → 查词典 → 算出超纲词清单、目标词命中率、按当前水平预测的真实生词率。不达标的做定点改写，或直接丢弃。</p>
+        <p class="feat-why"><b>原则：</b>模型只负责生成，<b>判定权完全在系统手里</b>。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B3</span>
+        <span class="feat-name">过量生成择优</span>
+        <p>每次生成多篇候选，本地校验后择优采用。比反复雕琢提示词有效，也比逐篇重试省时。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B4</span>
+        <span class="feat-name">真题库</span>
+        <p>CET-4 / CET-6 / 考研历年阅读原文入库，用于 A3 校准，同时作为「什么叫 CET 难度」的难度锚点，供生成时参照。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B5</span>
+        <span class="feat-name">提前备好，离线可读</span>
+        <p>当天的文章提前生成并缓存到设备。打开就能读，不等生成；地铁里没信号也能读。碎片时间学习的前提是随时可用。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B6</span>
+        <span class="feat-name">主题控制</span>
+        <p>可指定或排除主题。长期覆盖真题的主题分布（社会、科技、教育、环境、经济），同时允许按个人兴趣调味——同主题文章天然重复相同词汇，对复现效率有额外好处。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§C</span>
+      <h2>阅读</h2>
+      <span class="sec-note">8 项</span>
+    </div>
+    <p class="lede">主界面。所有学习行为都发生在这里，一切设计以不打断阅读流为准。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">C1</span>
+        <span class="feat-name">点词查词：三层释义</span>
+        <p>点击任意词即时显示，不离开页面、不丢失阅读位置。释义分三层，第一层默认展开，其余折叠：</p>
+        <p class="feat-why"><b>① 在这句话中的意思</b>——文章入库时由 LLM 标注，只有一条。<b>② 该词的常见释义</b>——来自词典。<b>③ 四六级常考释义与搭配</b>——来自真题语料统计。</p>
+        <p>第一层还同时给出该义项的<b>英文概念定义</b>，用你已掌握的词写成。这样查词本身也是阅读输入，而不是在中英之间来回切换。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C2</span>
+        <span class="feat-name">派生词给构词提示，不当新词</span>
+        <p>阅读流中的即时识别和单独审视时的推导识别是两回事——<code>nationality</code> 停下来想能推出来，读的时候却会卡住。派生词正落在这个夹缝里。</p>
+        <p>所以当一个派生词出现、而你已掌握它的词根时，点开显示的是构词分解而非普通释义：<span class="g" data-def="nationality ← nation（国家）+ -ity（名词后缀：性质、状态）。在本句中：国籍。">nationality ← nation + -ity</span>。它只需一次确认，不进入完整复习队列，目标词名额按三分之一计。词根本身也不认识时，才作为普通目标词处理。</p>
+        <p class="feat-why"><b>附带好处：</b>这在实打实地练构词法——考场上遇到没见过的词能靠词缀猜出大意，比多背几个词值钱。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C3</span>
+        <span class="feat-name">专有名词可点但不计数</span>
+        <p>人名、地名、机构名不计入生词率、不进复习队列，但可点击，显示一句简短说明。</p>
+        <p class="feat-why"><b>生成时要刻意保留适量：</b>CET 阅读里充满陌生专有名词，「遇到它直接跳过、不影响理解」本身就是一项要练的阅读技能。为了干净把它们剔掉，反而丢了真实感。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C4</span>
+        <span class="feat-name">标记生词</span>
+        <p>显式标记不认识的词。是可选动作而非强制步骤——因为 A5 的隐式信号已经在工作，标记只是更强的确认。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C5</span>
+        <span class="feat-name">词形还原</span>
+        <p>文中出现的任何变形（<span class="g" data-def="dwindling / dwindled / dwindles 都必须归到词条 dwindle。而 left / saw / leaves 这类歧义词形必须靠词性才能判断，只看单词会归错。">dwindling → dwindle</span>）都要正确归到词条，歧义词形靠词性消歧。这是记录、统计、调度的共同前提。</p>
+        <p class="feat-why">这项分析在<b>文章入库时一次性完成</b>并存好，运行时只是查表——所以阅读、点词、标记全程不需要任何语言分析，低配硬件也毫无压力。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C6</span>
+        <span class="feat-name">目标词与附带词的区分</span>
+        <p>一篇 300 词的文章会撞上约 10 个生词，每天 3–4 篇就是 30–35 个——全部进入复习队列会立刻爆炸。因此明确分成两类：</p>
+        <p class="feat-why"><b>目标词</b>（每篇 3–4 个，全部来自 CET 词表）进入复习队列，安排复现，会被抽查。<b>附带词</b>只给释义，读完即止，不产生任何任务。大部分词汇本来就是附带习得的，硬把每个生词变成任务正是背单词软件「记不住」的成因。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C7</span>
+        <span class="feat-name">进度保存与恢复</span>
+        <p>中断后从原位置继续，包括已做的标记和查词记录。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C8</span>
+        <span class="feat-name">长文阅读排版</span>
+        <p>字号、行距、页宽可调。这是每天要待 20 分钟的界面，排版质量直接影响能否坚持。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§D</span>
+      <h2>读后检验</h2>
+      <span class="sec-note">3 项</span>
+    </div>
+    <p class="lede">每篇 1–2 分钟。存在的唯一目的是抓出「以为自己认识」的词。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">D1</span>
+        <span class="feat-name">词汇抽查</span>
+        <p>每篇读完抽 3–5 个<b>未被标记</b>的词提问。专门针对隐式信号的盲区——被标记的词系统已经知道不会了，没必要问。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">D2</span>
+        <span class="feat-name">按义项提问</span>
+        <p>题目始终问「这个词<b>在本文中</b>是什么意思」，而不是词的通用释义。认识 <span class="g" data-def="作「地址」认识，不等于作「演讲」「着手解决」认识。后两个义项恰恰是 CET 阅读的常客。">address 是「地址」</span>不等于掌握了它在本文里的义项，而熟词僻义正是 CET 阅读最爱考的地方。</p>
+        <p class="feat-why"><b>这是义项级追踪唯一的强信号来源。</b>按词条追踪，认错义项这种错误永远抓不出来；一问「它在这句里什么意思」就暴露了。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">D3</span>
+        <span class="feat-name">结果回流</span>
+        <p>答错的<b>义项</b>自动升级为目标，进入复习队列，同时下调水平估计（A4）。答对则确认掌握该义项，计为一次高强度成功回忆。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§E</span>
+      <h2>复习</h2>
+      <span class="sec-note">6 项</span>
+    </div>
+    <p class="lede">一个词要稳固掌握需要遇见 8–12 次，靠自然阅读碰运气远远不够。复现必须由系统主动安排。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">E1</span>
+        <span class="feat-name">遗忘曲线调度</span>
+        <p>记忆状态（记忆强度、难度、下次到期时间）挂在<b>义项</b>上，不是词条上，按间隔重复算法安排复习时机。这是决定「今天该复习哪些内容」的唯一来源。</p>
+        <p class="feat-why"><b>由此多出一个主动能力：</b>系统知道你掌握了 address 的义项①、义项③还没接触，就可以刻意在未来的文章里安排义项③出现——针对熟词僻义的定向训练。普通阅读软件连你认识哪个词都靠猜，更做不到这一层。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">E2</span>
+        <span class="feat-name">双通道复习</span>
+        <p>到期词队列算出后分流：<b>能塞进当天文章的</b>交给阅读来复习——语境最自然，效果最好，读完没标记记为成功、标记了记为失败；<b>塞不下的</b>才走卡片。两条通道产出同一套评分，回到同一个记忆状态。</p>
+        <p class="feat-why"><b>为什么需要卡片：</b>稳态下每天到期约 80 次，而 3–4 篇文章最多自然容纳 60 个复现位。卡片是这个缺口的泄压阀，不是主菜。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">E3</span>
+        <span class="feat-name">原句渐进提示</span>
+        <p>卡片不做「翻面」，而是四级逐步揭示，每级由本人决定要不要点。提示的核心是<b>当初读到这个词的那一句原话</b>，不是词典里的通用例句——那句话带着真实的阅读记忆，回忆的钩子完全不同。</p>
+        <div class="ladder">
+          <div class="rung"><span class="rung-n">0</span><span><em>只给单词</em></span><span class="rung-grade">EASY</span></div>
+          <div class="rung"><span class="rung-n">1</span><span>+ <em>原句</em>，该词高亮</span><span class="rung-grade">GOOD</span></div>
+          <div class="rung"><span class="rung-n">2</span><span>+ <em>中文释义</em></span><span class="rung-grade">HARD</span></div>
+          <div class="rung"><span class="rung-n">3</span><span>+ <em>完整上下文</em> / 跳回原文</span><span class="rung-grade">AGAIN</span></div>
+        </div>
+      </div>
+      <div class="feat">
+        <span class="feat-id">E4</span>
+        <span class="feat-name">提示级别即评分</span>
+        <p>用到第几级自动映射为记忆算法的评分，不需要自己判断「简单还是困难」。行为比自评客观，也少一步操作。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">E5</span>
+        <span class="feat-name">原句轮换</span>
+        <p>一个词积累了多条遇见记录后，每次复习优先选<b>上次没用过的那一条</b>。</p>
+        <p class="feat-why"><b>为什么：</b>始终用同一句提示，最后记住的很可能是那句话的模式而不是那个词，换个语境照样不认识。轮换不同的真实语境才能逼出迁移能力。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">E6</span>
+        <span class="feat-name">旧文重读</span>
+        <p>每周推荐一两篇一两个月前读过的旧文重读。当初标了 15 个生词的文章现在毫无障碍——这是唯一能直观感受到进步的功能，也是坚持下去的燃料。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§F</span>
+      <h2>数据留存</h2>
+      <span class="sec-note">7 项</span>
+    </div>
+    <p class="lede">复习提示、原句轮换、进度统计全部建立在这层之上。丢了数据，语境就没了。</p>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">F1</span>
+        <span class="feat-name">文章永久保存</span>
+        <p>所有校验达标的文章长期保留，包括原文、生成参数与难度指标。它们是句子和语境的载体——文章一删，复习卡片上的原句就成了孤儿。同时支撑 E6 的重读和阅读量统计。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F2</span>
+        <span class="feat-name">遇见记录</span>
+        <p>系统记录的最小单位：<b>某个词的某个义项，在某篇文章的某一句里出现，以及当时的反应</b>（标记 / 查词 / 无动作）。逐渐积累成这个义项的个人语境档案。</p>
+        <p class="feat-why">E3 的原句提示、E5 的轮换、A2 的水平估计都从这里取数。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F3</span>
+        <span class="feat-name">义项级掌握状态</span>
+        <p>掌握状态挂在<b>义项</b>而非词条上：记忆参数、是否目标、首次遇见时间、累计遇见与复习次数。</p>
+        <p class="feat-why"><b>为什么必须到这一层：</b>用这种方式学会的词，往往只记住了其中一个意思。不记录「会哪个、不会哪个」，系统既无法发现你认错义项，也无法主动安排熟词僻义。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F4</span>
+        <span class="feat-name">义项集与词族关系</span>
+        <p><b>义项集</b>为本项目单独建立，不直接采用词典的划分——中等粒度，<b>按英文概念边界划，不按中文翻译的差异划</b>。present 的「提出 / 介绍 / 呈现」在英文里是同一个概念，合成一项；address 的「地址」和「着手解决」是两回事，各算一项。</p>
+        <p>每个义项的本体是一条<b>英文概念定义</b>，中文释义只是它在不同语境下的投影。<b>词族关系</b>记录词根、派生关系与词缀分解，支撑 C2 的构词提示。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F5</span>
+        <span class="feat-name">大纲标签与真题考频</span>
+        <p>每个词标注所属大纲层级（中考 / 高考 / CET-4 / CET-6 / 考研）与词频排名，后者作为难度先验。</p>
+        <p class="feat-why"><b>但最终的学习优先级以真题统计为准。</b>一个词在近二十年真题里出现 50 次，比它在某份流传的词表里被标成 CET-4 有说服力得多。真题语料同时给出实际考频、常考义项与常见搭配——第三层释义就来自这里。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F6</span>
+        <span class="feat-name">复习历史</span>
+        <p>每次复习记录复习了哪个义项、用了哪条遇见记录作原句、揭示到第几级、评分结果。E5 的轮换靠它实现，也是日后回看算法是否合理的依据。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">F7</span>
+        <span class="feat-name">备份与迁移</span>
+        <p>全部学习数据——进度、义项掌握状态、水平估计、已生成的文章、决策记录——集中在一个文件里。管理控制台上一键下载即完整备份，上传即完整恢复。</p>
+        <p class="feat-why">词典数据单独存放且可随时重建，所以备份文件只有几 MB 而非几 GB。换机器、迁云服务器都是拷一个文件的事。人可读的结构化导出（JSON，可跨版本）留到 P6。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§G</span>
+      <h2>进度与反馈</h2>
+      <span class="sec-note">6 项</span>
+    </div>
+
+    <div class="features">
+      <div class="feat">
+        <span class="feat-id">G1</span>
+        <span class="feat-name">大纲覆盖率与义项完整度</span>
+        <p>主进度按<b>词条</b>算，因为 CET 大纲本身就是按词条列的，「掌握 4500 词」这个目标天然是词条级；<b>义项完整度</b>作为深度指标并列显示。</p>
+        <p class="feat-why">两个数字一起看才不失真：只按词条算会虚高（你可能只懂三分之一义项），只按义项算又会显得进度过慢。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">G2</span>
+        <span class="feat-name">水平曲线</span>
+        <p>词汇量估计随时间的变化，以及真题校准点的实测结果。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">G3</span>
+        <span class="feat-name">阅读量统计</span>
+        <p>累计文章数、词数、遇见次数。语言学习的进度本质上是接触量的函数，这个数字比打卡天数更有意义。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">G4</span>
+        <span class="feat-name">负载预警与自动调节</span>
+        <p>复习队列积压时自动降低新词引入速度，宁可拉长周期也不让队列崩掉。少读一天造成的缺口也由系统自行摊平，不做惩罚性补课。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">G5</span>
+        <span class="feat-name">管理控制台</span>
+        <p>一套长期存在的网页后台，用来看后端在干什么、而不是用来学习。包含：系统状态与文章库存、学习状态总览、<b>下一批文章的生成参数与校验结果</b>、决策日志、日志查询与导出、备份导入导出、Bark 通知配置，以及手动干预（强制重新生成、修正某个义项的掌握状态）。</p>
+        <p class="feat-why">客户端只管学习，完全不碰后端状态；管理只在这里发生。这也是<b>用户与 AI 之间的诊断通道</b>——出问题时从这里导出日志和诊断包。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">G6</span>
+        <span class="feat-name">日志与可追溯性</span>
+        <p>技术日志（请求、异常、性能，30 天轮转）与<b>决策日志</b>（每次选文、调度、水平更新的输入与理由，长期保存）分开存放。每次操作有唯一追踪号，出现在错误提示里。</p>
+        <p class="feat-why"><b>决策日志是这个项目特有的必需品：</b>系统每天替你做判断却不透明。有了它，「最近文章怎么变难了」这类问题才能翻出当时的依据，定位到是水平估计偏了、候选池不够，还是校验器算错了。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§H</span>
+      <h2>每日流程</h2>
+    </div>
+
+    <div class="flow">
+      <div class="step">
+        <span class="step-when">打开时</span>
+        <span class="step-what"><b>卡片复习</b><span>当天到期、且塞不进文章的词。渐进提示，5–8 分钟。</span></span>
+      </div>
+      <div class="step">
+        <span class="step-when">主体</span>
+        <span class="step-what"><b>阅读 3–4 篇</b><span>已提前备好并缓存。点词查词、标记生词，每篇读完做一次词汇抽查。约 20 分钟。</span></span>
+      </div>
+      <div class="step">
+        <span class="step-when">还想读</span>
+        <span class="step-what"><b>加餐</b><span>预备的 1–2 篇，读完主线后解锁。装的是<b>次日到期的复习词</b>而非新目标词——所以加餐是提前完成明天的一部分，不是额外增加负担，今天多读明天就轻。</span></span>
+      </div>
+      <div class="step">
+        <span class="step-when">每周一次</span>
+        <span class="step-what"><b>旧文重读</b><span>一两个月前的文章，作为进步的直观反馈。也是「还想读」的第三级供给，永不枯竭。</span></span>
+      </div>
+      <div class="step">
+        <span class="step-when">结算</span>
+        <span class="step-what"><b>更新与准备</b><span>更新水平估计与各义项记忆状态，算出明天的到期队列，据此备好明天的文章。三层保险：读完即刻生成 → 固定时间兜底（默认 4:00，可配）→ 控制台手动触发。全程无需人工介入。</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§I</span>
+      <h2>关键参数</h2>
+      <span class="sec-note">初始值，跑起来后再调</span>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>参数</th><th>初始值</th><th>依据</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>每日阅读时长</td><td class="num">30 分钟</td><td>可长期维持的强度</td></tr>
+          <tr><td>每日文章数</td><td class="num">3–4 篇</td><td>约 1000 词日阅读量</td></tr>
+          <tr><td>单篇长度</td><td class="num">250–350 词</td><td>一次专注可完成</td></tr>
+          <tr><td>目标生词率</td><td class="num">3–5%</td><td>低于 2% 学不到东西，高于 8% 读不下去</td></tr>
+          <tr><td>每篇新目标词</td><td class="num">3–4 个</td><td>每日预算的三分之一</td></tr>
+          <tr><td>每篇复习词位</td><td class="num">15–18 个</td><td>再多会显得刻意、不自然</td></tr>
+          <tr><td>每日新目标词上限</td><td class="num">12 个</td><td>硬上限，队列不爆的关键</td></tr>
+          <tr><td>每日卡片上限</td><td class="num">~20 张</td><td>兜底性质，不喧宾夺主</td></tr>
+          <tr><td>读后抽查</td><td class="num">3–5 题</td><td>1–2 分钟内完成</td></tr>
+          <tr><td>单词掌握所需遇见</td><td class="num">8–12 次</td><td>调度目标，非硬性判定</td></tr>
+          <tr><td>预计周期</td><td class="num">~7 个月</td><td>约 2500 词缺口 ÷ 12 词/天</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§J</span>
+      <h2>明确不做</h2>
+      <span class="sec-note">范围边界</span>
+    </div>
+
+    <div class="excluded">
+      <div class="ex">
+        <span class="ex-tag">不做</span>
+        <span><b>产出型词汇训练</b>——拼写、造句、写作练习。<span>目标是读到能认出（被动词汇）。要求会用，每个词的成本至少翻倍，周期也翻倍，且会把体验拉回「背单词」。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">缓做</span>
+        <span><b>短语动词与固定搭配</b>——<span class="g" data-def="put up with / come across / account for 这类，CET 的高频考点，但词条级的模型完全看不见它们。">put up with</span> 这类。<span>CET 重灾区，但需要独立的识别与调度机制。数据结构预留位置，一期不做。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">不做</span>
+        <span><b>听力、口语、写作模块</b>。<span>本系统只解决阅读与词汇。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">不做</span>
+        <span><b>社交、排行榜、打卡分享</b>。<span>单人使用，没有观众。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">不做</span>
+        <span><b>通用难度分级体系</b>。<span>不服务陌生用户，所有难度判断都相对于本人当前的词汇状态。</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§K</span>
+      <h2>开发路线</h2>
+      <span class="sec-note">绝不跨 Phase</span>
+    </div>
+    <p class="lede">排序原则是<b>风险前置</b>——最不确定的东西最早验证，而不是最容易的先做。每个 Phase 结束时都是可用、可验收的状态。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>内容</th><th>完成的定义</th></tr>
+        </thead>
+        <tbody>
+          <tr class="done">
+            <td class="phase">P0 地基</td>
+            <td>框架能力（配置 / 日志 / 事件总线 / 模块注册 / 数据库迁移）、三个数据库、词典数据入库、词形还原、API 骨架、管理控制台骨架。<b>方案见 <a href="https://claude.ai/code/artifact/44a188d8-50d4-4a6c-8768-84bfcc96fd2c" style="color:var(--accent)">Phase 0 文档</a></b></td>
+            <td><b>已完成并验收</b>（2026-09-05）。自动检查 29 项全过；词典 404,011 词条；部署验证按决定推迟到项目末期</td>
+          </tr>
+          <tr class="now">
+            <td class="phase">P1 生成器</td>
+            <td>按约束生成 + 本地校验 + 择优。命令行，不暴露给客户端</td>
+            <td>读完一篇，认为「这英语是自然的」</td>
+          </tr>
+          <tr>
+            <td class="phase">P2 阅读闭环</td>
+            <td>今日包与事件上报接口 + Web 客户端：读文章、点词查词、标记生词、遇见记录落库</td>
+            <td>手机上真读完一篇，事件完整回传</td>
+          </tr>
+          <tr>
+            <td class="phase">P3 自适应</td>
+            <td>初始词汇量测试、水平估计、按水平选文</td>
+            <td>连读几篇，生词率向 3–5% 收敛</td>
+          </tr>
+          <tr>
+            <td class="phase">P4 检验</td>
+            <td>读后词汇抽查、题目生成、结果回流修正水平</td>
+            <td>能抓出「以为认识」的词</td>
+          </tr>
+          <tr>
+            <td class="phase">P5 复习</td>
+            <td>遗忘曲线调度、双通道分流、渐进提示卡片、原句轮换</td>
+            <td>到期词自动进文章，塞不下的走卡片</td>
+          </tr>
+          <tr>
+            <td class="phase">P6 日常运转</td>
+            <td>提前生成、今日包离线缓存、每日流程串联、负载调节</td>
+            <td>连续一周打开就能用，无需人工干预</td>
+          </tr>
+          <tr>
+            <td class="phase">P7 iOS 端</td>
+            <td>原生客户端，GitHub Actions 构建未签名 IPA，SideStore 安装</td>
+            <td>手机上装着自己的 App 在用</td>
+          </tr>
+          <tr>
+            <td class="phase">P8 打磨</td>
+            <td>进度统计、旧文重读、UI 精修、TestFlight</td>
+            <td>成品</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      <b>为什么 P1 是命令行生成器而不是界面：</b>整个产品押在一个假设上——AI 能不能写出「词汇受限但句法不降级、且读起来自然」的英语。写不出来的话后面全部白搭，得回头重新想内容来源。验证它不需要界面，跑几篇打印出来读一读就知道。这个答案越早拿到越好。
+    </p>
+    <p class="lede">
+      <b>Android 与 Windows 端不进路线表</b>——只是计划。但下面的架构前提保证了将来要做时，后端一行不用改。
+    </p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§L</span>
+      <h2>架构前提</h2>
+      <span class="sec-note">从第一天守到最后</span>
+    </div>
+    <p class="lede">这个项目是<b>一个 headless 后端 + 多个可替换客户端</b>。Web UI 只是第一个客户端，不是主角。</p>
+
+    <div class="rules">
+      <div class="rule"><i>1</i><span><b>客户端零业务逻辑。</b>水平估计、选文、复习调度、难度计算全部在后端；客户端只负责渲染、收集交互、回传事件。破了这条，将来要在三种语言里各实现一遍同样的算法，三份逻辑必然漂移。</span></div>
+      <div class="rule"><i>2</i><span><b>API 是离线形状。</b>服务端下发「今日包」——当天全部文章、文中每个词的释义、复习卡片及其原句，客户端拿到后全天离线可用；交互事件先存本地，联网后批量上报，每个事件带客户端生成的幂等键。在线和离线走同一条代码路径，不是两套。</span></div>
+      <div class="rule"><i>3</i><span><b>服务端是唯一事实来源。</b>客户端存的一切都只是缓存。多个客户端必须看到同一份学习记录，任何一端本地算出来的状态都会漂移。</span></div>
+      <div class="rule"><i>4</i><span><b>两套 API 完全分离。</b>客户端接口与管理接口在路径和认证上都分开，客户端令牌碰不到任何管理接口。客户端只管学习，管理只在控制台发生。</span></div>
+      <div class="rule"><i>5</i><span><b>API 版本化、只增不减。</b>侧载安装的客户端更新滞后，手机上大概率长期跑着旧版本。可以加字段，不能删字段或改字段含义，客户端忽略未知字段；破坏性变更才开新版本。契约文档每个 Phase 更新。</span></div>
+      <div class="rule"><i>6</i><span><b>可扩展性优先。</b>P1 到 P8 每一个 Phase 都是在加新功能，所以骨架必须让加功能变容易：功能按模块自包含（自带表、接口、管理页、任务、配置），新模块一处登记自动挂载，新功能通过<b>订阅事件</b>接入而非修改原有流程，表结构变更走<b>版本化迁移且升级前自动备份</b>，参数一律配置化。</span></div>
+      <div class="rule"><i>7</i><span><b>前端零构建链。</b>管理控制台与 Web 阅读页都用服务端渲染，不引入包管理和打包步骤。加一个页面就是写模板加登记，半年不动也不会构建不起来。</span></div>
+      <div class="rule"><i>8</i><span><b>Web 阅读页是开发期测试工具</b>，功能可用即可，用完即弃，UI 力气留给 P7 的 iOS 原生端；<b>Web 管理控制台长期存在</b>，要好用、稳定、信息全——它是运维入口，也是诊断通道。</span></div>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem"><b>流程规则：</b></p>
+    <div class="rules">
+      <div class="rule"><i>·</i><span>绝不跨 Phase 开发，不实现任何属于未来 Phase 的功能，哪怕只是「顺手做了」。</span></div>
+      <div class="rule"><i>·</i><span>当前 Phase 中发现的未来需求记进待办，不动手。</span></div>
+      <div class="rule"><i>·</i><span>数据结构<b>可以</b>为未来预留字段，但不实现任何未来 Phase 的逻辑。这是「留位置」，不是「提前开发」。</span></div>
+      <div class="rule"><i>·</i><span><b>每个 Phase 的方案必须经过充分讨论、达成一致后才能定案。</b>方案是讨论的起点，要摊开选项与权衡、标明不确定的地方，而不是一份等待批准的结论。</span></div>
+      <div class="rule"><i>·</i><span>方案讨论期间<b>不写任何实现代码</b>，包括脚手架和示例。</span></div>
+      <div class="rule"><i>·</i><span>每个 Phase 结束由本人实际跑一遍验收，通过后才进下一个。</span></div>
+      <div class="rule"><i>·</i><span>每个 Phase 结束时更新本文档，让文档和实际做出来的东西对齐。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§M</span>
+      <h2>待定</h2>
+    </div>
+
+    <div class="open">
+      <div><i>?</i><span><b>真题语料的获取与清洗途径</b>——目前手上没有现成资源，但它同时是难度锚点、常考释义和义项优先级的来源，是 P1 的关键前置</span></div>
+      <div><i>?</i><span>义项集批量生成时，如何保证粒度标准前后一致（中等粒度、按英文概念边界，需实跑几批验证）</span></div>
+      <div><i>?</i><span>英文概念定义所用的受限词汇表，如何随水平提升重新生成</span></div>
+      <div><i>?</i><span>初始测试的具体题量与词频分段划分</span></div>
+      <div><i>?</i><span>主题偏好清单，以及个人兴趣与真题主题分布的配比</span></div>
+      <div><i>?</i><span>文章体裁比例——说明文 / 议论文 / 记叙文</span></div>
+      <div><i>?</i><span>旧文重读的触发条件：固定每周，还是按「当初生词数」自动挑选</span></div>
+      <div><i>?</i><span>目标义项是否需要「毕业」机制——达到什么条件后彻底移出复习队列</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>功能设计 v1</span>
+    <span>2026-09-05</span>
+  </footer>
+
+</div>

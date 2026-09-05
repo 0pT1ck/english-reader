@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block title %}日志{% endblock %}
+
+{% block content %}
+<h1>日志</h1>
+<p class="subtitle">
+  技术日志按 30 天轮转，可丢弃；决策日志记录系统每次判断的依据，长期保存。
+</p>
+
+<div class="row" style="margin-bottom:1.1rem">
+  <a class="btn {{ 'primary' if view != 'decisions' else '' }}" href="/admin/logs">技术日志</a>
+  <a class="btn {{ 'primary' if view == 'decisions' else '' }}" href="/admin/logs?view=decisions">决策日志</a>
+  <span style="margin-left:auto"></span>
+  <button onclick="downloadBundle()">导出诊断包</button>
+</div>
+
+{% if view != 'decisions' %}
+<form class="card" method="get" style="margin-bottom:1.1rem">
+  <div class="row">
+    <label class="muted" style="min-width:3rem">级别</label>
+    <select name="level" style="max-width:9rem">
+      <option value="">全部</option>
+      {% for lv in ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'] %}
+      <option value="{{ lv }}" {{ 'selected' if filters.level == lv else '' }}>{{ lv }} 及以上</option>
+      {% endfor %}
+    </select>
+    <input type="text" name="event" value="{{ filters.event }}" placeholder="事件名前缀，如 article." style="max-width:16rem">
+    <input type="text" name="trace_id" value="{{ filters.trace_id }}" placeholder="trace_id" style="max-width:12rem">
+    <button class="primary" type="submit">筛选</button>
+    <a class="btn" href="/admin/logs">清除</a>
+  </div>
+  <p class="muted" style="margin:0.7rem 0 0">
+    出错提示里的 trace_id 填到上面那格，就能看到那一次操作从头到尾的完整记录——
+    包括因为出错而被自动落盘的 DEBUG 明细。
+  </p>
+</form>
+
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>时间</th><th>级别</th><th>模块</th><th>事件</th><th>说明</th><th>trace</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td class="mono nowrap">{{ r.ts[:19].replace('T', ' ') }}</td>
+        <td><span class="pill {{ r.level }}">{{ r.level }}</span></td>
+        <td class="mono nowrap">{{ r.module }}</td>
+        <td class="mono nowrap">{{ r.event }}</td>
+        <td>
+          {{ r.message }}
+          {% if r.context %}
+          <details class="detail"><summary>上下文</summary><pre>{{ r.context }}</pre></details>
+          {% endif %}
+        </td>
+        <td class="mono nowrap">
+          {% if r.trace_id %}
+          <a href="/admin/logs?trace_id={{ r.trace_id }}">{{ r.trace_id }}</a>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">没有符合条件的记录。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>时间</th><th>类型</th><th>结论</th><th>依据</th><th>trace</th></tr>
+    </thead>
+    <tbody>
+      {% for r in records %}
+      <tr>
+        <td class="mono nowrap">{{ r.ts[:19].replace('T', ' ') }}</td>
+        <td class="mono nowrap">{{ r.kind }}</td>
+        <td>
+          {{ r.summary }}
+          {% if r.chosen %}
+          <details class="detail"><summary>选中的对象</summary><pre>{{ r.chosen }}</pre></details>
+          {% endif %}
+        </td>
+        <td>
+          {{ r.reason }}
+          {% if r.inputs %}
+          <details class="detail"><summary>输入</summary><pre>{{ r.inputs }}</pre></details>
+          {% endif %}
+          {% if r.candidates %}
+          <details class="detail"><summary>候选</summary><pre>{{ r.candidates }}</pre></details>
+          {% endif %}
+        </td>
+        <td class="mono nowrap">
+          {% if r.trace_id %}
+          <a href="/admin/logs?trace_id={{ r.trace_id }}">{{ r.trace_id }}</a>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">
+        还没有决策记录。系统开始替你挑选文章、安排复习之后，这里会记录每一次判断的依据。
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function downloadBundle() {
+    const hours = window.prompt('导出最近多少小时的诊断信息？', '24');
+    if (!hours) return;
+    // Plain navigation rather than fetch: this is a file download, and the
+    // session cookie travels with it automatically.
+    window.location = '/v1/admin/diagnostic-bundle?hours=' + encodeURIComponent(hours);
+  }
+</script>
+{% endblock %}
