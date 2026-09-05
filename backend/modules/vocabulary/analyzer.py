@@ -154,7 +154,7 @@ def _lemminflect_candidates(word: str, upos: str) -> tuple[str, ...]:
     return ()
 
 
-def _resolve_lemma(token: Any) -> tuple[str, str]:
+def resolve_lemma(token: Any) -> tuple[str, str]:
     """Decide the lemma for one token. Returns ``(lemma, source)``.
 
     The two tools fail in different ways, and combining them is what gets the
@@ -214,7 +214,7 @@ def analyze(text: str) -> list[SentenceAnalysis]:
                 continue
 
             is_word = token.is_alpha
-            lemma, source = _resolve_lemma(token)
+            lemma, source = resolve_lemma(token)
 
             item = TokenAnalysis(
                 index=token_index,

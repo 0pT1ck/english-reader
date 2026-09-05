@@ -6,6 +6,7 @@
 
 - `docs/english-reader.html` — 功能设计（做什么、为什么这么做、开发路线、架构前提）
 - `docs/phase-0.html` — P0 实施方案（八项技术定案、要建的东西、明确不做的边界、验收清单）
+- `docs/phase-1.html` — P1 方案（三段推进、已定决策、P1a 工作流、验收标准）
 
 **文档只存在本地，不要发布为 Artifact。** 用户直接用浏览器打开这些 HTML 文件查看——所有样式和交互都在文件内，不依赖网络。
 
@@ -21,7 +22,11 @@ https://github.com/SCmenghua/english-reader （私有，默认分支 `main`）
 
 按 Phase 推进，路线见主文档 §K。
 
-**当前 Phase：P1 生成器 —— 方案待讨论，尚未动手。**
+**当前 Phase：P1b —— 配套数据，方案待讨论。**
+
+P1a 已于 2026-09-05 验收通过：8 个模型 × 2 组目标词共 16 篇，核心假设成立。
+结论与实验数据见 `docs/phase-1.html` §6。真题语料 452 篇在 `data/exam_papers/`，按考试分开。
+生成工作台在 `/admin/generation`（手动模式：出提示词 → 贴到网页版 AI → 贴回结果 → 看体检报告）。
 
 P0 已于 2026-09-05 完成并验收（自动检查 29 项全过，见 `docs/phase-0.html`）。
 服务用 `start.bat` 启动，开发用 `dev.bat`；`uv run python scripts/verify_phase0.py` 可复跑 P0 验收。

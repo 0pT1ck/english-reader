@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block title %}生成{% endblock %}
+
+{% block content %}
+<h1>生成实验</h1>
+<p class="subtitle">
+  P1a 的工作台。构造提示词 → 贴到网页版 AI → 把回复贴回来 → 看体检报告。
+  不接 API，任何模型都能试。
+</p>
+
+{% if not dictionary_ready %}
+<div class="notice bad">
+  <b>词典还没导入</b>，无法挑选目标词。先执行
+  <code>uv run python scripts/import_dictionary.py</code>。
+</div>
+{% endif %}
+
+<div class="notice">
+  <b>实验纪律：每篇单独开一个新对话。</b>同一次生成的多篇文章风格几乎必然雷同，
+  盲测时识破一篇会连带否掉另一篇——两篇的判断不独立，占两个名额却只有一篇的信息量。
+  <br>第一轮固定用<b>锚点方案</b>只比模型；等选出模型后，第二轮再比三种词汇约束方案。
+  一次只变一个变量，结论才站得住。
+</div>
+
+<h2>第一步 · 构造提示词</h2>
+<div class="card">
+  <div class="row">
+    <label class="muted" style="min-width:4.5rem">约束方案</label>
+    <select id="scheme" style="max-width:16rem">
+      {% for key, label in schemes.items() %}
+      <option value="{{ key }}">{{ label }}</option>
+      {% endfor %}
+    </select>
+
+    <label class="muted" style="min-width:4.5rem">目标词组</label>
+    <select id="word-set" style="max-width:7rem">
+      {% for name in word_sets %}
+      <option value="{{ name }}">{{ name }} 组</option>
+      {% endfor %}
+    </select>
+
+    <button class="primary" onclick="buildPrompt()">生成提示词</button>
+  </div>
+  <p class="muted" style="margin:0.8rem 0 0">
+    A 组用于第一轮、B 组用于第二轮。同一个模型的两篇用不同词组，内容才不会撞车；
+    模型之间用同一组词，才具备可比性。
+  </p>
+</div>
+
+<div id="prompt-area" hidden>
+  <div class="row" style="margin:1.2rem 0 0.6rem">
+    <b id="prompt-meta"></b>
+    <span style="margin-left:auto"></span>
+    <button class="primary" onclick="copyPrompt()">复制提示词</button>
+  </div>
+  <pre id="prompt-text" style="white-space:pre-wrap;max-height:22rem;overflow:auto;
+       background:var(--surface);border:1px solid var(--rule);border-radius:3px;
+       padding:1rem;font-family:var(--mono);font-size:0.82rem;line-height:1.7"></pre>
+  <p class="muted" id="target-list" style="margin-top:0.6rem"></p>
+</div>
+
+<h2>第二步 · 贴回结果</h2>
+<div class="card">
+  <div class="row" style="margin-bottom:0.7rem">
+    <label class="muted" style="min-width:4.5rem">用的模型</label>
+    <input type="text" id="model" list="model-presets" placeholder="例如 GPT-5.2 / Claude Opus 5 / Gemini 3 Pro"
+           style="max-width:22rem">
+    <datalist id="model-presets">
+      <option value="ChatGPT"></option>
+      <option value="Claude"></option>
+      <option value="Gemini"></option>
+      <option value="DeepSeek"></option>
+      <option value="Kimi"></option>
+      <option value="通义千问"></option>
+      <option value="豆包"></option>
+      <option value="文心一言"></option>
+    </datalist>
+    <input type="text" id="note" placeholder="备注（可选）" style="max-width:14rem">
+  </div>
+  <textarea id="response" rows="8" placeholder="把 AI 的完整回复粘贴到这里。前后多余的说明文字不用删，解析器会忽略。"
+    style="width:100%;font:inherit;font-size:0.88rem;padding:0.6rem;border:1px solid var(--rule);
+           border-radius:3px;background:var(--surface);color:var(--ink);resize:vertical"></textarea>
+  <div class="row" style="margin-top:0.7rem">
+    <button class="primary" onclick="submitDraft()">解析并校验</button>
+    <span class="muted">目标词会随提示词一起记录，用于判断模型有没有把它们用上。</span>
+  </div>
+</div>
+
+<div id="result"></div>
+
+<h2>已收录的草稿</h2>
+<div class="row" style="margin-bottom:0.8rem">
+  <button onclick="loadDrafts()">刷新</button>
+  <button onclick="loadComparison()">按模型汇总</button>
+</div>
+<div id="comparison"></div>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th>ID</th><th>标题</th><th>模型</th><th>方案</th><th>词组</th>
+          <th>词数</th><th>超范围</th><th>目标词</th><th>时间</th><th></th></tr>
+    </thead>
+    <tbody id="draft-rows">
+      <tr><td colspan="10" class="muted">点「刷新」加载。</td></tr>
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  let current = null;   // the prompt currently on screen, with its target words
+
+  async function buildPrompt() {
+    const scheme = document.getElementById('scheme').value;
+    const wordSet = document.getElementById('word-set').value;
+    try {
+      current = await api(`/generation/prompt?scheme=${scheme}&word_set=${wordSet}`);
+    } catch (e) { toast(e.message, true); return; }
+
+    document.getElementById('prompt-text').textContent = current.prompt;
+    document.getElementById('prompt-meta').textContent =
+      `${current.scheme_label} · ${current.word_set} 组 · ${current.chars} 字符 · `
+      + `允许词表 ${current.allowed_count} 词（假定已掌握 ${current.known_count} 词）`;
+    document.getElementById('target-list').innerHTML =
+      '<b>本篇目标词：</b>' + current.target_words.join('、');
+    document.getElementById('prompt-area').hidden = false;
+  }
+
+  async function copyPrompt() {
+    if (!current) return;
+    try {
+      await navigator.clipboard.writeText(current.prompt);
+      toast('已复制，去 AI 那里粘贴（记得开新对话）');
+    } catch (e) {
+      toast('复制失败，请手动选中上面的文本', true);
+    }
+  }
+
+  async function submitDraft() {
+    const model = document.getElementById('model').value.trim();
+    const response = document.getElementById('response').value.trim();
+    if (!model) { toast('先填写用的是哪个模型', true); return; }
+    if (!response) { toast('先粘贴 AI 的回复', true); return; }
+    if (!current) { toast('先生成提示词，否则记录不到目标词', true); return; }
+
+    let data;
+    try {
+      data = await api('/generation/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          response, model,
+          scheme: current.scheme,
+          word_set: current.word_set,
+          target_words: current.target_words,
+          prompt: current.prompt,
+          note: document.getElementById('note').value.trim(),
+        }),
+      });
+    } catch (e) { toast(e.message, true); return; }
+
+    renderReport(data);
+    document.getElementById('response').value = '';
+    loadDrafts();
+    toast('已收录 #' + data.id);
+  }
+
+  function renderReport(data) {
+    const r = data.report;
+    const hits = Object.entries(r.target_hits);
+    const missed = hits.filter(([, used]) => !used).map(([w]) => w);
+
+    const warn = data.warnings.length
+      ? `<div class="notice">解析时的提醒：${data.warnings.join('；')}</div>` : '';
+
+    const beyond = r.beyond.length
+      ? r.beyond.map(b => `<span class="pill ${b.in_dictionary ? 'WARNING' : 'ERROR'}"
+           title="${b.in_dictionary ? ('词典标签：' + (b.tags || '无')) : '词典中没有'}"
+           >${b.lemma}${b.count > 1 ? '×' + b.count : ''}</span>`).join(' ')
+      : '<span class="muted">没有超出允许范围的词</span>';
+
+    // Syntax is shown side by side with the real-paper baseline rather than
+    // judged: no thresholds in P1a, the numbers are for calibration.
+    const labels = {relcl:'定语从句', ccomp:'宾语从句', xcomp:'非限定补语',
+                    advcl:'状语从句', acl:'分词/不定式修饰', expl:'形式主语',
+                    passive:'被动语态', nominal:'名词化'};
+    const keys = Object.keys(labels).filter(k => r.syntax[k] || r.baseline[k]);
+    const syntax = keys.map(k =>
+      `<tr><td>${labels[k]}</td><td class="mono">${(r.syntax[k] || 0).toFixed(1)}</td>
+       <td class="mono muted">${(r.baseline[k] || 0).toFixed(1)}</td></tr>`).join('');
+
+    document.getElementById('result').innerHTML = `
+      <h2>体检报告 · #${data.id}</h2>
+      ${warn}
+      <div class="grid">
+        <div class="card stat"><span class="stat-label">词数</span>
+          <span class="stat-value">${r.words}</span></div>
+        <div class="card stat"><span class="stat-label">平均句长</span>
+          <span class="stat-value">${r.avg_sentence}<small> 词</small></span></div>
+        <div class="card stat"><span class="stat-label">最长句</span>
+          <span class="stat-value">${r.max_sentence}<small> 词</small></span></div>
+        <div class="card stat"><span class="stat-label">目标词用上</span>
+          <span class="stat-value">${r.targets_used}/${r.targets_total}</span></div>
+        <div class="card stat"><span class="stat-label">超出范围</span>
+          <span class="stat-value">${r.beyond.length}<small> 词条 · ${r.beyond_rate}%</small></span></div>
+        <div class="card stat"><span class="stat-label">最大嵌套深度</span>
+          <span class="stat-value">${r.max_depth}</span></div>
+      </div>
+
+      ${missed.length ? `<div class="notice"><b>没用上的目标词：</b>${missed.join('、')}</div>` : ''}
+
+      <h2>超出允许范围的词</h2>
+      <div class="card" style="line-height:2.2">${beyond}</div>
+      <p class="muted" style="margin-top:0.5rem">
+        黄色＝词典里有但不在允许层级；红色＝词典里没有（可能是新词、拼写变体，
+        或者连字符复合词被切开——这两个已知缺陷会让数字偏高）。
+      </p>
+
+      <h2>句法结构（每千词）</h2>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>结构</th><th>本篇</th><th>真题基线</th></tr></thead>
+          <tbody>${syntax}</tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin-top:0.5rem">
+        并列显示，不作判定。P1a 不设阈值——标准本身还没校准，
+        第一批实验校准的不只是提示词，也包括这个校验器。
+      </p>
+
+      <h2>正文</h2>
+      <div class="card" style="line-height:1.9">
+        <b>${data.title}</b><br><br>
+        ${data.body.split('\\n\\n').map(p => `<p>${p}</p>`).join('')}
+      </div>`;
+    document.getElementById('result').scrollIntoView({behavior: 'smooth'});
+  }
+
+  async function loadDrafts() {
+    let data;
+    try { data = await api('/generation/drafts'); }
+    catch (e) { toast(e.message, true); return; }
+
+    document.getElementById('draft-rows').innerHTML = data.drafts.length
+      ? data.drafts.map(d => {
+          const r = d.report || {};
+          return `<tr>
+            <td class="mono">${d.id}</td>
+            <td>${d.title || '—'}</td>
+            <td class="nowrap">${d.model}</td>
+            <td class="mono">${d.scheme}</td>
+            <td class="mono">${d.word_set || '—'}</td>
+            <td class="mono">${r.words ?? '—'}</td>
+            <td class="mono">${r.beyond ? r.beyond.length : '—'}</td>
+            <td class="mono">${r.targets_used ?? '—'}/${r.targets_total ?? '—'}</td>
+            <td class="mono nowrap">${(d.created_at || '').slice(0, 16).replace('T', ' ')}</td>
+            <td><button class="danger" onclick="removeDraft(${d.id})">删除</button></td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="10" class="muted">还没有草稿。</td></tr>';
+  }
+
+  async function removeDraft(id) {
+    if (!confirm('删除这篇草稿？')) return;
+    try { await api('/generation/drafts/' + id, {method: 'DELETE'}); loadDrafts(); }
+    catch (e) { toast(e.message, true); }
+  }
+
+  async function loadComparison() {
+    let data;
+    try { data = await api('/generation/comparison'); }
+    catch (e) { toast(e.message, true); return; }
+
+    document.getElementById('comparison').innerHTML = data.models.length ? `
+      <div class="scroll" style="margin-bottom:1rem">
+        <table>
+          <thead><tr><th>模型</th><th>方案</th><th>篇数</th><th>平均词数</th>
+                     <th>平均句长</th><th>平均超范围词条</th><th>超范围率</th>
+                     <th>目标词命中</th></tr></thead>
+          <tbody>${data.models.map(m => `<tr>
+            <td>${m.model}</td><td class="mono">${m.scheme}</td>
+            <td class="mono">${m.drafts}</td><td class="mono">${m.avg_words}</td>
+            <td class="mono">${m.avg_sentence}</td><td class="mono">${m.avg_beyond}</td>
+            <td class="mono">${m.avg_beyond_rate}%</td><td class="mono">${m.target_rate}%</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>
+      <p class="muted" style="margin:-0.6rem 0 1rem">
+        这些只是可量化的部分。<b>文章读起来行不行，得靠盲测</b>——本地数据再好看，
+        被人一眼认出是 AI 写的也没用。
+      </p>`
+      : '<p class="muted">还没有可汇总的数据。</p>';
+  }
+
+  loadDrafts();
+</script>
+{% endblock %}

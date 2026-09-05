@@ -671,6 +671,12 @@
         <h3>单用户系统</h3>
         <p>不需要为陌生用户做通用难度分级。每一篇文章都可以为唯一的这个人当天的词汇状态量身定制，这是通用产品做不到、也不划算做的事。</p>
       </div>
+      <div class="premise">
+        <span class="premise-n">04</span>
+        <h3>目标是分阶段推进的</h3>
+        <p>学习目标不是固定的「CET-4」，而是一个会往前走的等级：先四级，通过后转六级，再往后是考研。<b>目标等级是一个可切换的设置，不是写死的常量。</b></p>
+        <p>它一次决定三件事：参考哪套真题（文体、篇长、句法密度）、词表范围到哪一层、进度按哪个大纲统计。所以真题语料、篇长参数、覆盖率口径都必须<b>按考试分开存放</b>——混在一起，「我的目标考试长什么样」这个问题就没法回答了。</p>
+      </div>
     </div>
   </section>
 
@@ -717,9 +723,9 @@
     <div class="sec-head">
       <span class="sec-mark">§B</span>
       <h2>内容供给</h2>
-      <span class="sec-note">6 项</span>
+      <span class="sec-note">8 项</span>
     </div>
-    <p class="lede">「词汇受限但句法不降级」的材料现实中基本不存在，只能生成。真题则作为校准锚点。</p>
+    <p class="lede">两条来源并行：<b>生成的文章</b>负责精准投放目标词与到期复习词，<b>真题原文</b>提供真实语料的接触。前者可控，后者可信，互补。</p>
 
     <div class="features">
       <div class="feat">
@@ -741,7 +747,20 @@
       <div class="feat">
         <span class="feat-id">B4</span>
         <span class="feat-name">真题库</span>
-        <p>CET-4 / CET-6 / 考研历年阅读原文入库，用于 A3 校准，同时作为「什么叫 CET 难度」的难度锚点，供生成时参照。</p>
+        <p>CET-4 / CET-6 / 考研历年阅读原文入库，<b>按考试分开存放</b>——目标等级切换时要能换一套参照（见设计前提 04）。用于 A3 校准、B7 直读，以及句法结构的统计来源。</p>
+        <p class="feat-why">已入库 452 篇：四级 138、六级 134、考研 180。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B7</span>
+        <span class="feat-name">真题直读</span>
+        <p>真题不只是参照物，本身就是可读的材料。系统按你当前掌握的词计算每篇真题的难度，<b>筛出你能读下来的那些</b>供选读。</p>
+        <p class="feat-why"><b>为什么值得单列：</b>它是<b>真实语料</b>——不必担心地不地道，因为它本来就是考题；<b>零生成成本、零质量风险</b>；而且读真题的同时就在做 A3 的水平校准，一举两得。生成文章负责精准投放，真题负责真实接触，两者互补而非替代。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">B8</span>
+        <span class="feat-name">句法结构约束</span>
+        <p>从真题语料中统计常见的高级句法结构及其出现频率——定语从句、分词作状语、名词化、形式主语、倒装、强调句等——生成时<b>按相近比例适度使用</b>。</p>
+        <p class="feat-why">这是把「句法不降级」这条前提变成可执行清单的办法。目标是<b>适度</b>而非堆砌：通篇长难句既不像真题，也不利于阅读。频率来自真实统计，不靠拍脑袋。</p>
       </div>
       <div class="feat">
         <span class="feat-id">B5</span>
@@ -760,7 +779,7 @@
     <div class="sec-head">
       <span class="sec-mark">§C</span>
       <h2>阅读</h2>
-      <span class="sec-note">8 项</span>
+      <span class="sec-note">9 项</span>
     </div>
     <p class="lede">主界面。所有学习行为都发生在这里，一切设计以不打断阅读流为准。</p>
 
@@ -806,6 +825,12 @@
         <span class="feat-id">C7</span>
         <span class="feat-name">进度保存与恢复</span>
         <p>中断后从原位置继续，包括已做的标记和查词记录。</p>
+      </div>
+      <div class="feat">
+        <span class="feat-id">C9</span>
+        <span class="feat-name">标记读不懂的句子</span>
+        <p>除了标记生词，还能标记<b>整句读不懂</b>——即使每个词都认识。</p>
+        <p class="feat-why"><b>为什么需要：</b>句法统计只能告诉系统「真题里有什么结构」，无法告诉它「你卡在哪种结构上」。这两件事未必重合——可能真题里定语从句最多，而你真正读不动的是 <code>as</code> 的多义和省略结构。这个入口是唯一能积累出真实弱点数据的地方，积累够了就能反过来调整生成时的句法侧重。</p>
       </div>
       <div class="feat">
         <span class="feat-id">C8</span>
@@ -1035,7 +1060,10 @@
         <tbody>
           <tr><td>每日阅读时长</td><td class="num">30 分钟</td><td>可长期维持的强度</td></tr>
           <tr><td>每日文章数</td><td class="num">3–4 篇</td><td>约 1000 词日阅读量</td></tr>
-          <tr><td>单篇长度</td><td class="num">250–350 词</td><td>一次专注可完成</td></tr>
+          <tr><td>单篇长度 · CET-4</td><td class="num">330–360 词</td><td>138 篇真题实测：309–363，中位数 346</td></tr>
+          <tr><td>单篇长度 · CET-6</td><td class="num">420–460 词</td><td>134 篇真题实测：416–458，中位数 445</td></tr>
+          <tr><td>单篇长度 · 考研</td><td class="num">380–470 词</td><td>180 篇真题实测：334–467，中位数 421</td></tr>
+          <tr><td>平均句长</td><td class="num">23 / 27 / 25 词</td><td>四级 / 六级 / 考研实测，最长句可达 100–160 词</td></tr>
           <tr><td>目标生词率</td><td class="num">3–5%</td><td>低于 2% 学不到东西，高于 8% 读不下去</td></tr>
           <tr><td>每篇新目标词</td><td class="num">3–4 个</td><td>每日预算的三分之一</td></tr>
           <tr><td>每篇复习词位</td><td class="num">15–18 个</td><td>再多会显得刻意、不自然</td></tr>
@@ -1064,6 +1092,10 @@
       <div class="ex">
         <span class="ex-tag">缓做</span>
         <span><b>短语动词与固定搭配</b>——<span class="g" data-def="put up with / come across / account for 这类，CET 的高频考点，但词条级的模型完全看不见它们。">put up with</span> 这类。<span>CET 重灾区，但需要独立的识别与调度机制。数据结构预留位置，一期不做。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">缓做</span>
+        <span><b>独立的语法学习模块</b>——系统讲解、专项练习。<span>作为正式版之后的更新方向预留位置。当前阶段语法只以两种形式出现：一是生成文章时按 B8 适度使用高级句法，二是将来可能加的长难句结构解析（阅读辅助，非独立模块）。学习者的瓶颈在词汇，先集中解决它。</span></span>
       </div>
       <div class="ex">
         <span class="ex-tag">不做</span>
@@ -1101,17 +1133,17 @@
           </tr>
           <tr class="now">
             <td class="phase">P1 生成器</td>
-            <td>按约束生成 + 本地校验 + 择优。命令行，不暴露给客户端</td>
-            <td>读完一篇，认为「这英语是自然的」</td>
+            <td>按约束生成 + 本地校验 + 择优（命令行）；真题入库与难度画像；从真题统计句法结构；义项集与词族生成</td>
+            <td>生成的文章用词在范围内、搭配无误、句法是正常书面语</td>
           </tr>
           <tr>
             <td class="phase">P2 阅读闭环</td>
-            <td>今日包与事件上报接口 + Web 客户端：读文章、点词查词、标记生词、遇见记录落库</td>
+            <td>今日包与事件上报接口 + Web 客户端：读文章、点词查词、标记生词、遇见记录落库。<b>真题直读</b>（列表选读）在此接入——它是现成内容，正好当 P2 的素材</td>
             <td>手机上真读完一篇，事件完整回传</td>
           </tr>
           <tr>
             <td class="phase">P3 自适应</td>
-            <td>初始词汇量测试、水平估计、按水平选文</td>
+            <td>初始词汇量测试、水平估计、按水平选文；<b>真题按水平自动筛选推荐</b></td>
             <td>连读几篇，生词率向 3–5% 收敛</td>
           </tr>
           <tr>
@@ -1192,6 +1224,7 @@
       <div><i>?</i><span><b>真题语料的获取与清洗途径</b>——目前手上没有现成资源，但它同时是难度锚点、常考释义和义项优先级的来源，是 P1 的关键前置</span></div>
       <div><i>?</i><span>义项集批量生成时，如何保证粒度标准前后一致（中等粒度、按英文概念边界，需实跑几批验证）</span></div>
       <div><i>?</i><span>英文概念定义所用的受限词汇表，如何随水平提升重新生成</span></div>
+      <div><i>?</i><span>句法约束的个性化：等 C9 积累出足够的「读不懂」记录后，如何把它反馈到生成约束里——是加权真题统计频率，还是单独针对薄弱结构加练</span></div>
       <div><i>?</i><span>初始测试的具体题量与词频分段划分</span></div>
       <div><i>?</i><span>主题偏好清单，以及个人兴趣与真题主题分布的配比</span></div>
       <div><i>?</i><span>文章体裁比例——说明文 / 议论文 / 记叙文</span></div>

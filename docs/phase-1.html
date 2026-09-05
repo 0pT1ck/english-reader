@@ -1,0 +1,716 @@
+<title>Phase 1 生成器</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #FAFAFC;
+    --surface:     #FFFFFF;
+    --surface-sub: #F2F2F7;
+    --ink:         #1B1D26;
+    --ink-mid:     #4E5364;
+    --ink-soft:    #757B8E;
+    --rule:        #E3E4ED;
+    --rule-soft:   #EDEEF4;
+    --accent:      #37429B;
+    --accent-soft: #E8EAF7;
+    --mark:        #B37A0C;
+    --mark-soft:   #FBF2DE;
+    --stop:        #A33A3A;
+    --stop-soft:   #F7EAEA;
+    --good:        #2F7A4F;
+
+    --f-serif: "Newsreader", Georgia, serif;
+    --f-sans:  "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+               "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+    --f-mix:   "Newsreader", "PingFang SC", "HarmonyOS Sans SC",
+               "Microsoft YaHei", "Noto Sans SC", serif;
+    --f-mono:  "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+    --col: 45rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101119;
+      --surface:     #171922;
+      --surface-sub: #1D202B;
+      --ink:         #E7E8F0;
+      --ink-mid:     #ADB2C4;
+      --ink-soft:    #868CA0;
+      --rule:        #2A2D3B;
+      --rule-soft:   #22252F;
+      --accent:      #98A1EE;
+      --accent-soft: #232741;
+      --mark:        #DFAB49;
+      --mark-soft:   #2C2718;
+      --stop:        #E08585;
+      --stop-soft:   #2E1E1E;
+      --good:        #6BC191;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101119;
+    --surface:     #171922;
+    --surface-sub: #1D202B;
+    --ink:         #E7E8F0;
+    --ink-mid:     #ADB2C4;
+    --ink-soft:    #868CA0;
+    --rule:        #2A2D3B;
+    --rule-soft:   #22252F;
+    --accent:      #98A1EE;
+    --accent-soft: #232741;
+    --mark:        #DFAB49;
+    --mark-soft:   #2C2718;
+    --stop:        #E08585;
+    --stop-soft:   #2E1E1E;
+    --good:        #6BC191;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 1.5rem 6rem;
+  }
+
+  .wrap { max-width: var(--col); margin: 0 auto; }
+
+  .masthead {
+    padding: 4.5rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  h1 {
+    font-family: var(--f-serif);
+    font-size: clamp(2.4rem, 7.5vw, 3.4rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--f-mix);
+    font-size: 1.18rem;
+    line-height: 1.6;
+    color: var(--ink-mid);
+    margin: 0;
+    max-width: 34rem;
+    text-wrap: pretty;
+  }
+
+  .thesis {
+    font-family: var(--f-mix);
+    font-size: 1rem;
+    margin: 0;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--accent);
+    max-width: 34rem;
+  }
+
+  .parent {
+    font-size: 0.83rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  .parent a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--rule); }
+  .parent a:hover { border-bottom-color: var(--accent); }
+
+  section { margin-top: 4rem; }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 1.6rem;
+  }
+
+  .sec-mark {
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  h2 {
+    font-family: var(--f-mix);
+    font-size: 1.32rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .sec-note {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  h3 {
+    font-family: var(--f-mix);
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 2rem 0 0.8rem;
+  }
+
+  h3:first-of-type { margin-top: 0.4rem; }
+
+  .lede {
+    font-family: var(--f-mix);
+    color: var(--ink-mid);
+    margin: 0 0 1.6rem;
+    max-width: 36rem;
+  }
+
+  p { margin: 0 0 1rem; }
+  p:last-child { margin-bottom: 0; }
+
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+    min-width: 28rem;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.62rem 0.9rem 0.62rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: baseline;
+    color: var(--ink-mid);
+  }
+
+  td:first-child { color: var(--ink); }
+  td.topic { font-family: var(--f-mono); font-size: 0.82rem; color: var(--accent); white-space: nowrap; }
+  td.stage { font-family: var(--f-mono); font-weight: 500; color: var(--accent); white-space: nowrap; }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .steps { display: flex; flex-direction: column; gap: 1px; background: var(--rule);
+           border: 1px solid var(--rule); }
+
+  .step {
+    background: var(--surface);
+    padding: 0.95rem 1.1rem;
+    display: grid;
+    grid-template-columns: 1.9rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+
+  .step-n { font-family: var(--f-mono); font-size: 0.76rem; color: var(--accent);
+            font-variant-numeric: tabular-nums; }
+  .step-what { font-size: 0.93rem; }
+  .step-what b { display: block; font-weight: 600; font-size: 0.97rem;
+                 font-family: var(--f-mix); margin-bottom: 0.15rem; }
+  .step-what span { color: var(--ink-mid); }
+  .step-who { font-family: var(--f-mono); font-size: 0.7rem; color: var(--ink-soft);
+              letter-spacing: 0.05em; }
+
+  pre {
+    font-family: var(--f-mono);
+    font-size: 0.79rem;
+    line-height: 1.75;
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    padding: 1rem 1.15rem;
+    overflow-x: auto;
+    margin: 0 0 1rem;
+    color: var(--ink-mid);
+  }
+
+  pre b { color: var(--ink); font-weight: 500; }
+  pre i { font-style: normal; color: var(--ink-soft); }
+
+  .nots { display: flex; flex-direction: column; gap: 0.8rem; }
+
+  .not {
+    display: grid;
+    grid-template-columns: 1.2rem 1fr;
+    gap: 0.7rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .not i { font-style: normal; font-family: var(--f-mono); font-size: 0.85rem; color: var(--stop); }
+  .not b { font-weight: 600; }
+  .not span { color: var(--ink-mid); }
+
+  .checks { display: flex; flex-direction: column; gap: 1px; background: var(--rule);
+            border: 1px solid var(--rule); }
+
+  .check {
+    background: var(--surface);
+    padding: 0.9rem 1.1rem;
+    display: grid;
+    grid-template-columns: 1.8rem 1fr;
+    gap: 0.8rem;
+    align-items: baseline;
+  }
+
+  .check-n { font-family: var(--f-mono); font-size: 0.75rem; color: var(--ink-soft);
+             font-variant-numeric: tabular-nums; }
+  .check-what { font-size: 0.93rem; }
+  .check-what b { display: block; font-weight: 600; font-size: 0.96rem;
+                  font-family: var(--f-mix); margin-bottom: 0.15rem; }
+  .check-what span { color: var(--ink-mid); }
+
+  .deferred {
+    display: flex; flex-direction: column; gap: 0.7rem;
+    padding: 1.2rem 1.35rem; background: var(--surface-sub);
+    border-left: 2px solid var(--mark);
+  }
+
+  .deferred div {
+    display: grid; grid-template-columns: 3.4rem 1fr; gap: 0.7rem;
+    font-size: 0.92rem; color: var(--ink-mid); align-items: baseline;
+  }
+
+  .deferred i { font-style: normal; font-family: var(--f-mono); font-size: 0.72rem;
+                color: var(--mark); }
+
+  code {
+    font-family: var(--f-mono);
+    font-size: 0.86em;
+    background: var(--surface-sub);
+    padding: 0.08em 0.32em;
+    border-radius: 2px;
+  }
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 2.5rem 0 0;
+  }
+
+  .fig { background: var(--surface); padding: 1rem 0.9rem 1.1rem;
+         display: flex; flex-direction: column; gap: 0.25rem; }
+  .fig-val { font-family: var(--f-mono); font-size: 1.25rem; font-weight: 500;
+             font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+             color: var(--ink); line-height: 1.2; }
+  .fig-val span { font-size: 0.78rem; font-weight: 400; color: var(--ink-soft);
+                  margin-left: 0.15em; }
+  .fig-key { font-size: 0.76rem; color: var(--ink-soft); line-height: 1.4; }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--f-mono);
+  }
+
+  @media (max-width: 34rem) {
+    body { padding: 0 1.15rem 4rem; }
+    .masthead { padding-top: 3rem; }
+    .step, .check { grid-template-columns: 1fr; gap: 0.2rem; }
+    .deferred div { grid-template-columns: 1fr; gap: 0.15rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 1 · P1a 已验收 · 2026-09-05</div>
+    <h1>生成器</h1>
+    <p class="standfirst">回答一个问题：AI 能不能写出词汇受限、句法不降级、搭配正确的英语。</p>
+    <p class="thesis">这是整个项目押注的假设。它不成立，内容来源就得重新想，后面所有阶段的地基都要动。所以 P1 的第一要务不是把管线建好，而是<b>尽快拿到「行还是不行」这个答案</b>。</p>
+    <p class="parent">功能设计见 <a href="./english-reader.html">English Reader 设计文档</a> ｜ 上一阶段 <a href="./phase-0.html">Phase 0 地基</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">452<span>篇</span></div><div class="fig-key">真题已入库</div></div>
+    <div class="fig"><div class="fig-val">3<span>段</span></div><div class="fig-key">P1a / P1b / P1c</div></div>
+    <div class="fig"><div class="fig-val">3<span>条</span></div><div class="fig-key">生成约束</div></div>
+    <div class="fig"><div class="fig-val">8<span>个</span></div><div class="fig-key">待比较的模型</div></div>
+    <div class="fig"><div class="fig-val">20<span>篇</span></div><div class="fig-key">盲测材料</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>三段推进</h2>
+      <span class="sec-note">P1 内部也风险前置</span>
+    </div>
+    <p class="lede">验证核心假设需要的东西，比 P1 要交付的东西少得多。先做能拿到答案的那部分。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>阶段</th><th>做什么</th><th>为什么是这个顺序</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="stage">P1a</td>
+            <td><b>最小验证回路</b>：手动生成 + 本地校验 + 盲测</td>
+            <td>不接 API、不做义项、不做管线。目标是尽快知道答案</td>
+          </tr>
+          <tr>
+            <td class="stage">P1b</td>
+            <td><b>配套数据</b>：义项集、词族与构词分解、句法结构统计、受限词汇表</td>
+            <td>都是完整功能需要的，但<b>验证核心假设一个都用不上</b>。假设成立后才值得投入</td>
+          </tr>
+          <tr>
+            <td class="stage">P1c</td>
+            <td><b>完整生成管线</b>：接 API 自动化、语境释义标注、过量生成择优、定点修补</td>
+            <td>工程问题，不是可行性问题。前两段跑通后水到渠成</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1.5rem"><b>如果先花两周搞义项集和完整管线，然后发现生成的英语根本不能读</b>，那两周全部白费，而且要回头重新想内容来源。所以顺序不能反。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>已定的决策</h2>
+      <span class="sec-note">经讨论确认</span>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>议题</th><th>结论</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="topic">生成约束</td>
+            <td><b>只剩三条</b>：词汇受限（基准词表 + 目标词）、书面语体、搭配用法正确。篇长、超纲率、专有名词数量等表面指标<b>全部降级为参考</b>——文章只是词汇的载体，模仿真题的各项参数是本末倒置</td>
+          </tr>
+          <tr>
+            <td class="topic">句法要求</td>
+            <td>只要求「正常的书面英语」，不追求精确对齐句长。但<b>不得降级为分级读物式的简化句式</b>——这条是设计前提，不是新增要求</td>
+          </tr>
+          <tr>
+            <td class="topic">难度参数化</td>
+            <td><b>生成难度是一组参数，不是写死的常量</b>——这正是本项目的核心能力。两个参数必须分开：<b>假定已掌握词</b>（P1a 取中考+高考，约 5000）与<b>允许用词上限</b>（P1a 取到 CET-4，约 8800）。只准用已经会的词，文章里就没有生词可学；生词恰恰应当落在两者之间的那一层，那才是学习目标。切换目标等级时只改这两个参数</td>
+          </tr>
+          <tr>
+            <td class="topic">校验基准</td>
+            <td>校验器接收一个「已知词集合」，P1 阶段来自固定配置，P3 换成动态水平估计，<b>接口不变</b>。P1a 只验证机制能不能跑通，参数用四级标准即可，不必在边界上纠缠</td>
+          </tr>
+          <tr>
+            <td class="topic">来源标记</td>
+            <td>每篇生成的文章记录<b>模型、词汇约束方案、提示词版本、生成时间</b>。否则盲测测完只知道「有几篇被识破」，无法归因到具体模型——而选出最好的模型正是这一轮的目的</td>
+          </tr>
+          <tr>
+            <td class="topic">模型选择</td>
+            <td><b>不写死任何模型。</b>在设置中自选、自填 API key。同时支持<b>手动模式</b>：系统输出提示词，用户贴到网页版 AI，再把结果贴回来</td>
+          </tr>
+          <tr>
+            <td class="topic">词汇约束表达</td>
+            <td>三种方案<b>做成可切换</b>，第一批实验一起比：完整白名单 / 描述性约束 + 难度锚点 / 纯描述性。倾向锚点方案，但用数据定</td>
+          </tr>
+          <tr>
+            <td class="topic">返回格式</td>
+            <td><b>带标记的纯文本，不用 JSON。</b>P1a 只要标题和正文</td>
+          </tr>
+          <tr>
+            <td class="topic">校验器</td>
+            <td>P1a <b>只做本地四项、不设阈值</b>，输出一份「体检报告」。搭配检查靠人</td>
+          </tr>
+          <tr>
+            <td class="topic">内容取向</td>
+            <td><b>易读优先</b>：段落结构清晰、逻辑连接显式、具体优先于抽象。以说明文和议论文为主，主题不限于真题那五类</td>
+          </tr>
+          <tr>
+            <td class="topic">验收方式</td>
+            <td><b>盲测</b>——生成文章混进真题，十几位判断者各看 3 篇，挑出哪些不是真题</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>P1a 的工作流</h2>
+      <span class="sec-note">手动模式</span>
+    </div>
+    <p class="lede">手动模式不只是省钱的备选，它<b>顺手把最小验证回路变得更小</b>——不接 API、不管密钥、不处理重试，系统只负责吐提示词和解析结果。而且任何模型都能试，包括没有 API 的。</p>
+
+    <div class="steps">
+      <div class="step">
+        <span class="step-n">1</span>
+        <span class="step-what"><b>系统生成提示词</b>
+        <span>指定目标词、约束方式（三选一）、篇数。输出一段可整体复制的文本。</span>
+        <span class="step-who">系统</span></span>
+      </div>
+      <div class="step">
+        <span class="step-n">2</span>
+        <span class="step-what"><b>贴到网页版 AI，取回结果</b>
+        <span><b>每次只生成一篇，每篇开新对话。</b>同一次生成的多篇文章措辞习惯、句式偏好、段落节奏几乎必然雷同，盲测里识破一篇会连带否掉另一篇——两篇的判断不独立，占两个名额却只有一篇的信息量。日常使用（P1c 自动模式）可以一次多篇，那时不涉及独立性问题。</span>
+        <span class="step-who">人工</span></span>
+      </div>
+      <div class="step">
+        <span class="step-n">3</span>
+        <span class="step-what"><b>贴回系统，解析入库</b>
+        <span>解析器按标记提取，忽略前后多余的解释文字和代码块包裹。</span>
+        <span class="step-who">系统</span></span>
+      </div>
+      <div class="step">
+        <span class="step-n">4</span>
+        <span class="step-what"><b>本地校验，出体检报告</b>
+        <span>不到一秒，无需联网。</span>
+        <span class="step-who">系统</span></span>
+      </div>
+      <div class="step">
+        <span class="step-n">5</span>
+        <span class="step-what"><b>盲测</b>
+        <span>生成文章混进真题，发给群友判断。</span>
+        <span class="step-who">人工</span></span>
+      </div>
+    </div>
+
+    <h3>提示词的结构</h3>
+    <p>手动模式带来一个硬约束：<b>提示词必须短到能一次性复制</b>。这直接否决了把 5000 词白名单整个塞进去的方案——而且两种模式必须共用同一套提示词，否则产出质量不一致，验证就白做了。</p>
+
+<pre>写一篇英语短文，约 350 词。
+
+<b>用词限制</b>在最常见的约 5000 个英语单词以内，
+大致相当于中国高中英语的水平。
+
+<b>难度上限参照</b>（不要用比这些更难的词）：
+achieve, benefit, community, environment, feature,
+industry, method, opinion, particular, remove …
+
+<b>必须自然地用上</b>（本文的学习目标）：
+[目标词列表]
+
+<b>文体要求</b>：说明文或议论文，正式书面语体。
+段落结构清晰，逻辑连接词明确，多举具体例子。
+句式保持正常书面英语的复杂度，不要刻意简化。
+
+<b>返回格式</b>：
+===ARTICLE===
+TITLE: 标题
+正文，段落之间空一行
+===END===</pre>
+
+    <p class="lede" style="margin-bottom:0.8rem">给<b>难度锚点</b>而不是完整词表，理由是：模型不是约束求解器，它不会逐词回查清单。四十个词是一把它能感知的尺子，五千个词是一本它查不完的字典。漏网的超纲词交给事后校验和定点修补——那才是模型擅长的事。</p>
+
+    <h3>校验器查什么</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>项目</th><th>怎么查</th></tr></thead>
+        <tbody>
+          <tr><td>超纲词清单</td><td>词形还原 → 查词典 → 不在基准词表且非专有名词的，逐个列出</td></tr>
+          <tr><td>目标词命中</td><td>指定的目标词有没有出现（按词条匹配）</td></tr>
+          <tr><td>句法结构分布</td><td>依存分析统计从句、非谓语、被动、名词化等，与真题基线并列</td></tr>
+          <tr><td>基本指标</td><td>篇长、句数、平均句长、段落数</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>不设阈值、不打回重试、不排序择优。</b>标准还没校准——基准词表是拍的，句法频率刚统计出来还没验证，超纲率本身有噪音。这时候卡阈值只会误伤，而且分不清是文章的问题还是阈值的问题。<b>第一批实验校准的不只是提示词，还有校验器本身。</b></p>
+
+    <h3>一次只变一个变量</h3>
+    <p>要测的其实是两样东西：<b>模型</b>和<b>词汇约束方案</b>。混在同一批里测，会发现某篇被识破却分不清是模型的问题还是方案的问题。所以分两批：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>批次</th><th>变量</th><th>固定</th><th>目的</th></tr></thead>
+        <tbody>
+          <tr><td class="stage">第一批</td><td>8 个模型</td><td>约束方案固定用锚点方案</td><td>选出模型</td></tr>
+          <tr><td class="stage">第二批</td><td>3 种约束方案</td><td>用第一批选出的模型</td><td>选出方案</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">第二批规模小得多，而且<b>未必需要盲测</b>——本地校验器的超纲词数据可能就足以分出高下。实际能凑齐几个模型取决于手上有哪些账号，不足 8 个不影响设计。</p>
+
+    <h3>盲测设计</h3>
+    <p><b>20 篇文章 = 16 篇生成 + 4 篇真题。</b>16 篇的构成是 8 个模型 × 2 轮，<b>每轮一组不同的目标词、每篇独立开对话生成</b>：同模型的两篇因此内容和风格都不同，而模型之间在同一组目标词上可比。</p>
+    <p>每位判断者随机拿 3 篇，其中<b>最多 1 篇真题</b>，只回答「真题 / AI 写的」。</p>
+    <p>顺序随机以防对答案。分到真题的人，那一篇同时是对他本人的校准——把真题判成 AI 写的，答卷剔除。</p>
+    <p><b>这一轮定位是粗筛，不是定论。</b>参与人数事先不确定；若只有十几人，每篇生成文章平均仅被 2 人判断，<b>不足以分辨模型之间的细微差别</b>。但足以淘汰明显不行的：某个模型两篇都被识破，信号已经很清楚。留下 2–3 个模型后再做第二轮，每个多生成几篇，那时才谈得上分高下。两轮之间隔开，人情也用得省一些。</p>
+    <p>数据<b>直接收集入库</b>，不用截图回传：临时开一个公开页面，通过内网穿透发到群里，用完即关。</p>
+    <p class="lede" style="margin-top:1rem;margin-bottom:0"><b>比总分更有价值的是分歧度</b>：某篇 4 个人全说是 AI，它一定有明显破绽，挑出来单独分析；某篇一半一半，那是临界水平。这比一个总正确率有用得多。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>盲测工具独立于主程序</h2>
+      <span class="sec-note">即用即抛</span>
+    </div>
+    <p class="lede">盲测页面必须无需认证——群友不可能有账号。但解法不是给主程序开一个公开入口，而是<b>把它整个放到主程序之外</b>。</p>
+
+    <p>如果做成主程序的一部分，就得引入第三类「公开路由」，还要为它划安全边界、加开关、防止以后有人往里面加东西。<b>为一次性活动给长期架构添负担，不划算。</b>做成独立小程序则一样都不需要：它不认识 learning.db，也没有任何路径能通到那里。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>项</th><th>做法</th></tr></thead>
+        <tbody>
+          <tr><td>位置</td><td><code>tools/blindtest.py</code>——单文件，<b>不 import 任何 backend 代码</b></td></tr>
+          <tr><td>数据</td><td>独立的 <code>data/blindtest.db</code>，不碰主程序的三个库</td></tr>
+          <tr><td>素材</td><td>直接读文件：生成的文章与 <code>data/exam_papers/</code> 下的真题</td></tr>
+          <tr><td>暴露方式</td><td>内网穿透临时开放，用完即关。电脑关机链接失效，短期活动无所谓</td></tr>
+          <tr><td>用完之后</td><td><b>整个删掉</b>。结果数据留着，程序不留</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1.4rem">附带好处：它可以随便写。不受主程序的模块结构、认证约定、迁移机制约束，也不必考虑可扩展性——<b>一次性的东西按一次性的标准写</b>，反而更快更简单。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>P1a 明确不做</h2>
+      <span class="sec-note">防止跨阶段</span>
+    </div>
+
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>接 API 自动生成</b>——属于 P1c。P1a 全程手动，这正是它小的原因</span></div>
+      <div class="not"><i>×</i><span><b>语境释义标注</b>——属于 P1c。它不在验证范围内，加进去会让提示词变复杂、模型分心、格式更易出错。<b>文章本身不合格的话，标得再好的释义也没用</b></span></div>
+      <div class="not"><i>×</i><span><b>义项集、词族、构词分解的生成</b>——属于 P1b</span></div>
+      <div class="not"><i>×</i><span><b>过量生成择优、定点修补、重试策略</b>——属于 P1c。还没验证假设就先建流水线，是把顺序做反了</span></div>
+      <div class="not"><i>×</i><span><b>AI 搭配检查的自动化</b>——P1a 靠人工盲测。同源偏差让 AI 很难挑出 AI 的毛病</span></div>
+      <div class="not"><i>×</i><span><b>阅读界面</b>（P2）、<b>水平估计</b>（P3）、<b>复习调度</b>（P5）</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>P1a 实验结果</h2>
+      <span class="sec-note">16 篇 · 8 个模型</span>
+    </div>
+    <p class="lede">第一轮：8 个模型 × 2 组目标词，全部使用锚点方案。<b>核心假设成立，方案可行。</b></p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>指标</th><th>生成（16 篇均值）</th><th>真题基线</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>目标词命中</td><td class="num">14 篇 8/8，2 篇 7/8</td><td>—</td><td>约束有效，无区分度</td></tr>
+          <tr><td>平均句长</td><td class="num">19.5 词</td><td class="num">18.9 词</td><td>贴合</td></tr>
+          <tr><td>最大嵌套深度</td><td class="num">8.5</td><td class="num">10.5</td><td>略浅</td></tr>
+          <tr><td>超出 CET-4 范围</td><td class="num">4.7%</td><td class="num">10.0%</td><td>明显更保守</td></tr>
+          <tr><td>被动语态</td><td class="num">9.9 ‰</td><td class="num">16.9 ‰</td><td>偏少四成</td></tr>
+          <tr><td>名词化</td><td class="num">48.0 ‰</td><td class="num">33.2 ‰</td><td>偏多四成</td></tr>
+          <tr><td>形式主语</td><td class="num">0.2 ‰</td><td class="num">3.5 ‰</td><td>几乎不用</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>三条值得记住的发现</h3>
+    <p><b>① 用词限制越狠，文章越退化成作文范文。</b>超纲率 1.08% 那篇通篇 <code>Moreover / In addition / On the contrary</code> 开头、内容全是抽象论述、没有一个具体事实；超纲率 9.13% 那篇写十九世纪欧美慈善组织，有场景有细节，最接近真题。<b>后续应把词汇限制往宽处调</b>——长期只读前一种，接触不到真实文本里的具体名词、专名和数据表述。</p>
+
+    <p><b>② 被动偏少 + 名词化偏多 + 几乎不用形式主语，是一组 AI 写作指纹。</b>现代模型被训练成偏好主动语态和「清晰直接」，而学术英语恰恰大量使用被动和 <code>It is essential that…</code>。这三项可以写进提示词加以纠正。</p>
+
+    <p><b>③ 目标词随机抽取会导致硬凑。</b><code>anchor / humor / wagon / robe</code> 八个不相关的词塞进 350 词，模型只能生硬安排（<code>an anchor for future improvement</code>、<code>develop humor</code>）。<b>选词时应考虑语义关联</b>，语境自然了，语境记忆的质量才高。</p>
+
+    <h3>验收结论</h3>
+    <p>语言正确性是唯一不可退让的一条——三篇逐句读过，<b>没有搭配或用法错误</b>，不会教错东西。目标词都用在句子里而非列表里，难度落在「读得懂但有挑战」的位置，句法有训练价值。<b>就「能不能用来学英语」这个目标而言，方案成立。</b></p>
+    <p>盲测按决定跳过：它回答的是「像不像真人写的」，而这个项目要回答的是「能不能用来学」。后者可以由语言层面的检查得出结论，前者才需要真人。真题直读（B7）本身也是一层兜底——真实语料的接触由它保证。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>P1a 验收清单</h2>
+    </div>
+
+    <div class="checks">
+      <div class="check">
+        <span class="check-n">01</span>
+        <span class="check-what"><b>提示词能一次复制、结果能稳定解析</b>
+        <span>连续三批，解析成功率高，不需要手工修补格式。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">02</span>
+        <span class="check-what"><b>三种词汇约束方案有可比的数据</b>
+        <span>超纲词数量、目标词使用是否自然，各有实测结果，能得出结论。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">03</span>
+        <span class="check-what"><b>体检报告的数字合理</b>
+        <span>对照人工阅读的感受，校验器报的数没有明显偏离——这一步同时是在校准校验器。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">04</span>
+        <span class="check-what"><b>盲测正确率接近随机</b>
+        <span>约 50% 说明分不出来，假设成立；60–70% 可用但值得优化；<b>80% 以上要回去改</b>。第一轮按模型分别看，先淘汰明显不行的。</span></span>
+      </div>
+      <div class="check">
+        <span class="check-n">05</span>
+        <span class="check-what"><b>本人读几篇，认可可以用来学习</b>
+        <span>最终的一票。数据再好看，读起来不能接受就是不行。</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>留到后面</h2>
+    </div>
+
+    <div class="deferred">
+      <div><i>P1b</i><span><b>放宽词汇限制</b>，往超纲率 8–10% 的区间靠——第一轮证明限制过严会让文章退化成作文范文</span></div>
+      <div><i>P1b</i><span><b>目标词按语义关联成组挑选</b>，取代随机抽取，消除硬凑痕迹</span></div>
+      <div><i>P1b</i><span><b>提示词补上被动语态、形式主语的要求</b>，抑制名词化堆砌——针对已测出的 AI 写作指纹</span></div>
+      <div><i>P1b</i><span>派生形式（<code>planning / carefully / participant</code>）未归到词根，与连字符、美式拼写一起构成超纲率虚高的三个来源</span></div>
+      <div><i>P1a</i><span>难度锚点词具体选哪 40 个——从基准词表按频率取，还是人工挑典型词</span></div>
+      <div><i>P1b</i><span>义项集生成的提示词设计，以及粒度一致性怎么验证</span></div>
+      <div><i>P1b</i><span>词族与构词分解的生成（仓库里的 <code>wordroot.txt</code> 词根表可用）</span></div>
+      <div><i>P1b</i><span>英文概念定义所用的受限词汇表怎么定，以及如何随水平重新生成</span></div>
+      <div><i>P1b</i><span>句法结构的统计实现：连续指标（嵌套深度、依存距离）与离散清单（各类从句、非谓语、倒装等）</span></div>
+      <div><i>P1b</i><span><b>修 P0 遗留的两个缺陷</b>：连字符复合词被切开（<code>socio-economic</code>）、美式拼写未归一（<code>center</code>／<code>centre</code>）。它们让超纲率统计偏高，要精确计数就得先修</span></div>
+      <div><i>P1c</i><span>AI 搭配检查的自动化，以及用人工标注的金标准来衡量它的漏检与误报</span></div>
+      <div><i>P1c</i><span>阈值、择优排序、定点修补的收敛策略</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 1 方案</span>
+    <span>2026-09-05</span>
+  </footer>
+
+</div>
