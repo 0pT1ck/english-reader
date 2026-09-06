@@ -100,6 +100,19 @@ def download(destination: Path, *, force: bool = False) -> Path:
     return destination
 
 
+def _unescape(text: str) -> str:
+    r"""Turn ECDICT's escape sequences into real characters.
+
+    The source stores line breaks as the two characters ``\`` and ``n``, not as
+    newlines — that is how the CSV keeps one entry on one row. Left as-is, the
+    gloss reaches the reader as ``n. 州, 状态\na. 国家的``, and every attempt to
+    split a gloss by part of speech or sense silently fails.
+    """
+    if not text:
+        return text
+    return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "")
+
+
 def _parse_exchange(exchange: str) -> list[tuple[str, str]]:
     """Turn ``p:left/d:left/i:leaving`` into ``[(surface, code), ...]``."""
     if not exchange:
@@ -179,8 +192,8 @@ def import_csv(source: Path) -> dict[str, int]:
                 (
                     headword,
                     (row.get("phonetic") or "").strip() or None,
-                    (row.get("definition") or "").strip() or None,
-                    (row.get("translation") or "").strip() or None,
+                    _unescape((row.get("definition") or "").strip()) or None,
+                    _unescape((row.get("translation") or "").strip()) or None,
                     (row.get("pos") or "").strip() or None,
                     as_int("collins"),
                     as_int("oxford"),

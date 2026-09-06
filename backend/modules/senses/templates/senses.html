@@ -1,0 +1,209 @@
+{% extends "base.html" %}
+{% block title %}义项{% endblock %}
+
+{% block content %}
+<h1>义项集</h1>
+<p class="subtitle">
+  按<b>英文概念</b>划分，中文只是这个概念在不同语境下的投影。判据：学会一个意思之后，
+  遇到另一个用法是能自然理解还是会理解错——能理解就合并，会理解错就拆开。
+</p>
+
+{% if not dictionary_ready %}
+<div class="notice bad"><b>词典还没导入。</b>先运行 <code>uv run python scripts/import_dictionary.py</code>。</div>
+{% endif %}
+
+<div class="grid">
+  <div class="card stat">
+    <span class="stat-label">已建义项的词</span>
+    <span class="stat-value">{{ stats.words }}</span>
+    <span class="muted mono">共 {{ stats.senses }} 个义项 · 平均 {{ stats.per_word }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">需要建的词</span>
+    <span class="stat-value">{{ screening.needs_senses or 0 }}</span>
+    <span class="muted mono">目标词共 {{ screening.total or 0 }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">例句</span>
+    <span class="stat-value">{{ stats.examples }}</span>
+    <span class="muted mono">惰性生成，用到才补</span>
+  </div>
+</div>
+
+{% if screening %}
+<h2>粗筛</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>类别</th><th>数量</th><th>处理</th></tr></thead>
+    <tbody>
+      {% for key, label in labels.items() %}
+      <tr>
+        <td>{{ label }}</td>
+        <td class="mono">{{ screening.get(key, 0) }}</td>
+        <td>{% if key == 'simple' %}<span class="muted">跳过，不花钱</span>{% else %}建{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card" style="margin-top:1rem">
+  <div class="row">
+    <button onclick="screen(this)">跑粗筛</button>
+    <button onclick="validate(this)">三层验证</button>
+    <input type="text" id="probe" placeholder="查一个词，如 address" style="width:16rem">
+    <button onclick="probe()">查</button>
+    <button onclick="buildOne()">给这个词补建义项</button>
+    <label class="row" style="width:auto"><input type="checkbox" id="with-usages" style="width:auto"> 附真题用例</label>
+  </div>
+  <p class="muted" style="margin:0.8rem 0 0">
+    建义项集和补例句是<a href="/admin/llm">模型</a>页面上的批次任务（<code>sense_build</code> /
+    <code>sense_examples</code>），会按花费上限自动停。
+  </p>
+</div>
+
+<div id="out" style="display:none;margin-top:1rem"></div>
+
+<h2>样本</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>词</th><th>#</th><th>英文概念定义</th><th>中文投影</th><th>主题</th></tr></thead>
+    <tbody>
+      {% for s in samples %}
+      <tr>
+        <td class="mono">{{ s.headword }}</td>
+        <td class="mono">{{ s.ordinal }}</td>
+        <td>{{ s.concept_en }}</td>
+        <td class="mono">{{ s.gloss_zh }}</td>
+        <td class="muted">{{ s.topic or '' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">还没有义项。先跑粗筛，再到模型页面建一个 sense_build 任务。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const out = document.getElementById('out');
+  const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  // The raw JSON stays available but folded away: it is what gets pasted into a
+  // bug report, and it is not what the page is for.
+  function render(html, data) {
+    out.style.display = 'block';
+    out.innerHTML = html + `
+      <details class="detail" style="margin-top:0.8rem">
+        <summary>原始 JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre>
+      </details>`;
+    out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  async function screen(button) {
+    button.disabled = true;
+    try {
+      const r = await api('/senses/screen', { method: 'POST' });
+      toast(`目标词 ${r.total} 个，需要建义项的 ${r.needs_senses} 个`);
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) { toast(e.message, true); button.disabled = false; }
+  }
+
+  async function validate(button) {
+    button.disabled = true;
+    button.textContent = '验证中…';
+    try {
+      const v = await api('/senses/validate');
+      const total = Object.values(v.shape.distribution).reduce((a, b) => a + b, 0) || 1;
+      const bars = Object.entries(v.shape.distribution).map(([n, count]) => `
+        <tr><td class="mono nowrap">${n} 个义项</td><td class="mono">${count}</td>
+        <td style="width:60%">
+          <span style="display:inline-block;height:0.55rem;vertical-align:middle;width:${
+            (100 * count / total).toFixed(1)}%;background:var(--accent);border-radius:2px"></span>
+          <span class="muted"> ${(100 * count / total).toFixed(1)}%</span></td></tr>`).join('');
+
+      render(`
+        <h2>三层验证</h2>
+        <div class="grid">
+          <div class="card stat"><span class="stat-label">还没建义项的词</span>
+            <span class="stat-value">${v.shape.missing_count}</span></div>
+          <div class="card stat"><span class="stat-label">义项数超过 5 的词</span>
+            <span class="stat-value">${v.shape.too_many_count}</span>
+            <span class="muted mono">粒度可能失控</span></div>
+          <div class="card stat"><span class="stat-label">定义里有超纲词</span>
+            <span class="stat-value">${v.definitions.rate}<small>%</small></span>
+            <span class="muted mono">${v.definitions.offenders_count} / ${v.definitions.checked} 条</span></div>
+          <div class="card stat"><span class="stat-label">真题里从未出现</span>
+            <span class="stat-value">${v.exam.never_in_papers}</span>
+            <span class="muted mono">共 ${v.exam.words_with_senses} 词 · ${v.exam.papers} 篇真题</span></div>
+        </div>
+
+        <h2>每个词有几个义项</h2>
+        <div class="scroll"><table><tbody>${bars}</tbody></table></div>
+        <p class="muted" style="margin-top:0.5rem">绝大多数词应该落在 1–3 个义项，超过 5 个几乎一定是拆细了。</p>
+
+        <h2>定义里最常出现的超纲词</h2>
+        <div class="card" style="line-height:2.2">${
+          v.definitions.common_offenders.map(([w, n]) =>
+            `<span class="pill WARNING">${esc(w)}${n > 1 ? ' ×' + n : ''}</span>`).join(' ')
+          || '<span class="muted">没有</span>'}</div>
+        <p class="muted" style="margin-top:0.5rem">
+          英文定义只该用最常见的两千词——读定义本身也是阅读输入，不该在定义里撞上新生词。
+        </p>`, v);
+    } catch (e) { toast(e.message, true); }
+    button.disabled = false;
+    button.textContent = '三层验证';
+  }
+
+  async function buildOne() {
+    const word = document.getElementById('probe').value.trim();
+    if (!word) { toast('先在框里填一个词', true); return; }
+    try {
+      const job = await api('/senses/word/' + encodeURIComponent(word) + '/build',
+                            { method: 'POST' });
+      toast('已排上任务 #' + job.id + '，几秒后再查一次这个词');
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function probe() {
+    const word = document.getElementById('probe').value.trim();
+    if (!word) return;
+    const usages = document.getElementById('with-usages').checked;
+    try {
+      const r = await api('/senses/word/' + encodeURIComponent(word)
+                          + (usages ? '?usages=true' : ''));
+
+      // The Chinese reading comes first and the English concept underneath:
+      // the concept is the sense's identity, but the glosses are what a reader
+      // scans for.
+      const senses = r.senses.length ? r.senses.map(s => `
+        <div class="card" style="margin-bottom:0.6rem">
+          <div class="row" style="align-items:baseline">
+            <span class="mono muted">${s.ordinal}</span>
+            <b style="font-size:1.02rem">${(s.gloss_zh || []).map(esc).join(' · ')}</b>
+            ${s.topic ? `<span class="pill INFO">${esc(s.topic)}</span>` : ''}
+            ${s.pos ? `<span class="muted mono">${esc(s.pos)}</span>` : ''}
+          </div>
+          <div style="margin-top:0.35rem">${esc(s.concept_en)}</div>
+          ${(s.examples || []).length ? `<div class="muted" style="margin-top:0.5rem">${
+            s.examples.map(e => esc(e.text_en) + (e.gloss_zh ? ' — ' + esc(e.gloss_zh) : ''))
+              .join('<br>')}</div>` : ''}
+        </div>`).join('')
+        : '<div class="notice">这个词还没有义项集。可以点「给这个词补建义项」。</div>';
+
+      render(`
+        <h2>${esc(r.word)}
+          ${r.tags.map(t => `<span class="pill off">${esc(t)}</span>`).join(' ')}</h2>
+        ${senses}
+        ${r.dictionary ? `<details class="detail"><summary>词典原文（ECDICT，仅供对照）</summary>
+          <pre>${esc(r.dictionary)}</pre></details>` : ''}
+        ${r.usages.length ? `<h2>真题里的实际用例</h2>${
+          r.usages.map(u => `<div class="card" style="margin-bottom:0.5rem">${esc(u)}</div>`)
+            .join('')}` : ''}`, r);
+    } catch (e) { toast(e.message, true); }
+  }
+</script>
+{% endblock %}

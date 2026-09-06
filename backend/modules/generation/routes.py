@@ -58,6 +58,7 @@ class DraftIn(BaseModel):
 async def make_prompt(
     scheme: Annotated[str, Query()] = "anchor",
     word_set: Annotated[str, Query()] = "A",
+    topic: Annotated[str | None, Query(description="指定主题；留空则自动挑一个")] = None,
 ) -> dict[str, Any]:
     """Build a prompt ready to be copied into a chat window."""
     if scheme not in prompts.SCHEME_LABELS:
@@ -76,6 +77,8 @@ async def make_prompt(
         anchor_count=int(runtime_config.get("gen_anchor_count")),
         length=int(runtime_config.get("gen_length")),
         seed=WORD_SET_SEEDS[word_set],
+        topic=topic,
+        targets_per_paragraph=int(runtime_config.get("gen_targets_per_paragraph")),
     )
 
     return {
@@ -86,6 +89,7 @@ async def make_prompt(
         "word_set": word_set,
         "target_words": plan.target_words,
         "anchor_words": plan.anchor_words,
+        "topic": plan.topic,
         "allowed_count": plan.allowed_count,
         "known_count": plan.known_count,
         "chars": len(text),

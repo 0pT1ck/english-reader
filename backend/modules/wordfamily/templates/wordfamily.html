@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}词族{% endblock %}
+
+{% block content %}
+<h1>词族</h1>
+<p class="subtitle">
+  规则先跑一遍（免费、确定），模型只负责判定语义距离和写中文说明。
+  分级决定一个派生词怎么出现在阅读里：<b>A</b> 不算生词，<b>B</b> 给构词提示、算三分之一名额，
+  <b>C</b> 当普通生词，不提构词。
+</p>
+
+{% if not dictionary_ready %}
+<div class="notice bad"><b>词典还没导入。</b>先运行 <code>uv run python scripts/import_dictionary.py</code>。</div>
+{% endif %}
+
+<div class="grid">
+  <div class="card stat">
+    <span class="stat-label">词缀条目</span>
+    <span class="stat-value">{{ stats.affixes.total or 0 }}</span>
+    <span class="muted mono">
+      前缀 {{ stats.affixes.prefix or 0 }} · 后缀 {{ stats.affixes.suffix or 0 }} ·
+      词根 {{ stats.affixes.root or 0 }}
+    </span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">已译中文说明</span>
+    <span class="stat-value">{{ stats.affixes.glossed or 0 }}</span>
+    <span class="muted mono">前后缀共 {{ (stats.affixes.prefix or 0) + (stats.affixes.suffix or 0) }} 条</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">派生关系</span>
+    <span class="stat-value">{{ stats.families.total or 0 }}</span>
+    <span class="muted mono">
+      {% for grade, n in (stats.families.by_grade or {}).items() %}{{ grade }} {{ n }}{% if not loop.last %} · {% endif %}{% endfor %}
+    </span>
+  </div>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <div class="row">
+    <button onclick="act('import-affixes', this)">导入词根词缀表</button>
+    <button onclick="act('run-rules', this)">跑规则分解</button>
+    <input type="text" id="probe" placeholder="查一个词，如 nationality" style="width:16rem">
+    <button onclick="probe()">查</button>
+  </div>
+  <p class="muted" style="margin:0.8rem 0 0">
+    规则分解可以反复跑：已有的行不会被覆盖，所以模型改过的判定不会被规则冲掉。
+    中文说明和 A/B/C 复核在<a href="/admin/llm">模型</a>页面上作为批次任务跑。
+  </p>
+</div>
+
+<div id="probe-out" style="display:none;margin-top:1rem"></div>
+
+<h2>样本</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>派生词</th><th>分解</th><th>级</th><th>中文说明</th><th>来源</th></tr></thead>
+    <tbody>
+      {% for f in families %}
+      <tr>
+        <td class="mono">{{ f.member }}</td>
+        <td class="mono">{{ f.root }} + {{ f.affix }}</td>
+        <td><span class="pill {{ 'ok' if f.grade == 'A' else ('INFO' if f.grade == 'B' else 'off') }}">{{ f.grade }}</span></td>
+        <td>{{ f.breakdown_zh or '' }}</td>
+        <td class="muted mono">{{ f.source }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">还没有数据。先导入词缀表，再跑一次规则分解。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function act(path, button) {
+    button.disabled = true;
+    const label = button.textContent;
+    button.textContent = '处理中…';
+    try {
+      const res = await api('/wordfamily/' + path, { method: 'POST' });
+      toast(res.found !== undefined
+        ? `扫了 ${res.examined} 个词，找到 ${res.found} 条派生关系`
+        : `词根词缀共 ${res.total} 条（前缀 ${res.prefix} · 后缀 ${res.suffix} · 词根 ${res.root}）`);
+      setTimeout(() => location.reload(), 1200);
+    } catch (e) {
+      toast(e.message, true);
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>]/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+  const GRADES = {
+    A: ['ok', '完全透明 — 认识词根就认识它，不算生词'],
+    B: ['INFO', '可以推出来 — 给构词提示，算三分之一个目标词'],
+    C: ['off', '语义已漂移 — 当普通生词，不显示构词'],
+  };
+
+  async function probe() {
+    const word = document.getElementById('probe').value.trim();
+    if (!word) return;
+    const out = document.getElementById('probe-out');
+    try {
+      const r = await api('/wordfamily/word/' + encodeURIComponent(word));
+      const f = r.family;
+      const g = f ? (GRADES[f.grade] || ['off', '']) : null;
+
+      const breakdown = f ? `
+        <div class="card">
+          <div style="font-size:1.15rem">
+            <b>${esc(f.member)}</b>
+            <span class="muted"> ＝ </span>${esc(f.root)}
+            <span class="muted"> ＋ </span>${esc(f.affix)}
+          </div>
+          ${f.breakdown_zh ? `<div style="margin-top:0.5rem">${esc(f.breakdown_zh)}</div>`
+            : (r.affix_gloss ? `<div class="muted" style="margin-top:0.5rem">${
+                esc(f.affix)}：${esc(r.affix_gloss)}</div>` : '')}
+          <div class="row" style="margin-top:0.7rem">
+            <span class="pill ${g[0]}">${esc(f.grade)} 级</span>
+            <span class="muted">${g[1]}</span>
+            <span class="muted mono">来源 ${esc(f.source)}</span>
+          </div>
+        </div>`
+        : `<div class="notice">没有这个词的构词分解。${
+            r.rule_says ? '规则能拆出 <b>' + esc(r.rule_says.root) + ' + '
+              + esc(r.rule_says.affix) + '</b>，但还没入库——跑一次规则分解即可。'
+              : '它可能本来就不是派生词。'}</div>`;
+
+      const members = r.members.length ? `
+        <h2>由 ${esc(r.word)} 派生出的词</h2>
+        <div class="card" style="line-height:2.4">${r.members.map(m =>
+          `<span class="pill ${(GRADES[m.grade] || ['off'])[0]}">${esc(m.member)}
+           <small>${esc(m.affix)}</small></span>`).join(' ')}</div>` : '';
+
+      out.style.display = 'block';
+      out.innerHTML = `
+        <h2>${esc(r.word)} ${r.tags.map(t => `<span class="pill off">${esc(t)}</span>`).join(' ')}</h2>
+        ${breakdown}
+        ${members}
+        <details class="detail" style="margin-top:0.8rem">
+          <summary>原始 JSON</summary><pre>${esc(JSON.stringify(r, null, 2))}</pre>
+        </details>`;
+      out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (e) { toast(e.message, true); }
+  }
+</script>
+{% endblock %}

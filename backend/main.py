@@ -132,15 +132,16 @@ def create_app() -> FastAPI:
 
     # Before anything opens a connection: if the admin console staged a restore,
     # this is the only safe moment to swap it in.
-    restored_from = apply_pending_restore()
+    restored = apply_pending_restore()
 
     _run_core_migrations()
 
-    if restored_from is not None:
+    for name, backup_path in restored.items():
         log.warning(
             "restore.applied",
-            "已用上传的数据替换学习数据库，替换前的版本已备份",
-            backup=str(restored_from),
+            f"已用上传的数据替换 {name} 数据库，替换前的版本已备份",
+            database=name,
+            backup=str(backup_path),
         )
 
     notifications.install()

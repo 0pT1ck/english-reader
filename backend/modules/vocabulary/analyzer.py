@@ -169,7 +169,21 @@ def resolve_lemma(token: Any) -> tuple[str, str]:
 
     Hence: prefer spaCy's lemma when both tools consider it possible, and fall
     back to lemminflect when spaCy produced something morphologically wrong.
+
+    The fallback only applies when spaCy produced something that is *not a word*.
+    With ``lemmatize_oov`` on, lemminflect will strip a suffix that was never
+    there — ``other`` as an adjective comes back as ``('oth',)`` because ``-er``
+    looks like a comparative, and ``oth`` happens to be in ECDICT as an
+    abbreviation, so merely checking that a candidate exists is not enough. It
+    cost four false out-of-syllabus hits across sixteen drafts.
+
+    So the order is: agree if both accept it; otherwise keep spaCy's answer if it
+    is a real headword, because spaCy read the sentence and lemminflect only saw
+    a tag; only when spaCy's answer is not in the dictionary at all does the
+    morphology table get to decide.
     """
+    from backend.modules.vocabulary import repository
+
     spacy_lemma = (token.lemma_ or token.text).lower()
 
     if not token.is_alpha:
@@ -182,9 +196,76 @@ def resolve_lemma(token: Any) -> tuple[str, str]:
     if spacy_lemma in candidates:
         return spacy_lemma, "agreed"
 
-    # spaCy's answer is not a form lemminflect recognises — usually a rule-based
-    # mistake on an irregular word. Trust the morphology table.
-    return candidates[0], "lemminflect"
+    if repository.lookup(spacy_lemma) is not None:
+        return spacy_lemma, "spacy"
+
+    # spaCy's answer is not a word at all — usually a rule-based mistake on an
+    # irregular form. Now the morphology table is the better guess.
+    for candidate in candidates:
+        if repository.lookup(candidate) is not None:
+            return candidate, "lemminflect"
+
+    return spacy_lemma, "spacy"
+
+
+# Bound morphemes that only ever appear attached to something else. A
+# hyphenated compound whose first half is one of these ("socio-economic",
+# "self-aware") must not have that half judged as a word in its own right —
+# spaCy splits on the hyphen, and `socio` is in no syllabus because it is not a
+# word. This list is the fallback; once the affix table is loaded, that is the
+# better source.
+COMBINING_FORMS = frozenset(
+    """
+    socio psycho physio bio geo neuro agro astro hydro thermo electro
+    micro macro mini multi mono poly semi pseudo quasi proto retro
+    anti auto co counter cross de dis ex extra hyper hypo il im in inter intra
+    ir mid mis non over post pre pro re self sub super trans ultra un under
+    """.split()
+)
+
+
+def hyphenated_spans(doc: Any) -> dict[int, tuple[int, int]]:
+    """Map each token index to the hyphenated compound it belongs to.
+
+    Returns ``{token index: (start, end)}`` with ``end`` exclusive. A compound is
+    a run of alphabetic tokens joined by hyphens with no whitespace anywhere in
+    between, which is exactly how ``socio-economic`` and ``well-being`` arrive
+    after tokenisation — as three tokens that mean one word.
+    """
+    spans: dict[int, tuple[int, int]] = {}
+    index = 0
+    tokens = list(doc)
+
+    while index < len(tokens):
+        start = index
+        end = index + 1
+        # Extend while the pattern "word - word" continues unbroken.
+        while (
+            end + 1 < len(tokens)
+            and tokens[end].text == "-"
+            and not tokens[end - 1].whitespace_
+            and not tokens[end].whitespace_
+            and tokens[end - 1].is_alpha
+            and tokens[end + 1].is_alpha
+        ):
+            end += 2
+        if end > start + 1:
+            for position in range(start, end):
+                spans[position] = (start, end)
+        index = end
+
+    return spans
+
+
+def compound_forms(doc: Any, span: tuple[int, int]) -> tuple[str, str]:
+    """The hyphenated and the run-together spelling of one compound.
+
+    Both are worth trying: dictionaries disagree about ``well-being`` versus
+    ``wellbeing`` and ``socio-economic`` versus ``socioeconomic``.
+    """
+    start, end = span
+    hyphenated = "".join(token.text for token in list(doc)[start:end]).lower()
+    return hyphenated, hyphenated.replace("-", "")
 
 
 def analyze(text: str) -> list[SentenceAnalysis]:

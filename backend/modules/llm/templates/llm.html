@@ -1,0 +1,312 @@
+{% extends "base.html" %}
+{% block title %}模型{% endblock %}
+
+{% block content %}
+<h1>模型接入</h1>
+<p class="subtitle">
+  提供商、密钥与批次任务。密钥只写进 <code>data/secrets.json</code>——不进版本控制、
+  不进备份、不进诊断包。
+</p>
+
+<h2>提供商</h2>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>名称</th><th>类型</th><th>模型</th><th>价格 / 百万 token</th>
+        <th>密钥</th><th>状态</th><th></th>
+      </tr>
+    </thead>
+    <tbody id="provider-rows">
+      {% for p in providers %}
+      <tr data-id="{{ p.id }}">
+        <td>
+          <b>{{ p.label }}</b>{% if p.is_default %} <span class="pill ok">默认</span>{% endif %}
+          <div class="muted mono">{{ p.id }}</div>
+        </td>
+        <td class="mono nowrap">{{ p.kind_label }}</td>
+        <td class="mono">{{ p.model }}</td>
+        <td class="mono nowrap">入 {{ p.price_in }} / 出 {{ p.price_out }} {{ p.currency }}</td>
+        <td>
+          {% if p.has_key %}<span class="pill ok">已配置</span>
+          {% else %}<span class="pill off">缺失</span>{% endif %}
+        </td>
+        <td>
+          {% if p.enabled %}<span class="pill INFO">启用</span>
+          {% else %}<span class="pill off">停用</span>{% endif %}
+        </td>
+        <td class="nowrap">
+          <button onclick="setKey('{{ p.id }}')">填密钥</button>
+          <button onclick="testProvider('{{ p.id }}', this)">测试</button>
+          <button class="danger" onclick="removeProvider('{{ p.id }}')">删除</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">还没有配置提供商。从下面的预设里挑一个开始。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>添加提供商</h2>
+<div class="card">
+  <p class="muted" style="margin:0 0 0.8rem">
+    绝大多数国产模型和中转服务都提供 OpenAI 兼容接口，填 <code>base_url</code>、模型名、
+    密钥三样就能用。价格用来累计成本，填错只影响统计，不影响调用。
+  </p>
+  <div class="row" style="margin-bottom:0.8rem">
+    {% for preset in presets %}
+    <button onclick='fillPreset({{ preset | tojson }})'>{{ preset.label }}</button>
+    {% endfor %}
+  </div>
+  <form id="provider-form">
+    <div class="grid">
+      <label>id（英文短名，也是密钥的存放键）<input type="text" name="id" required></label>
+      <label>显示名<input type="text" name="label"></label>
+      <label>接口类型
+        <select name="kind">
+          {% for value, text in kinds.items() %}<option value="{{ value }}">{{ text }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>base_url<input type="text" name="base_url" required placeholder="https://api.deepseek.com/v1"></label>
+      <label>模型名<input type="text" name="model" required></label>
+      <label>货币<input type="text" name="currency" value="CNY"></label>
+      <label>输入价格 / 百万 token<input type="number" name="price_in" step="0.01" value="0"></label>
+      <label>输出价格 / 百万 token<input type="number" name="price_out" step="0.01" value="0"></label>
+      <label>API 密钥（可留空，稍后再填）<input type="password" name="api_key" autocomplete="off"></label>
+    </div>
+    <div class="row" style="margin-top:0.9rem">
+      <label class="row" style="width:auto"><input type="checkbox" name="is_default" style="width:auto"> 设为默认</label>
+      <button class="primary" type="submit">保存</button>
+    </div>
+  </form>
+</div>
+
+<h2>批次任务</h2>
+<div class="grid">
+  <div class="card stat">
+    <span class="stat-label">累计花费</span>
+    <span class="stat-value">{{ '%.4f' % summary.cost }}</span>
+    <span class="muted mono">{{ summary.jobs }} 个任务</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">累计 token</span>
+    <span class="stat-value">{{ '{:,}'.format(summary.tokens_in + summary.tokens_out) }}</span>
+    <span class="muted mono">入 {{ '{:,}'.format(summary.tokens_in) }} · 出 {{ '{:,}'.format(summary.tokens_out) }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">正在运行</span>
+    <span class="stat-value">{{ summary.running | length }}</span>
+    <span class="muted mono">{{ summary.running | join(', ') or '无' }}</span>
+  </div>
+</div>
+
+{% if job_kinds %}
+<div class="card" style="margin-top:1rem">
+  <div class="row">
+    <select id="job-kind" style="width:auto">
+      {% for k in job_kinds %}<option value="{{ k.kind }}">{{ k.title }}</option>{% endfor %}
+    </select>
+    <input type="number" id="job-cap" placeholder="花费上限（留空用默认）" step="0.5" style="width:13rem">
+    <input type="number" id="job-limit" placeholder="只处理前 N 个（试跑用）" step="10" style="width:15rem">
+    <input type="number" id="job-batch" placeholder="每次调用几条（慢模型调小）" step="1" style="width:16rem">
+    <button class="primary" onclick="createJob()">新建任务</button>
+  </div>
+  <p class="muted" style="margin:0.8rem 0 0">
+    任务按项记录进度，中断后可以接着跑；达到花费上限会自动暂停而不是失败，
+    改上限后可以继续。<b>第一次跑先填个数量上限试几十个</b>，用实测单价反推总价再放开。
+  </p>
+  <p class="muted" style="margin:0.5rem 0 0">
+    用<b>思考型模型</b>（名字里带 thinking / R1 / qwen3 之类）时把每次调用的条数调小——
+    它们的输出预算大半花在思维链上，批量一大就会超时或被截断。失败了点「看失败原因」，
+    里面有模型原样返回的内容。
+  </p>
+</div>
+{% endif %}
+
+<div class="scroll" style="margin-top:1rem">
+  <table>
+    <thead>
+      <tr><th>#</th><th>任务</th><th>进度</th><th>花费</th><th>状态</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td class="mono">{{ j.id }}</td>
+        <td>
+          <b>{{ j.title }}</b>
+          <div class="muted mono">{{ j.kind }} · {{ j.provider_id }}</div>
+        </td>
+        <td class="mono nowrap">
+          {{ j.done }} / {{ j.total }}{% if j.failed %} <span class="pill ERROR">失败 {{ j.failed }}</span>{% endif %}
+        </td>
+        <td class="mono nowrap">
+          {{ '%.4f' % j.cost }}{% if j.spend_cap %} <span class="muted">/ {{ j.spend_cap }}</span>{% endif %}
+        </td>
+        <td><span class="pill {{ 'ok' if j.status == 'done' else ('INFO' if j.status == 'running' else ('ERROR' if j.status == 'failed' else 'off')) }}">{{ j.status }}</span></td>
+        <td class="nowrap">
+          {% if j.status == 'capped' %}
+          <button class="primary" onclick="raiseCap({{ j.id }}, {{ j.spend_cap or 0 }})">提高上限并继续</button>
+          {% elif j.status in ['pending', 'paused', 'failed'] %}
+          <button onclick="jobAction({{ j.id }}, 'start')">继续</button>
+          {% elif j.status == 'running' %}
+          <button onclick="jobAction({{ j.id }}, 'pause')">暂停</button>
+          {% endif %}
+          {% if j.status != 'done' %}
+          <button onclick="raiseCap({{ j.id }}, {{ j.spend_cap or 0 }})">改上限</button>
+          {% endif %}
+          {% if j.failed %}
+          <button onclick="showFailures({{ j.id }})">看失败原因</button>
+          {% endif %}
+          <button class="danger" onclick="deleteJob({{ j.id }})">删除</button>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="muted">还没有批次任务。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div id="failures" style="display:none;margin-top:1rem"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function fillPreset(preset) {
+    const form = document.getElementById('provider-form');
+    for (const [key, value] of Object.entries(preset)) {
+      if (form.elements[key]) form.elements[key].value = value;
+    }
+    toast('已填入 ' + preset.label + ' 的默认值，密钥还要你自己填');
+  }
+
+  document.getElementById('provider-form').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const form = ev.target;
+    const data = Object.fromEntries(new FormData(form).entries());
+    const apiKey = data.api_key;
+    delete data.api_key;
+    data.price_in = Number(data.price_in || 0);
+    data.price_out = Number(data.price_out || 0);
+    data.is_default = form.elements.is_default.checked;
+    data.enabled = true;
+
+    try {
+      await api('/llm/providers/' + encodeURIComponent(data.id), {
+        method: 'PUT', body: JSON.stringify(data),
+      });
+      if (apiKey) {
+        await api('/llm/providers/' + encodeURIComponent(data.id) + '/key', {
+          method: 'PUT', body: JSON.stringify({ api_key: apiKey }),
+        });
+      }
+      toast('已保存');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { toast(e.message, true); }
+  });
+
+  async function setKey(id) {
+    const key = prompt('填入 ' + id + ' 的 API 密钥（只写入 secrets.json）');
+    if (!key) return;
+    try {
+      await api('/llm/providers/' + encodeURIComponent(id) + '/key', {
+        method: 'PUT', body: JSON.stringify({ api_key: key }),
+      });
+      toast('已保存密钥');
+      setTimeout(() => location.reload(), 600);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function testProvider(id, button) {
+    button.disabled = true;
+    button.textContent = '测试中…';
+    try {
+      const res = await api('/llm/providers/' + encodeURIComponent(id) + '/test', { method: 'POST' });
+      if (res.ok) {
+        toast('通了：「' + res.reply + '」 · ' + res.tokens_in + '+' + res.tokens_out
+              + ' token · ' + res.cost.toFixed(6) + ' ' + res.currency);
+      } else {
+        toast(res.error, true);
+      }
+    } catch (e) { toast(e.message, true); }
+    button.disabled = false;
+    button.textContent = '测试';
+  }
+
+  async function removeProvider(id) {
+    if (!confirm('删除提供商 ' + id + '？它的密钥也会一起删掉。')) return;
+    try {
+      await api('/llm/providers/' + encodeURIComponent(id), { method: 'DELETE' });
+      location.reload();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function createJob() {
+    const kind = document.getElementById('job-kind').value;
+    const capRaw = document.getElementById('job-cap').value;
+    const limitRaw = document.getElementById('job-limit').value;
+    const body = { kind: kind, params: {} };
+    if (capRaw) body.spend_cap = Number(capRaw);
+    if (limitRaw) body.params.limit = Number(limitRaw);
+    const batchRaw = document.getElementById('job-batch').value;
+    if (batchRaw) body.params.batch = Number(batchRaw);
+    try {
+      const job = await api('/llm/jobs', { method: 'POST', body: JSON.stringify(body) });
+      toast('已创建任务 #' + job.id + '，共 ' + job.total + ' 项');
+      setTimeout(() => location.reload(), 700);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function showFailures(id) {
+    try {
+      const res = await api('/llm/jobs/' + id + '?status=failed');
+      const box = document.getElementById('failures');
+      box.style.display = 'block';
+      box.innerHTML = '<h2>任务 #' + id + ' 的失败项</h2>' + res.items.map(i => `
+        <div class="card" style="margin-bottom:0.6rem">
+          <div class="mono">#${i.seq} ${i.key} <span class="muted">· 尝试 ${i.attempts} 次</span></div>
+          <div style="color:var(--bad);margin:0.4rem 0">${i.error || ''}</div>
+          ${i.reply ? `<details class="detail"><summary>模型原样返回的内容</summary>
+             <pre>${i.reply.replace(/</g, '&lt;')}</pre></details>`
+            : '<div class="muted">没有留下回复内容</div>'}
+        </div>`).join('');
+      box.scrollIntoView({ behavior: 'smooth' });
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function raiseCap(id, current) {
+    const answer = prompt('这个任务的新花费上限（留空表示不限制）', current || '');
+    if (answer === null) return;
+    const value = answer.trim() === '' ? null : Number(answer);
+    try {
+      await api('/llm/jobs/' + id + '/spend-cap', {
+        method: 'PUT', body: JSON.stringify({ spend_cap: value }),
+      });
+      toast('已改上限，点「继续」接着跑');
+      setTimeout(() => location.reload(), 700);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function jobAction(id, action) {
+    try {
+      await api('/llm/jobs/' + id + '/' + action, { method: 'POST' });
+      setTimeout(() => location.reload(), 500);
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function deleteJob(id) {
+    if (!confirm('删除任务 #' + id + '？已经生成的内容不会被删除。')) return;
+    try {
+      await api('/llm/jobs/' + id, { method: 'DELETE' });
+      location.reload();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  // A running job's progress only changes server-side, so the page refreshes
+  // itself while one is live rather than making the user press F5.
+  if ({{ (summary.running | length) }} > 0) {
+    setTimeout(() => location.reload(), 5000);
+  }
+</script>
+{% endblock %}

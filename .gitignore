@@ -14,6 +14,9 @@ __pycache__/
 # Local configuration and secrets
 .env
 .env.local
+# API keys. Already covered by data/, listed again because committing this one
+# would publish live credentials.
+data/secrets.json
 
 # Logs
 logs/

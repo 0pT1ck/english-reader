@@ -86,7 +86,10 @@ def emit(event_name: str, **payload: Any) -> None:
     handlers = _subscribers.get(event_name, [])
 
     if not handlers:
-        log.debug("event.unhandled", f"事件 {event_name} 没有订阅者", event=event_name)
+        # `event` is the logger's own first parameter, so the context key has to
+        # be something else — passing event= here raised TypeError and took down
+        # whatever emitted an event nobody had subscribed to yet.
+        log.debug("event.unhandled", f"事件 {event_name} 没有订阅者", emitted=event_name)
         return
 
     for _priority, owner, handler in handlers:

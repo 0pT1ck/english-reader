@@ -7,6 +7,7 @@ belongs in the import script, not in the running service.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from functools import lru_cache
 from typing import Any
@@ -74,6 +75,67 @@ def resolve_surface(surface: str) -> str | None:
     return rows[0]["headword"] if rows else None
 
 
+@lru_cache(maxsize=20000)
+def tags_of(headword: str) -> frozenset[str]:
+    """Syllabus tags for a word, unioned across its spelling variants.
+
+    ECDICT splits the tags between British and American spellings more or less
+    at random — ``neighbour`` carries ``cet4`` while ``neighbor`` does not — so
+    reading the tags of one spelling alone misclassifies the other as beyond the
+    syllabus. See :mod:`.spelling` for why the pairing is safe.
+    """
+    from backend.modules.vocabulary import spelling
+
+    entry = lookup(headword)
+    if entry is None:
+        return frozenset()
+
+    tags = set((entry["tags"] or "").split())
+    for variant in spelling.variants(headword):
+        other = lookup(variant)
+        if other is not None:
+            tags |= set((other["tags"] or "").split())
+    return frozenset(tags)
+
+
+# ECDICT marks parts of speech at the start of each gloss line, in both the
+# English definition ("v. give help") and the Chinese translation ("vt. 帮助").
+# The markers are not uniform, so they are normalised to a small set.
+_POS_MARKER = re.compile(r"^\s*([a-z]{1,4})\.")
+_POS_NORMAL = {
+    "n": "noun", "pl": "noun",
+    "v": "verb", "vt": "verb", "vi": "verb", "aux": "verb",
+    "a": "adj", "adj": "adj",
+    "ad": "adv", "adv": "adv",
+    "prep": "prep", "conj": "conj", "pron": "pron", "num": "num",
+    "art": "art", "int": "int", "abbr": "abbr",
+}
+
+
+@lru_cache(maxsize=20000)
+def parts_of_speech(headword: str) -> frozenset[str]:
+    """Which parts of speech a headword can be.
+
+    Used to sanity-check morphology: ``-ly`` attaches to adjectives, so
+    ``early`` is not ``ear + -ly``; agentive ``-er`` attaches to verbs, so
+    ``matter`` is not ``mat + -er``. Without this the derivation rules invent
+    families out of coincidental spellings.
+    """
+    entry = lookup(headword)
+    if entry is None:
+        return frozenset()
+
+    found: set[str] = set()
+    for field in ("definition", "translation"):
+        for line in (entry[field] or "").split("\n"):
+            match = _POS_MARKER.match(line)
+            if match:
+                normalised = _POS_NORMAL.get(match.group(1))
+                if normalised:
+                    found.add(normalised)
+    return frozenset(found)
+
+
 def is_imported() -> bool:
     """Whether the dictionary has any content at all."""
     return entry_count() > 0
@@ -99,8 +161,20 @@ def stats() -> dict[str, Any]:
     try:
         total = entry_count()
         forms = conn.execute("SELECT COUNT(*) AS n FROM word_forms").fetchone()["n"]
-        senses = conn.execute("SELECT COUNT(*) AS n FROM senses").fetchone()["n"]
-        families = conn.execute("SELECT COUNT(*) AS n FROM word_families").fetchone()["n"]
+
+        # Generated content lives in its own database; missing tables there just
+        # mean that phase of the work has not been run yet.
+        content = get_connection("content")
+        try:
+            senses = content.execute("SELECT COUNT(*) AS n FROM senses").fetchone()["n"]
+        except sqlite3.Error:
+            senses = 0
+        try:
+            families = content.execute(
+                "SELECT COUNT(*) AS n FROM word_families"
+            ).fetchone()["n"]
+        except sqlite3.Error:
+            families = 0
 
         by_tag = {}
         for tag in SYLLABUS_LABELS:
@@ -136,5 +210,10 @@ def stats() -> dict[str, Any]:
 
 def clear_caches() -> None:
     """Drop lookup caches. Called after a dictionary import."""
+    from backend.modules.vocabulary import spelling
+
     lookup.cache_clear()
     resolve_surface.cache_clear()
+    tags_of.cache_clear()
+    parts_of_speech.cache_clear()
+    spelling.clear_cache()

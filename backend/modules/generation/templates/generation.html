@@ -177,7 +177,15 @@
       ? r.beyond.map(b => `<span class="pill ${b.in_dictionary ? 'WARNING' : 'ERROR'}"
            title="${b.in_dictionary ? ('词典标签：' + (b.tags || '无')) : '词典中没有'}"
            >${b.lemma}${b.count > 1 ? '×' + b.count : ''}</span>`).join(' ')
-      : '<span class="muted">没有超出允许范围的词</span>';
+      : '<span class="muted">没有超纲词</span>';
+
+    // Derivations of known roots are shown apart from the violations: the
+    // design counts them as light target words, not as words that should not
+    // be there.
+    const derived = (r.derived || []).length
+      ? r.derived.map(d => `<span class="pill INFO" title="词根：${d.root}"
+           >${d.lemma}${d.count > 1 ? '×' + d.count : ''} <small>← ${d.root}</small></span>`).join(' ')
+      : '<span class="muted">没有</span>';
 
     // Syntax is shown side by side with the real-paper baseline rather than
     // judged: no thresholds in P1a, the numbers are for calibration.
@@ -201,19 +209,28 @@
           <span class="stat-value">${r.max_sentence}<small> 词</small></span></div>
         <div class="card stat"><span class="stat-label">目标词用上</span>
           <span class="stat-value">${r.targets_used}/${r.targets_total}</span></div>
-        <div class="card stat"><span class="stat-label">超出范围</span>
+        <div class="card stat"><span class="stat-label">超纲</span>
           <span class="stat-value">${r.beyond.length}<small> 词条 · ${r.beyond_rate}%</small></span></div>
+        <div class="card stat"><span class="stat-label">已知词根的派生词</span>
+          <span class="stat-value">${(r.derived || []).length}<small> 词条 · ${r.derived_rate || 0}%</small></span></div>
         <div class="card stat"><span class="stat-label">最大嵌套深度</span>
           <span class="stat-value">${r.max_depth}</span></div>
       </div>
 
       ${missed.length ? `<div class="notice"><b>没用上的目标词：</b>${missed.join('、')}</div>` : ''}
 
-      <h2>超出允许范围的词</h2>
+      <h2>超纲词</h2>
       <div class="card" style="line-height:2.2">${beyond}</div>
       <p class="muted" style="margin-top:0.5rem">
-        黄色＝词典里有但不在允许层级；红色＝词典里没有（可能是新词、拼写变体，
-        或者连字符复合词被切开——这两个已知缺陷会让数字偏高）。
+        黄色＝词典里有但不在允许层级；红色＝词典里根本没有。目标为零：
+        漏网的一两个可以接受，阅读界面上会标注「暂时不用学会」。
+      </p>
+
+      <h2>已知词根的派生词</h2>
+      <div class="card" style="line-height:2.2">${derived}</div>
+      <p class="muted" style="margin-top:0.5rem">
+        这些不算违规。词根在允许范围内、语义可推的派生词（B 级）是设计里的轻量目标词：
+        给构词提示、算三分之一名额。完全透明的 A 级（carefully ← careful）根本不计。
       </p>
 
       <h2>句法结构（每千词）</h2>

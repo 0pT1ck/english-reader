@@ -14,9 +14,11 @@ from pathlib import Path
 from backend.admin.templating import add_template_dir
 from backend.core import runtime_config
 from backend.core.registry import AdminPage, Module
-from backend.modules.generation import routes, schema
+from backend.modules.generation import routes, schema, workers
 
 add_template_dir(Path(__file__).parent / "templates")
+
+workers.register()
 
 # Difficulty is a set of parameters, not a constant — re-aiming at a harder exam
 # later means changing these values, nothing else.
@@ -57,12 +59,24 @@ runtime_config.register(
     ),
     runtime_config.ConfigSpec(
         key="gen_target_count",
-        default=8,
+        default=25,
         value_type="int",
         title="每篇的目标词数量",
-        description="要求文章必须用上的学习目标词个数。",
+        description="要求文章必须用上的学习目标词个数，也就是生词密度。"
+        "这个数直接决定学完全部词汇要多久：7226 个目标词 ÷ 这个数 = 需要读多少篇。"
+        "8 个时要 903 篇，25 个时要 289 篇。实测提到 25 个超纲率仍只有 0.29%。",
         group="generation",
         order=20,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_targets_per_paragraph",
+        default=5,
+        value_type="int",
+        title="每段的目标词数量",
+        description="光有密度不够，还要管分布——二十五个生词分五段、每段五个是能读的，"
+        "堆在开头两段就成了单词表。段数由「每篇目标词 ÷ 这个数」自动算出。",
+        group="generation",
+        order=21,
     ),
     runtime_config.ConfigSpec(
         key="gen_anchor_count",
@@ -73,6 +87,17 @@ runtime_config.register(
         "太多就退化成了词表。",
         group="generation",
         order=21,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_provider",
+        default="",
+        value_type="str",
+        title="生成文章用的提供商",
+        description="留空则用默认提供商。写作和数据整理要的能力不一样："
+        "同一套提示词下，deepseek-v4-flash 的超纲率 3.64%，claude-haiku-4-5 是 0.98%，"
+        "gpt-5.5 是 0.32%。数据整理该用快模型，写文章不该。",
+        group="generation",
+        order=13,
     ),
     runtime_config.ConfigSpec(
         key="gen_length",

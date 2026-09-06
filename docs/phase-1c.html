@@ -1,0 +1,616 @@
+<title>Phase 1c 义项重建</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 1c · 方案 · 2026-09-06</div>
+    <h1>义项重建</h1>
+    <p class="standfirst">用外部清单定「有哪些义项」，用模型定「哪些属于通用书面语」，用真题定「哪些必须掌握」。</p>
+    <p class="thesis">P1b 的义项集是模型凭空生成的，没有任何东西可以核对。这一阶段不是给它补漏，是<b>换一条有据可查的管线</b>——每一步的答案都来自它最该来自的地方。</p>
+    <p class="parent">上级 <a href="./phase-1.html">Phase 1</a> ｜ 上一阶段 <a href="./phase-1b.html">Phase 1b</a> ｜ 功能设计 <a href="./english-reader.html">English Reader</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">7226</div><div class="fig-key">全部重做的词</div></div>
+    <div class="fig"><div class="fig-val">502<span>MB</span></div><div class="fig-key">Wiktionary 转储</div></div>
+    <div class="fig"><div class="fig-val">452</div><div class="fig-key">篇真题作为裁判</div></div>
+    <div class="fig"><div class="fig-val">3</div><div class="fig-key">步，各归各的</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>为什么推倒重来</h2>
+    </div>
+    <p class="lede">P1b 的数据质量其实不差。推倒的理由不是它错了，是<b>我们无法知道它对不对</b>。</p>
+
+    <p>P1b 的三层验证查了三件事：义项数是否合理、英文定义用词是否超纲、词在不在真题里。
+    <b>没有一项能回答「这个词有没有漏掉一个常用义项」。</b>模型少给一个义项，系统永远不知道，
+    而少给的那个恰恰可能是考试要考的。</p>
+
+    <p>抽查 <code>address</code> 的结果是好的——我们给的三个义项（地址／着手解决／演说），
+    在 Wiktionary 剔除古义后的 20 条清单里全都对得上，也没落下该学的。但<b>一个词的抽查不是证据</b>，
+    而且这正说明问题：要知道有没有漏，就得有个清单可比。</p>
+
+    <p>所以这一阶段引入外部清单。不是因为模型不可信，是因为<b>没有参照系的判断无法被检验</b>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>三步分工</h2>
+    </div>
+    <p class="lede">每一步都交给最有资格回答的那一方，模型只做它擅长的判断。</p>
+
+<pre>Wiktionary 全量转储（502 MB，一次下载，离线可重跑）
+  ↓  <b>清单</b>：这个词在英文里存在哪些概念
+按标签机械过滤 obsolete / archaic / dated / rare / dialectal
+  ↓  免费，address 从 29 条降到 20 条
+LLM 做<b>语域筛选</b>：哪些属于通用书面英语，哪些是行话
+  ↓  高尔夫术语、内存地址、航海用语出局
+LLM 按我们的判据<b>合并</b>成中等粒度，并重写英文定义与中文投影
+  ↓  address 20 条 → 3 项
+真题标注：每个义项在 452 篇里出现几次
+  ↓  <b>优先级</b>，以及熟词僻义的自动标记</pre>
+
+    <h3>模型不回答「值不值得学」——这一条是关键</h3>
+    <p>最初的设计是问模型「这几条里哪些是四六级考生需要掌握的」。<b>这个问法会毁掉整条管线</b>，
+    因为它会答出最常见的意思，而四六级恰恰考不常见的那个。</p>
+    <p><code>address</code> 就是活例子：按那个问法，模型多半保「地址」、可能保「演说」，
+    而「着手解决」因为不那么常用会被筛掉。但真题里出现的偏偏是它——
+    <code>a problem that needs to be addressed immediately</code>。
+    <b>最该学的义项会被当成不重要的删掉。</b></p>
+    <p>所以模型只回答一个客观得多、也不需要它猜考纲的问题：</p>
+<pre>这个义项属于通用书面英语，还是某个专门领域的行话／已经不再使用的古义？</pre>
+    <p>删除的理由永远是<b>语域</b>，不是「不重要」。「着手解决」是通用书面英语，留下。
+    高尔夫的 <i>address the ball</i> 是行话，删掉。这个判断模型做得稳，因为它不涉及价值排序。</p>
+
+    <h3>优先级完全交给真题</h3>
+    <p>一个义项在 452 篇真题里出现过，它就是要掌握的，<b>不管模型觉得它常不常用</b>。
+    这是这个项目里唯一真正锚定目标的证据，主文档 F5 早就写了这条原则：
+    「一个词在近二十年真题里出现 50 次，比它在某份词表里被标成 CET-4 有说服力得多。」</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>熟词僻义变成可以算出来的</h2>
+      <span class="sec-note">意外收获</span>
+    </div>
+    <p class="lede">这一层是讨论中途冒出来的，不在原计划里，但可能是整个 P1c 最有价值的产出。</p>
+
+    <p>跑完管线，每个义项会同时带上两个数：模型给的<b>常用度序号</b>，和真题里的<b>实际出现次数</b>。
+    两者一交叉，熟词僻义就自己浮出来了：</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>词</th><th>义项</th><th>序号</th><th>真题出现</th><th>判定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">address</td><td>地址</td><td class="num">1</td><td class="num">有</td><td>常见义，正常</td></tr>
+          <tr><td class="topic">address</td><td>着手解决</td><td class="num">2</td><td class="num">有</td><td><b>熟词僻义</b> — 序号靠后却被考到</td></tr>
+          <tr><td class="topic">address</td><td>演说</td><td class="num">3</td><td class="num">无</td><td>存着，低优先级</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1.2rem">规则一句话：<b>序号靠后、却在真题里出现的义项，就是熟词僻义。</b>
+    这正好填进 <code>senses</code> 表里 P0 建表时预留、至今为空的 <code>is_exam_key</code> 字段。</p>
+
+    <p>主文档 §C 写着「熟词僻义正是 CET 阅读最爱考的地方」——那一直只是一句设计理念，
+    现在它变成一个能算出来的标记，以后出抽查题、排复习顺序都能直接用。</p>
+
+    <p>顺带还能纠错：如果某个义项模型排第 4、真题里却出现最多，那是模型排错了，<b>真题说了算</b>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>Wiktionary 怎么用</h2>
+    </div>
+
+    <h3>只取清单，不取措辞</h3>
+    <p>Wiktionary 的英文定义<b>不能直接用</b>。它大量条目是 1913 年韦氏词典的公版文本，
+    语言是一百年前的：<code>to superscribe, or to direct and transmit</code>、<code>to betake</code>、
+    <code>to make suit to as a lover</code>。对 CET 学习者这是负资产，比我们模型写的还难。</p>
+    <p>所以取它的<b>义项清单</b>（这个词在英文里存在哪些概念），英文定义由模型按我们的 2000 词规格重写。</p>
+    <p><b>附带好处</b>：不复制它的文字，就不触发 CC BY-SA 的传染性条款——将来公开仓库没有包袱。
+    这一点上它比柯林斯干净得多：柯林斯没有合规的批量来源，官方 API 已经 403，
+    流传的 MDX 是未授权复制，会变成一个「不能公开的依赖」。</p>
+
+    <h3>取全量转储，不用逐词接口</h3>
+    <p>kaikki.org 两种都能用：逐词 <code>.jsonl</code>（<code>address</code> 23 KB），
+    以及 502 MB 的英文全量转储。<b>取转储</b>——7226 个词就是 7226 次请求，
+    而转储下一次就永久离线可用，重跑不依赖网络，也不给对方添麻烦。</p>
+
+    <h3>先做一次覆盖率体检</h3>
+    <p><b>这是动手前的第一步，也是可能推翻方案的一步。</b>Wiktionary 对我们这批词的覆盖率还没测过。
+    如果覆盖率高（预期如此，都是常用词），继续；如果发现大片缺失，整个方案要重想。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>粗筛换掉</h2>
+    </div>
+    <p class="lede">P1b 的粗筛在数中文逗号，这件事本身就和我们的原则拧着。</p>
+
+    <p>现在的判据是：数 ECDICT 中文释义里有几个词性标记、几条逗号分隔的说法。
+    <b>用中文释义的结构去猜英文有几个概念</b>——而我们自己的第一原则是「义项按英文概念划分，
+    不按中文差异划分」。</p>
+
+    <p>实测它的准确度：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>粗筛归类</th><th>词数</th><th>实际平均义项</th><th>结果只有 1 个</th></tr></thead>
+        <tbody>
+          <tr><td>多词性 · 强候选</td><td class="num">1437</td><td class="num">2.98</td><td class="num">58（4%）</td></tr>
+          <tr><td>双词性 · 待判</td><td class="num">1789</td><td class="num">2.14</td><td class="num">310（17%）</td></tr>
+          <tr><td>单词性多义</td><td class="num">360</td><td class="num">2.01</td><td class="num">102（28%）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">整体 13% 白建。而且阈值（3 词性／2 词性／7 条释义）是<b>拍出来的</b>——
+    当初为了让总数落在方案估算附近调的，没有证据支撑。</p>
+
+    <p>更麻烦的是看不见的那一半：被判成「简单」直接跳过的 3640 个词里，
+    有多少其实是多义的？<b>现在完全是盲区。</b>而且判据依赖 ECDICT 每个条目的编写风格——
+    同样的多义程度，编得详细的被建、编得简略的被跳过，这不是词的性质，是编者的习惯。</p>
+
+    <p><b>换成 Wiktionary 的义项数当过筛信号</b>：它直接就是「英文里有几个概念」，不用从中文反推，
+    而且是免费的（不调模型）。这一步顺带把 3640 个词的盲区扫掉。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>旧数据保留但不使用</h2>
+    </div>
+    <p>现有 8837 个义项整表归档（<code>senses_p1b</code>），新数据建新表。两边并排能直接算出
+    <b>「模型独立生成」和「有清单参照」差多少</b>——这个数对以后判断该不该信模型很有用，
+    存两份的成本只有几 MB。</p>
+    <p>动手前已做数据快照：<code>content-20260906-073455-before-p1c-rebuild.db</code>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>明确不做</h2>
+    </div>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>完整生成管线</b>——过量生成择优、定点修补的收敛策略，
+      原本排在 P1c，现在<b>顺延到 P1d</b>。这一阶段被义项重建占满了。</span></div>
+      <div class="not"><i>×</i><span><b>例句生成</b>——仍然是惰性的，等 P5 的到期队列和 P6 的夜间批处理。</span></div>
+      <div class="not"><i>×</i><span><b>Wiktionary 的例句、词源、发音</b>——转储里都有，都不取。
+      只取义项清单和标签。</span></div>
+      <div class="not"><i>×</i><span><b>阅读界面</b>（P2）、<b>水平估计</b>（P3）、<b>复习调度</b>（P5）。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>待定 —— 需要讨论后才能动手</h2>
+      <span class="sec-note">5 项</span>
+    </div>
+    <p class="lede">这些我有倾向但不确定，写出来是为了讨论，不是为了走个过场。</p>
+
+    <div class="nots">
+      <div class="not"><i>?</i><span><b>真题标注抽多少句。</b>2030 个词出现 ≥3 次，合计 94407 处。
+      全标不现实。每词抽 8 句 ≈ 12000 句 ≈ 1200 次调用。抽样会漏掉低频义项，
+      抽多了成本翻倍——<b>8 句这个数是拍的，需要先做小样本试出合理值。</b></span></div>
+
+      <div class="not"><i>?</i><span><b>779 个真题零出现的词怎么办。</b>没有语料可锚，
+      优先级排不出来。选项：照模型的序号排；或者干脆全部标成低优先级；
+      或者对这批词单独做一次「问三遍取共识」。我倾向第二个（最省），但可能太粗暴。</span></div>
+
+      <div class="not"><i>?</i><span><b>合并粒度会不会因为清单变长而失控。</b>
+      P1b 是让模型从零生成，平均 2.46 个义项，分布健康。
+      现在给它一份 20 条的清单让它合并——<b>模型可能倾向于多留</b>，
+      义项数会不会涨到 5、6 个？这个只能试了才知道，得在小样本上先测。</span></div>
+
+      <div class="not"><i>?</i><span><b>词性要不要作为拆分依据。</b>Wiktionary 按词性分开列
+      （<code>address</code> 名词 13 条、动词 16 条），而我们的判据明说「不要因为词性不同就拆」。
+      清单本身带着词性结构，会不会把模型往按词性拆的方向带？提示词要不要显式对抗这一点？</span></div>
+
+      <div class="not"><i>?</i><span><b>还用不用 deepseek-v4-flash。</b>它在 P1b 的开放式生成上表现最好，
+      但这次任务变了——输入长了一个数量级（20 条清单 + 词典释义），要做的是筛选和合并。
+      <b>长上下文里的筛选任务，快模型不一定还占优。</b>要重新横评一次。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>推进顺序</h2>
+    </div>
+    <p class="lede">前三步都是免费的，而且任何一步的结果都可能改变后面的方案。</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>下转储，测覆盖率</b>
+        <span>7226 个词里 Wiktionary 有多少、平均几个义项、标签过滤后剩多少。
+        <b>覆盖率太低就得重想方案。</b>免费。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>重新过筛</b>
+        <span>用义项数替代数中文逗号，看那 3640 个被跳过的词里盲区有多大。免费。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>差异审计</b>
+        <span>现有 3587 个词，Wiktionary 有而我们没有的义项有多少。
+        <b>这个数直接决定重建值不值。</b>免费。</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what"><b>小样本横评</b>
+        <span>30 个词 × 几个模型，测 §8 里那三个不确定：粒度会不会失控、
+        会不会按词性拆、哪个模型合适。几毛钱。</span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what"><b>全量重建</b>
+        <span>7226 个词。前四步的结果决定提示词和模型怎么定。</span></span></div>
+      <div class="step"><span class="step-n">6</span><span class="step-what"><b>真题标注</b>
+        <span>产出每个义项的考频、熟词僻义标记，以及漏义项报告。</span></span></div>
+    </div>
+    <p style="margin-top:1.2rem"><b>第 1 到 3 步跑完应该停下来一起看数。</b>
+    如果差异审计发现我们几乎没漏，那「全量重建」的性价比就要重新算——
+    可能只补漏、只加真题标注，比推倒重来划算得多。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>验收</h2>
+    </div>
+    <div class="checks">
+      <div class="check"><span class="check-n">01</span><span class="check-what"><b>清单来源可离线重跑</b>
+        <span>转储在本地，断网也能重建；覆盖率有明确数字。</span></span></div>
+      <div class="check"><span class="check-n">02</span><span class="check-what"><b>粗筛换成义项数</b>
+        <span>原来被跳过的 3640 个词已重新评估，盲区有量化结果。</span></span></div>
+      <div class="check"><span class="check-n">03</span><span class="check-what"><b>义项集重建完成</b>
+        <span>粒度仍在 1–3 个为主；<code>address</code> 是三项、<code>present</code> 的
+        提出／介绍／呈现仍然合并成一项。</span></span></div>
+      <div class="check"><span class="check-n">04</span><span class="check-what"><b>真题考频已标注</b>
+        <span><code>exam_frequency</code> 有值；<code>is_exam_key</code> 能标出熟词僻义，
+        抽查 <code>address</code> 的「着手解决」应被标中。</span></span></div>
+      <div class="check"><span class="check-n">05</span><span class="check-what"><b>漏义项报告可查</b>
+        <span>真题里「一个义项都不匹配」的句子有清单，能据此补建。</span></span></div>
+      <div class="check"><span class="check-n">06</span><span class="check-what"><b>新旧可对照</b>
+        <span><code>senses_p1b</code> 仍在，能算出两版的义项数差异和定义超纲率差异。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>实际怎么走的 —— 重建搁置，先补全</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+    <p class="lede">前三步全部跑完，第四步撞墙。结论是：<b>外部清单确实有价值，
+    但让模型按清单重建的粒度控制没做通，不值得继续卡在这里。</b></p>
+
+    <h3>前三步：两个结论，一个方法错误</h3>
+    <p><b>覆盖率 99%</b>（7171/7226），7 万个义项条目，14% 带 obsolete/archaic 标签可免费剔除。
+    数据源没问题。</p>
+    <p><b>盲区确认了，而且很大。</b>被原粗筛判成「简单·跳过」的 3640 个词里，
+    <b>65% 其实是多义词</b>——<code>bank</code>、<code>come</code>、<code>do</code>、
+    <code>be</code>、<code>positive</code> 全在里面。数中文逗号这个判据确实不行。</p>
+    <p><b>第三步的方法是错的。</b>原计划「比义项数，差得多就说明漏了」——
+    我们平均 2.47、Wiktionary 12.29，<code>run</code> 是 6 对 113。
+    但这什么也证明不了：Wiktionary 把「跑一家公司」「板球得一分」「养鸡场围栏」
+    都算独立义项，粒度不在一个量级。<b>数量差只能证明两者切法不同，
+    要回答「有没有漏」必须逐条做语义匹配。</b></p>
+
+    <h3>第四步：粒度控制没做通</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>做法</th><th>平均义项</th><th>定义难词/条</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>P1b 老办法（无清单）</td><td class="num"><b>2.46</b></td><td class="num">0.61</td><td>粒度合格</td></tr>
+          <tr><td>给清单 · deepseek-flash</td><td class="num">7.0</td><td class="num"><b>0.18</b></td><td>出现重复义项</td></tr>
+          <tr><td>给清单 · mimo-v2.5-pro</td><td class="num">5.0</td><td class="num">0.20</td><td>无重复，但仍偏高</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">§8 里担心的三件事，两件没发生、一件发生了：
+    <b>按词性拆没发生</b>（自动检测 0 例）；<b>定义反而更简单了</b>，难词密度 0.61 → 0.18；
+    <b>粒度失控发生了</b>。</p>
+    <p>改了三轮提示词——点名语域反例、禁止清单外自创、给每个词按清单长度算出目标项数——
+    deepseek 从 6.8 只降到 7.0，还开始产出重复义项：<code>fast</code> 出现两次「禁食/斋戒」，
+    <code>address</code> 同时给出「演说/讲话」和「向…讲话/向…致辞」。</p>
+    <p><b>诊断：这不是拆太细，是语义聚类没做对。</b>P1b 的任务是「看中文释义写义项」，
+    这里是「读 25 条清单做聚类再改写」——后者难得多，快模型到了能力边界。
+    换 mimo 立刻降到 5.0 且无重复，但仍高于设计目标，而且慢 60%。</p>
+
+    <h3>值得记下的是：合并本身有效</h3>
+<pre>present   把 8 条合并成「提出／展现／介绍」一项   ← 设计判据，通过
+bank      河岸保住；内存区块、飞机侧倾被正确删掉
+address   熟词僻义「着手解决」每次都在</pre>
+    <p>语域筛选和覆盖追踪都是有效的——问题只在合并力度。所以这条路是通的，
+    只是需要<b>两步走</b>（先只做聚类、只输出编号分组，再写定义），
+    而那是另一轮工程。</p>
+
+    <h3>决定：先补全，重建留到以后</h3>
+    <p>与其继续在提示词上试错，不如<b>用已经验证过的老办法把缺口补上，把闭环推下去</b>。
+    外部清单的价值已经证明（盲区那 65% 就是它查出来的），
+    工程也留在代码里（<code>wiktionary_senses</code> 表、<code>sense_rebuild</code> 任务、
+    <code>inventory.py</code> 的分词性截断），随时可以接着做。</p>
+    <p>实际执行：还原 P1b 的 8837 条义项，<b>去掉粗筛这道过滤</b>，
+    用老的 <code>sense_build</code> 把剩下的 3640 个词跑完。五轮收敛：
+    3640 → 931 → 282 → 70 → 28 → 0。</p>
+
+    <div class="figures">
+      <div class="fig"><div class="fig-val">7227</div><div class="fig-key">全部目标词都有义项</div></div>
+      <div class="fig"><div class="fig-val">13739</div><div class="fig-key">义项总数</div></div>
+      <div class="fig"><div class="fig-val">1.90</div><div class="fig-key">平均每词义项数</div></div>
+      <div class="fig"><div class="fig-val">0</div><div class="fig-key">待建</div></div>
+    </div>
+    <p style="margin-top:1.5rem">义项数 1–3 个的占 <b>92%</b>，超过 5 个的 52 词（0.7%），
+    定义超纲率 14.3%。<code>bank</code> 给出银行／河岸／库，<code>positive</code>
+    给出肯定／积极／阳性——这些正是原来被跳过的词。</p>
+
+    <h3>留到以后的</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>按清单重建</b>——需要改成两步走（先聚类再写定义）。
+      代码和数据都在，随时能接。</span></div>
+      <div class="not"><i>·</i><span><b>真题义项标注</b>（考频、熟词僻义标记、漏义项报告）——
+      §3 那套设计没有动过，它不依赖重建，可以独立做。</span></div>
+      <div class="not"><i>·</i><span><b>漏义项审计</b>——要逐条语义匹配，不是比数量。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>第二轮生成 —— P1 完成定义的答案</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+    <p class="lede">P1 的完成定义是「生成的文章用词在范围内、搭配无误、句法是正常书面语」。
+    这一节把它验证掉，顺带纠正我自己一个判断错误。</p>
+
+    <h3>先接上 API</h3>
+    <p>原 P1c 的第一件事。<code>generate_article</code> 批量任务：出提示词 → 调模型 →
+    解析 → 校验 → 入库，复用已有的每一块，八篇零失败。手动模式保留不动。</p>
+
+    <h3>一个被对照实验推翻的判断</h3>
+    <p>第一次跑完我报告「新提示词的超纲率翻倍」（1.78% → 3.64%）。<b>那个对比是错的：</b>
+    P1a 那 16 篇来自八个不同的聊天模型（含 ChatGPT、Claude、Gemini），
+    新的八篇全部来自 <code>deepseek-v4-flash</code>——模型和提示词一起变了，
+    我却把差异全算在提示词头上。</p>
+    <p>控制变量重跑：<b>同一个模型、同一批目标词，只换提示词措辞</b>。</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>deepseek-v4-flash</th><th>旧提示词</th><th>新提示词</th><th>真题基线</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">超纲率</td><td class="num">6.69%</td><td class="num"><b>3.64%</b></td><td class="num">—</td></tr>
+          <tr><td class="topic">名词化</td><td class="num">55.1</td><td class="num"><b>31.0</b></td><td class="num">33.2</td></tr>
+          <tr><td class="topic">句长</td><td class="num">20.3</td><td class="num">17.8</td><td class="num">18.9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>新提示词把超纲率砍了将近一半，名词化从严重超标拉回基线。</b>
+    它一直是有效的——问题在模型。我自己在选型时写过「deepseek-flash 适合数据整理」，
+    然后拿它去写文章，还奇怪为什么写得差。</p>
+
+    <h3>换会写的模型：目标达成</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型（同一套新提示词）</th><th>超纲率</th><th>名词化</th><th>形式主语</th><th>耗时/篇</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">deepseek-v4-flash</td><td class="num">3.64%</td><td class="num">31.0</td><td class="num">0</td><td class="num">快</td></tr>
+          <tr><td class="topic">claude-haiku-4-5</td><td class="num">0.98%</td><td class="num">20.7</td><td class="num">0.59</td><td class="num">7 秒</td></tr>
+          <tr><td class="topic"><b>gpt-5.5</b></td><td class="num"><b>0.32%</b></td><td class="num">11.6</td><td class="num">0.71</td><td class="num">58 秒</td></tr>
+          <tr><td class="topic">真题基线</td><td class="num">—</td><td class="num">33.2</td><td class="num">3.5</td><td class="num">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>0.32%。</b>gpt-5.5 那四篇里只有两个超纲词：
+    <code>yuan</code>（人民币）和 <code>hose</code>（软管）——前者严格说还不算错。
+    这基本就是设计要的「零超纲」。<b>P1 的完成定义达标了</b>，
+    结论是：能不能做到取决于用哪个模型，而不是取决于提示词还能怎么调。</p>
+    <p><b>选定 gpt-5.5 写文章</b>，deepseek-flash 继续做数据整理。这个分工写进配置项
+    <code>gen_provider</code>，不再依赖「默认提供商」——两类任务要的能力本来就不同。</p>
+
+    <h3>「形式主语几乎为零」是我测错了</h3>
+    <p>我为这个数字改了三轮提示词，还差点得出「模型做不到，得靠 P1d 定点修补」的结论。
+    实际上<b>校验器一直在数别的东西</b>：spaCy 只把 <code>there is/are</code> 里的
+    <code>there</code> 标成 <code>expl</code>，而 <code>It is clear that…</code> 里的
+    <code>It</code> 标的是普通 <code>nsubj</code>。P1a 建校验器时我把 <code>expl</code>
+    直接写成「形式主语」，之后每一轮都在读这个标签，没人回头验证它到底在数什么。</p>
+    <p>改成分开数（<code>It</code> 带从句或补语才算形式主语，<code>there be</code> 单列）之后，
+    真相反过来：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>形式主语（真实）</th><th>there be</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">真题基线</td><td class="num">5.6</td><td class="num">3.6</td></tr>
+          <tr><td class="topic">P1a 旧提示词</td><td class="num">3.12</td><td class="num">0.18</td></tr>
+          <tr><td class="topic">P1b 新提示词</td><td class="num"><b>8.91</b></td><td class="num">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">新提示词不但没有「形式主语为零」，反而用到了基线的 1.6 倍——
+    那条指令一直是有效的。接近零的是 <code>there be</code>，而它本来就不是要控制的东西。</p>
+    <p><b>教训：一个错误的度量比没有度量更危险。</b>它看起来在指导决策，实际在误导决策，
+    而且因为带着数字，反而没人怀疑。</p>
+
+    <h3>被动语态：数字约束无效，结构性规则两轮解决</h3>
+    <p>唯一真实的偏差，三个模型都在基线的两倍上。调的过程又验证了一件事：
+    <b>模型对提示词里的数量约束基本无感</b>——这和义项集那次「让它合并成 3-5 项、结果给 7 项」
+    是同一个现象。</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>提示词写法</th><th>被动</th><th>对照基线 17.0</th></tr></thead>
+        <tbody>
+          <tr><td>「该用就用，不要一律改成主动」</td><td class="num">30.8</td><td>被读成「多用被动」</td></tr>
+          <tr><td>「全文不要超过五六处」（给数字）</td><td class="num">36.5</td><td>无效，反而更高</td></tr>
+          <tr><td>「只在执行者不重要时才用」（给条件）</td><td class="num">24.6</td><td>方向对了</td></tr>
+          <tr><td><b>再加「找得到具体施动者就改主动」＋ 写完自查</b></td><td class="num"><b>15.5</b></td><td><b>达标</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>说清楚「什么时候该用」，比说「用几次」有效得多。</b>
+    最终这一版同时把名词化降到 16.3、句长 18.8（基线 18.9）、超纲率 0.14%。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>P1 结账 —— 还剩什么，为什么顺延</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+    <p class="lede">核对主文档 §K 里 P1 自己的范围定义，而不是 P1a/P1b 的验收表。
+    这一步做晚了：中途曾宣布「P1 收尾」，那时其实还漏着三项。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>P1 范围内的条目</th><th>状态</th><th>去向</th></tr></thead>
+        <tbody>
+          <tr><td>按约束生成</td><td class="num">✓</td><td>—</td></tr>
+          <tr><td>本地校验</td><td class="num">✓</td><td>—</td></tr>
+          <tr><td>接 API 自动生成</td><td class="num">✓</td><td>本阶段补做</td></tr>
+          <tr><td>真题入库（452 篇）</td><td class="num">✓</td><td>—</td></tr>
+          <tr><td>从真题统计句法结构</td><td class="num">✓</td><td>—</td></tr>
+          <tr><td>义项集与词族</td><td class="num">✓</td><td>—</td></tr>
+          <tr><td class="topic"><b>真题难度画像</b></td><td class="num">✗</td><td><b>顺延 P2</b></td></tr>
+          <tr><td class="topic"><b>语境释义标注</b></td><td class="num">✗</td><td><b>顺延 P2</b></td></tr>
+          <tr><td class="topic"><b>过量生成择优</b></td><td class="num">✗</td><td><b>顺延 P1d</b></td></tr>
+          <tr><td class="topic"><b>定点修补</b></td><td class="num">✗</td><td><b>顺延 P1d</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>顺延的理由</h3>
+    <p><b>难度画像和语境释义标注 → P2。</b>两者的消费方都在 P2：难度画像是为了「按你的水平
+    筛真题给你读」，语境释义标注是三层释义的第一层。<b>在使用它们的功能出现之前先做，
+    就是在没有反馈的情况下猜格式</b>——这个教训 P1c 前半段刚吃过一次。</p>
+    <p><b>择优和定点修补 → P1d。</b>纯工程，没有可行性风险：P1 已经证明模型写得出合格文章，
+    这两项是把「合格」变成「稳定合格」。但现在<b>每天生成的需求还不存在</b>，
+    先建等于空转，而且择优的排序标准要看真实使用中什么样的文章更好读——那也得等 P2。</p>
+
+    <h3>一条没验证的完成定义</h3>
+    <p>P1 的完成定义是「用词在范围内、<b>搭配无误</b>、句法是正常书面语」。
+    第一和第三条有数据：超纲率 0.14%、被动 15.5 对基线 17.0。</p>
+    <p><b>「搭配无误」从来没有独立验证过。</b>原计划是找十几个英语好的人做盲测，
+    后来决定「如果有学习价值，甚至无需真人测试」，于是这一条实际上只有我读了几篇之后的主观判断。
+    这不是验证，写在这里是为了别把它当成验证过的事。</p>
+    <p>最省事的补法是本人读两篇——文章都在 <code>generation_drafts</code> 里。
+    真要严格，AI 搭配检查的自动化在 P1d 的范围内。</p>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 1c 方案与实际走向</span>
+    <span>2026-09-06</span>
+  </footer>
+
+</div>

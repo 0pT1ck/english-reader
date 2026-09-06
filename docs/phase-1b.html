@@ -1,0 +1,683 @@
+<title>Phase 1b 配套数据</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 1b · 方案 · 2026-09-05</div>
+    <h1>配套数据</h1>
+    <p class="standfirst">义项集、词族关系、词典修复。P2 的点词查词和派生词提示都建在这批数据上。</p>
+    <p class="thesis">P1a 验证了「能不能生成」，P1b 产出的是<b>让完整功能跑起来的数据</b>。这不是可有可无的配套——没有义项集，P2 的三层释义无从谈起。</p>
+    <p class="parent">上级 <a href="./phase-1.html">Phase 1</a> ｜ 功能设计 <a href="./english-reader.html">English Reader</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">7226</div><div class="fig-key">目标词总数</div></div>
+    <div class="fig"><div class="fig-val">3586</div><div class="fig-key">需建义项集</div></div>
+    <div class="fig"><div class="fig-val">188</div><div class="fig-key">现成词缀条目</div></div>
+    <div class="fig"><div class="fig-val">5<span>项</span></div><div class="fig-key">词典缺陷待修</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>顺序</h2>
+    </div>
+    <p class="lede">一条链，前面不做完后面测不准。</p>
+<pre>接 API（密钥、模型选择、批量任务、成本记录）
+  ↓  数据生成必须自动化，手动模式撑不住几千次调用
+修五个词典缺陷 ＋ 词族与构词分解
+  ↓  这两件其实是一件：缺陷里「派生形式」那一项本来就要靠词族解决，
+  ↓  不一起做完，后面所有词汇统计都还是错的
+筛选多义词 → 生成义项集 → 用真题验证覆盖
+  ↓
+生成质量的四条改进</pre>
+    <p>下面 §3–§6 是按主题编排的，<b>执行顺序以上图为准</b>——§5 的词族要和 §3 一起做完，再动 §4 的义项集。</p>
+    <p><b>接 API 从 P1c 提前到这里</b>：义项集要覆盖三千多个词，手动模式一次处理 100 个也要 27 轮复制粘贴，不现实。手动模式继续保留——试新模型、API 额度用尽时仍然有用，只是不再是唯一路径。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>API 集成</h2>
+    </div>
+
+    <h3>支持哪些提供商</h3>
+    <p>以 <b>OpenAI 兼容格式</b>为主。DeepSeek、Kimi、通义、智谱、豆包以及各类中转服务都提供兼容端点，支持这一种就覆盖了绝大多数模型——配置一个模型只需填 <code>base_url + api_key + model</code>。另外单独支持 <b>Anthropic</b>（格式不同但值得单列）。</p>
+
+    <h3>密钥单独存放 —— 有安全含义</h3>
+    <p><b>密钥不能进 <code>learning.db</code>。</b>那个库有「下载备份」按钮，会被发到别的机器、发给排查方。密钥躺在里面等于每次备份都在传播它。</p>
+    <p>所以存 <code>data/secrets.json</code>：不进 git、不进备份、不进诊断包。管理控制台可编辑，用户不必手改文件。日志层已有的脱敏规则（<code>secret / token / api_key</code> 一律替换）在这里正好生效。</p>
+
+    <h3>批量任务基础设施</h3>
+    <p>几千个词跑几小时，需要：任务队列、进度可见、断点续传、失败重试、成本累计。</p>
+    <p><b>这套东西 P6 也要用</b>——每晚预生成文章是同一种长时间批处理。所以它不是一次性工具，要做成通用的：一张任务表记录批次状态，控制台一页显示「在跑什么、到第几个、花了多少、失败几个」，中断重启接着跑。</p>
+
+    <h3>成本要有个数，更要有个闸</h3>
+    <p>义项集是 P1b 唯一的大额开销。按十个词一批估：约 280 次调用，输入合计 40–50 万 token，输出 50–60 万 token。国产主流模型量级在<b>十几块钱</b>，海外旗舰模型量级在<b>几十到一百多</b>。词族补漏几百个词、188 条词缀翻译，都是零头。</p>
+    <p>数字本身不重要，重要的是<b>批量任务必须能设花费上限</b>——到线就停下等确认，而不是闷头跑完。正式跑之前先拿 20 个词试跑，用实测单价反推总价再决定全量。</p>
+
+    <h3>密钥防泄漏要改成白名单</h3>
+    <p>诊断包现在是<b>黑名单</b>：<code>admin/routes.py</code> 里显式 <code>pop("bark_url")</code>。加了提供商配置以后，只要有一个密钥字段进了 runtime_config 而不是 <code>secrets.json</code>，它就会随诊断包一起发出去。</p>
+    <p>改成在配置项声明处标 <code>secret=True</code>，由导出层统一排除。以后加配置不会漏掉这一步。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>词典缺陷</h2>
+      <span class="sec-note">5 项</span>
+    </div>
+    <p class="lede">第一轮实验里 127 个「超纲词」，绝大多数是假的。在这样的数据上建任何统计都不成立。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>缺陷</th><th>症状</th><th>修法</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="topic">转义未处理</td>
+            <td>释义存的是字面 <code>\n</code> 两个字符，<b>用户点词会看到 <code>n. 州\na. 国家的</code></b></td>
+            <td><b>已修</b>，导入时还原转义并重新导入</td>
+          </tr>
+          <tr>
+            <td class="topic">派生形式</td>
+            <td><code>planning / carefully / participant</code> 未归到词根，误判超纲</td>
+            <td>由 §5 的词族关系解决</td>
+          </tr>
+          <tr>
+            <td class="topic">兜底造出不存在的词</td>
+            <td><code>other</code> → <code>oth</code>。lemminflect 把 <code>-er</code> 当比较级剥掉，spaCy 给的 <code>other</code> 又不在它的候选里，于是代码采信了候选第一名——<b>一个根本不存在的词</b>。P1a 十六篇里出现 4 次</td>
+            <td><b>候选必须在词典里查得到才采信</b>，查不到就退回 spaCy 的结果，再不行用原形。改 <code>analyzer.py:187</code> 那一行</td>
+          </tr>
+          <tr>
+            <td class="topic">连字符复合词</td>
+            <td><code>socio-economic</code> 被切成 <code>socio</code> + <code>economic</code>，前者查无此词</td>
+            <td>分词时保留复合词，查不到再拆开分别查</td>
+          </tr>
+          <tr>
+            <td class="topic">美式拼写</td>
+            <td><code>center / neighbor / organizer</code> 判超纲，词典收的是英式拼写</td>
+            <td>先用规则转换（<code>-ize/-ise</code>、<code>-or/-our</code>、<code>-er/-re</code>、<code>-ense/-ence</code>），<b>转换后必须能在词典里查到才接受</b>，否则当没转换过——规则的假阳性（<code>flour</code> ≠ <code>flor</code>）自动被挡掉，不必引外部词表</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>修完必须重算句法基线。</b>连字符那一项会改变分词结果，而 <code>data/syntax_baseline.json</code> 是按旧口径算好缓存在磁盘上的。不删掉重算，第二轮的对比就是拿新口径去比旧基线。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>义项集</h2>
+      <span class="sec-note">P1b 的主体</span>
+    </div>
+
+    <h3>覆盖范围：粗筛后 3586 个词，全部建</h3>
+    <p><b>目标词共 7226 个</b>——所有带大纲标签且有词频的词，<b>中考和高考层级也算在内</b>。
+    这一条是实施时改的：原方案只取 CET-4/6/考研的 6052 个，结果 <code>present</code>、
+    <code>spring</code>、<code>bear</code>、<code>run</code>、<code>set</code> 全被排除在外，
+    因为它们只带中考/高考标签。而<b>熟词僻义正是长在这类词上的</b>——认识 <code>bear</code>
+    是「熊」，不等于认识「忍受」「支撑」。详见 §11。</p>
+    <p>按词典释义的结构粗筛（数字为实测）：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>类别</th><th>数量</th><th>处理</th><th>例</th></tr></thead>
+        <tbody>
+          <tr><td>多词性 · 强候选</td><td class="num">1437</td><td>建</td><td><code>state, part, issue, power</code></td></tr>
+          <tr><td>双词性 · 待判</td><td class="num">1789</td><td>建</td><td><code>might, provide, social</code></td></tr>
+          <tr><td>单词性多义</td><td class="num">360</td><td>建</td><td><code>system, business, art</code></td></tr>
+          <tr><td>简单 · 跳过</td><td class="num">3640</td><td><b>免费排除</b></td><td><code>against, happen, area, fact</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">一半靠词典结构就能排除，不花钱。剩下 3586 个一次建完，不留按需补建的尾巴。</p>
+    <p><b>但要留一个补建单个词的入口。</b>粗筛的判据是 ECDICT 的释义结构，而 ECDICT 的释义质量参差，漏判一定会有。控制台上一个「给这个词补建义项」的按钮，一次几厘钱；没有它，漏掉的就永久漏掉了。</p>
+
+    <h3>粒度规则</h3>
+    <p><b>合并的依据是英文里是不是同一个概念，不是中文翻译是否相同。</b></p>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><b>合并</b>：<code>present</code> 的「提出 / 介绍 / 呈现」——英文都是 <i>to show or give something to someone</i>，中文因搭配习惯译成三个词</span></div>
+      <div class="not"><i>✓</i><span><b>拆开</b>：<code>address</code> 的「地址」和「着手解决」——概念完全不同</span></div>
+      <div class="not"><i>×</i><span>不要因中文有两个说法就拆</span></div>
+      <div class="not"><i>×</i><span>不要因词性不同就拆：<code>address</code> 作名词「地址」和作动词「写地址」是同一概念</span></div>
+    </div>
+    <p style="margin-top:1.2rem"><b>一句话判据</b>：记住其中一个意思之后，遇到另一个用法能自然理解就合并，会理解错就拆开。这比「概念边界」具体，模型执行时歧义更小。</p>
+
+    <h3>每个义项包含什么</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>字段</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>英文概念定义</td><td>义项的身份。用最常见 2000 词写，读定义时不会撞上新生词</td></tr>
+          <tr><td>中文投影</td><td><b>2–3 个</b>不同语境下的中文说法</td></tr>
+          <tr><td>常用度序号</td><td>哪个是主义项</td></tr>
+          <tr><td>主题标签</td><td>社会 / 科技 / 文化 / 日常生活 / 环境 / 经济 / 教育 / 健康 / 心理 / 历史，或「通用」</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">主题标签是<b>搭车产出</b>——本来就要为这几千个词调 LLM，多返回一个字段几乎零成本，却同时解决了 §6 的选词问题和 B6 的主题控制。</p>
+
+    <h3>例句：惰性生成，搭车批处理</h3>
+    <p><b>建义项集时不生成例句</b>——几千个词全配例句，大部分永远不会被复习到。</p>
+    <p>改为：某个义项即将出现在复习卡片上时，先查有没有例句，没有就生成 1–3 条，<b>并入夜里生成明天文章的那次批处理</b>。那个时点正好已经算出明天的到期队列，不增加任何新的调用轮次，成本按实际需要分摊。</p>
+    <p><b>例句和原句分工不同</b>：原句来自你真实读过的文章，带语境记忆，复习时优先用；例句是干净的典型句，补两种缺口——这个义项还没在文章里遇到过，或者遇到过但那句不够典型。</p>
+    <p><b>P1b 只做到一半</b>：建表、写生成函数、留好调用入口。真正的触发时机挂在到期队列（P5）和夜间批处理（P6）上，那两样现在都不存在。所以 P1b 的验收不测例句，别把它当成这一阶段的交付物。</p>
+
+    <h3>存放：新建第四个库 <code>content.db</code></h3>
+    <p>义项、例句、词族关系、词缀表都进它。</p>
+    <p><b>不能放 <code>dictionary.db</code></b>——那个库的定位就是「可丢弃、可重建、不备份」，<code>backup_learning_db()</code> 根本不碰它。把花钱生成的东西放进去，等于放在一个设计上随时可以删掉的地方，一句「不得清空」的约定挡不住误删和硬盘故障。<b>也不放 <code>learning.db</code></b>——那是你的行为数据，和买来的内容混在一起，边界会越来越糊。</p>
+    <p>四个库正好按「丢了会怎样」分成两类：<b>必须备份</b>——<code>learning.db</code>（你的记录）与 <code>content.db</code>（花钱买的内容）；<b>不用备份</b>——<code>dictionary.db</code>（ECDICT 可重建）与 <code>logs.db</code>（可丢弃）。控制台的备份和恢复要同时覆盖前两个。</p>
+
+    <h3>质量验证：三层，全自动</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>格式校验</b>
+        <span>义项数是否合理——一个词划出八个义项基本是粒度失控。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>定义用词校验</b>
+        <span>英文定义有没有超出 2000 词范围，用已有的校验器。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>真题覆盖验证</b>
+        <span>拿 452 篇真题里该词的实际用法，看能否在义项集中找到对应项。找不到说明有遗漏；某义项在 452 篇中从未出现，可能是多余的。<b>用已有数据，客观且免费。</b></span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>词族与构词分解</h2>
+    </div>
+    <p class="lede">它和「派生形式未归到词根」那个缺陷是同一件事的两面，一起做。</p>
+
+    <h3>数据源：词缀表可用，例词不够</h3>
+    <p>ECDICT 仓库的 <code>wordroot.txt</code> 有 611 条：423 词根 + 110 前缀 + 78 后缀，每条带含义、类别、例词。<b>词缀部分直接可用</b>，只缺中文说明（原文是 <code>state or quality of</code> 这类英文），188 条一次性翻译，成本可忽略。</p>
+    <p>但它的 6716 个例词只覆盖我们目标词表的 <b>30%</b>，不足以直接建立所有派生关系。</p>
+
+    <h3>三步，绝大部分免费</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>导入 188 个词缀 + 翻译中文说明</b>
+        <span>一次性，成本可忽略。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>算法剥离建立派生关系</b>
+        <span>剥掉后缀，看剩下的是不是词典里的词且词频更高。需处理拼写变化：<code>happy+ness→happiness</code>（y→i）、<code>nature+al→natural</code>（去 e）、<code>run+ing→running</code>（双写）。规则有限且确定，<b>不花钱</b>。词根表的例词正好当交叉验证。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>LLM 补漏</b>
+        <span>不规则派生（<code>deep→depth</code>、<code>strong→strength</code>）估计几百个，成本很小。</span></span></div>
+    </div>
+
+    <h3>三档划分 —— 屈折与派生必须分清</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>档</th><th>例</th><th>处理</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>A 完全归并</b></td>
+            <td><code>carefully ← careful</code><br><code>happiness ← happy</code></td>
+            <td>语义完全透明、仅词性转换。<b>不算生词</b>——认识原形就一定认识它。<b>这一档正好修掉第一轮的误判</b></td>
+          </tr>
+          <tr>
+            <td><b>B 轻量目标词</b></td>
+            <td><code>national ← nation</code><br><code>nationality ← nation</code></td>
+            <td>语义基本可推但有具体化。按 C2：给构词提示、算三分之一名额、不进完整复习队列</td>
+          </tr>
+          <tr>
+            <td><b>C 独立词</b></td>
+            <td><code>depart ← part</code><br><code>recover ← cover</code></td>
+            <td>语义已漂移。当作普通生词，<b>不做构词提示</b>——提示了反而误导</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>A 档的「归并」只影响判定，不影响记录。</b><code>carefully</code> 不算生词、不占目标词名额、不进复习队列，但它的遇见记录仍按 <code>carefully</code> 自己记，点词时显示它自己的释义加一行构词说明。这一点现在就要定死——存储形态拖到 P2 再改，代价大得多。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>生成质量的四条改进</h2>
+    </div>
+
+    <h3>① 零超纲 —— 修正了 P1a 的结论</h3>
+    <p>P1a 曾据「真题有 10% 超纲」推论生成文章也该有。<b>那是错的</b>，因为它又把「像真题」当成了目标。两条内容线的目的不同：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>目的</th><th>超纲词的角色</th></tr></thead>
+        <tbody>
+          <tr><td>生成文章</td><td>精准投放目标词与复习词，<b>把每个生词都搞懂</b></td><td>干扰项：学不会，还占注意力</td></tr>
+          <tr><td>真题直读</td><td>接触真实语料，练「遇到不认识的词怎么办」</td><td><b>必需</b>，那本来就是真实文本的样子</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>生成文章目标为零超纲</b>，专有名词除外。可行性：P1a 实测 1–9%，而那些「超纲词」绝大多数是 §3 的五个缺陷造成的假象；修完后真实超纲率约 1–2%。</p>
+    <p><b>零是目标，不是废稿线。</b>真要把每篇都压到零，需要「校验器报告 → 定点重写那几个词 → 再校验」的收敛回路，那是 P1c。P1b 交付的是把真实超纲率压到 2% 以下，并把剩下的一两个词<b>显式标注出来</b>：阅读界面上标明这是超纲词、暂时不用学会，给中文意思让句子读得通，但不计生词率、不进复习队列（主文档 C10）。</p>
+    <p>这比为一两个词重生成整篇划算，也比悄悄放过去诚实——不标注的话，那些词会被当成该背的词去啃，正好是要避免的注意力浪费。</p>
+
+    <h3>② 要求内容具体 —— 这才是像不像范文的真正原因</h3>
+    <p>P1a 观察到「超纲率低的文章像作文范文」，但那是<b>把两个独立变量混为一谈</b>。ChatGPT 那篇像范文是因为通篇抽象论述，没有一个具体事实；通义千问那篇像真题是因为有十九世纪的具体场景和细节。<b>跟超纲率没有因果关系</b>——用最简单的词一样能写出有血有肉的文章。</p>
+    <p>所以提示词里要加的是：<i>必须包含具体的例子、场景或数据，不要通篇抽象论述。宁可讲一件具体的事，也不要罗列三条空泛的道理。</i></p>
+
+    <h3>③ 抑制 AI 写作指纹</h3>
+    <p>P1a 测出三项偏离：被动语态偏少四成、名词化偏多四成、形式主语几乎不用。针对性加三句定性要求，<b>不给具体频率</b>（「每篇至少四处被动」会让文章别扭）。校验器本就把这三项与真题基线并列显示，第二轮跑完一眼能看出是否改善。</p>
+
+    <h3>④ 目标词按主题成组</h3>
+    <p>随机抽八个不相关的词（<code>anchor / humor / wagon / robe</code>）逼得模型硬凑。改为：<b>先定主题 → 从该主题词里取 3–4 个 → 用无主题的通用词补足到 8 个</b>。主题标签由 §4 搭车产出。</p>
+    <p><b>主题偏好</b>：社会、科技、文化、日常生活优先，其余题材照常出现但权重低。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>明确不做</h2>
+    </div>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>完整生成管线</b>——过量生成择优、定点修补的收敛策略、语境释义标注，属于 P1c</span></div>
+      <div class="not"><i>×</i><span><b>真题的义项标注与考频统计</b>——三层释义的第三层依赖它，但它需要先有义项集，排在 P1b 之后</span></div>
+      <div class="not"><i>×</i><span><b>阅读界面</b>（P2）、<b>水平估计</b>（P3）、<b>复习调度</b>（P5）</span></div>
+      <div class="not"><i>×</i><span><b>短语动词</b>——已知缺口，数据结构预留，一期不做</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>验收</h2>
+    </div>
+    <div class="checks">
+      <div class="check"><span class="check-n">01</span><span class="check-what"><b>API 可配置可用</b>
+        <span>控制台填入密钥后能成功调用；密钥不出现在备份和诊断包里。</span></span></div>
+      <div class="check"><span class="check-n">02</span><span class="check-what"><b>批量任务能断点续传</b>
+        <span>中途停止再启动，接着跑而不重复；进度和成本在控制台可见。</span></span></div>
+      <div class="check"><span class="check-n">03</span><span class="check-what"><b>五个词典缺陷已修</b>
+        <span>先删掉 <code>syntax_baseline.json</code> 重算基线，再拿 P1a 那 16 篇重跑校验：超纲率显著下降，<code>planning / neighbor / socio / oth</code> 一类不再出现在超纲列表里。</span></span></div>
+      <div class="check"><span class="check-n">04</span><span class="check-what"><b>义项集建成并通过三层验证</b>
+        <span>粗筛留下的词都有义项；抽查 <code>address / present / state</code> 等词，粒度符合规则。</span></span></div>
+      <div class="check"><span class="check-n">05</span><span class="check-what"><b>词族关系可用</b>
+        <span><code>nationality</code> 能给出 <code>nation + -ity</code> 的分解；<code>carefully</code> 归并到 <code>careful</code> 不再算生词。</span></span></div>
+      <div class="check"><span class="check-n">06</span><span class="check-what"><b>第二轮生成有改善</b>
+        <span>真实超纲率 2% 以下且清单里没有假超纲；内容具体；被动与形式主语向基线靠拢。再手工修一篇看能否清零——只验证可行性，不建自动回路（那是 P1c）。本人读两篇认可。</span></span></div>
+      <div class="check"><span class="check-n">07</span><span class="check-what"><b><code>content.db</code> 纳入备份与恢复</b>
+        <span>控制台下载的备份里有 <code>content.db</code>，恢复后义项集还在。删掉 <code>dictionary.db</code> 重新导入词典，义项、例句、词族不受影响。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>实施结果</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+    <p class="lede">方案落地后的实测数字，以及六处与计划不同的地方。</p>
+
+    <div class="figures">
+      <div class="fig"><div class="fig-val">1.69<span>%</span></div><div class="fig-key">超纲率（原 4.75%）</div></div>
+      <div class="fig"><div class="fig-val">10471</div><div class="fig-key">规则找到的派生关系</div></div>
+      <div class="fig"><div class="fig-val">2962</div><div class="fig-key">需建义项集的词</div></div>
+      <div class="fig"><div class="fig-val">26</div><div class="fig-key">自动验收项全过</div></div>
+    </div>
+
+    <h3>词典缺陷：四个变五个</h3>
+    <p>动手时查出第五个，而且是最隐蔽的一个：<code>oth</code> 不是解析残片，是 <b><code>other</code></b>。
+    lemminflect 把 <code>-er</code> 当比较级剥掉得到 <code>oth</code>，而 <code>oth</code> 恰好在 ECDICT 里
+    作为缩写存在，所以「候选必须查得到」这条守卫拦不住它。</p>
+    <p>改成：<b>两者都认可就用 spaCy；spaCy 的答案本身是个真词就用 spaCy；只有 spaCy 给出的不是词时，
+    才轮到词形表决定。</b>spaCy 读过整个句子，lemminflect 只看到一个词性标签——谁更可信本来就有答案。
+    <code>leaves→leaf</code>、<code>left→leave</code>、<code>mice→mouse</code> 全部不受影响。</p>
+
+    <h3>英美拼写：问题不是词缺了，是标签被拆开了</h3>
+    <p>ECDICT 两个拼写都收，但把大纲标签随机分给了其中一个：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>词</th><th>标签</th><th>另一拼写</th><th>标签</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">neighbor</td><td class="mono">ky toefl</td><td class="topic">neighbour</td><td class="mono">zk gk cet4 cet6</td></tr>
+          <tr><td class="topic">theater</td><td class="mono">ky toefl</td><td class="topic">theatre</td><td class="mono">zk gk cet4 cet6 ielts</td></tr>
+          <tr><td class="topic">colour</td><td class="mono">zk gk</td><td class="topic">color</td><td class="mono">cet4 ky ielts</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">所以修法不是「美式转英式」，是<b>把两个拼写当成同一个词，标签取并集</b>。
+    配对靠规则生成候选，再过两道关：候选必须在词典里，且两者的中文释义必须有共同词条。
+    第二道关是关键——只靠规则，<code>size</code> 会配到 <code>sise</code>（人名）、
+    <code>member</code> 会配到 <code>membre</code>（比利时地名），两个都真在词典里。
+    真正的拼写对必然共享释义，巧合从不。</p>
+
+    <h3>新增一类：已知词根的派生词，单独计</h3>
+    <p>这是方案里没有、但做下来发现必须有的一档。<code>cooperation</code> 的词根 <code>cooperate</code>
+    是四级词，把它算成「超纲」既不公平，也让「零超纲」这个目标失去意义——按设计它本来就是
+    <b>B 级轻量目标词</b>：给构词提示、算三分之一名额。</p>
+    <p>所以校验器现在报两个数：<b>超纲</b>（真违规）和<b>已知词根的派生词</b>（合法内容）。
+    十六篇实测：超纲 1.69%，派生词 0.79%。</p>
+
+    <h3>逐条修完的效果</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>这一步修了什么</th><th>平均超纲率</th><th>被消掉的假超纲</th></tr></thead>
+        <tbody>
+          <tr><td>P1a 原始</td><td class="num">4.75%</td><td class="mono muted">—</td></tr>
+          <tr><td>词形还原 + 英美拼写 + 连字符</td><td class="num">4.50%</td><td class="mono">oth, neighbor, theater, datum, well-timed</td></tr>
+          <tr><td>+ 屈折形回查词形表</td><td class="num">3.31%</td><td class="mono">planning, reasoning, debating, organized, paved, waiting</td></tr>
+          <tr><td>+ 词族 A 档归并</td><td class="num">2.48%</td><td class="mono">carefully, quickly, readiness, meaningful, unused</td></tr>
+          <tr><td>+ B 档派生词单独计</td><td class="num"><b>1.69%</b></td><td class="mono">cooperation, negotiation, cultural, participant</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">剩下的 51 个词是<b>真超纲</b>：<code>axle, donor, empathy, podium, rehearse,
+    resilience, rivalry, televise, credibility, transcendence</code>。正是 §6① 预测的
+    「修完后真实超纲率约 1–2%」，也正是提示词该拦住的那一批。</p>
+
+    <h3>词族：规则一遍跑完，免费</h3>
+    <p>35,215 个常用词里找到 <b>10,471 条</b>派生关系，用时 2.7 秒，零成本。分档：A 3778 / B 5974 / C 719。</p>
+    <p>精度靠三道守卫，缺一不可：<b>词根不能比派生词更冷僻</b>（否则 <code>mother ← moth</code>）、
+    <b>词根词性要对</b>（否则 <code>early ← ear + -ly</code>、<code>matter ← mat + -er</code>）、
+    <b>词根必须是大纲词或频率相当</b>（否则 <code>reply ← rep</code>）。
+    49 个陷阱词测试零误判，16 个应分解的词零遗漏。</p>
+    <p>模型只做规则做不了的事：判定语义距离（A/B/C）、写中文构词说明、把规则找错的关系降为 C。</p>
+
+    <h3>粗筛：2962 个词需要建，不是 2766</h3>
+    <p>目标词总数 6052 与方案一致。分类阈值实现时写死为「≥3 个词性 / 2 个词性 / 单词性但 ≥7 条释义」，
+    比方案估算时多留下约 200 个词。多花的钱有限，宁可多问不要漏。</p>
+    <p><b>这两个数后来又变了。</b>跑完第一轮才发现目标词集合本身漏了熟词僻义，
+    补进中考/高考层级后是 <b>7226 个目标词、3586 个需建</b>——见 §11。</p>
+    <p>另外按 §4 的意见留了<b>单词补建入口</b>：控制台上填一个词、一键排队，几厘钱。</p>
+
+    <h3>顺带修掉一个 P0 遗留的 bug</h3>
+    <p><code>core/events.py</code> 里 <code>log.debug("event.unhandled", …, event=name)</code>
+    与 logger 自己的第一个参数重名，<b>只要 emit 一个没有订阅者的事件就抛 TypeError</b>。
+    P0 一直没触发是因为当时唯一的事件正好有订阅者。批次任务跑完 emit 完成事件时撞上了它，
+    整个任务被标成 failed。</p>
+
+    <h3>与方案的其他出入</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>备份改成 zip</b>：两个库必须一起走，只恢复其中一个会得到一个半残的装置。
+      恢复端同时收 zip 和单个 <code>.db</code>，后者<b>按里面的表判断是哪个库</b>，不看文件名。</span></div>
+      <div class="not"><i>·</i><span><b>花费上限会略微超出</b>：一次调用的花费要等它返回才知道，
+      所以上限是「发起前检查」，最多超出并发数减一次调用的量。已写进配置项说明。</span></div>
+      <div class="not"><i>·</i><span><b>任务计数改成重算而非累加</b>：失败项重试成功后，累加会同时留下一次失败和一次成功，
+      成本统计随之虚高。改成每次从任务项汇总，代价是一条带索引的聚合查询。</span></div>
+    </div>
+
+    <h3>验收状态</h3>
+    <p><code>uv run python scripts/verify_phase1b.py</code>：<b>自动检查 26 项全过</b>，
+    5 项待人工——都需要你的 API 密钥：接口连通、批次断点续传、义项集实际生成、第二轮生成质量。
+    P0 的 29 项回归检查同样全过。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>第一次接真模型跑出来的问题</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+    <p class="lede">四个都是「本地测不出来、一接真模型就全灭」的那种，记下来免得再踩。</p>
+
+    <h3>① 思考型模型把输出预算烧在思维链上</h3>
+    <p>第一个批次任务八项全部失败，报「回复里没有找到 JSON 对象」。查下来：
+    用的是 <code>qwen3.8-27b</code>，<b>3 个词缀的回复只有 68 个字符，却花掉 376 个输出 token</b>。
+    25 个词缀一批时，1500 的上限全部用在思考上，<code>finish_reason=length</code>，
+    <b>可见文本是空字符串</b>——于是解析器如实报告「没有 JSON」，而真正的原因被埋掉了。</p>
+    <p>改法不是让调用方去猜一个数（那个数取决于配了哪个模型），而是<b>撞到截断就把预算翻三倍重试</b>，
+    上限 16000。一次短调用就能试出来，换任何模型都自适应。同时把 <code>finish_reason</code>
+    写进错误信息，不再让它伪装成解析失败。</p>
+
+    <h3>② 失败的任务项没留下模型的回复</h3>
+    <p>这是上一条难查的直接原因。代码注释里写着「原样保留回复以备审计」，
+    但<b>只在成功时保留</b>——失败时 <code>outcome</code> 是 None，回复就丢了。
+    「没找到 JSON」而拿不到那段没有 JSON 的文本，只能手工把调用复现一遍，
+    而任务记录存在的意义正是让人不必这样做。</p>
+    <p>现在失败项也存回复，控制台任务行上多了「看失败原因」，展开就是模型原样返回的内容。</p>
+
+    <h3>③ 不要让模型回显复杂的键</h3>
+    <p>词缀表的键长这样：<code>a-1, an-1</code>、<code>able, -ible, -ble</code>、
+    <code>circu-, circum</code>——<b>188 个里有 73 个带逗号或消歧编号</b>。
+    提示词让模型用词缀本身当 JSON 的键，它当然复述不出来，于是回复解析成功、匹配却全落空。</p>
+    <p>四个任务全部改成<b>按行号回答</b>：调用方本来就知道第几行是什么，
+    没有任何理由要模型把标识符抄一遍。另外每个任务都加了「一条都没对上」的显式失败，
+    不再出现「成功但什么也没写入」。</p>
+
+    <h3>④ 词缀表的键本身就是坏的</h3>
+    <p>更要命的是这些键会直接毁掉查询：构词分解产出的是 <code>-able</code>，
+    而表里存的是 <code>able, -ible, -ble</code>，<b>永远查不到</b>。P2 的构词提示会整片失效。</p>
+    <p>导入时改成按逗号拆成多条、去掉连字符和编号，611 条源数据展开成 1068 行
+    （前缀 118 · 后缀 98 · 词根 852）；同一个词缀合并释义而不是相互覆盖。
+    另外 <code>affix_gloss()</code> 现在必须区分前后缀——<code>al</code> 既是同化的
+    <code>ad-</code>（朝、向）又是形容词后缀 <code>-al</code>，答错一个就是在读者面前放一句明显错误的解释。</p>
+
+    <h3>由此得到的一条使用建议</h3>
+    <p>思考型模型（名字里带 thinking / R1 / qwen3 这类）跑这些机械任务时，
+    <b>把每次调用的条数调小</b>：实测 25 条会让中转站 504 超时，10 条 23 秒稳定通过。
+    批量大小现在是任务参数，控制台上可填。这类任务本来也不需要推理能力——
+    真正需要好模型的只有义项集。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>选模型与全量跑完</h2>
+      <span class="sec-note">2026-09-06</span>
+    </div>
+
+    <div class="figures">
+      <div class="fig"><div class="fig-val">3587</div><div class="fig-key">建了义项的词</div></div>
+      <div class="fig"><div class="fig-val">8837</div><div class="fig-key">义项总数</div></div>
+      <div class="fig"><div class="fig-val">10471</div><div class="fig-key">派生关系（近半经模型复核）</div></div>
+      <div class="fig"><div class="fig-val">1.13<span>M</span></div><div class="fig-key">总 token</div></div>
+    </div>
+
+    <h3>模型横评：快的那个反而更好</h3>
+    <p>中转站上有 20 个模型，两组测试各有客观打分。<b>机械任务</b>（10 条词缀翻译，看速度和是否每行都回来）：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>耗时</th><th>输出 token</th><th>命中</th></tr></thead>
+        <tbody>
+          <tr><td class="topic"><b>deepseek-v4-flash-0731</b></td><td class="num"><b>2.2 秒</b></td><td class="num"><b>100</b></td><td class="mono">10/10</td></tr>
+          <tr><td class="topic">glm-5.3-flash</td><td class="num">15.4 秒</td><td class="num">671</td><td class="mono">10/10</td></tr>
+          <tr><td class="topic">minimax-m2.5</td><td class="num">32.7 秒</td><td class="num">1348</td><td class="mono">10/10</td></tr>
+          <tr><td class="topic">qwen3.7-flash</td><td class="num">34.8 秒</td><td class="num">2658</td><td class="mono">10/10</td></tr>
+          <tr><td class="topic">seed-2.1-turbo</td><td class="num">38.3 秒</td><td class="num">2200</td><td class="mono">10/10</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">全部答对，速度差 17 倍——差的全在思维链上：qwen3.7-flash 为了写 10 条不超过
+    15 字的说明，花了 2658 个输出 token。</p>
+
+    <p><b>判断任务</b>（8 个刻意选的多义词建义项集，评分项是速度、平均义项数、
+    英文定义里的难词密度、以及 <code>present</code> 的「提出/介绍/呈现」有没有被错误拆开）：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>耗时</th><th>平均义项数</th><th>定义难词/条</th><th>present</th></tr></thead>
+        <tbody>
+          <tr><td class="topic"><b>deepseek-v4-flash-0731</b></td><td class="num"><b>10 秒</b></td><td class="num">4.5</td><td class="num"><b>0.61</b></td><td>合并 ✓</td></tr>
+          <tr><td class="topic">mimo-v2.5-pro</td><td class="num">28 秒</td><td class="num">3.9</td><td class="num">1.00</td><td>合并 ✓</td></tr>
+          <tr><td class="topic">minimax-m2.7</td><td class="num">89 秒</td><td class="num">3.4</td><td class="num">2.00</td><td>合并 ✓</td></tr>
+          <tr><td class="topic">deepseek-v4-pro / glm-5.3 / kimi-k2.6 / qwen3.8-max / seed-2.1-pro / longcat-2.0</td><td class="num" colspan="4">全部在 190 秒撞上中转站的 504 网关超时，一条都没跑完</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>结论和「义项集要用最好的模型」这条预期相反。</b>
+    非思考型的 deepseek-v4-flash 不只快 3–9 倍，<b>英文定义的用词还最简单</b>（每条 0.61 个难词，
+    对手是 1.00 和 2.00）——而这恰恰是义项集最要紧的指标之一：定义本身要能读。
+    强模型在这里的问题不是不会做，是<b>在 180 秒的网关超时里做不完</b>。</p>
+    <p>所以「需不需要强 AI」这个问题，实测答案是：<b>需要的是不思考的模型</b>。
+    这些任务本来就不是推理题——它们是「按规则整理」，思考只是在烧预算。</p>
+
+    <h3>跑起来才暴露的两个 bug</h3>
+    <p><b>限流。</b>模型太快，并发 3 一分钟能发九十次请求，中转站的额度是 20，于是大批 429。
+    加了「每分钟最多调用次数」的前置限流（先排队再发，而不是被拒后回退），
+    并且改成<b>听服务端的 <code>retryAfterSeconds</code></b>——自己猜一个更短的等待时间，
+    只会再浪费一次调用。设成 18 次/分钟后失败归零。</p>
+    <p><b>诊断脚本会把正在跑的任务标成暂停。</b><code>recover_interrupted()</code>
+    挂在模块启动钩子上，而任何脚本只要 import 了应用就会触发它——
+    它假设自己是唯一的进程，于是一边跑长任务一边查状态时，查询把任务写成了 paused。
+    改成只重置<b>五分钟没动过</b>的行：任务每处理一项就更新一次，动着的行不会被误判。</p>
+
+    <h3>粗筛漏掉了熟词僻义，这是设计层面的错</h3>
+    <p>第一轮跑完发现 <code>present</code>、<code>spring</code>、<code>bear</code>、
+    <code>run</code>、<code>set</code> 都<b>没有义项集</b>——它们只带中考/高考标签，
+    而目标词集合当时限定在 cet4/cet6/考研。</p>
+    <p>这正好把系统要教的东西筛掉了。认识 <code>bear</code> 是「熊」，
+    不等于认识「忍受」「支撑」「结出」；<b>熟词僻义是 CET 阅读考得最狠的地方</b>，
+    主文档 §C 就是这么写的。而设计文档里用来讲合并规则的例子 <code>present</code>，
+    居然不在集合里。</p>
+    <p>把中考/高考层级纳入粗筛，多出 624 个这类词。补跑之后 <code>present</code> 的结果正是判据要的：</p>
+<pre>present 1. existing or happening now              现在的、目前的
+        2. being in a particular place at a time  出席的、在场的
+        3. to give something to someone formally  <b>赠送、提出、呈现</b>   ← 合并成一项
+        4. something you give on a special day    礼物、礼品</pre>
+
+    <h3>全量结果</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>产出</th><th>数量</th><th>用时</th><th>失败</th></tr></thead>
+        <tbody>
+          <tr><td>词缀中文说明</td><td class="mono">216 条</td><td class="mono">10 秒</td><td class="mono">0</td></tr>
+          <tr><td>义项集</td><td class="mono">3587 词 / 8837 义项</td><td class="mono">约 30 分钟</td><td class="mono">0</td></tr>
+          <tr><td>词族分级复核</td><td class="mono">4997 条</td><td class="mono">14 分钟</td><td class="mono">0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">义项数分布 1–3 个的占 <b>88%</b>，超过 5 个的 52 个词（1.5%）；
+    英文定义里含超纲词的比例 <b>14.6%</b>，剩下的多是 <code>substance</code>、
+    <code>officially</code> 这类真实边界词。分级复核后 A/B/C 为 5767 / 3414 / 1290，
+    模型正确地把规则找错的关系判成了 C：<code>confident ← confide</code>、
+    <code>admiral ← admire</code>、<code>machination ← machine</code>。</p>
+    <p>拿 P1a 的 16 篇重跑校验器：<b>超纲率 4.75% → 1.78%</b>，另有 0.33% 是已知词根的 B 级派生词。</p>
+
+    <h3>「零失败」是个假象，已经修掉</h3>
+    <p>第一轮任务报告 <code>368/368 失败 0</code>，同时有<b>四百多个词一条义项都没有</b>。
+    原因是判据太松：一批八个词，<b>存下至少一个就算这批成功</b>。而模型每批稳定漏答一两个，
+    实测完整返回的批次只有 79%，平均每批回 6.6 个词——最差的一批八个词只回了一个。</p>
+    <p>所以那四轮补漏不是谨慎，是<b>第一轮实际只完成了八成</b>。改法两条：
+    <b>返回不全就判失败</b>，让它重试而不是记成功；<b>重试时只问还缺的词</b>——
+    一批八个只缺一个时，重问整批有七八成是白花的钱。</p>
+    <p>造一个「只答一半」的回复验证过：现在会拦下来，报「这一批 2 个词只返回了 1 个，缺 [...]」。</p>
+
+    <h3>还没做的</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>成本显示为 0</b>：提供商的价格字段还是 0，
+      填上每百万 token 的单价才会累计。这次共 55.5 万输入 + 57.2 万输出。</span></div>
+      <div class="not"><i>·</i><span><b>例句一条没生成</b>：按设计是惰性的，等复习队列（P5）
+      和夜间批处理（P6）才触发。</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 1b 方案与实施结果</span>
+    <span>2026-09-05</span>
+  </footer>
+
+</div>

@@ -7,7 +7,7 @@
 
 {% if data.restore_pending %}
 <div class="notice">
-  <b>有一份数据等待恢复。</b>下次重启服务时会替换当前的学习数据，替换前会自动备份。
+  <b>有数据等待恢复（{{ data.restore_pending | join('、') }}）。</b>下次重启服务时会替换当前的数据，替换前会自动备份。
 </div>
 {% endif %}
 
@@ -16,7 +16,7 @@
   {% for name, info in data.databases.items() %}
   <div class="card stat">
     <span class="stat-label">
-      {{ {'dictionary': '词典（只读，可重建）', 'learning': '学习数据（需备份）', 'logs': '技术日志（可丢弃）'}[name] }}
+      {{ {'dictionary': '词典（只读，可重建）', 'content': '生成内容（需备份）', 'learning': '学习数据（需备份）', 'logs': '技术日志（可丢弃）'}[name] }}
     </span>
     <span class="stat-value" data-bytes="{{ info.size_bytes }}">{{ info.size_bytes }} <small>B</small></span>
     <span class="muted mono">{{ name }}.db{% if not info.exists %} · 尚未创建{% endif %}</span>

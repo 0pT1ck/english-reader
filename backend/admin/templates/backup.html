@@ -4,25 +4,30 @@
 {% block content %}
 <h1>备份</h1>
 <p class="subtitle">
-  下载得到的那一个文件，就是你的全部学习数据——进度、掌握状态、水平估计、
-  已生成的文章、决策记录。词典不在里面，它可以随时重新导入。
+  下载得到的压缩包里有两个库：<b>learning.db</b> 是你的全部学习数据——进度、掌握状态、
+  水平估计、已生成的文章、决策记录；<b>content.db</b> 是花钱生成的义项、例句、词族。
+  词典和日志不在里面，前者可以随时重新导入，后者丢了也不要紧。
 </p>
 
 {% if restore_pending %}
 <div class="notice">
-  <b>有一份数据等待恢复。</b>重启服务后生效，替换前会自动备份当前数据。
+  <b>有数据等待恢复（{{ restore_pending | join('、') }}）。</b>重启服务后生效，替换前会自动备份当前数据。
 </div>
 {% endif %}
 
 <h2>导出</h2>
 <div class="card">
   <div class="row">
-    <a class="btn primary" href="/v1/admin/backup">下载学习数据</a>
+    <a class="btn primary" href="/v1/admin/backup">下载完整备份</a>
     <button onclick="snapshot()">在服务器上存一份</button>
-    <span class="muted">当前大小 <b class="mono" data-bytes="{{ learning_size }}">{{ learning_size }}</b></span>
+    {% for name, size in sizes.items() %}
+    <span class="muted">{{ name }} <b class="mono" data-bytes="{{ size }}">{{ size }}</b></span>
+    {% endfor %}
   </div>
   <p class="muted" style="margin:0.8rem 0 0">
-    换机器、迁到云服务器，都是拷这一个文件的事。人能读的结构化导出（JSON、可跨版本）
+    换机器、迁到云服务器，都是拷这一个压缩包的事。只需要其中一个库时，可以单独下载
+    <a href="/v1/admin/backup/learning">learning.db</a> 或
+    <a href="/v1/admin/backup/content">content.db</a>。人能读的结构化导出（JSON、可跨版本）
     留到后面的阶段。
   </p>
 </div>
@@ -31,20 +36,20 @@
 <div class="card">
   <form id="restore-form">
     <div class="row">
-      <input type="file" id="restore-file" accept=".db" required>
+      <input type="file" id="restore-file" accept=".zip,.db" required>
       <button class="primary" type="submit">上传并恢复</button>
     </div>
   </form>
   <p class="muted" style="margin:0.8rem 0 0">
-    上传的文件会先校验、暂存，<b>在下次重启时替换</b>。这样做是因为替换一个正在被读写的
-    数据库无法保证安全，而启动时还没有任何连接，是唯一不会出错的时机。
-    当前数据在替换前会自动备份。
+    压缩包和单个 <code>.db</code> 都能收。单个文件按里面的表判断是哪个库，不看文件名。
+    上传的文件会先校验、暂存，<b>在下次重启时替换</b>：替换一个正在被读写的数据库无法
+    保证安全，而启动时还没有任何连接，是唯一不会出错的时机。当前数据在替换前会自动备份。
   </p>
 </div>
 
 <h2>服务器上的自动备份</h2>
 <p class="muted" style="margin-top:-0.5rem;margin-bottom:0.9rem">
-  每次数据库结构升级前都会自动存一份，只保留最近 20 份。
+  每次数据库结构升级前都会自动存一份，每个库各保留最近 20 份。
 </p>
 <div class="scroll">
   <table>
@@ -73,7 +78,7 @@
   async function snapshot() {
     try {
       const res = await api('/backup/snapshot', { method: 'POST' });
-      toast('已存到服务器：' + res.path.split(/[\\/]/).pop());
+      toast('已存到服务器：' + res.paths.map(p => p.split(/[\\/]/).pop()).join('、'));
       setTimeout(() => location.reload(), 800);
     } catch (e) { toast(e.message, true); }
   }
@@ -82,7 +87,7 @@
     ev.preventDefault();
     const input = document.getElementById('restore-file');
     if (!input.files.length) return;
-    if (!confirm('恢复后当前的学习数据会被替换（替换前自动备份）。确定吗？')) return;
+    if (!confirm('恢复后当前的数据会被替换（替换前自动备份）。确定吗？')) return;
 
     const form = new FormData();
     form.append('file', input.files[0]);

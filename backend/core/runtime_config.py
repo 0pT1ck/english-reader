@@ -62,6 +62,12 @@ class ConfigSpec:
     group: str = "general"
     order: int = 100
 
+    #: Whether the value is a credential. Marking it here — at the point the
+    #: setting is declared, by whoever owns it — is what keeps the diagnostic
+    #: bundle safe as settings are added: the exporter drops everything flagged,
+    #: instead of maintaining a blacklist that a new phase can forget to update.
+    secret: bool = False
+
 
 _specs: dict[str, ConfigSpec] = {}
 _cache: dict[str, Any] = {}
@@ -169,9 +175,18 @@ def set(key: str, value: Any) -> None:  # noqa: A001 - reads naturally as config
     log.info("config.updated", f"配置项 {key} 已更新", key=key)
 
 
-def all_values() -> dict[str, Any]:
-    """Current value of every declared setting, for the admin console."""
-    return {spec.key: get(spec.key) for spec in _specs.values()}
+def all_values(*, include_secrets: bool = True) -> dict[str, Any]:
+    """Current value of every declared setting.
+
+    ``include_secrets=False`` drops everything a spec marked as a credential —
+    used by the diagnostic bundle, which is a file the user mails to somebody
+    else.
+    """
+    return {
+        spec.key: get(spec.key)
+        for spec in _specs.values()
+        if include_secrets or not spec.secret
+    }
 
 
 def invalidate_cache() -> None:
@@ -211,6 +226,7 @@ register(
         "内网部署时需要配置代理；自建 Bark 服务端则填内网地址。",
         group="diagnostics",
         order=21,
+        secret=True,  # the path component is the push credential
     ),
     ConfigSpec(
         key="alert_dedupe_minutes",

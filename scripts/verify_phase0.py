@@ -14,7 +14,9 @@ invisible until it corrupts something.
 
 from __future__ import annotations
 
+import io
 import sys
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -122,10 +124,18 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
               r.status_code == 200 and "attachment" in r.headers.get("content-disposition", ""),
               f"{len(r.content) / 1024:.0f} KB")
 
+        # P1b turned this into a zip holding every database that cannot be
+        # regenerated, so the check is now "both are in there", not "it is a
+        # SQLite file".
         r = client.get("/v1/admin/backup", headers=headers)
-        is_sqlite = r.content.startswith(b"SQLite format 3\x00")
-        check("4.7", "学习数据可下载", r.status_code == 200 and is_sqlite,
-              f"{len(r.content) / 1024:.0f} KB")
+        try:
+            with zipfile.ZipFile(io.BytesIO(r.content)) as archive:
+                members = set(archive.namelist())
+        except zipfile.BadZipFile:
+            members = set()
+        check("4.7", "备份可下载且含 learning + content",
+              r.status_code == 200 and {"learning.db", "content.db"} <= members,
+              f"{len(r.content) / 1024:.0f} KB · {', '.join(sorted(members)) or '不是压缩包'}")
 
         r = client.post("/v1/admin/restore", headers=headers,
                         files={"file": ("bad.db", b"not a database", "application/octet-stream")})

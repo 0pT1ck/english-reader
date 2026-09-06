@@ -1,6 +1,6 @@
 """SQLite connections and schema migrations.
 
-Three separate database files are used (see :mod:`backend.core.config` for why).
+Four separate database files are used (see :mod:`backend.core.config` for why).
 Raw ``sqlite3`` is used rather than an ORM for two reasons:
 
 1. Cross-database queries via ``ATTACH`` are a normal operation here (study
@@ -29,7 +29,13 @@ from typing import Literal
 
 from backend.core.config import get_settings
 
-DatabaseName = Literal["dictionary", "learning", "logs"]
+DatabaseName = Literal["dictionary", "content", "learning", "logs"]
+
+#: The databases that cannot be regenerated from a download, and therefore the
+#: ones every backup, restore and pre-migration snapshot must cover.
+#: ``dictionary`` is re-importable and ``logs`` is disposable, so both are
+#: deliberately excluded — that is what keeps a backup small.
+BACKED_UP: tuple[DatabaseName, ...] = ("learning", "content")
 
 # Connections are per-thread: sqlite3 connections are not safe to share across
 # threads, and FastAPI runs synchronous endpoint functions in a thread pool.
@@ -47,6 +53,7 @@ def _db_path(name: DatabaseName) -> Path:
     settings = get_settings()
     return {
         "dictionary": settings.dictionary_db,
+        "content": settings.content_db,
         "learning": settings.learning_db,
         "logs": settings.logs_db,
     }[name]
@@ -67,14 +74,17 @@ def _configure(conn: sqlite3.Connection) -> None:
 
 
 def get_connection(name: DatabaseName) -> sqlite3.Connection:
-    """Return this thread's connection to one of the three databases.
+    """Return this thread's connection to one of the four databases.
 
-    The ``learning`` connection has ``dictionary.db`` attached under the schema
-    name ``dict``, so queries can join study state against word data directly::
+    The ``learning`` connection has the two reference databases attached, so
+    queries can join study state against word data directly::
 
         SELECT s.*, w.headword
         FROM sense_states s
-        JOIN dict.senses w ON w.id = s.sense_id
+        JOIN content.senses s2 ON s2.id = s.sense_id
+        JOIN dict.words w      ON w.headword = s2.headword
+
+    ``dict`` is the ECDICT import, ``content`` is what we generated ourselves.
     """
     cache: dict[str, sqlite3.Connection] = getattr(_local, "connections", None)  # type: ignore[assignment]
     if cache is None:
@@ -91,11 +101,12 @@ def get_connection(name: DatabaseName) -> sqlite3.Connection:
     _configure(conn)
 
     if name == "learning":
-        dictionary_path = _db_path("dictionary")
-        dictionary_path.parent.mkdir(parents=True, exist_ok=True)
-        # ATTACH creates the file if absent, which is fine: an empty dictionary
-        # simply means the import script has not been run yet.
-        conn.execute("ATTACH DATABASE ? AS dict", (str(dictionary_path),))
+        # ATTACH creates the file if absent, which is fine: an empty database
+        # simply means the import or generation step has not been run yet.
+        for alias, attached in (("dict", "dictionary"), ("content", "content")):
+            attached_path = _db_path(attached)  # type: ignore[arg-type]
+            attached_path.parent.mkdir(parents=True, exist_ok=True)
+            conn.execute(f"ATTACH DATABASE ? AS {alias}", (str(attached_path),))
 
     cache[name] = conn
     return conn
@@ -116,8 +127,8 @@ def close_connections() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def backup_learning_db(reason: str) -> Path:
-    """Snapshot ``learning.db`` into the backup directory.
+def backup_database(name: DatabaseName, reason: str) -> Path:
+    """Snapshot one database into the backup directory.
 
     Uses SQLite's own backup API rather than copying the file: with WAL enabled
     a plain file copy can miss committed data still sitting in the ``-wal``
@@ -131,9 +142,9 @@ def backup_learning_db(reason: str) -> Path:
 
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     safe_reason = "".join(c if c.isalnum() or c in "-_" else "-" for c in reason)[:60]
-    target = settings.backup_dir / f"learning-{stamp}-{safe_reason}.db"
+    target = settings.backup_dir / f"{name}-{stamp}-{safe_reason}.db"
 
-    source = get_connection("learning")
+    source = get_connection(name)
     destination = sqlite3.connect(target)
     try:
         source.backup(destination)
@@ -143,8 +154,13 @@ def backup_learning_db(reason: str) -> Path:
     return target
 
 
-def apply_pending_restore() -> Path | None:
-    """Swap in a database staged by the admin console's restore.
+def backup_learning_db(reason: str) -> Path:
+    """Backwards-compatible alias. Prefer :func:`backup_database`."""
+    return backup_database("learning", reason)
+
+
+def apply_pending_restore() -> dict[str, Path]:
+    """Swap in databases staged by the admin console's restore.
 
     Must run before any connection is opened — that is the entire reason restore
     is a two-step operation. At this point no thread holds a handle, so the swap
@@ -154,38 +170,48 @@ def apply_pending_restore() -> Path | None:
     the *old* database, and leaving them next to a different file is a
     well-known way to corrupt it.
 
-    Returns the backup path if a restore happened, else ``None``.
+    Returns ``{database name: path of the pre-restore backup}`` for whatever was
+    actually swapped, which is empty on a normal start.
     """
     settings = get_settings()
-    staged = settings.data_dir / "learning.db.pending"
-    if not staged.exists():
-        return None
+    restored: dict[str, Path] = {}
 
-    settings.backup_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    backup_path = settings.backup_dir / f"learning-{stamp}-before-restore.db"
+    for name in BACKED_UP:
+        target = _db_path(name)
+        staged = target.with_name(target.name + ".pending")
+        if not staged.exists():
+            continue
 
-    if settings.learning_db.exists():
-        # Open, snapshot, close — all before the app has any connections. This
-        # captures data still sitting in the WAL, which a file copy would miss.
-        source = sqlite3.connect(settings.learning_db)
-        destination = sqlite3.connect(backup_path)
-        try:
-            source.backup(destination)
-        finally:
-            destination.close()
-            source.close()
+        settings.backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        backup_path = settings.backup_dir / f"{name}-{stamp}-before-restore.db"
 
-    for suffix in ("", "-wal", "-shm"):
-        stale = settings.learning_db.with_name(settings.learning_db.name + suffix)
-        stale.unlink(missing_ok=True)
+        if target.exists():
+            # Open, snapshot, close — all before the app has any connections.
+            # This captures data still in the WAL, which a file copy would miss.
+            source = sqlite3.connect(target)
+            destination = sqlite3.connect(backup_path)
+            try:
+                source.backup(destination)
+            finally:
+                destination.close()
+                source.close()
 
-    shutil.move(str(staged), str(settings.learning_db))
-    return backup_path
+        for suffix in ("", "-wal", "-shm"):
+            stale = target.with_name(target.name + suffix)
+            stale.unlink(missing_ok=True)
+
+        shutil.move(str(staged), str(target))
+        restored[name] = backup_path
+
+    return restored
 
 
 def prune_backups(keep: int = 20) -> list[Path]:
-    """Delete all but the newest ``keep`` automatic backups.
+    """Delete all but the newest ``keep`` automatic backups *per database*.
+
+    Per database rather than overall: a burst of content.db snapshots during a
+    generation run must not push every learning.db snapshot out of the window.
 
     Backups are small, but an unbounded directory on a device with an SSD the
     user also uses for other things is still bad manners.
@@ -194,15 +220,16 @@ def prune_backups(keep: int = 20) -> list[Path]:
     if not settings.backup_dir.exists():
         return []
 
-    backups = sorted(
-        settings.backup_dir.glob("learning-*.db"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True,
-    )
     removed = []
-    for stale in backups[keep:]:
-        stale.unlink(missing_ok=True)
-        removed.append(stale)
+    for name in BACKED_UP:
+        backups = sorted(
+            settings.backup_dir.glob(f"{name}-*.db"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        )
+        for stale in backups[keep:]:
+            stale.unlink(missing_ok=True)
+            removed.append(stale)
     return removed
 
 
@@ -258,10 +285,11 @@ def run_migrations(module: str, migrations: Iterable[Migration]) -> list[Migrati
     Returns the migrations that were actually applied, so the caller can log a
     meaningful summary rather than "startup complete".
 
-    Before the first change that touches ``learning.db``, a backup is taken.
-    That database holds study records that cannot be regenerated, and every
-    phase of this project will add tables to it — so the one thing that must
-    never happen is a botched migration with no way back.
+    Before the first change to a database that cannot be regenerated
+    (:data:`BACKED_UP`), a backup of *that* database is taken. Those files hold
+    records that cannot be rebuilt from a download, and every phase of this
+    project will add tables to them — so the one thing that must never happen is
+    a botched migration with no way back.
     """
     pending = sorted(
         (m for m in migrations), key=lambda m: m.version
@@ -271,17 +299,19 @@ def run_migrations(module: str, migrations: Iterable[Migration]) -> list[Migrati
 
     with _migration_lock:
         applied: list[Migration] = []
-        backed_up = False
+        backed_up: set[str] = set()
 
         for migration in pending:
             conn = get_connection(migration.database)
             if migration.version in _applied_versions(conn, module):
                 continue
 
-            if migration.database == "learning" and not backed_up:
-                backup_learning_db(f"before-{module}-v{migration.version}")
+            if migration.database in BACKED_UP and migration.database not in backed_up:
+                backup_database(
+                    migration.database, f"before-{module}-v{migration.version}"
+                )
                 prune_backups()
-                backed_up = True
+                backed_up.add(migration.database)
 
             try:
                 if callable(migration.apply):

@@ -12,8 +12,10 @@ Adding a page is a template plus a route.
 
 from __future__ import annotations
 
+import io
 import json
 import sqlite3
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated, Any
@@ -24,7 +26,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from backend.core import auth, events, notifications, runtime_config
 from backend.core.config import get_settings
 from backend.core.db import (
-    backup_learning_db,
+    BACKED_UP,
+    DatabaseName,
+    backup_database,
     database_size_bytes,
     get_connection,
 )
@@ -37,6 +41,31 @@ log = get_logger("admin")
 
 admin_api = APIRouter(dependencies=[Depends(auth.require_admin)])
 admin_pages = APIRouter()
+
+# SQLite files start with this exact string — a cheap guard against someone
+# uploading the wrong file entirely.
+SQLITE_MAGIC = b"SQLite format 3\x00"
+
+
+def _staged_path(name: DatabaseName) -> Path:
+    """Where a restore waits until the next start. See ``apply_pending_restore``."""
+    settings = get_settings()
+    return settings.data_dir / f"{name}.db.pending"
+
+
+def _serialise(name: DatabaseName) -> bytes:
+    """Consistent bytes for one database.
+
+    Uses SQLite's serialize rather than reading the file: with WAL enabled a raw
+    file read can miss committed data still in the sidecar, producing a backup
+    that looks valid and silently isn't. The checkpoint folds the write-ahead
+    log in first, so the result covers everything committed.
+    """
+    conn = get_connection(name)
+    conn.execute("PRAGMA wal_checkpoint(FULL)")
+    # "main" is the database itself; anything ATTACHed to the connection is
+    # excluded, which is exactly what a per-database backup wants.
+    return conn.serialize(name="main")
 
 
 # --------------------------------------------------------------------------- #
@@ -80,6 +109,7 @@ async def status() -> dict[str, Any]:
             }
             for name, path in (
                 ("dictionary", settings.dictionary_db),
+                ("content", settings.content_db),
                 ("learning", settings.learning_db),
                 ("logs", settings.logs_db),
             )
@@ -92,7 +122,9 @@ async def status() -> dict[str, Any]:
         "logs_last_24h": log_counts,
         "decisions_total": decisions_total,
         "devices": auth.list_devices(),
-        "restore_pending": (settings.learning_db.with_suffix(".db.pending")).exists(),
+        "restore_pending": sorted(
+            name for name in BACKED_UP if _staged_path(name).exists()
+        ),
     }
 
 
@@ -182,8 +214,10 @@ async def diagnostic_bundle(
         (since,),
     ).fetchall()
 
-    settings_snapshot = runtime_config.all_values()
-    settings_snapshot.pop("bark_url", None)  # contains a push credential
+    # Whitelist, not blacklist: every setting whose owner declared it a
+    # credential is dropped. A blacklist here would silently leak the first
+    # secret a later phase forgets to add to it.
+    settings_snapshot = runtime_config.all_values(include_secrets=False)
 
     bundle = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -274,55 +308,83 @@ async def delete_device(device_id: int) -> dict[str, Any]:
 # --------------------------------------------------------------------------- #
 
 
-@admin_api.get("/backup", summary="下载学习数据备份")
+@admin_api.get("/backup", summary="下载完整备份")
 async def download_backup() -> Response:
-    """Download ``learning.db`` — the complete, portable study record.
+    """Download everything irreplaceable as one zip.
 
-    Uses SQLite's serialize rather than reading the file: with WAL enabled a raw
-    file read can miss committed data still in the sidecar, producing a backup
-    that looks valid and silently isn't.
+    Two databases go in, not one: ``learning.db`` is the user's own record, and
+    ``content.db`` holds senses, examples and word families that cost real money
+    to generate. The two rebuildable databases stay out — that is what keeps
+    this file small enough to move around casually.
+
+    A zip rather than a single file because the pair must travel together; a
+    restore that brought back study state but not the content it references
+    would leave a half-working install.
     """
-    conn = get_connection("learning")
-    # Fold the write-ahead log into the main database first, so the serialised
-    # bytes include everything committed rather than everything checkpointed.
-    conn.execute("PRAGMA wal_checkpoint(FULL)")
-    # "main" is the learning database itself; the attached dictionary is
-    # excluded, which is exactly what we want in a backup.
-    payload = conn.serialize(name="main")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    log.info("backup.downloaded", "下载了学习数据备份", size_bytes=len(payload))
+    buffer = io.BytesIO()
+    sizes: dict[str, int] = {}
+
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name in BACKED_UP:
+            payload = _serialise(name)
+            sizes[name] = len(payload)
+            archive.writestr(f"{name}.db", payload)
+        archive.writestr(
+            "MANIFEST.json",
+            json.dumps(
+                {
+                    "product": "english-reader",
+                    "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                    "databases": sizes,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+        )
+
+    payload = buffer.getvalue()
+    log.info(
+        "backup.downloaded",
+        "下载了完整备份",
+        size_bytes=len(payload),
+        databases=sizes,
+    )
     return Response(
         content=payload,
-        media_type="application/octet-stream",
+        media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="learning-{stamp}.db"'
+            "Content-Disposition": f'attachment; filename="english-reader-{stamp}.zip"'
         },
     )
 
 
-@admin_api.post("/restore", summary="上传学习数据以恢复")
-async def upload_restore(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
-    """Stage an uploaded database for restore on next start.
+@admin_api.get("/backup/{name}", summary="下载单个数据库")
+async def download_one(name: str) -> Response:
+    """One database on its own, for when only one needs moving."""
+    if name not in BACKED_UP:
+        raise InvalidRequest("只能下载 learning 或 content", name=name)
+    payload = _serialise(name)  # type: ignore[arg-type]
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    log.info("backup.downloaded", f"下载了 {name} 数据库", database=name, size_bytes=len(payload))
+    return Response(
+        content=payload,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{name}-{stamp}.db"'},
+    )
 
-    The file is *staged*, not swapped in place. Live connections are per-thread
-    and cannot all be closed from here, and on Windows an open file cannot be
-    replaced at all. Staging plus a restart is the version of this operation
-    that cannot corrupt anything: the swap happens at startup before a single
-    connection exists.
+
+def _stage(name: DatabaseName, payload: bytes) -> int:
+    """Validate one database and park it for the next start.
+
+    Verifying before accepting matters: a restart that swapped in an unrelated
+    database would leave the app broken with no obvious cause.
     """
-    settings = get_settings()
-    payload = await file.read()
+    if not payload.startswith(SQLITE_MAGIC):
+        raise InvalidRequest(f"{name}.db 不是 SQLite 数据库")
 
-    # SQLite files begin with this exact string. Cheap guard against a user
-    # uploading the wrong file entirely.
-    if not payload.startswith(b"SQLite format 3\x00"):
-        raise InvalidRequest("上传的文件不是 SQLite 数据库")
-
-    staged = settings.data_dir / "learning.db.pending"
+    staged = _staged_path(name)
     staged.write_bytes(payload)
-
-    # Verify it is one of ours before accepting, so a restart does not swap in
-    # an unrelated database and leave the app broken.
     try:
         probe = sqlite3.connect(staged)
         try:
@@ -331,24 +393,94 @@ async def upload_restore(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
             probe.close()
     except sqlite3.Error as exc:
         staged.unlink(missing_ok=True)
-        raise InvalidRequest("这个数据库不是 English Reader 的学习数据") from exc
+        raise InvalidRequest(f"这个 {name}.db 不是 English Reader 的数据库") from exc
+    return len(payload)
+
+
+@admin_api.post("/restore", summary="上传备份以恢复")
+async def upload_restore(file: Annotated[UploadFile, File()]) -> dict[str, Any]:
+    """Stage an uploaded backup for restore on next start.
+
+    Accepts either the zip produced by the backup button or a bare ``.db``
+    file — the latter both for backups taken before the zip existed and for the
+    case where only one database needs replacing. A bare file is identified by
+    the tables it contains rather than by its name, since browsers rename
+    downloads freely.
+
+    Files are *staged*, not swapped in place. Live connections are per-thread
+    and cannot all be closed from here, and on Windows an open file cannot be
+    replaced at all. Staging plus a restart is the version of this operation
+    that cannot corrupt anything: the swap happens at startup before a single
+    connection exists.
+    """
+    payload = await file.read()
+    staged: dict[str, int] = {}
+
+    if payload[:4] == b"PK\x03\x04":
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            members = {Path(n).name: n for n in archive.namelist()}
+            for name in BACKED_UP:
+                member = members.get(f"{name}.db")
+                if member is None:
+                    continue
+                staged[name] = _stage(name, archive.read(member))
+        if not staged:
+            raise InvalidRequest("这个压缩包里没有 learning.db 或 content.db")
+    else:
+        name = _identify(payload)
+        staged[name] = _stage(name, payload)
 
     log.warning(
         "restore.staged",
-        "已接收恢复用的数据库，将在下次启动时生效",
-        size_bytes=len(payload),
+        "已接收恢复用的数据，将在下次启动时生效",
+        databases=staged,
     )
     return {
-        "staged": True,
-        "size_bytes": len(payload),
+        "staged": sorted(staged),
+        "size_bytes": staged,
         "note": "重启服务后生效。当前数据会在替换前自动备份。",
     }
 
 
+def _identify(payload: bytes) -> DatabaseName:
+    """Work out which database a bare uploaded file is, by its tables.
+
+    Filenames are unreliable — browsers append "(1)" and users rename things —
+    so the content decides. ``content.db`` is recognised by a table only it has;
+    anything else that is one of ours is treated as learning data.
+    """
+    if not payload.startswith(SQLITE_MAGIC):
+        raise InvalidRequest("上传的文件既不是压缩包也不是 SQLite 数据库")
+
+    settings = get_settings()
+    probe_path = settings.data_dir / "restore-probe.db"
+    probe_path.write_bytes(payload)
+    try:
+        probe = sqlite3.connect(probe_path)
+        try:
+            names = {
+                row[0]
+                for row in probe.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            }
+        finally:
+            probe.close()
+    except sqlite3.Error as exc:
+        raise InvalidRequest("无法读取这个数据库") from exc
+    finally:
+        probe_path.unlink(missing_ok=True)
+
+    if "senses" in names or "word_families" in names:
+        return "content"
+    return "learning"
+
+
 @admin_api.post("/backup/snapshot", summary="立即生成一次本地备份")
 async def snapshot() -> dict[str, Any]:
-    path = backup_learning_db("manual")
-    return {"path": str(path), "size_bytes": path.stat().st_size}
+    made = [backup_database(name, "manual") for name in BACKED_UP]
+    return {
+        "paths": [str(p) for p in made],
+        "size_bytes": {p.name: p.stat().st_size for p in made},
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -442,16 +574,15 @@ async def config_page(request: Request) -> Response:
 async def backup_page(request: Request) -> Response:
     if (redirect := require_page_auth(request)) is not None:
         return redirect
-    settings = get_settings()
     backups = sorted(
-        settings.backup_dir.glob("learning-*.db"),
+        (p for name in BACKED_UP for p in get_settings().backup_dir.glob(f"{name}-*.db")),
         key=lambda p: p.stat().st_mtime,
         reverse=True,
-    )[:10]
+    )[:12]
     return render(
         request,
         "backup.html",
-        learning_size=database_size_bytes("learning"),
+        sizes={name: database_size_bytes(name) for name in BACKED_UP},
         backups=[
             {
                 "name": p.name,
@@ -462,5 +593,7 @@ async def backup_page(request: Request) -> Response:
             }
             for p in backups
         ],
-        restore_pending=(settings.data_dir / "learning.db.pending").exists(),
+        restore_pending=sorted(
+            name for name in BACKED_UP if _staged_path(name).exists()
+        ),
     )
