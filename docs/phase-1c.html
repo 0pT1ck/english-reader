@@ -298,7 +298,7 @@ LLM 按我们的判据<b>合并</b>成中等粒度，并重写英文定义与中
     </div>
     <div class="nots">
       <div class="not"><i>×</i><span><b>完整生成管线</b>——过量生成择优、定点修补的收敛策略，
-      原本排在 P1c，现在<b>顺延到 P1d</b>。这一阶段被义项重建占满了。</span></div>
+      原本排在 P1c，现在<b>顺延到 P2x</b>。这一阶段被义项重建占满了。</span></div>
       <div class="not"><i>×</i><span><b>例句生成</b>——仍然是惰性的，等 P5 的到期队列和 P6 的夜间批处理。</span></div>
       <div class="not"><i>×</i><span><b>Wiktionary 的例句、词源、发音</b>——转储里都有，都不取。
       只取义项清单和标签。</span></div>
@@ -521,7 +521,7 @@ address   熟词僻义「着手解决」每次都在</pre>
     <code>gen_provider</code>，不再依赖「默认提供商」——两类任务要的能力本来就不同。</p>
 
     <h3>「形式主语几乎为零」是我测错了</h3>
-    <p>我为这个数字改了三轮提示词，还差点得出「模型做不到，得靠 P1d 定点修补」的结论。
+    <p>我为这个数字改了三轮提示词，还差点得出「模型做不到，得靠 P2x 定点修补」的结论。
     实际上<b>校验器一直在数别的东西</b>：spaCy 只把 <code>there is/are</code> 里的
     <code>there</code> 标成 <code>expl</code>，而 <code>It is clear that…</code> 里的
     <code>It</code> 标的是普通 <code>nsubj</code>。P1a 建校验器时我把 <code>expl</code>
@@ -583,8 +583,8 @@ address   熟词僻义「着手解决」每次都在</pre>
           <tr><td>义项集与词族</td><td class="num">✓</td><td>—</td></tr>
           <tr><td class="topic"><b>真题难度画像</b></td><td class="num">✗</td><td><b>顺延 P2</b></td></tr>
           <tr><td class="topic"><b>语境释义标注</b></td><td class="num">✗</td><td><b>顺延 P2</b></td></tr>
-          <tr><td class="topic"><b>过量生成择优</b></td><td class="num">✗</td><td><b>顺延 P1d</b></td></tr>
-          <tr><td class="topic"><b>定点修补</b></td><td class="num">✗</td><td><b>顺延 P1d</b></td></tr>
+          <tr><td class="topic"><b>过量生成择优</b></td><td class="num">✗</td><td><b>顺延 P2x</b></td></tr>
+          <tr><td class="topic"><b>定点修补</b></td><td class="num">✗</td><td><b>顺延 P2x</b></td></tr>
         </tbody>
       </table>
     </div>
@@ -593,7 +593,7 @@ address   熟词僻义「着手解决」每次都在</pre>
     <p><b>难度画像和语境释义标注 → P2。</b>两者的消费方都在 P2：难度画像是为了「按你的水平
     筛真题给你读」，语境释义标注是三层释义的第一层。<b>在使用它们的功能出现之前先做，
     就是在没有反馈的情况下猜格式</b>——这个教训 P1c 前半段刚吃过一次。</p>
-    <p><b>择优和定点修补 → P1d。</b>纯工程，没有可行性风险：P1 已经证明模型写得出合格文章，
+    <p><b>择优和定点修补 → P2x。</b>纯工程，没有可行性风险：P1 已经证明模型写得出合格文章，
     这两项是把「合格」变成「稳定合格」。但现在<b>每天生成的需求还不存在</b>，
     先建等于空转，而且择优的排序标准要看真实使用中什么样的文章更好读——那也得等 P2。</p>
 
@@ -604,7 +604,7 @@ address   熟词僻义「着手解决」每次都在</pre>
     后来决定「如果有学习价值，甚至无需真人测试」，于是这一条实际上只有我读了几篇之后的主观判断。
     这不是验证，写在这里是为了别把它当成验证过的事。</p>
     <p>最省事的补法是本人读两篇——文章都在 <code>generation_drafts</code> 里。
-    真要严格，AI 搭配检查的自动化在 P1d 的范围内。</p>
+    真要严格，AI 搭配检查的自动化在 P2x 的范围内。</p>
   </section>
 
   <footer>
