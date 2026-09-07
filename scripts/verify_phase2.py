@@ -378,67 +378,6 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               if not any(dangling.values())
               else "、".join(f"{k} {v}" for k, v in dangling.items() if v))
 
-        # --- 7c. 词组 ------------------------------------------------------ #
-        print("\n7c. 词组")
-
-        from backend.modules.reading import phrases as phrase_module
-
-        pstats = phrase_module.stats()
-        check("7.7", "词组候选已扫出来",
-              pstats["candidates"] > 100,
-              f"{pstats['candidates']} 处候选，平均每篇 "
-              f"{pstats['candidates'] / max(1, pstats['candidates'] and len(repository.list_articles(shelf='all', limit=10000))):.1f} 处")
-
-        check("7.8", "候选已逐处判断过",
-              pstats["pending"] == 0 and pstats["confirmed"] > 0,
-              f"判为词组 {pstats['confirmed']} 处（{pstats['distinct']} 个不同），"
-              f"判为字面用法 {pstats['rejected']} 处，待判 {pstats['pending']}")
-
-        # The判断 must be per occurrence, not per string — `look at` is a phrase
-        # in one sentence and two words in the next. If every occurrence of a
-        # sequence got the same verdict, the model is matching strings and the
-        # context is doing nothing.
-        both = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM (SELECT phrase FROM reading_phrases"
-            " WHERE verdict IS NOT NULL GROUP BY phrase"
-            " HAVING SUM(verdict = 1) > 0 AND SUM(verdict = 0) > 0)"
-        ).fetchone()[0]
-        check("7.9", "判断是按上下文做的，不是按字符串",
-              both > 0,
-              f"{both} 个序列在不同句子里得到了不同判定"
-              f"（look at、live in、come from 这类）" if both else "每个序列的判定都一样")
-
-        # The structural filter is what keeps dictionary noise out: `to be`,
-        # `the world`, `there is` all have dictionary entries and none of them
-        # starts with a verb.
-        noise = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM reading_phrases WHERE phrase IN"
-            " ('to be','have been','the world','there is','that is','such as')"
-        ).fetchone()[0]
-        check("7.10", "词典噪音没有进候选",
-              noise == 0,
-              "动词+小品词的结构预筛挡住了 to be / the world / there is 这类"
-              if noise == 0 else f"{noise} 处噪音混进来了")
-
-        art_with_phrases = get_connection("learning").execute(
-            "SELECT article_id FROM reading_phrases WHERE verdict = 1 LIMIT 1"
-        ).fetchone()
-        if art_with_phrases:
-            payload = service.article(1, int(art_with_phrases["article_id"]))
-            sample = payload["phrases"][0] if payload["phrases"] else None
-            check("7.11", "词组随文章一起下发，带释义与跨度",
-                  bool(sample and sample.get("translation") and
-                       sample["end_seq"] > sample["start_seq"]),
-                  f"{len(payload['phrases'])} 处，例如 {sample['surface']} → "
-                  f"{sample['translation']}" if sample else "这篇没有词组")
-        else:
-            check("7.11", "词组随文章一起下发，带释义与跨度", False, "没有已确认的词组")
-
-        check("7.12", "词组是独立的词条，标记不牵连组成词",
-              True,
-              "词组以 phrase 字符串作为 headword 存进 word_marks／sense_states——"
-              "标记 account for 不会动 account 的任何义项记录")
-
         # --- 8. 模块自包含 ------------------------------------------------ #
         print("\n8. 模块自包含")
 
@@ -462,9 +401,6 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         print("\n需要人工确认")
         note("M1", "电脑上真读完一篇",
              "打开 /admin/reader，挑一篇，点词、标记、读到底，全程不卡")
-        note("M2b", "点词组：显示词组释义，并追问组成词",
-             "点 account for 的任一半，应显示词组释义而不是 account 的「账户」；"
-             "标了不认识之后，下面应出现「那 account 本身呢？」，逐义项可单独标")
         note("M2", "点词弹层的四个分支都对",
              "普通生词看三层释义；派生词看构词分解；人名地名说可以跳过；"
              "超纲词说暂时不用学会（只在生成文里）")

@@ -23,7 +23,7 @@ from backend.core import auth, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import difficulty, ingest, phrases, repository
+from backend.modules.reading import difficulty, ingest, repository
 from backend.modules.senses import repository as senses
 from backend.modules.vocabulary import repository as dictionary
 
@@ -218,29 +218,6 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
     return glossary
 
 
-def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
-    """Confirmed phrases in this article, with their glosses and your marks.
-
-    A phrase is its own headword: marking ``account for`` records nothing
-    against ``account``, which is the separation the design insists on — not
-    knowing a phrase says nothing about whether you know the word inside it.
-    """
-    found = phrases.confirmed_for(article_id)
-    marks = repository.marks_for_headwords(
-        learner_id, {p["phrase"] for p in found})
-    states = repository.states_for_headwords(
-        learner_id, {p["phrase"] for p in found})
-    return [
-        {
-            **item,
-            "mark": marks.get((item["phrase"], 0)),
-            "state": (lambda s: {"pool": s["pool"], "encounters": s["encounters"]}
-                      if s else None)(states.get((item["phrase"], 0))),
-        }
-        for item in found
-    ]
-
-
 def article(learner_id: int, article_id: int) -> dict[str, Any]:
     row = repository.article_row(article_id)
     if row["status"] != "ready":
@@ -313,10 +290,6 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
             }
             for t in tokens
         ],
-        # Spans where the word under the reader's finger is half of something
-        # else. Sent with the article so tapping either half opens the phrase
-        # without a request, like everything else here.
-        "phrases": _phrase_payload(learner_id, article_id),
         "glossary": _glossary(learner_id, tokens),
         "progress": repository.progress_of(learner_id, article_id),
     }

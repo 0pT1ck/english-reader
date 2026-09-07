@@ -223,48 +223,4 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_events_type ON client_events (type, received_at);
         """,
     ),
-    Migration(
-        version=3,
-        name="phrase occurrences",
-        database="learning",
-        # Where a run of tokens is a phrase rather than words that happen to be
-        # adjacent. Two stages produce a row here: a structural filter (a verb
-        # followed by a particle, the pair existing in the dictionary) proposes,
-        # and the model decides per occurrence.
-        #
-        # Rejected candidates are kept, not deleted. `verdict = 0` is the record
-        # that this one was already asked about — without it every re-run pays
-        # again for the same question, and the same negative answer.
-        apply="""
-        CREATE TABLE IF NOT EXISTS reading_phrases (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            article_id  INTEGER NOT NULL REFERENCES reading_articles(id) ON DELETE CASCADE,
-            sentence_id INTEGER NOT NULL REFERENCES reading_sentences(id) ON DELETE CASCADE,
-
-            -- The dictionary form, e.g. "account for". This is what marks and
-            -- study state key on: a phrase is a headword in its own right, so
-            -- marking `account for` never touches what is recorded about
-            -- `account` — that separation is the whole point.
-            phrase      TEXT    NOT NULL,
-
-            -- Token span. `start_seq`..`end_seq` are article-level token
-            -- positions, so the client can join the words visually and either
-            -- half can be tapped to open the phrase.
-            start_seq   INTEGER NOT NULL,
-            end_seq     INTEGER NOT NULL,
-            surface     TEXT    NOT NULL,
-
-            -- NULL not judged yet, 1 a phrase here, 0 adjacent words only.
-            verdict     INTEGER,
-            judged_at   TEXT,
-            created_at  TEXT    NOT NULL,
-            UNIQUE (article_id, start_seq, phrase)
-        );
-        CREATE INDEX IF NOT EXISTS idx_phrases_article
-            ON reading_phrases (article_id, verdict);
-        CREATE INDEX IF NOT EXISTS idx_phrases_pending
-            ON reading_phrases (verdict, article_id);
-        CREATE INDEX IF NOT EXISTS idx_phrases_phrase ON reading_phrases (phrase);
-        """,
-    ),
 ]

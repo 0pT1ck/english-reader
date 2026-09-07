@@ -22,10 +22,9 @@ from pydantic import BaseModel, Field
 
 from backend.admin.templating import render, require_page_auth
 from backend.core import auth, runtime_config
-from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import annotate, difficulty, ingest, phrases, repository, service
+from backend.modules.reading import annotate, difficulty, ingest, repository, service
 
 log = get_logger("reading.routes")
 
@@ -200,33 +199,6 @@ async def admin_recount_exam_frequency() -> dict[str, Any]:
     running this again gives the right answer rather than double counting.
     """
     return repository.recount_exam_frequency()
-
-
-@admin_router.post("/reading/phrases/scan", summary="扫描并判断词组")
-async def admin_scan_phrases(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Find phrase candidates in every ready article, then queue the judgement.
-
-    The finding half is structural and free — it reads tokens that are already
-    stored, so retrofitting the whole corpus never touches the expensive sense
-    annotation. Only the candidates go to a model.
-    """
-    ids = (payload or {}).get("article_ids")
-    if not ids:
-        ids = [r["id"] for r in repository.list_articles(shelf="all", limit=10000)]
-    return phrases.scan_and_judge([int(i) for i in ids])
-
-
-@admin_router.get("/reading/phrases", summary="词组识别概览")
-async def admin_phrases(limit: int = Query(40, ge=1, le=500)) -> dict[str, Any]:
-    rows = get_connection("learning").execute(
-        "SELECT phrase, verdict, COUNT(*) AS n FROM reading_phrases"
-        " GROUP BY phrase, verdict ORDER BY n DESC LIMIT ?", (limit * 2,)
-    ).fetchall()
-    return {
-        "stats": phrases.stats(),
-        "confirmed": [dict(r) for r in rows if r["verdict"] == 1][:limit],
-        "rejected": [dict(r) for r in rows if r["verdict"] == 0][:limit],
-    }
 
 
 @admin_router.get("/reading/missing-senses", summary="标注时没有贴合义项的词")

@@ -66,43 +66,6 @@ MIGRATIONS = [
         """,
     ),
     Migration(
-        version=4,
-        name="multi-word entries",
-        database="dictionary",
-        # Kept apart from `words` on purpose. The import deliberately dropped
-        # every multi-word entry ("Multi-word entries are phrases, not
-        # headwords"), which was right while phrases were out of scope — but it
-        # threw away 366,502 rows that already carry Chinese glosses for
-        # `get up`, `account for`, `look after` and the rest.
-        #
-        # Bringing them back as their own table rather than into `words` keeps
-        # the 404,011 single-word entries exactly as they are: every lookup on
-        # the reading path goes through `words`, and doubling that table to make
-        # phrases reachable would slow the common case to serve the rare one.
-        #
-        # No quality signal exists here — 318k of these are 2-to-4-word
-        # sequences and only six carry a syllabus tag, frequency is zero
-        # throughout. This table answers "does this combination have a
-        # dictionary entry", nothing more. Deciding which combinations are
-        # *phrases* is done per occurrence, in context, by the annotator.
-        apply="""
-        CREATE TABLE IF NOT EXISTS phrases (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            phrase      TEXT    NOT NULL UNIQUE,
-            -- Number of words, so the matcher can try longest-first.
-            word_count  INTEGER NOT NULL,
-            -- First word, for the index the matcher actually uses: candidates
-            -- are found by looking up the verb's lemma, not the whole string.
-            head        TEXT    NOT NULL,
-            translation TEXT,
-            definition  TEXT,
-            collins     INTEGER,
-            oxford      INTEGER
-        );
-        CREATE INDEX IF NOT EXISTS idx_phrases_head ON phrases (head, word_count);
-        """,
-    ),
-    Migration(
         version=3,
         name="move senses and word families out of the dictionary",
         database="dictionary",

@@ -26,7 +26,6 @@
   .prose .w.derived { border-bottom: 2px dotted var(--good); }
   .prose .w.beyond { border-bottom: 2px dashed var(--ink-soft); color: var(--ink-mid); }
   .prose .w.proper { color: var(--ink-soft); }
-  .prose .w.phrase { background: var(--good-soft); border-bottom: 2px solid var(--good); }
   .prose .w.m-unknown { background: var(--bad-soft); }
   .prose .w.m-fuzzy { background: var(--warn-soft); }
   .prose .w.on { outline: 2px solid var(--accent); }
@@ -79,7 +78,6 @@
         <span style="border-bottom:2px solid var(--accent)">目标词</span>
         <span style="border-bottom:2px dotted var(--good)">派生词</span>
         <span style="border-bottom:2px dashed var(--ink-soft)">超纲词</span>
-        <span style="background:var(--good-soft);border-bottom:2px solid var(--good)">词组</span>
         <span class="queue" id="queue">队列 0</span>
       </span>
     </div>
@@ -101,7 +99,6 @@ const QUEUE_KEY = 'er.reading.queue';
 
 let current = null;      // the loaded article payload
 let tokenBySeq = {};
-let phraseBySeq = {};    // token position -> the phrase it belongs to
 let selected = null;
 
 // --- the client API, spoken exactly as a real client would speak it --------- //
@@ -188,16 +185,11 @@ function pendingMarks() {
   return map;
 }
 
-// A phrase is its own headword, so the same local-queue lookup serves it.
-function markOfPhrase(phrase) { return markOf(phrase, 0); }
-
 function markOf(headword, senseId) {
   const local = pendingMarks()[headword + '|' + (senseId || 0)];
   if (local) return local;
   const entry = current && current.glossary[headword];
-  if (entry) return entry.marks[String(senseId || 0)] || null;
-  const ph = current && (current.phrases || []).find(x => x.phrase === headword);
-  return ph ? (ph.mark || null) : null;
+  return entry ? (entry.marks[String(senseId || 0)] || null) : null;
 }
 
 // --- library --------------------------------------------------------------- //
@@ -256,12 +248,6 @@ async function openArticle(id) {
   current = data;
   tokenBySeq = {};
   for (const t of data.tokens) tokenBySeq[t.seq] = t;
-  // Every token position inside a phrase points at that phrase, so tapping
-  // either half opens the same panel.
-  phraseBySeq = {};
-  for (const ph of (data.phrases || [])) {
-    for (let q = ph.start_seq; q <= ph.end_seq; q++) phraseBySeq[q] = ph;
-  }
 
   document.getElementById('picker').hidden = true;
   document.getElementById('reader').hidden = false;
@@ -280,14 +266,6 @@ async function openArticle(id) {
 
 function classesFor(t) {
   const cls = ['w'];
-  // A phrase wins over every other branch: if the word under the finger is
-  // half of `account for`, that is the first thing worth saying about it.
-  if (phraseBySeq[t.seq]) {
-    cls.push('phrase');
-    const m = markOfPhrase(phraseBySeq[t.seq].phrase);
-    if (m) cls.push('m-' + m);
-    return cls.join(' ');
-  }
   if (t.kind === 'proper') cls.push('proper');
   else if (t.beyond && current.article.mark_beyond) cls.push('beyond');
   else if (t.is_target) cls.push('target');
@@ -336,9 +314,6 @@ function showPanel(seq) {
   document.querySelectorAll('.prose .w.on').forEach(e => e.classList.remove('on'));
   const el = document.querySelector('.prose .w[data-seq="' + seq + '"]');
   if (el) el.classList.add('on');
-
-  const ph = phraseBySeq[seq];
-  if (ph) return showPhrase(ph);
 
   const g = t.headword ? current.glossary[t.headword] : null;
   const caps = current.capabilities;
@@ -459,92 +434,6 @@ function showPanel(seq) {
   }
 
   paint(html, t);
-}
-
-// Tapping half of a phrase must not show the half. `account` alone reads
-// 账目／账户 while the sentence says `account for` — that gloss is wrong, not
-// merely unhelpful, and wrong input is what this whole project exists to avoid.
-function showPhrase(ph) {
-  let html = '<h3 style="margin:0 0 0.2rem">' + escapeHtml(ph.surface) + '</h3>' +
-             '<p class="muted mono" style="margin:0 0 0.5rem">词组 ' +
-             escapeHtml(ph.phrase) + '</p>';
-  html += '<div class="layer"><h4>这里是一个词组</h4>' +
-          '<div class="zh">' + escapeHtml(ph.translation || '（词典里没有中文释义）') + '</div>';
-  if (ph.definition) {
-    html += '<div class="en">' + escapeHtml(ph.definition.split('\n')[0]) + '</div>';
-  }
-  html += '<div class="pile">整体的意思跟拆开来看不一样，所以按词组记，不按单词记。</div></div>';
-
-  const mark = markOfPhrase(ph.phrase);
-  html += '<div class="row" style="margin-top:0.9rem">' +
-    '<button class="' + (mark === 'unknown' ? 'primary' : '') + '"' +
-    ' onclick="markPhrase(&quot;unknown&quot;)">不认识</button>' +
-    '<button class="' + (mark === 'fuzzy' ? 'primary' : '') + '"' +
-    ' onclick="markPhrase(&quot;fuzzy&quot;)">模糊</button>' +
-    (mark ? '<button onclick="unmarkPhrase()">撤销</button>' : '') + '</div>';
-
-  // The follow-up. Not knowing `account for` says nothing about whether you
-  // know `account`; letting the phrase mark stand in for both would drop a word
-  // you understand perfectly well into the review queue.
-  if (mark) {
-    const head = tokenBySeq[ph.start_seq];
-    const g = head && head.headword ? current.glossary[head.headword] : null;
-    if (g && (g.senses || []).length) {
-      html += '<div class="layer" style="margin-top:0.6rem"><h4>那 ' +
-              escapeHtml(g.headword) + ' 本身呢？</h4>' +
-              '<div class="pile">词组不认识，不代表这个词不认识。' +
-              '哪个义项不会就点哪个，都会就不用点。</div>';
-      html += g.senses.map(function (sn) {
-        const m = markOf(g.headword, sn.id);
-        return '<div class="row" style="margin-top:0.35rem">' +
-          '<button style="font-size:0.78rem;padding:0.2rem 0.5rem"' +
-          ' class="' + (m === 'unknown' ? 'primary' : '') + '"' +
-          ' onclick="markSense(&quot;' + g.headword + '&quot;,' + sn.id + ')">' +
-          (m === 'unknown' ? '已标' : '不认识') + '</button>' +
-          '<span class="pile">' + escapeHtml((sn.gloss_zh || []).join('／')) + '</span></div>';
-      }).join('');
-      html += '</div>';
-    }
-  }
-
-  document.getElementById('panel').innerHTML = html;
-  emit('word.tapped', { article_id: current.article.id, headword: ph.phrase,
-                        sense_id: 0, token_id: ph.start_seq });
-}
-
-function markPhrase(kind) {
-  const ph = phraseBySeq[selected];
-  if (!ph) return;
-  emit('word.marked', { article_id: current.article.id, headword: ph.phrase,
-                        sense_id: 0, kind: kind, token_id: ph.start_seq });
-  ph.mark = kind;
-  render();
-  showPanel(selected);
-}
-
-function unmarkPhrase() {
-  const ph = phraseBySeq[selected];
-  if (!ph) return;
-  emit('word.unmarked', { article_id: current.article.id, headword: ph.phrase,
-                          sense_id: 0 });
-  ph.mark = null;
-  render();
-  showPanel(selected);
-}
-
-function markSense(headword, senseId) {
-  const existing = markOf(headword, senseId);
-  emit(existing ? 'word.unmarked' : 'word.marked', {
-    article_id: current.article.id, headword: headword,
-    sense_id: senseId, kind: 'unknown',
-  });
-  const g = current.glossary[headword];
-  if (g) {
-    if (existing) delete g.marks[String(senseId)];
-    else g.marks[String(senseId)] = 'unknown';
-  }
-  refreshWord(headword);
-  showPanel(selected);
 }
 
 function paint(html, t) {

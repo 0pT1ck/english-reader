@@ -1134,8 +1134,8 @@
         <span><b>产出型词汇训练</b>——拼写、造句、写作练习。<span>目标是读到能认出（被动词汇）。要求会用，每个词的成本至少翻倍，周期也翻倍，且会把体验拉回「背单词」。</span></span>
       </div>
       <div class="ex">
-        <span class="ex-tag">P2</span>
-        <span><b>短语动词与固定搭配</b>——<span class="g" data-def="put up with / come across / account for 这类，CET 的高频考点，但词条级的模型完全看不见它们。">put up with</span> 这类。<span>原为「缓做」，2026-09-07 <b>并入 P2</b>：点 <code>account</code> 却不知道这里是 <code>account for</code>，是<b>点词查词的缺陷</b>，而点词查词就是 P2 的核心交付。P2 的语境标注实测撞上了它——模型遇到 <code>get up</code>、<code>known as</code> 时单词义项没一条贴得上，只能跳过，每篇约 7 处。<b>不需要词组清单</b>：不认识就标，跟单词一样。</span></span>
+        <span class="ex-tag">缓做</span>
+        <span><b>短语动词与固定搭配</b>——<span class="g" data-def="put up with / come across / account for 这类，CET 的高频考点，但词条级的模型完全看不见它们。">put up with</span> 这类。<span>CET 重灾区。2026-09-07 讨论过一轮并有结论——<b>不需要「值得学的词组」清单</b>（不认识就标，跟单词一样），识别的两步做法也实测过，但方案未谈完，<b>尚未实施</b>。讨论结论记在 Phase 2 文档。</span></span>
       </div>
       <div class="ex">
         <span class="ex-tag">缓做</span>
@@ -1189,7 +1189,7 @@
             <td>文章入库（句子与逐词分析落表）+ 客户端接口 + Web 阅读页：读文章、点词查词、标记生词、遇见记录落库。<b>真题直读</b>（列表选读）在此接入——它是现成内容，正好当 P2 的素材。
             自 P1 顺延两项：<b>语境释义标注</b>（点词查词第一层的直接依赖）与<b>真题难度画像</b>（列表排序要用）。
             <b>不做今日包</b>——它要求服务端决定今天读什么，而选文与水平估计都在 P3；P2 全部走列表自选，<code>/today</code> 是新增接口，将来补上不违反只增不减。
-            新增一档词状态<b>「模糊」</b>（现在懂了但未必记得住），只记录不调度。<b>方案见 <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a></b><br><b>词组也在 P2 内</b>（2026-09-07 并入，原打算单列 P2y）——短语动词与固定搭配的识别、释义与标记。理由：<b>点 account 却不知道这里是 account for，是点词查词的缺陷，而点词查词就是 P2 的核心</b>。不需要词组清单：不认识就标，跟单词一样</td>
+            新增一档词状态<b>「模糊」</b>（现在懂了但未必记得住），只记录不调度。<b>方案见 <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a></b></td>
             <td>电脑上真读完一篇，事件完整回传。<b>手机端归 P7</b>：Web 阅读页按铁律 8 只是开发期测试工具，不做移动端适配</td>
           </tr>
           <tr>
