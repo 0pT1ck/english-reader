@@ -1002,38 +1002,151 @@ retreat  ← treat + re-     同上</pre>
     <p>保留下来的是文章列表上的「目标词」一列，含义相应地窄了：它说的是
     <b>这篇为教哪些词而写</b>（生成文 25、真题 0），不是「读完会记几个」。</p>
 
-    <h3>词组：讨论过，没有实施</h3>
-    <p class="callout"><b>这一节记的是讨论结论，不是已经做出来的东西。</b>
-    2026-09-07 曾把它实现了一版并提交，随后按要求整体撤回——方案没有经过充分讨论就动了手，
-    违反了「方案必须达成一致才能定案、讨论期间不写实现代码」。撤回保留了讨论成果，
-    下次动手前要先把方案谈完。</p>
-    <p><b>问题</b>：语境标注跑完真题后，漏义项报告里冒出 <code>get up</code>、<code>known as</code>、
-    <code>at least</code>——模型遇到它们时单词义项没一条贴得上，只能跳过。<b>每篇约 7 处</b>。
-    点 <code>account</code> 却不知道这句里是 <code>account for</code>，是点词查词的缺陷。</p>
-    <p><b>已达成的结论：</b></p>
-    <div class="nots">
-      <div class="not"><i>1</i><span><b>不建「哪些词组值得学」的清单。</b>
-        原打算对标义项集建一份，那是花了两个阶段、中间还推倒重来过一次的活儿。
-        一句话砍掉了它：「不认识词组的话，也没必要管他是不是考纲里的吧？」——
-        这正是同一天立的规则：<b>进复习队列只由你的标记决定</b>。
-        「31.8 万条词组里只有 6 条带考纲标签」是策展的难题，而我们不策展。</span></div>
-      <div class="not"><i>2</i><span><b>释义是现成的。</b>ECDICT 源文件里有 36 万条多词条目，
-        <code>get up</code>、<code>account for</code> 全带中文。P0 导入时一句
-        <code>" " in headword</code> 主动滤掉了。</span></div>
-      <div class="not"><i>3</i><span><b>识别分两步，实测有效。</b>
-        结构性（动词 + 小品词，且词典里有这个组合，不花钱，挡掉 <code>to be</code>
-        <code>the world</code> 这类噪音，每篇从 43 处降到 6.8 处）
-        + 逐处封闭判断（「在这句里是不是一个整体」，判据是<b>透明度不是价值</b>：
-        整体意思能不能从组成词看出来）。三组对照实测：真词组 10/10、字面 8–9/10、
-        噪音 8–9/10，而那几个「错」里有两个是测试标错了。</span></div>
-      <div class="not"><i>4</i><span><b>标记词组之后要追问组成词。</b>
-        「account for 肯定得认识 account……不能因为这个词组影响了对 account 的判断。」
-        不认识词组不代表不认识 <code>account</code>——让词组的标记替这个词背锅，
-        会把一个完全掌握的词塞进复习队列。</span></div>
+    <h3>词组 —— 方案（2026-09-07 定案，尚未实施）</h3>
+    <p class="callout"><b>这一节是定案的方案，代码还没写。</b>
+    先前曾未经充分讨论就实现并提交，随后整体撤回——违反了「方案必须达成一致才能定案、
+    讨论期间不写实现代码」。这一版是逐条谈完的结果。</p>
+
+    <p><b>问题</b>：点 <code>account</code>，看到「账目／账户」，而这句话是
+    <code>renewable sources account for a third of supply</code>。
+    <b>那个释义不是没帮助，是错的</b>——而错的输入正是这个项目要避免的东西。
+    语境标注跑完 452 篇真题后，漏义项报告里冒出 <code>get up</code>、<code>known as</code>、
+    <code>at least</code>：模型遇到它们时单个词的义项没有一条贴得上，只能跳过。
+    <b>每篇约 7 处，读得越多丢得越多。</b></p>
+    <p>它不卡 P3——初始词汇量测试、水平估计、按水平选文都是按单词算的。
+    <b>先做的理由是欠账在涨</b>，不是有技术依赖。这个区别值得写下来，免得以后有人以为有。</p>
+
+    <h4>一、不做什么：不建「哪些词组值得学」的清单</h4>
+    <p>原本打算对标义项集建一份清单——那是花了 P1b + P1c 两个阶段、中途还推倒重来过一次的活儿。
+    一句话砍掉了它：<b>「如果我不认识词组的话，感觉也没必要管他是不是考纲里的吧？」</b></p>
+    <p>对，而且这与同日立下的规则同源：<b>进复习队列只由你的标记决定，系统不替你判断你会不会。</b>
+    「ECDICT 的 31.8 万条词组里只有 6 条带考纲标签、词频全是 0」这个难题，
+    <b>是策展的难题——而我们不策展</b>。剩下的只有三件小事：识别、释义、能被标记。</p>
+
+    <h4>二、识别：两步，因为这是两个不同的问题</h4>
+<pre>① <b>结构性</b>（不调模型）：动词 + 小品词/介词，且这个组合在词典里有条目
+     用词性排除不定式的 to（spaCy 把它标 PART、介词标 ADP）
+     └ 这一步就把噪音挡住了：<b>to be、the world、there is 都不以动词开头</b>
+       只匹配词典每篇命中 43 处，前几名是 to be 69 次、have been 57 次
+       加上这个过滤：<b>每篇 6.8 处</b>
+
+② <b>语境性</b>（逐处问模型）：在这句话里，它是不是一个整体？
+     He ran into an old friend.  → 遇见，看不出来 → 是
+     He ran into the room.       → 跑进，看得出来 → 不是</pre>
+    <p><b>判据是透明度，不是价值</b>：整体的意思能不能从组成词直接看出来？
+    <code>walk to the station</code> 能，<code>account for</code> 不能。
+    这与义项那次问「属不属于通用书面英语」而不是「值不值得学」是同一个道理——
+    <b>问客观属性，不问价值判断</b>。</p>
+    <p>问法用的是<b>封闭判断</b>，不是开放式找错。同期的对照实验证明这个区别是决定性的：
+    让模型「找出文章里不地道的搭配」，它给考试委员会审定的真题判出均值 5.1 个「问题」；
+    换成逐句问「这句母语者会这么说吗」，在种下已知错误的测试里召回 100%、误报 0%。</p>
+    <p><b>三组对照实测</b>（同一批句子，隐去来源打乱后判断）：</p>
+<pre>真词组（account for、run into 遇见义…）   10/10 正确
+字面用法（ran into the room、walk to…）    8–9/10
+词典噪音（to be、the world、such as…）      8–9/10
+（那几个「错」里有两个是测试标错了：give up one's seat 和 turn out the light 真是词组）</pre>
+
+    <h4>三、数据怎么存 —— 四条决定</h4>
+
+    <p><b>1. 学习记录：一张表，加类型列。</b>现在的 <code>word_marks</code> 与
+    <code>sense_states</code> 改名为 <code>study_marks</code> 与 <code>study_states</code>，
+    增加 <code>item_type</code>（<code>word</code> / <code>phrase</code>）与
+    <code>item_key</code>（<code>account</code> / <code>account for</code>）：</p>
+<pre>study_marks
+  item_type  item_key        sense_id  kind
+  word       account         6669      unknown
+  phrase     account for     0         unknown</pre>
+    <p><b>为什么合并而不是分表</b>：复习调度要回答「今天该复习什么」，答案里单词和词组是
+    <b>混在一起的一个列表</b>。分成两张表，P5 的调度算法就要读两次再合并——
+    而那是这个项目最核心的算法，写两遍就是两份会各自跑偏的代码。</p>
+    <p><b>为什么现在改名</b>：一张叫「单词标记」的表里装词组，是名字在说谎。
+    而且 <code>word_marks</code> 现在只有 6 行、<code>sense_states</code> 6 行——
+    <b>迁移几乎免费，而这是唯一一次免费的机会</b>。等读半年、几千行、P5 的调度长在上面，就不是了。</p>
+    <p>数据库层面加约束，不靠自觉：<code>item_type</code> 只允许两个值（写错直接报错），
+    <code>(learner_id, item_type, item_key, sense_id)</code> 唯一。
+    <b>剩下一处不干净</b>：<code>sense_id</code> 对词组没有意义，永远填 0。
+    这是「一列只有某些类型用得上」，属于正常形态，再拆就过头了。</p>
+
+    <p><b>2. 已有的 95058 条标注：不重标，但把落在词组里的 token 标出来。</b>
+    标注器扫全语料时还不知道有词组，碰到 <code>account for</code> 只能在
+    <code>account</code> 的四个义项里挑一个。<b>约 2181 处词组、4300 个 token，占 4.5%。</b></p>
+    <p>后果是<b>真题考频被污染</b>：「<code>account</code> 的『占／构成』出现 22 次」里，
+    混着一部分其实是 <code>account for</code> 的出现——那不是这个单词的义项在被考。</p>
+    <p class="callout"><b>换词典不会洗掉它。</b>§F4 定的换法是「保留旧表、做义项级映射」，
+    而<b>映射是照着旧标注搬的，它保留错误</b>。只有重标才会修，而重标正是为省钱不做的那条路
+    （13 倍差价）。所以「等换词典时一起解决」这个指望是落空的。</p>
+    <p>做法：<b>不作为独立任务，作为词组识别的顺带产物</b>——识别本来就要算出哪些 token 在词组里，
+    顺手打个标记，考频重算一次（一条 SQL，几秒）。<b>额外成本接近零</b>，
+    而且顺带把漏义项报告洗干净：<code>get up</code>、<code>at least</code> 这些永远补不上的词组
+    会从报告里消失，剩下的才是真缺口。</p>
+
+    <p><b>3. 词典数据：词组单独一张 <code>phrases</code> 表。</b>
+    ECDICT 源文件里有 36 万条多词条目、带中文释义，P0 导入时一句
+    <code>" " in headword</code> 全跳过了（注释写着「词组是明确顺延的」）。取其中
+    2–4 个纯字母词的，约 318,207 条。</p>
+    <p><b>为什么这里分表、上一条却合表</b>——判据是同一条：<b>有没有查询需要同时看两种类型？</b>
+    复习调度要混着排序，所以合；而查词典时你要么在查一个单词、要么在查一个词组，
+    <b>没有任何操作需要「不分类型取全部条目」</b>，所以分。附带好处是主表
+    <code>words</code> 不从 40 万涨到 72 万——它是点词查词的主路径，每篇文章要查上百次。</p>
+    <p><b>导入脚本</b>：<code>import_dictionary.py</code> 默认导两张表，加
+    <code>--phrases-only</code> 可只更新词组。<b>不做成两个脚本</b>：
+    <code>dictionary.db</code> 在设计上是「可整个删掉、跑脚本就回来」，
+    重建要记得跑两个脚本的话那句话就是假的，而且漏了不报错——词组表空着，
+    点词时就是不显示，没人知道为什么。</p>
+
+    <p><b>4. 客户端：契约下发跨度，Web 端不在正文里标。</b>
+    接口随文章下发每处词组的 token 跨度与释义；<b>怎么显示是客户端自己的事</b>。
+    Web 阅读页取最省的一种——<b>正文什么都不加，点任一半都打开词组面板</b>。</p>
+    <p>理由是铁律 8：Web 页是开发期测试工具，UI 力气留给 P7 的原生端，那边会有自己的呈现。
+    而且正文已经有四种标记（目标词实线、派生词点线、超纲词虚线、标记过的底色），
+    <b>下划线和底色两个通道都占满了</b>，再加一种只会更花。
+    先前那版给词组加底色并盖掉了原有标记，实测让 28 个超纲词、34 个派生词丢了标记——
+    <b>这正是不该由 Web 端的临时选择去牺牲信息的例子</b>。</p>
+
+    <h4>四、标记词组之后，追问组成词</h4>
+    <blockquote style="margin:0 0 1rem 1.1rem;padding-left:1rem;border-left:2px solid var(--rule)">
+    「<code>account for</code> 肯定得认识 <code>account</code>。假如你标记了
+    <code>account for</code> 不认识的时候，提问你认不认识 <code>account</code>，
+    然后标记认识的义项和不认识的义项。<b>不能因为这个词组影响了对 account 的判断。</b>」</blockquote>
+    <p>所以标了词组之后，面板下面出现「<b>那 <code>account</code> 本身呢？</b>」，
+    把这个词的义项逐条列出来，哪个不会点哪个。<b>不认识词组不代表不认识组成词</b>——
+    很可能你清楚 <code>account</code> 是「账户」，只是不知道 <code>account for</code>
+    是「占…比例」。让词组的标记替这个词背锅，会把一个你完全掌握的词塞进复习队列。</p>
+    <p>这是 D1 抽查的微缩版：<b>在信息量最大的那一刻问一句</b>，成本只是多点一下。</p>
+
+    <h4>五、实施顺序</h4>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>改表：<code>study_marks</code> / <code>study_states</code></b>
+        <span>迁移 12 行数据，改七八处读写点。先做这一步，因为它最便宜的时刻就是现在。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>导入词典的词组表</b>
+        <span>改 <code>import_dictionary.py</code>，加 <code>--phrases-only</code>。约 318,207 条。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>结构性扫描</b>
+        <span>在已存的 token 上跑，不调模型。453 篇预计约 3000 处候选。</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what"><b>逐处判断</b>
+        <span>批次任务，约 150 次调用。用快模型——这是数据整理，不是写作。</span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what"><b>顺带清账</b>
+        <span>落在词组里的 token 打标记，考频重算。</span></span></div>
+      <div class="step"><span class="step-n">6</span><span class="step-what"><b>契约与阅读页</b>
+        <span>词组随文章下发；Web 端点任一半开面板，标记后追问组成词。</span></span></div>
     </div>
-    <p><b>还没谈的（下次动手前必须先定）：</b>数据怎么存（词组在标记表里怎么跟单词区分）、
-    已有的 95058 条标注要不要动、词典怎么导入（单独一张表还是并进 <code>words</code>）、
-    阅读页怎么显示（词组标记会不会盖掉目标词／派生词／超纲词的标记）。</p>
+
+    <h4>六、验收</h4>
+    <div class="checks">
+      <div class="check"><span class="check-n">01</span><span class="check-what"><b>词典噪音没有进候选</b>
+        <span><code>to be</code>、<code>the world</code>、<code>there is</code> 一处都不在</span></span></div>
+      <div class="check"><span class="check-n">02</span><span class="check-what"><b>判断是按上下文做的，不是按字符串</b>
+        <span>同一个序列在不同句子里得到不同判定——<code>look at</code> 这类应该两种都有。
+        全都一样就说明模型在匹配字符串，句子没起作用</span></span></div>
+      <div class="check"><span class="check-n">03</span><span class="check-what"><b>标记词组不动组成词的任何记录</b>
+        <span>标 <code>account for</code> 之后，<code>account</code> 的义项状态一行不变</span></span></div>
+      <div class="check"><span class="check-n">04</span><span class="check-what"><b>点任一半都打开词组面板</b>
+        <span>点 <code>account</code> 不再显示「账目／账户」</span></span></div>
+      <div class="check"><span class="check-n">05</span><span class="check-what"><b>追问出现，且逐义项可单独标</b></span></div>
+      <div class="check"><span class="check-n">06</span><span class="check-what"><b>考频清账后，漏义项报告里不再有词组</b>
+        <span><code>get up</code>、<code>at least</code> 应该消失，剩下的是真缺口</span></span></div>
+      <div class="check"><span class="check-n">07</span><span class="check-what"><b>迁移后旧记录一条不丢</b>
+        <span>改表前后 <code>study_marks</code> 的行数与内容一致</span></span></div>
+    </div>
 
     <h3>待你定夺（回来再说，没有动手）</h3>
     <div class="opens">
