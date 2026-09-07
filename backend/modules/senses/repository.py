@@ -33,6 +33,19 @@ def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = ""
     holds a reference repairs itself; without that announcement, topping up one
     word's senses silently orphans every annotation of it, with no error and no
     log (architecture rule 6: new features subscribe, they do not edit this).
+
+    **This path is for topping up one word. It is the wrong path for replacing
+    the whole inventory**, which is planned — these sense sets are model-written
+    and will be rebuilt from a real lexicographic source. Called in a loop over
+    every headword, the subscriber would reset all 95,058 contextual
+    annotations, discarding the 4.6M input tokens the corpus pass cost, silently
+    and in the time it takes to click a button.
+
+    A replacement should instead keep the old rows (``senses_p1b`` is the
+    precedent) and build an old-sense → new-sense map, one call per headword.
+    That is about 7,200 calls against 95,058 tokens re-annotated — an order of
+    magnitude cheaper — and it carries the exam frequencies across instead of
+    throwing them away. See the main design document, §F4.
     """
     existing = [row["id"] for row in get_connection("content").execute(
         "SELECT id FROM senses WHERE headword = ?", (headword,)

@@ -22,9 +22,10 @@ from pydantic import BaseModel, Field
 
 from backend.admin.templating import render, require_page_auth
 from backend.core import auth, runtime_config
+from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import annotate, difficulty, ingest, repository, service
+from backend.modules.reading import annotate, difficulty, ingest, phrases, repository, service
 
 log = get_logger("reading.routes")
 
@@ -158,23 +159,26 @@ async def admin_ingest_batch(payload: dict[str, Any]) -> dict[str, Any]:
     The same path the lazy per-article ingest uses, run in bulk. This is how the
     remaining 447 papers get done after the annotation format has been checked
     against a few real readings — and doing that unlocks 考频, which is where
-    layer ③ of the gloss and the 熟词僻义 flag come from for free.
+    layer ③ of the gloss comes from for free.
     """
     source = str(payload.get("source") or "")
     limit = int(payload.get("limit") or 10)
     papers = [p for p in ingest.exam_papers(source) if not p["ingested"]][:limit]
 
-    queued = []
+    ingested: list[int] = []
     for paper in papers:
         try:
-            article_id = ingest.ingest_exam_paper(source, paper["ref"])
+            ingested.append(ingest.ingest_exam_paper(source, paper["ref"]))
         except Exception as exc:  # noqa: BLE001 - one bad paper must not stop the batch
             log.warning("paper.ingest.failed", f"{paper['ref']} 入库失败：{exc}",
                         source=source, ref=paper["ref"])
-            continue
-        queued.append({"article_id": article_id, "ref": paper["ref"],
-                       "job_id": annotate.start_for(article_id)})
-    return {"source": source, "queued": len(queued), "articles": queued}
+
+    # One job for the whole lot, not one per paper: the batch machinery — pause,
+    # resume, spend cap, recovery from an interrupted run — only applies within
+    # a job, and the rate limiter schedules the calls better than a loop can.
+    job_id = annotate.start_for_many(ingested, title=f"批量标注 {source} {len(ingested)} 篇")
+    return {"source": source, "queued": len(ingested), "job_id": job_id,
+            "article_ids": ingested}
 
 
 @admin_router.post("/reading/ingest/draft/{draft_id}", summary="把生成草稿入库")
@@ -186,6 +190,43 @@ async def admin_ingest_draft(draft_id: int) -> dict[str, Any]:
 @admin_router.post("/reading/articles/{article_id}/annotate", summary="重跑语境标注")
 async def admin_reannotate(article_id: int) -> dict[str, Any]:
     return {"job_id": annotate.start_for(article_id, retry_declined=True)}
+
+
+@admin_router.post("/reading/exam-frequency", summary="按真题标注重算考频")
+async def admin_recount_exam_frequency() -> dict[str, Any]:
+    """Turn the annotated exam corpus into per-sense exam counts.
+
+    Re-runnable: it zeroes the columns first, so annotating more papers and
+    running this again gives the right answer rather than double counting.
+    """
+    return repository.recount_exam_frequency()
+
+
+@admin_router.post("/reading/phrases/scan", summary="扫描并判断词组")
+async def admin_scan_phrases(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Find phrase candidates in every ready article, then queue the judgement.
+
+    The finding half is structural and free — it reads tokens that are already
+    stored, so retrofitting the whole corpus never touches the expensive sense
+    annotation. Only the candidates go to a model.
+    """
+    ids = (payload or {}).get("article_ids")
+    if not ids:
+        ids = [r["id"] for r in repository.list_articles(shelf="all", limit=10000)]
+    return phrases.scan_and_judge([int(i) for i in ids])
+
+
+@admin_router.get("/reading/phrases", summary="词组识别概览")
+async def admin_phrases(limit: int = Query(40, ge=1, le=500)) -> dict[str, Any]:
+    rows = get_connection("learning").execute(
+        "SELECT phrase, verdict, COUNT(*) AS n FROM reading_phrases"
+        " GROUP BY phrase, verdict ORDER BY n DESC LIMIT ?", (limit * 2,)
+    ).fetchall()
+    return {
+        "stats": phrases.stats(),
+        "confirmed": [dict(r) for r in rows if r["verdict"] == 1][:limit],
+        "rejected": [dict(r) for r in rows if r["verdict"] == 0][:limit],
+    }
 
 
 @admin_router.get("/reading/missing-senses", summary="标注时没有贴合义项的词")

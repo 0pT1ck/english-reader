@@ -23,7 +23,7 @@ from backend.core import auth, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import difficulty, ingest, repository
+from backend.modules.reading import difficulty, ingest, phrases, repository
 from backend.modules.senses import repository as senses
 from backend.modules.vocabulary import repository as dictionary
 
@@ -135,6 +135,7 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
     for headword in sorted(headwords):
         entry = dictionary.lookup(headword)
         sense_list = senses.senses_of(headword)
+        exam_total = sum(s.get("exam_frequency") or 0 for s in sense_list)
         # Same eligibility rule the ingest pass used, so what the reader sees
         # and what was stored on the token can never disagree.
         family = ingest.derivation_for(headword)
@@ -159,10 +160,29 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                     "gloss_zh": s["gloss_zh"],
                     # Layer ③. Absent, not zero, until the exam corpus has been
                     # annotated — see capabilities().
+                    #
+                    # Counts and a share of this word's exam occurrences —
+                    # facts, with no verdict attached. The label this replaced
+                    # (熟词僻义, "a familiar word in an obscure sense") was
+                    # retired on 2026-09-07: `address` means 着手解决 38 times
+                    # against 地址 twice, so that sense is not obscure at all,
+                    # it is the dominant one in written English. Calling it
+                    # obscure takes the learner's first impression as the
+                    # baseline instead of the language. The share says the same
+                    # thing without the judgement, and the reader draws their
+                    # own conclusion.
+                    #
+                    # `is_exam_key` is kept and permanently false rather than
+                    # dropped: architecture rule 5 says fields are not removed,
+                    # and one boolean is a cheap way to keep that rule intact.
                     "exam": (
                         {
                             "frequency": s.get("exam_frequency", 0),
-                            "is_exam_key": bool(s.get("is_exam_key")),
+                            "share": (
+                                round(s.get("exam_frequency", 0) / exam_total * 100, 1)
+                                if exam_total else None
+                            ),
+                            "is_exam_key": False,
                         }
                         if s.get("exam_frequency") else None
                     ),
@@ -196,6 +216,29 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
             },
         }
     return glossary
+
+
+def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
+    """Confirmed phrases in this article, with their glosses and your marks.
+
+    A phrase is its own headword: marking ``account for`` records nothing
+    against ``account``, which is the separation the design insists on — not
+    knowing a phrase says nothing about whether you know the word inside it.
+    """
+    found = phrases.confirmed_for(article_id)
+    marks = repository.marks_for_headwords(
+        learner_id, {p["phrase"] for p in found})
+    states = repository.states_for_headwords(
+        learner_id, {p["phrase"] for p in found})
+    return [
+        {
+            **item,
+            "mark": marks.get((item["phrase"], 0)),
+            "state": (lambda s: {"pool": s["pool"], "encounters": s["encounters"]}
+                      if s else None)(states.get((item["phrase"], 0))),
+        }
+        for item in found
+    ]
 
 
 def article(learner_id: int, article_id: int) -> dict[str, Any]:
@@ -270,6 +313,10 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
             }
             for t in tokens
         ],
+        # Spans where the word under the reader's finger is half of something
+        # else. Sent with the article so tapping either half opens the phrase
+        # without a request, like everything else here.
+        "phrases": _phrase_payload(learner_id, article_id),
         "glossary": _glossary(learner_id, tokens),
         "progress": repository.progress_of(learner_id, article_id),
     }

@@ -202,6 +202,63 @@ def ingested_refs(source: str) -> set[str]:
     return {r["source_ref"] for r in rows}
 
 
+def recount_exam_frequency() -> dict[str, int]:
+    """Count how often each sense actually occurs in the exam corpus.
+
+    The free half of annotating the exam papers. Once every content word in 452
+    past papers carries a sense id, 考频 is a GROUP BY — and with it something
+    the design wanted since day one becomes a number rather than a belief:
+    which meaning of a word the exams actually use. `address` reads 地址 twice
+    against 着手解决 thirty-eight times.
+
+    Lives here rather than in the senses module because the annotation is this
+    module's output and only the ``learning`` connection has both databases
+    attached. The columns were declared by senses in P0 and left at 0 ever
+    since; this is what finally fills them.
+    """
+    conn = get_connection("learning")
+    counts = conn.execute(
+        "SELECT t.sense_id, COUNT(*) AS n FROM reading_tokens t"
+        " JOIN reading_articles a ON a.id = t.article_id"
+        " WHERE a.source != 'generated' AND t.sense_id > 0"
+        " GROUP BY t.sense_id"
+    ).fetchall()
+
+    conn.execute("UPDATE content.senses SET exam_frequency = 0, is_exam_key = 0")
+    conn.executemany(
+        "UPDATE content.senses SET exam_frequency = ? WHERE id = ?",
+        [(int(r["n"]), int(r["sense_id"])) for r in counts],
+    )
+    conn.commit()
+
+    # `is_exam_key` is deliberately left at 0, and the idea behind it — flagging
+    # a "familiar word in an obscure sense" — was dropped on 2026-09-07.
+    #
+    # The label does not survive its own data. `address` means 着手解决 in 38 of
+    # its 41 exam occurrences and 地址 in 2: that sense is not obscure, it is the
+    # dominant one in written English. Calling it obscure takes the learner's
+    # first impression as the baseline instead of the language. And the only
+    # available rule — "a sense the model ranked second or later that still
+    # appears in the exams" — flagged 2629 senses, 19% of all of them, including
+    # `well` 好, `even` 甚至 and `make` 使得, because `ordinal` is a model's
+    # guess at commonness and these sense sets are temporary anyway.
+    #
+    # What replaces it is the count and each sense's share of the word's exam
+    # occurrences: facts, side by side, with the reader drawing the conclusion.
+    # The column stays declared and empty per architecture rule 5.
+    scored = int(conn.execute(
+        "SELECT COUNT(*) FROM content.senses WHERE exam_frequency > 0").fetchone()[0])
+    log.info(
+        "senses.exam_frequency.recounted",
+        f"按 452 篇真题的标注结果算出考频：{scored} 个义项在真题里出现过",
+        scored=scored,
+    )
+    return {"senses_with_frequency": scored, "exam_key_senses": 0,
+            "articles_counted": int(conn.execute(
+                "SELECT COUNT(*) FROM reading_articles WHERE source != 'generated'"
+                " AND status = 'ready'").fetchone()[0])}
+
+
 def scores_by_source() -> dict[str, list[float]]:
     """Composite scores grouped by exam, for the calibration check."""
     rows = get_connection("learning").execute(

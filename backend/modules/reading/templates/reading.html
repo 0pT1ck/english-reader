@@ -61,7 +61,7 @@
   <p class="muted">
     真题是<b>现成的素材</b>，先惰性备几篇把标注格式跑通，确认好用之后再批量补跑剩下的。
     全量标注完还能白拿一层：把标注结果按义项数一遍出现次数，就是四六级考频，
-    序号靠后却被考到的即熟词僻义。
+    第三层释义随之有内容。
   </p>
   <div class="row" style="margin-top:0.8rem">
     <select id="paper-source" style="width:auto" onchange="loadPapers()">
@@ -122,6 +122,24 @@
       {% endfor %}
     </tbody>
   </table>
+</div>
+
+<h2>词组</h2>
+<div class="card">
+  <p class="muted">
+    每篇文章大约 7 处，你点的那个词其实是词组的一半——点 <code>account</code>，
+    而这句里是 <code>account for</code>。<b>不建「值得学的词组」清单</b>：不认识就标，跟单词一样。
+    识别分两步：先按<b>动词 + 小品词、且词典里有这个组合</b>结构性地筛（不花钱，这一步就挡掉了
+    <code>to be</code>、<code>the world</code> 这类噪音），再<b>逐处问模型</b>
+    「在这句话里它是不是一个整体」——同一个序列在不同句子里可以不同，
+    <code>ran into an old friend</code> 是，<code>ran into the room</code> 不是。
+  </p>
+  <div class="row" style="margin-top:0.8rem">
+    <button onclick="scanPhrases()">扫描并判断</button>
+    <button onclick="loadPhrases()">刷新</button>
+    <span id="phrase-count" class="muted"></span>
+  </div>
+  <div id="phrases" style="margin-top:0.9rem"></div>
 </div>
 
 <h2>漏义项报告</h2>
@@ -208,6 +226,32 @@
     } catch (e) { toast(e.message, true); }
   }
 
+  async function scanPhrases() {
+    toast('扫描是结构性的，不花钱；判断在后台跑…');
+    try {
+      const r = await api('/reading/phrases/scan', { method: 'POST' });
+      toast('新候选 ' + r.found + ' 处，待判断 ' + r.waiting +
+            (r.job_id ? '，任务 ' + r.job_id : ''));
+      loadPhrases();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function loadPhrases() {
+    const data = await api('/reading/phrases?limit=25');
+    const st = data.stats;
+    document.getElementById('phrase-count').textContent =
+      '候选 ' + st.candidates + ' 处 · 判为词组 ' + st.confirmed +
+      '（' + st.distinct + ' 个不同）· 否掉 ' + st.rejected + ' · 待判 ' + st.pending;
+    const col = (rows, head) =>
+      '<div><b>' + head + '</b><div class="scroll" style="margin-top:0.4rem"><table><tbody>' +
+      rows.map(r => '<tr><td class="mono">' + r.phrase + '</td>' +
+                    '<td class="mono">' + r.n + '</td></tr>').join('') +
+      '</tbody></table></div></div>';
+    document.getElementById('phrases').innerHTML =
+      '<div class="grid">' + col(data.confirmed, '判为词组') +
+      col(data.rejected, '判为字面用法，不显示') + '</div>';
+  }
+
   async function loadMissing() {
     const data = await api('/reading/missing-senses');
     document.getElementById('missing-count').textContent =
@@ -239,6 +283,7 @@
   }
 
   loadPapers();
+  loadPhrases();
   loadMissing();
   loadEvents();
 </script>

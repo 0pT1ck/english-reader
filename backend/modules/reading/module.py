@@ -30,7 +30,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.reading import annotate, repository, routes
+from backend.modules.reading import annotate, phrases, repository, routes
 from backend.modules.reading.schema import MIGRATIONS
 
 log = get_logger("reading")
@@ -96,6 +96,18 @@ runtime_config.register(
         order=40,
     ),
     runtime_config.ConfigSpec(
+        key="phrase_batch_size",
+        default=20,
+        value_type="int",
+        title="词组判断每批条数",
+        description=(
+            "一次让模型判断多少处「这是不是词组」。每条只是一句话加一个序列，"
+            "比义项标注短得多，所以批次可以大一些。"
+        ),
+        group="reading",
+        order=35,
+    ),
+    runtime_config.ConfigSpec(
         key="library_default_sort",
         default="composite",
         value_type="str",
@@ -132,6 +144,7 @@ runtime_config.register(
 
 def _register_workers() -> None:
     jobs.register_worker(annotate.WORKER)
+    jobs.register_worker(phrases.WORKER)
 
 
 def on_senses_replaced(event: Event) -> None:

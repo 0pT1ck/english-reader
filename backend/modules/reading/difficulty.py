@@ -207,7 +207,7 @@ SORTABLE: dict[str, str] = {
     "beyond_cet6_pct": "超六级词比例",
     "frequency_p90": "词频 90 分位",
     "rare_word_pct": "生僻词比例",
-    "exam_key_pct": "熟词僻义密度",
+    "exam_key_pct": "非首义项占比",
     "word_count": "篇幅",
     "mean_sentence_length": "平均句长",
     "prepared_at": "备稿时间",

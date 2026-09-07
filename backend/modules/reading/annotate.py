@@ -13,8 +13,9 @@ never writes prose. That choice is deliberate:
 generated articles, 98% of distinct content words have a sense set and over 80%
 of them are polysemous. Without annotation, tapping any ordinary-looking word —
 ``account``, ``measure``, ``subject`` — yields the dictionary's comma pile and
-leaves the reader to guess which entry applies. Since 熟词僻义 is what the exam
-actually tests, those are exactly the words worth annotating.
+leaves the reader to guess which entry applies. A common word carrying one of
+its less obvious senses is exactly what the exam tests, so those are exactly the
+words worth annotating.
 
 **Batching is not decoration.** P1c established that a fast model asked to
 produce a long structured list drifts in the second half. Batches are cut at
@@ -54,7 +55,7 @@ INSTRUCTION = """\
 请判断每个词**在它所在的那句话里**用的是哪一个义项。
 
 判断的是这一处的用法，不是这个词最常见的用法。
-四六级阅读大量考查熟词僻义——常见词用在不常见的义项上，
+四六级阅读大量考查的正是常见词用在不那么显眼的义项上，
 所以不要因为某个义项排在前面就选它，要看句子。
 
 如果候选义项里**没有一条贴合这句的用法，就填 0**。
@@ -85,47 +86,78 @@ def _prefill(article_id: int) -> tuple[int, int]:
 
 
 def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    article_id = int(params["article_id"])
-    no_sense, single = _prefill(article_id)
-    log.info(
-        "annotate.prefilled",
-        f"文章 {article_id}：{no_sense} 个词没有义项集，{single} 个词只有一个义项，"
-        "都已直接落库，不用调模型",
-        article_id=article_id, no_sense=no_sense, single=single,
-    )
+    """Batches for one article, or for many.
 
-    remaining = repository.unannotated_tokens(article_id)
-    if not remaining:
-        ingest.finalise_if_annotated(article_id)
-        return []
+    Taking a list matters for the corpus backfill: 376 papers as 376 separate
+    jobs means 376 rounds of start-and-wait, and none of the batch machinery —
+    pause, resume, spend cap, recovery after an interrupted run — applies across
+    them. One job over the lot gets all of that, and the rate limiter schedules
+    the calls rather than a script's sleep loop.
+    """
+    ids = params.get("article_ids")
+    article_ids = [int(i) for i in ids] if ids else [int(params["article_id"])]
 
     size = max(5, int(runtime_config.get("annotate_batch_words")))
     batches: list[tuple[str, dict[str, Any]]] = []
-    current: list[dict[str, Any]] = []
 
-    for position, token in enumerate(remaining):
-        current.append(token)
-        # Cut only between sentences: a word's sense is decided from its
-        # sentence, so a batch ending mid-sentence would hide the context from
-        # the model for the tokens that follow.
-        last = position == len(remaining) - 1
-        at_boundary = last or token["sentence_id"] != remaining[position + 1]["sentence_id"]
-        if len(current) >= size and at_boundary:
+    for article_id in article_ids:
+        no_sense, single = _prefill(article_id)
+        if no_sense or single:
+            log.debug(
+                "annotate.prefilled",
+                f"文章 {article_id}：{no_sense} 个词没有义项集，{single} 个词只有一个义项，"
+                "都已直接落库，不用调模型",
+                article_id=article_id, no_sense=no_sense, single=single,
+            )
+
+        remaining = repository.unannotated_tokens(article_id)
+        if not remaining:
+            ingest.finalise_if_annotated(article_id)
+            continue
+
+        current: list[dict[str, Any]] = []
+        for position, token in enumerate(remaining):
+            current.append(token)
+            # Cut only between sentences: a word's sense is decided from its
+            # sentence, so a batch ending mid-sentence would hide the context
+            # from the model for the tokens that follow.
+            last = position == len(remaining) - 1
+            at_boundary = last or token["sentence_id"] != remaining[position + 1]["sentence_id"]
+            if len(current) >= size and at_boundary:
+                batches.append(_batch(article_id, current))
+                current = []
+        if current:
             batches.append(_batch(article_id, current))
-            current = []
 
-    if current:
-        batches.append(_batch(article_id, current))
     return batches
 
 
 def _batch(article_id: int, tokens: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
     first, last = tokens[0], tokens[-1]
-    key = f"句 {first['sentence_seq'] + 1}–{last['sentence_seq'] + 1}"
+    key = f"文章 {article_id} 句 {first['sentence_seq'] + 1}–{last['sentence_seq'] + 1}"
     return key, {
         "article_id": article_id,
         "token_ids": [int(t["id"]) for t in tokens],
     }
+
+
+def start_for_many(article_ids: list[int], *, title: str | None = None,
+                   provider_id: str | None = None) -> int | None:
+    """One job covering many articles. Returns ``None`` if none need work."""
+    if not article_ids:
+        return None
+    try:
+        job_id = jobs.create(
+            KIND,
+            params={"article_ids": [int(i) for i in article_ids]},
+            provider_id=provider_id,
+            title=title or f"批量标注 {len(article_ids)} 篇",
+        )
+    except Exception as exc:  # noqa: BLE001 - "nothing to annotate" is normal
+        log.info("annotate.nothing_to_do", f"没有需要标注的内容：{exc}")
+        return None
+    jobs.start(job_id)
+    return job_id
 
 
 def _sentences_for(token_ids: list[int]) -> list[dict[str, Any]]:

@@ -1002,6 +1002,70 @@ retreat  ← treat + re-     同上</pre>
     <p>保留下来的是文章列表上的「目标词」一列，含义相应地窄了：它说的是
     <b>这篇为教哪些词而写</b>（生成文 25、真题 0），不是「读完会记几个」。</p>
 
+    <h3>词组：本来要单开一个阶段，被一句话砍掉了大半</h3>
+    <p>语境标注跑完真题之后，漏义项报告里冒出 <code>get up</code>、<code>known as</code>、
+    <code>at least</code>——模型遇到它们时单词义项没一条贴得上，只能跳过。<b>每篇约 7 处</b>，
+    读得越多丢得越多。所以词组从「缓做」提上日程，并入 P2：<b>点 <code>account</code>
+    却不知道这里是 <code>account for</code>，是点词查词的缺陷，而点词查词就是 P2 的核心。</b></p>
+    <p>原本的设计是建一份「哪些词组值得学」的清单，对标义项集——那是花了 P1b + P1c 两个阶段、
+    中间还推倒重来过一次的活儿。<b>一句话砍掉了它：「如果我不认识词组的话，
+    感觉也没必要管他是不是考纲里的吧？」</b></p>
+    <p>对。而且这正是同一天刚立下的规则：<b>进复习队列只由你的标记决定，系统不替你判断你会不会。</b>
+    我却在给词组重新发明一套「系统替你挑」的机制。那个「31.8 万条词组里只有 6 条带考纲标签」的难题，
+    <b>是策展的难题——而我们不需要策展</b>。剩下的只有三件小事：识别、释义、能被标记。</p>
+
+    <h3>释义是白拿的，识别分两步</h3>
+    <p><b>释义</b>：ECDICT 源文件里有 36 万条多词条目，<code>get up</code>、<code>account for</code>
+    全带中文。P0 导入时一句 <code>" " in headword</code> 主动滤掉了（注释写着「词组是明确顺延的」）。
+    放开是改一行——实际做法是<b>单独一张 <code>phrases</code> 表</b>，318,207 条，2.7 秒导完。
+    不混进 <code>words</code>：点词查词的主路径每次都走那张表，为了让词组可查而把它翻倍不划算。</p>
+    <p><b>识别</b>分两步，因为这是两个不同的问题：</p>
+<pre>① 结构性（不花钱）：动词 + 小品词/介词，且这个组合在词典里有条目
+     └ 这一步就挡掉了噪音：<b>to be、the world、there is 都不以动词开头</b>
+       只匹配词典的话每篇命中 43 处，前几名是 to be 69 次、have been 57 次；
+       加上这个过滤是 <b>6.8 处</b>
+
+② 语境性（逐处问模型）：在这句话里，它是不是一个整体？
+     He ran into an old friend.  → 遇见，是
+     He ran into the room.       → 跑进，不是</pre>
+    <p>第二步用的正是当天验证过的那种问法——<b>封闭判断，不是开放式找错</b>。
+    判据是<b>透明度而非价值</b>：整体意思能不能从组成词看出来？
+    <code>walk to the station</code> 能，<code>account for</code> 不能。
+    这跟义项那次问「属不属于通用书面英语」而不是「值不值得学」是同一个道理。</p>
+
+    <h3>不用重跑全语料，这是关键的一笔省钱</h3>
+    <p>结构那一步<b>读的是已经存好的 token</b>，不碰分析、不碰模型。所以给 453 篇存量文章补上词组，
+    代价是 3062 个候选、154 次调用、几分钟——<b>而不是重标 95,058 个 token 的四百六十万输入 token</b>。
+    昂贵的那一遍原封不动。</p>
+
+    <h3>实测结果</h3>
+<pre>3062 处候选（每篇 6.8）
+  判为词组   2181 处 · 751 个不同
+  判为字面    881 处
+  待判          0 处
+
+判为词组：account for · result in · rely on · depend on · contribute to
+          engage in · call for · associate with · point out · lead to
+判为字面：live in · go to · look at · talk about · come from · work in</pre>
+    <p><b>最有说服力的一项：171 个序列在不同句子里得到了不同判定。</b>
+    <code>look at</code> 15 处是词组、25 处是字面；<code>live in</code> 4 对 34；
+    <code>come from</code> 13 对 17。<b>这证明它在读句子，不是在匹配字符串</b>——
+    验收 7.9 就是查这条。</p>
+
+    <h3>标记词组之后追问组成词</h3>
+    <p>这条是讨论中提出来的，比「表怎么分」重要得多：</p>
+    <blockquote style="margin:0 0 1rem 1.1rem;padding-left:1rem;border-left:2px solid var(--rule)">
+    「account for 肯定得认识 account。假如你标记了 account for 不认识的时候，
+    提问你认不认识 account，然后标记认识的义项和不认识的义项。
+    <b>不能因为这个词组影响了对 account 的判断。</b>」</blockquote>
+    <p>所以标了词组之后，面板下面出现「<b>那 account 本身呢？</b>」，把这个词的每个义项列出来，
+    哪个不会点哪个。<b>不认识词组不代表不认识组成词</b>——很可能你清楚 <code>account</code> 是「账户」，
+    只是不知道 <code>account for</code> 是「占…比例」。让词组的标记替这个词背锅，
+    会把一个你完全掌握的词塞进复习队列。</p>
+    <p>存储上：<b>词组以自己的字符串作为 headword</b> 进 <code>word_marks</code> 与
+    <code>sense_states</code>。同一张表——将来复习调度不用写两套——但不同的 headword 天然是不同记录。
+    「分开但不能分太开」，原话如此。</p>
+
     <h3>待你定夺（回来再说，没有动手）</h3>
     <div class="opens">
       <div class="open"><i>?</i><span><b>漏义项报告里的词组要不要分开。</b>报告现在有 5 个词：

@@ -237,6 +237,15 @@ def finalise_if_annotated(article_id: int) -> bool:
     done, total = repository.annotation_progress(article_id)
     if total and done < total:
         return False
+    # Structural only — no model, so it costs nothing and the judgement can be
+    # queued whenever. An article is readable before its phrases are judged;
+    # they simply do not show until they are.
+    try:
+        from backend.modules.reading import phrases
+        phrases.find_candidates(article_id)
+    except Exception:  # noqa: BLE001 - a phrase scan must never block an article
+        log.exception("phrases.scan.failed", f"文章 {article_id} 的词组扫描失败，不影响阅读",
+                      article_id=article_id)
     repository.set_status(article_id, "ready")
     log.info("article.ready", f"文章 {article_id} 已就绪", article_id=article_id)
     events.emit("article.ready", article_id=article_id)
