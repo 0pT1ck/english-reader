@@ -1,0 +1,499 @@
+{% extends "base.html" %}
+{% block title %}阅读页{% endblock %}
+
+{# Development reading tool. Desktop only, deliberately.
+
+   Architecture rule 8: this page is a test instrument, thrown away when P7's
+   native iOS client arrives, and the UI effort belongs there. So: no responsive
+   layout, no touch gestures, no font/leading/width controls (the browser's own
+   zoom already does that), no service worker.
+
+   What it *does* do faithfully is exercise the client contract — it holds a
+   device token and talks to /v1/client like any other client would, rather than
+   borrowing the admin session it is served under. The contract is the thing P2
+   exists to get right, so a page that bypassed it would verify nothing. #}
+
+{% block content %}
+<style>
+  .reader-wrap { display: grid; grid-template-columns: minmax(0, 1fr) 21rem; gap: 1.5rem; align-items: start; }
+  .prose {
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 1.6rem 1.9rem; font-size: 1.05rem; line-height: 2.05; white-space: pre-wrap;
+  }
+  .prose .w { cursor: pointer; border-radius: 2px; padding: 0 1px; }
+  .prose .w:hover { background: var(--accent-soft); }
+  .prose .w.target { border-bottom: 2px solid var(--accent); }
+  .prose .w.derived { border-bottom: 2px dotted var(--good); }
+  .prose .w.beyond { border-bottom: 2px dashed var(--ink-soft); color: var(--ink-mid); }
+  .prose .w.proper { color: var(--ink-soft); }
+  .prose .w.m-unknown { background: var(--bad-soft); }
+  .prose .w.m-fuzzy { background: var(--warn-soft); }
+  .prose .w.on { outline: 2px solid var(--accent); }
+  .panel { position: sticky; top: 1rem; }
+  .layer { border-top: 1px solid var(--rule-soft); padding: 0.65rem 0; }
+  .layer:first-of-type { border-top: none; }
+  .layer h4 { margin: 0 0 0.25rem; font-size: 0.72rem; text-transform: uppercase;
+              letter-spacing: 0.08em; color: var(--ink-soft); font-weight: 500; }
+  .layer .zh { font-size: 1rem; color: var(--ink); }
+  .layer .en { font-size: 0.86rem; color: var(--ink-mid); font-style: italic; }
+  .layer .pile { font-size: 0.84rem; color: var(--ink-mid); }
+  .todo { font-size: 0.78rem; color: var(--ink-soft); font-style: italic; }
+  .crosshint { font-size: 0.82rem; color: var(--warn); background: var(--warn-soft);
+               padding: 0.4rem 0.55rem; border-radius: 3px; margin-top: 0.5rem; }
+  .legend span { margin-right: 0.9rem; font-size: 0.78rem; color: var(--ink-soft); }
+  .queue { font-family: var(--mono); font-size: 0.78rem; }
+</style>
+
+<h1 id="title">阅读页</h1>
+<p class="subtitle" id="meta">
+  开发期测试工具，只在电脑上跑。手机端是 P7 的原生应用。
+</p>
+
+<div id="picker">
+  <div class="row" style="margin-bottom:0.9rem">
+    <select id="shelf" style="width:auto" onchange="loadLibrary()">
+      <option value="fresh">新备的</option>
+      <option value="archive">往期</option>
+      <option value="all">全部</option>
+    </select>
+    <select id="sort" style="width:auto" onchange="loadLibrary()">
+      <option value="composite">按综合难度</option>
+      <option value="beyond_cet4_pct">按超四级词比例</option>
+      <option value="rare_word_pct">按生僻词比例</option>
+      <option value="word_count">按篇幅</option>
+      <option value="mean_sentence_length">按平均句长</option>
+      <option value="prepared_at">按备稿时间</option>
+    </select>
+    <span class="muted" id="shelf-note"></span>
+  </div>
+  <div id="library"></div>
+</div>
+
+<div id="reader" class="reader-wrap" hidden>
+  <div>
+    <div class="row" style="margin-bottom:0.7rem">
+      <button onclick="backToLibrary()">← 列表</button>
+      <button class="primary" onclick="finishArticle()">读完了</button>
+      <span class="muted legend">
+        <span style="border-bottom:2px solid var(--accent)">目标词</span>
+        <span style="border-bottom:2px dotted var(--good)">派生词</span>
+        <span style="border-bottom:2px dashed var(--ink-soft)">超纲词</span>
+        <span class="queue" id="queue">队列 0</span>
+      </span>
+    </div>
+    <div class="prose" id="prose"></div>
+  </div>
+  <div class="panel">
+    <div class="card" id="panel">
+      <p class="muted">点文章里的任意一个词。</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const TOKEN = {{ token | tojson }};
+const START_ID = {{ article_id }};
+const QUEUE_KEY = 'er.reading.queue';
+
+let current = null;      // the loaded article payload
+let tokenBySeq = {};
+let selected = null;
+
+// --- the client API, spoken exactly as a real client would speak it --------- //
+
+async function client(path, options) {
+  const res = await fetch('/v1/client' + path, Object.assign({
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+  }, options || {}));
+  const text = await res.text();
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch (e) { body = { raw: text }; }
+  if (!res.ok) {
+    const msg = (body && body.error && body.error.message) || ('HTTP ' + res.status);
+    throw new Error(msg);
+  }
+  return body;
+}
+
+// --- local event queue ----------------------------------------------------- //
+//
+// Events go into localStorage first and upload in batches. That is the offline
+// shape of the contract, and it is what makes the acceptance check "stop the
+// backend, keep reading, restart, everything arrives" pass.
+
+function queue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+
+function setQueue(items) {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items)); } catch (e) { /* full */ }
+  const el = document.getElementById('queue');
+  if (el) el.textContent = '队列 ' + items.length;
+}
+
+function emit(type, payload) {
+  const items = queue();
+  items.push({
+    idem_key: type + '-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+    type: type,
+    payload: payload,
+    occurred_at: new Date().toISOString(),
+  });
+  setQueue(items);
+  flush();
+}
+
+let flushing = false;
+async function flush() {
+  if (flushing) return;
+  const items = queue();
+  if (!items.length) return;
+  flushing = true;
+  try {
+    const r = await client('/events', {
+      method: 'POST', body: JSON.stringify({ events: items.slice(0, 200) }),
+    });
+    // Only drop what the server actually accounted for. A duplicate counts as
+    // handled — a retry is the protocol working, not a fault.
+    const done = new Set(r.results.filter(x => x.status !== 'failed').map(x => x.idem_key));
+    setQueue(queue().filter(e => !done.has(e.idem_key)));
+  } catch (e) {
+    // Offline, or the backend is stopped. Keep everything and try again later;
+    // nothing about reading depends on this succeeding.
+  } finally {
+    flushing = false;
+  }
+}
+setInterval(flush, 8000);
+window.addEventListener('online', flush);
+
+// Marks made while the queue is unsent must still show up when another article
+// containing the same word is opened — otherwise a mark made with the backend
+// down appears to vanish and then reappear later, which is very hard to debug.
+function pendingMarks() {
+  const map = {};
+  for (const e of queue()) {
+    if (e.type === 'word.marked') {
+      map[e.payload.headword + '|' + (e.payload.sense_id || 0)] = e.payload.kind;
+    } else if (e.type === 'word.unmarked') {
+      delete map[e.payload.headword + '|' + (e.payload.sense_id || 0)];
+    }
+  }
+  return map;
+}
+
+function markOf(headword, senseId) {
+  const local = pendingMarks()[headword + '|' + (senseId || 0)];
+  if (local) return local;
+  const entry = current && current.glossary[headword];
+  return entry ? (entry.marks[String(senseId || 0)] || null) : null;
+}
+
+// --- library --------------------------------------------------------------- //
+
+async function loadLibrary() {
+  const shelf = document.getElementById('shelf').value;
+  const sort = document.getElementById('sort').value;
+  const data = await client('/library?shelf=' + shelf + '&sort=' + sort);
+  document.getElementById('shelf-note').textContent =
+    '「新备的」= 最近 ' + data.fresh_days + ' 天备稿且未读；往期的不会删除，随时能翻出来读';
+  const rows = data.articles.map(a =>
+    '<tr><td class="mono">' + a.id + '</td>' +
+    '<td><a href="#" onclick="openArticle(' + a.id + ');return false;">' +
+      (a.title || '（无标题）') + '</a></td>' +
+    '<td class="mono">' + a.source_label + '</td>' +
+    '<td class="mono">' + a.word_count + '</td>' +
+    '<td class="mono">' + (a.difficulty_score === null ? '—' : a.difficulty_score) + '</td>' +
+    '<td class="mono">' + ((a.difficulty || {}).beyond_cet4_pct ?? '—') + '</td>' +
+    '<td class="mono">' + ((a.difficulty || {}).rare_word_pct ?? '—') + '</td>' +
+    '<td class="mono">' + (a.target_count || '—') + '</td>' +
+    '<td>' + (a.read_at ? '<span class="pill ok">读过</span>' :
+              (a.percent ? '<span class="pill INFO">' + Math.round(a.percent) + '%</span>' : '')) +
+    '</td></tr>').join('');
+  document.getElementById('library').innerHTML = rows
+    ? '<div class="scroll"><table><thead><tr><th>#</th><th>标题</th><th>来源</th><th>篇幅</th>' +
+      '<th>综合分<sup>参考</sup></th><th>超四级</th><th>生僻词</th><th title="读完会记账的词数。真题没有目标词，只记你手动标的">目标词</th><th></th></tr></thead><tbody>' +
+      rows + '</tbody></table></div>'
+    : '<p class="muted">这个书架上还没有文章。去<a href="/admin/reading">阅读管理页</a>备几篇真题。</p>';
+}
+
+function backToLibrary() {
+  current = null;
+  document.getElementById('reader').hidden = true;
+  document.getElementById('picker').hidden = false;
+  document.getElementById('title').textContent = '阅读页';
+  history.replaceState(null, '', '/admin/reader');
+  loadLibrary();
+}
+
+// --- one article ----------------------------------------------------------- //
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+async function openArticle(id) {
+  const data = await client('/articles/' + id);
+  if (data.preparing) {
+    document.getElementById('library').innerHTML =
+      '<div class="notice">这篇还在准备：' + data.preparing.status +
+      '（已标注 ' + data.preparing.annotated + '/' + data.preparing.total + '）。' +
+      '入库要跑一次分析和语境标注，几十秒。稍后再试。</div>';
+    setTimeout(() => openArticle(id), 5000);
+    return;
+  }
+  current = data;
+  tokenBySeq = {};
+  for (const t of data.tokens) tokenBySeq[t.seq] = t;
+
+  document.getElementById('picker').hidden = true;
+  document.getElementById('reader').hidden = false;
+  document.getElementById('title').textContent = data.article.title || '（无标题）';
+  const d = data.article.difficulty || {};
+  document.getElementById('meta').textContent =
+    data.article.source_label + ' · ' + data.article.word_count + ' 词 · ' +
+    data.article.sentence_count + ' 句 · 综合难度（参考）' +
+    (data.article.difficulty_score ?? '—') +
+    ' · 超四级词 ' + (d.beyond_cet4_pct ?? '—') + '%';
+
+  render();
+  emit('article.opened', { article_id: id });
+  history.replaceState(null, '', '/admin/reader/' + id);
+}
+
+function classesFor(t) {
+  const cls = ['w'];
+  if (t.kind === 'proper') cls.push('proper');
+  else if (t.beyond && current.article.mark_beyond) cls.push('beyond');
+  else if (t.is_target) cls.push('target');
+  else if (t.headword && (current.glossary[t.headword] || {}).derivation) cls.push('derived');
+  const mark = t.headword ? markOf(t.headword, t.sense_id) : null;
+  if (mark) cls.push('m-' + mark);
+  return cls.join(' ');
+}
+
+function render() {
+  const body = current.article.body;
+  let out = '', pos = 0;
+  for (const t of current.tokens) {
+    out += escapeHtml(body.slice(pos, t.char_start));
+    out += '<span class="' + classesFor(t) + '" data-seq="' + t.seq + '">' +
+           escapeHtml(t.surface) + '</span>';
+    pos = t.char_end;
+  }
+  out += escapeHtml(body.slice(pos));
+  const prose = document.getElementById('prose');
+  prose.innerHTML = out;
+  prose.onclick = ev => {
+    const el = ev.target.closest('.w');
+    if (el) showPanel(parseInt(el.dataset.seq, 10));
+  };
+}
+
+function refreshWord(headword) {
+  document.querySelectorAll('.prose .w').forEach(el => {
+    const t = tokenBySeq[parseInt(el.dataset.seq, 10)];
+    if (t && t.headword === headword) el.className = classesFor(t);
+  });
+}
+
+// --- the tap panel --------------------------------------------------------- //
+//
+// Which branch is shown depends on what kind of word was tapped. That is the
+// substance of C1 through C10: a derived word gets its word-formation breakdown
+// rather than a new gloss to memorise; a proper noun is explicitly dismissable;
+// an out-of-syllabus word is told to be out of syllabus rather than quietly
+// looking like something worth learning.
+
+function showPanel(seq) {
+  selected = seq;
+  const t = tokenBySeq[seq];
+  document.querySelectorAll('.prose .w.on').forEach(e => e.classList.remove('on'));
+  const el = document.querySelector('.prose .w[data-seq="' + seq + '"]');
+  if (el) el.classList.add('on');
+
+  const g = t.headword ? current.glossary[t.headword] : null;
+  const caps = current.capabilities;
+  let html = '<h3 style="margin:0 0 0.2rem">' + escapeHtml(t.surface) + '</h3>';
+  if (g && g.headword !== t.surface.toLowerCase()) {
+    html += '<p class="muted mono" style="margin:0 0 0.5rem">→ ' + g.headword +
+            (g.phonetic ? ' /' + g.phonetic + '/' : '') + '</p>';
+  }
+
+  if (t.kind === 'proper') {
+    html += '<div class="layer"><div class="zh">这是人名／地名／机构名。</div>' +
+            '<div class="pile">读到直接跳过就行，不算生词，也不进复习队列——' +
+            '考场上遇到陌生专名照样跳过，这本身就是要练的阅读技能。</div>';
+    html += caps.proper_noun_notes
+      ? '<div class="pile">' + escapeHtml(t.note || '') + '</div>'
+      : '<div class="todo">一句话说明：功能待开发</div>';
+    html += '</div>';
+    return paint(html, null);
+  }
+
+  if (t.kind === 'nonword' || !g) {
+    html += '<p class="muted">这不是一个词。</p>';
+    return paint(html, null);
+  }
+
+  // Function words are tappable because C1 says any word is, but they are never
+  // annotated and never marked — so they get the dictionary entry and nothing
+  // else. Without this branch they fall through to the content layout and
+  // report "还没标注", which is wrong: nothing is pending, there is simply
+  // nothing to annotate.
+  if (t.kind === 'function') {
+    html += '<div class="layer"><h4>虚词</h4><div class="pile">' +
+            escapeHtml(g.translation || '（词典里没有）') + '</div>' +
+            '<div class="pile">虚词不标语境义项、不计生词率、不进复习队列。</div></div>';
+    return paint(html, null);
+  }
+
+  const beyondHere = t.beyond && current.article.mark_beyond;
+  if (beyondHere) {
+    html += '<div class="layer"><h4>超出大纲</h4>' +
+            '<div class="zh">这个词超出当前大纲，<b>暂时不用学会</b>。</div>' +
+            '<div class="pile">' + escapeHtml(g.translation || '') + '</div>' +
+            '<div class="pile">给出意思只是让句子读得通，它不计入生词率、不进复习队列。</div></div>';
+    return paint(html, null);
+  }
+
+  // Derived word: the breakdown replaces the gloss, so it reads as "a word you
+  // can work out" rather than "a new word to memorise".
+  if (g.derivation) {
+    html += '<div class="layer"><h4>构词</h4>' +
+            '<div class="zh mono">' + g.derivation.root + ' + ' + (g.derivation.affix || '') + '</div>';
+    if (g.derivation.breakdown_zh) {
+      html += '<div class="pile">' + escapeHtml(g.derivation.breakdown_zh) + '</div>';
+    }
+    html += caps.level_estimate
+      ? ''
+      : '<div class="todo">你是否已掌握词根 ' + g.derivation.root + '：功能待开发</div>';
+    html += '</div>';
+  }
+
+  const sense = (g.senses || []).find(s => s.id === t.sense_id);
+  html += '<div class="layer"><h4>① 在这句话里</h4>';
+  if (sense) {
+    html += '<div class="zh">' + escapeHtml((sense.gloss_zh || []).join('／')) + '</div>' +
+            '<div class="en">' + escapeHtml(sense.concept_en || '') + '</div>';
+  } else if (t.sense_id === 0) {
+    html += '<div class="todo">这个词没有义项集，只能看词典释义</div>';
+  } else if (t.sense_id === -1) {
+    // The annotator was asked and declined — none of our senses covered this
+    // use. Saying so is more honest than showing a wrong one, and these are
+    // collected as the missing-sense report.
+    html += '<div class="todo">这个词的义项集里没有贴合这句的一条，已记下待补</div>';
+  } else {
+    html += '<div class="todo">还没标注</div>';
+  }
+  html += '</div>';
+
+  html += '<div class="layer"><h4>② 常见释义</h4><div class="pile">' +
+          escapeHtml(g.translation || '（词典里没有）').replace(/\\n/g, ' / ') + '</div></div>';
+
+  html += '<div class="layer"><h4>③ 四六级常考</h4>';
+  if (caps.exam_frequency && sense && sense.exam) {
+    html += '<div class="pile">真题出现 ' + sense.exam.frequency + ' 次' +
+            (sense.exam.is_exam_key ? ' · <b>熟词僻义</b>' : '') + '</div>';
+  } else {
+    html += '<div class="todo">真题考频待统计——真题全量入库标注后自动算出</div>';
+  }
+  html += '</div>';
+
+  // Marked another sense of the same word? Say so. Without this line the reader
+  // sees "unmarked" on a word they know they marked and concludes the app
+  // forgot — when in fact tracking is per sense on purpose, because 熟词僻义 is
+  // exactly what the exam tests.
+  const others = Object.entries(g.marks)
+    .filter(([sid]) => Number(sid) !== (t.sense_id || 0))
+    .map(([sid, kind]) => {
+      const s = (g.senses || []).find(x => String(x.id) === sid);
+      return (s ? (s.gloss_zh || []).join('／') : '另一个义项') +
+             '（' + (kind === 'unknown' ? '不认识' : '模糊') + '）';
+    });
+  if (others.length) {
+    html += '<div class="crosshint">你标记过这个词的另一个义项：' + escapeHtml(others.join('，')) +
+            '。这次是不同的意思。</div>';
+  }
+
+  paint(html, t);
+}
+
+function paint(html, t) {
+  if (t) {
+    const mark = markOf(t.headword, t.sense_id);
+    html += '<div class="row" style="margin-top:0.9rem">' +
+      '<button class="' + (mark === 'unknown' ? 'primary' : '') + '"' +
+      ' onclick="mark(\'unknown\')">不认识</button>' +
+      '<button class="' + (mark === 'fuzzy' ? 'primary' : '') + '"' +
+      ' onclick="mark(\'fuzzy\')">模糊</button>' +
+      (mark ? '<button onclick="unmark()">撤销</button>' : '') +
+      '</div>' +
+      '<p class="todo" style="margin-top:0.5rem">' +
+      '「模糊」= 现在懂了，但未必记得住。存着，将来某次复习捎带出现。</p>';
+  }
+  document.getElementById('panel').innerHTML = html;
+  if (t) emit('word.tapped', { article_id: current.article.id, headword: t.headword,
+                               sense_id: t.sense_id, token_id: t.seq });
+}
+
+function mark(kind) {
+  const t = tokenBySeq[selected];
+  if (!t || !t.headword) return;
+  emit('word.marked', {
+    article_id: current.article.id, headword: t.headword,
+    sense_id: t.sense_id || 0, kind: kind, token_id: t.seq,
+  });
+  // Optimistic: the queue is the source of truth until it uploads, and
+  // markOf() already prefers it, so the display is correct either way.
+  refreshWord(t.headword);
+  showPanel(selected);
+}
+
+function unmark() {
+  const t = tokenBySeq[selected];
+  if (!t || !t.headword) return;
+  emit('word.unmarked', {
+    article_id: current.article.id, headword: t.headword, sense_id: t.sense_id || 0,
+  });
+  const g = current.glossary[t.headword];
+  if (g) delete g.marks[String(t.sense_id || 0)];
+  refreshWord(t.headword);
+  showPanel(selected);
+}
+
+// --- progress -------------------------------------------------------------- //
+
+let lastReported = -1;
+setInterval(() => {
+  if (!current) return;
+  const prose = document.getElementById('prose');
+  const box = prose.getBoundingClientRect();
+  const seen = Math.min(1, Math.max(0, (window.innerHeight - box.top) / Math.max(1, box.height)));
+  const percent = Math.round(seen * 100);
+  if (percent <= lastReported) return;
+  lastReported = percent;
+  emit('article.progress', {
+    article_id: current.article.id,
+    sentence_seq: Math.floor(current.article.sentence_count * seen),
+    percent: percent,
+  });
+}, {{ progress_seconds }} * 1000);
+
+function finishArticle() {
+  if (!current) return;
+  emit('article.finished', {
+    article_id: current.article.id,
+    sentence_seq: current.article.sentence_count,
+  });
+  toast('读完了。这篇的目标词已记为「学过」，进入复习中。');
+  flush().then(backToLibrary);
+}
+
+setQueue(queue());
+if (START_ID) { openArticle(START_ID); } else { loadLibrary(); }
+</script>
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}阅读{% endblock %}
+
+{% block content %}
+<h1>阅读</h1>
+<p class="subtitle">
+  文章入库、语境义项标注、客户端事件。入库跑一次分析就存死，读的时候只是查表——
+  所以点词、标记全程不做任何语言分析。
+</p>
+
+<div class="grid">
+  <div class="card stat">
+    <span class="stat-label">可读文章</span>
+    <span class="stat-value">{{ stats.ready }}</span>
+    <span class="muted mono">共入库 {{ stats.articles }} · 读过 {{ stats.read }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">语境标注</span>
+    <span class="stat-value">{{ stats.annotated }}</span>
+    <span class="muted mono">共 {{ stats.tokens }} 个词</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">复习中的义项</span>
+    <span class="stat-value">{{ stats.reviewing or 0 }}</span>
+    <span class="muted mono">不认识 {{ stats.marked_unknown }} · 模糊 {{ stats.marked_fuzzy }}</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">客户端事件</span>
+    <span class="stat-value">{{ stats.events }}</span>
+    <span class="muted mono">幂等键去重</span>
+  </div>
+</div>
+
+{% if pending %}
+<h2>还在准备的</h2>
+<div class="scroll">
+  <table>
+    <thead><tr><th>#</th><th>标题</th><th>来源</th><th>状态</th><th></th></tr></thead>
+    <tbody>
+      {% for item in pending %}
+      <tr>
+        <td class="mono">{{ item.id }}</td>
+        <td>{{ item.title }}</td>
+        <td class="mono">{{ item.source }}</td>
+        <td>
+          <span class="pill {{ 'ERROR' if item.status == 'failed' else 'INFO' }}">{{ item.status }}</span>
+          {% if item.status_detail %}<span class="muted">{{ item.status_detail }}</span>{% endif %}
+        </td>
+        <td class="nowrap">
+          <button onclick="reannotate({{ item.id }})">重跑标注</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<h2>备稿</h2>
+<div class="card">
+  <p class="muted">
+    真题是<b>现成的素材</b>，先惰性备几篇把标注格式跑通，确认好用之后再批量补跑剩下的。
+    全量标注完还能白拿一层：把标注结果按义项数一遍出现次数，就是四六级考频，
+    序号靠后却被考到的即熟词僻义。
+  </p>
+  <div class="row" style="margin-top:0.8rem">
+    <select id="paper-source" style="width:auto" onchange="loadPapers()">
+      <option value="cet4">四级真题</option>
+      <option value="cet6">六级真题</option>
+      <option value="kaoyan">考研真题</option>
+    </select>
+    <span id="paper-count" class="muted"></span>
+    <input type="number" id="batch-limit" value="5" min="1" max="200" style="width:6rem">
+    <button class="primary" onclick="ingestBatch()">批量预备这么多篇</button>
+  </div>
+  <div id="paper-list" style="margin-top:0.9rem"></div>
+</div>
+
+<h2>难度分标定</h2>
+<div class="card">
+  <p class="muted">
+    综合分的权重不靠拍脑袋——真题自带三个已知难度等级，就是现成的标尺。
+    <b>算不出「四级 &lt; 六级 ≈ 考研」的权重就是错的。</b>
+    实测结论：难度几乎全在词汇上，句长与从句密度区分不了等级，所以不进综合分。
+  </p>
+  <div class="row" style="margin-top:0.8rem">
+    <button onclick="calibrate()">现在验一次</button>
+    <span id="calibration" class="muted"></span>
+  </div>
+</div>
+
+<h2>文章库</h2>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>标题</th><th>来源</th><th>篇幅</th>
+        <th>综合分</th><th>超四级</th><th>超六级</th><th>生僻词</th><th>目标词</th>
+        <th>备稿</th><th>读过</th><th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in articles %}
+      <tr>
+        <td class="mono">{{ a.id }}</td>
+        <td>{{ a.title or '（无标题）' }}</td>
+        <td class="mono">{{ a.source_label }}</td>
+        <td class="mono">{{ a.word_count }}</td>
+        <td class="mono">{{ '%.1f'|format(a.difficulty_score) if a.difficulty_score is not none else '—' }}</td>
+        <td class="mono">{{ a.difficulty.beyond_cet4_pct if a.difficulty else '—' }}</td>
+        <td class="mono">{{ a.difficulty.beyond_cet6_pct if a.difficulty else '—' }}</td>
+        <td class="mono">{{ a.difficulty.rare_word_pct if a.difficulty else '—' }}</td>
+        <td class="mono">{{ a.target_count or '—' }}</td>
+        <td class="mono nowrap">{{ (a.prepared_at or '')[:10] }}</td>
+        <td>{% if a.read_at %}<span class="pill ok">读过</span>{% endif %}</td>
+        <td class="nowrap">
+          <a class="btn" href="/admin/reader/{{ a.id }}">打开</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="12" class="muted">还没有入库的文章。先在上面备几篇真题，或者去生成工作台把草稿入库。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2>漏义项报告</h2>
+<div class="card">
+  <p class="muted">
+    标注时模型遇到、却在我们的义项集里找不到贴合一条的词。它<b>没有硬选一个错的</b>，
+    判断是对的——而这些正好是义项集缺条目的线索。第一轮跑真题就抓到
+    <code>around</code>（「大约」）和 <code>note</code>（「口气、意味」）。
+    补完义项之后在上面点「重跑标注」，这些词会重新排队。
+  </p>
+  <div class="row" style="margin-top:0.8rem">
+    <button onclick="loadMissing()">刷新</button>
+    <span id="missing-count" class="muted"></span>
+  </div>
+  <div id="missing" style="margin-top:0.8rem"></div>
+</div>
+
+<h2>最近的客户端事件</h2>
+<div class="card">
+  <div class="row">
+    <button onclick="loadEvents()">刷新</button>
+    <span class="muted">阅读页产生的每一次点词、标记、进度都在这里，带幂等键。</span>
+  </div>
+  <div id="events" style="margin-top:0.8rem"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function loadPapers() {
+    const source = document.getElementById('paper-source').value;
+    const data = await api('/reading/papers/' + source);
+    document.getElementById('paper-count').textContent =
+      '共 ' + data.total + ' 篇，已入库 ' + data.ingested + ' 篇';
+    const rows = data.papers.slice(0, 40).map(p =>
+      '<tr><td class="mono">' + p.ref + '</td><td>' +
+      (p.ingested ? '<span class="pill ok">已入库</span>'
+                  : '<button onclick="ingestOne(\'' + source + '\',\'' + p.ref + '\')">备这篇</button>') +
+      '</td></tr>').join('');
+    document.getElementById('paper-list').innerHTML =
+      '<div class="scroll"><table><tbody>' + rows + '</tbody></table></div>' +
+      (data.papers.length > 40 ? '<p class="muted">只列出前 40 篇，其余用批量预备。</p>' : '');
+  }
+
+  async function ingestOne(source, ref) {
+    try {
+      const r = await api('/reading/ingest/paper', {
+        method: 'POST', body: JSON.stringify({ source, ref }),
+      });
+      toast('已入库为文章 ' + r.article_id + '，标注任务 ' + (r.job_id || '（无需标注）'));
+      loadPapers();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function ingestBatch() {
+    const source = document.getElementById('paper-source').value;
+    const limit = parseInt(document.getElementById('batch-limit').value, 10) || 5;
+    toast('开始预备，分析是同步的，标注在后台跑…');
+    try {
+      const r = await api('/reading/ingest/batch', {
+        method: 'POST', body: JSON.stringify({ source, limit }),
+      });
+      toast('已排入 ' + r.queued + ' 篇，标注进度看「模型」页的批次任务');
+      loadPapers();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function reannotate(id) {
+    try {
+      const r = await api('/reading/articles/' + id + '/annotate', { method: 'POST' });
+      toast(r.job_id ? '标注任务 ' + r.job_id + ' 已启动' : '没有需要标注的词，已置为就绪');
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function calibrate() {
+    try {
+      const r = await api('/reading/calibration');
+      const m = r.medians || {};
+      const verdict = r.ordered_correctly === null ? '三类真题还没都入库，无法判定'
+                    : r.ordered_correctly ? '✓ 排对了' : '✗ 排错了，权重或指标有问题';
+      document.getElementById('calibration').textContent =
+        '四级 ' + (m.cet4 ?? '—') + ' · 六级 ' + (m.cet6 ?? '—') +
+        ' · 考研 ' + (m.kaoyan ?? '—') + '　' + verdict;
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function loadMissing() {
+    const data = await api('/reading/missing-senses');
+    document.getElementById('missing-count').textContent =
+      data.words + ' 个词 · ' + data.occurrences + ' 处';
+    const rows = data.items.map(w => {
+      const ex = w.examples.map(e =>
+        '<div class="muted" style="margin-top:0.2rem">' + e.sentence + '</div>').join('');
+      return '<tr><td class="mono">' + w.headword + '</td><td class="mono">' + w.count +
+             '</td><td>' + ex + '</td></tr>';
+    }).join('');
+    document.getElementById('missing').innerHTML = rows
+      ? '<div class="scroll"><table><thead><tr><th>词</th><th>处数</th><th>出现的句子</th>' +
+        '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+      : '<p class="muted">还没有——要么标注得很顺，要么还没跑多少篇。</p>';
+  }
+
+  async function loadEvents() {
+    const data = await api('/reading/events?limit=60');
+    const rows = data.events.map(e =>
+      '<tr><td class="mono">' + e.id + '</td><td class="mono">' + e.type + '</td>' +
+      '<td class="mono">' + (e.payload.headword || e.payload.article_id || '') + '</td>' +
+      '<td class="mono nowrap">' + (e.received_at || '').slice(11, 19) + '</td>' +
+      '<td>' + (e.error ? '<span class="pill ERROR">' + e.error + '</span>' : '') + '</td></tr>'
+    ).join('');
+    document.getElementById('events').innerHTML =
+      rows ? '<div class="scroll"><table><thead><tr><th>#</th><th>事件</th><th>对象</th><th>时间</th><th></th></tr></thead><tbody>'
+             + rows + '</tbody></table></div>'
+           : '<p class="muted">还没有事件。打开一篇文章读读看。</p>';
+  }
+
+  loadPapers();
+  loadMissing();
+  loadEvents();
+</script>
+{% endblock %}

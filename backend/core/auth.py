@@ -53,7 +53,27 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_devices_hash ON devices (token_hash);
         """,
     ),
+    Migration(
+        version=2,
+        name="device belongs to a learner",
+        database="learning",
+        # The identity hook. There is exactly one learner and this column is
+        # always 1 — no registration, no login, nothing reads it as a variable
+        # yet. It exists because P2 is the moment the client contract is
+        # written, and architecture rule 5 forbids removing or repurposing a
+        # field afterwards: a contract that hardcodes "there is only one person"
+        # leaves /v2/ as the only way to ever add a second one.
+        #
+        # Identity is derived from the device token, never self-reported by the
+        # client. Adding real users later means giving this column real values
+        # and nothing else — no sideloaded client needs updating.
+        apply="ALTER TABLE devices ADD COLUMN learner_id INTEGER NOT NULL DEFAULT 1;",
+    ),
 ]
+
+#: The single learner, until there is a reason for more. Named rather than
+#: written as a bare 1 so every place that assumes it is greppable.
+SOLE_LEARNER_ID = 1
 
 
 # --------------------------------------------------------------------------- #
@@ -169,9 +189,33 @@ def revoke_device(device_id: int) -> bool:
 
 def list_devices() -> list[dict]:
     rows = get_connection("learning").execute(
-        "SELECT id, name, created_at, last_seen_at, revoked_at FROM devices ORDER BY id"
+        "SELECT id, name, learner_id, created_at, last_seen_at, revoked_at"
+        " FROM devices ORDER BY id"
     ).fetchall()
     return [dict(row) for row in rows]
+
+
+def learner_for_device(device_id: int) -> int:
+    """Which learner this device belongs to.
+
+    Always returns 1 today. Client endpoints call this instead of writing the
+    constant inline, so switching to real multi-user work is a change to this
+    function and the column behind it — not a sweep through every endpoint.
+    """
+    row = get_connection("learning").execute(
+        "SELECT learner_id FROM devices WHERE id = ?", (device_id,)
+    ).fetchone()
+    return int(row["learner_id"]) if row else SOLE_LEARNER_ID
+
+
+def learner_profile(learner_id: int) -> dict:
+    """The ``learner`` block echoed in every client response.
+
+    Lets a client notice it is looking at someone else's cache and drop it.
+    ``level`` is the reserved slot for P3's ability estimate — declared now,
+    null until then, with ``capabilities.level_estimate`` saying which it is.
+    """
+    return {"id": learner_id, "name": "本人", "level": None}
 
 
 async def require_device(

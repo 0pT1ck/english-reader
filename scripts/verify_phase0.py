@@ -89,10 +89,21 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
         paths = spec.get("paths", {})
         check("3.1", "OpenAPI 可访问", r.status_code == 200,
               f"{len(paths)} 个接口")
+        # Until P2 this asserted that *no* client endpoint existed, which was a
+        # phase-boundary marker rather than a property. P2 wrote the first
+        # client contract, so the marker has expired and what is left to check
+        # is the property architecture rule 4 actually states: the two surfaces
+        # live under separate prefixes and neither leaks into the other. That
+        # a client token cannot reach an admin endpoint is checked in
+        # verify_phase2.py, where the token exists.
+        admin_paths = [p for p in paths if p.startswith("/v1/admin")]
+        client_paths = [p for p in paths if p.startswith("/v1/client")]
+        stray = [p for p in paths
+                 if p.startswith("/v1/") and p not in admin_paths and p not in client_paths]
         check("3.2", "两套接口分离",
-              any(p.startswith("/v1/admin") for p in paths)
-              and not any(p.startswith("/v1/client") for p in paths),
-              "P0 尚无客户端接口，符合阶段边界")
+              bool(admin_paths) and not stray,
+              f"管理 {len(admin_paths)} 个 / 客户端 {len(client_paths)} 个"
+              + (f"，越界路径：{stray}" if stray else "，没有越界路径"))
         r = client.get("/docs")
         check("3.3", "文档页面可打开", r.status_code == 200)
 

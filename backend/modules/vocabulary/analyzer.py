@@ -268,6 +268,31 @@ def compound_forms(doc: Any, span: tuple[int, int]) -> tuple[str, str]:
     return hyphenated, hyphenated.replace("-", "")
 
 
+def _force_breaks_at_blank_lines(doc: Any) -> None:
+    """Make a paragraph break end a sentence.
+
+    ``senter`` decides boundaries from punctuation and pays no attention to
+    layout, so a paragraph that ends without a full stop — a heading, a list
+    item, an article whose paragraphs are separated only by blank lines — gets
+    welded onto the paragraph after it. Real damage seen on exam papers: one
+    "sentence" spanning two paragraphs, which then becomes the context handed to
+    the sense annotator, the unit the reader highlights, and the granularity
+    reading position is restored to.
+
+    Safe to do after the fact only because the dependency parser is excluded
+    from the pipeline (see :func:`_load_model`); spaCy refuses to move sentence
+    boundaries on a parsed document.
+    """
+    if doc.has_annotation("DEP"):  # pragma: no cover - parser is excluded
+        return
+    for token in doc:
+        if token.i == 0:
+            continue
+        # The whitespace preceding this token lives on the token before it.
+        if "\n" in doc[token.i - 1].whitespace_ or "\n" in doc[token.i - 1].text:
+            token.is_sent_start = True
+
+
 def analyze(text: str) -> list[SentenceAnalysis]:
     """Split ``text`` into sentences and resolve every token.
 
@@ -278,6 +303,7 @@ def analyze(text: str) -> list[SentenceAnalysis]:
 
     nlp = _load_model()
     doc = nlp(text)
+    _force_breaks_at_blank_lines(doc)
 
     sentences: list[SentenceAnalysis] = []
     token_index = 0

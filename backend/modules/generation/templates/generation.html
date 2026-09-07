@@ -271,10 +271,23 @@
             <td class="mono">${r.beyond ? r.beyond.length : '—'}</td>
             <td class="mono">${r.targets_used ?? '—'}/${r.targets_total ?? '—'}</td>
             <td class="mono nowrap">${(d.created_at || '').slice(0, 16).replace('T', ' ')}</td>
-            <td><button class="danger" onclick="removeDraft(${d.id})">删除</button></td>
+            <td class="nowrap">
+              <button onclick="shelveDraft(${d.id})">入库</button>
+              <button class="danger" onclick="removeDraft(${d.id})">删除</button></td>
           </tr>`;
         }).join('')
       : '<tr><td colspan="10" class="muted">还没有草稿。</td></tr>';
+  }
+
+  // Putting a draft on the reading shelf is a button, not a rule: automatic
+  // over-generate-and-pick belongs to P2x, and with ten usable drafts an
+  // explicit 「入库」 is the honest amount of machinery. Ingest runs the
+  // analysis synchronously and queues sense annotation in the background.
+  async function shelveDraft(id) {
+    try {
+      const r = await api('/reading/ingest/draft/' + id, {method: 'POST'});
+      toast('已入库为文章 ' + r.article_id + '，标注任务 ' + (r.job_id || '（无需标注）'));
+    } catch (e) { toast(e.message, true); }
   }
 
   async function removeDraft(id) {

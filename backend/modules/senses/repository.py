@@ -7,6 +7,7 @@ import sqlite3
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.core import events
 from backend.core.db import get_connection
 
 TOPICS = (
@@ -24,7 +25,19 @@ def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = ""
     Replace rather than merge: a sense set is a single judgement about how a
     word divides up, and half of an old division mixed with half of a new one
     is not a division of anything.
+
+    **Replacing changes the sense ids**, and from P2 onwards other things point
+    at them — the contextual annotation on every occurrence of the word, the
+    learner's marks, the per-sense study state. Nothing here knows about those,
+    and nothing should. So the change is announced on the event bus and whoever
+    holds a reference repairs itself; without that announcement, topping up one
+    word's senses silently orphans every annotation of it, with no error and no
+    log (architecture rule 6: new features subscribe, they do not edit this).
     """
+    existing = [row["id"] for row in get_connection("content").execute(
+        "SELECT id FROM senses WHERE headword = ?", (headword,)
+    ).fetchall()]
+
     conn = get_connection("content")
     conn.execute("DELETE FROM senses WHERE headword = ?", (headword,))
     conn.executemany(
@@ -49,6 +62,10 @@ def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = ""
         ],
     )
     conn.commit()
+
+    if existing:
+        events.emit("senses.replaced", headword=headword,
+                    previous_ids=existing, count=len(senses))
     return len(senses)
 
 

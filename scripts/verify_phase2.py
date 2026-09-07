@@ -1,0 +1,424 @@
+"""Run the Phase 2 verification checklist.
+
+    uv run python scripts/verify_phase2.py
+
+P2 is the reading loop: articles get analysed once and stored, the first client
+contract is written, and every tap, mark and finish comes back and lands in the
+right table.
+
+Two of the checks are worth calling out because they guard mistakes that are
+silent when they happen:
+
+* **入库不记账.** Only *finishing* an article may write sense states. If ingest
+  ever writes them, the words used in articles that were never opened are
+  quietly marked as learned and never come up again — no error, no log, and
+  months of vocabulary lost before anyone notices.
+* **难度分能排对三个等级.** The composite score is checked against the one
+  sample in this project with a known answer. A weighting that cannot produce
+  四级 < 六级 ≈ 考研 is wrong, and this is the second metric in this project to
+  have measured something other than its own name.
+
+What no script can check is whether reading it actually works. Those items are
+printed at the end.
+
+**This script writes to the learning database.** It registers a device, reports
+events, and finishes one generated article to check that finishing records the
+ledger. That is unavoidable — the behaviours being verified are writes — and
+harmless on a single-user system, but it means the article it finishes will show
+as read afterwards.
+"""
+
+from __future__ import annotations
+
+import statistics
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from backend.core import auth  # noqa: E402
+from backend.core.db import get_connection  # noqa: E402
+from backend.core.logging import get_logger, trace  # noqa: E402
+from backend.main import app  # noqa: E402  installs modules and migrations
+from backend.modules.reading import difficulty, ingest, repository, service  # noqa: E402
+
+passed: list[str] = []
+failed: list[str] = []
+manual: list[str] = []
+
+log = get_logger("scripts.verify2")
+
+
+def check(number: str, title: str, ok: bool, detail: str = "") -> None:
+    (passed if ok else failed).append(number)
+    print(f"  [{'通过' if ok else '失败'}] {number} {title}" + (f" — {detail}" if detail else ""))
+
+
+def note(number: str, title: str, detail: str) -> None:
+    manual.append(number)
+    print(f"  [人工] {number} {title} — {detail}")
+
+
+def _first_ready(source: str | None = None) -> dict | None:
+    rows = repository.list_articles(shelf="all", source=source, sort="prepared_at", limit=1000)
+    return rows[0] if rows else None
+
+
+def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
+    with trace():
+        client = TestClient(app)
+        token = auth.create_device("verify-phase2")
+        head = {"Authorization": "Bearer " + token}
+
+        # --- 1. 入库管线 ------------------------------------------------- #
+        print("\n1. 入库管线")
+
+        papers = ingest.exam_papers("cet4")
+        check("1.1", "真题在磁盘上、入库状态可见",
+              len(papers) > 100,
+              f"cet4 {len(papers)} 篇，已入库 {sum(1 for p in papers if p['ingested'])} 篇")
+
+        target = next((p for p in papers if p["ingested"]), None)
+        if target is None:
+            target = papers[0]
+            ingest.ingest_exam_paper("cet4", target["ref"])
+        article_id = repository.create_article("cet4", target["ref"], "", "")
+        row = repository.article_row(article_id)
+
+        check("1.2", "分句分词与词形还原已落库",
+              row["sentence_count"] > 5 and len(repository.tokens_of(article_id)) > 100,
+              f"{row['sentence_count']} 句 / {len(repository.tokens_of(article_id))} 个 token")
+
+        tokens = repository.tokens_of(article_id)
+        kinds = {k: sum(1 for t in tokens if t["kind"] == k)
+                 for k in ("content", "function", "proper", "nonword")}
+        check("1.3", "每个词都分了类",
+              kinds["content"] > 50 and kinds["proper"] >= 0 and kinds["function"] > 20,
+              " / ".join(f"{k} {v}" for k, v in kinds.items()))
+
+        sentences = repository.sentences_of(article_id)
+        spanning = [s for s in sentences
+                    if "\n\n" in s["text"] and s["text"].split("\n\n", 1)[1].strip()]
+        check("1.4", "句子不跨段落",
+              not spanning,
+              "段落边界强制断句（P0 的 senter 只看标点，会把整段焊在一起）"
+              if not spanning else f"{len(spanning)} 句跨了段落")
+
+        # The client rebuilds the page by slicing the body between token
+        # offsets, so an off-by-one anywhere garbles the whole article — and it
+        # would garble it *plausibly*, as shifted punctuation rather than an
+        # error. Checked as an invariant over every stored article instead.
+        mismatched = 0
+        checked = 0
+        for candidate in repository.list_articles(shelf="all", limit=1000):
+            body = repository.article_row(candidate["id"])["body"]
+            rebuilt, cursor = [], 0
+            for t in repository.tokens_of(candidate["id"]):
+                rebuilt.append(body[cursor:t["char_start"]])
+                rebuilt.append(t["surface"])
+                if body[t["char_start"]:t["char_end"]] != t["surface"]:
+                    mismatched += 1
+                cursor = t["char_end"]
+            rebuilt.append(body[cursor:])
+            if "".join(rebuilt) != body:
+                mismatched += 1
+            checked += 1
+        check("1.5", "按字符偏移能原样重建正文",
+              mismatched == 0,
+              f"{checked} 篇逐字节还原，无偏移错位"
+              if mismatched == 0 else f"{mismatched} 处对不上")
+
+        # --- 2. 语境释义标注 --------------------------------------------- #
+        print("\n2. 语境释义标注")
+
+        done, total = repository.annotation_progress(article_id)
+        check("2.1", "全篇实词都有语境义项",
+              total > 0 and done == total,
+              f"{done} / {total}")
+
+        with_sense = [t for t in tokens if (t["sense_id"] or 0) > 0]
+        check("2.2", "标注结果指向真实义项",
+              len(with_sense) > 30,
+              f"{len(with_sense)} 个词标到了具体义项，"
+              f"{sum(1 for t in tokens if t['sense_id'] == 0)} 个词没有义项集（退回词条级）")
+
+        bad = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses s ON s.id = t.sense_id"
+            " WHERE t.sense_id > 0 AND (s.id IS NULL OR s.headword != t.headword)"
+        ).fetchone()[0]
+        check("2.3", "没有一条标注指向别的词的义项",
+              bad == 0,
+              "服务端机械校验：编号必须存在且属于该词条" if bad == 0 else f"{bad} 条越界")
+
+        # --- 3. 难度画像 -------------------------------------------------- #
+        print("\n3. 难度画像")
+
+        grouped = repository.scores_by_source()
+        have_all = all(len(grouped.get(s, [])) >= 5 for s in ("cet4", "cet6", "kaoyan"))
+        if have_all:
+            medians = {s: statistics.median(grouped[s]) for s in ("cet4", "cet6", "kaoyan")}
+            ordered = medians["cet4"] < medians["cet6"] and medians["cet4"] < medians["kaoyan"]
+            check("3.1", "综合难度分能把三个等级排对",
+                  ordered,
+                  f"四级 {medians['cet4']:.1f} < 六级 {medians['cet6']:.1f}"
+                  f" ≈ 考研 {medians['kaoyan']:.1f}")
+        else:
+            check("3.1", "综合难度分能把三个等级排对", False,
+                  "三类真题各需至少 5 篇入库才能验："
+                  + " ".join(f"{s} {len(grouped.get(s, []))}" for s in
+                             ("cet4", "cet6", "kaoyan")))
+
+        measures = row["difficulty"]
+        check("3.2", "词汇类指标齐全",
+              all(k in measures for k in
+                  ("beyond_cet4_pct", "beyond_cet6_pct", "frequency_p90", "rare_word_pct")),
+              ", ".join(f"{k}={measures.get(k)}" for k in
+                        ("beyond_cet4_pct", "beyond_cet6_pct", "rare_word_pct")))
+
+        check("3.3", "句法指标存着但不进综合分",
+              all(k in measures for k in difficulty.NOT_IN_COMPOSITE)
+              and all(difficulty.weights().get(k, 0) == 0 for k in difficulty.NOT_IN_COMPOSITE),
+              "实测句长与从句密度区分不了三个等级，进综合分只会稀释信号")
+
+        # The measurement error this project already made twice. `the` carries
+        # only zk/gk, so "lacks the cet4 tag" would call it out of syllabus.
+        the_beyond = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM reading_tokens WHERE headword IN ('the','make','people')"
+            " AND beyond = 1"
+        ).fetchone()[0]
+        check("3.4", "考纲标签是累积着判的",
+              the_beyond == 0,
+              "the / make / people 没有被判成超纲词"
+              if the_beyond == 0 else f"{the_beyond} 个基础词被误判为超纲")
+
+        # --- 4. 客户端契约 ------------------------------------------------ #
+        print("\n4. 客户端契约")
+
+        check("4.1", "客户端令牌碰不到管理接口",
+              client.get("/v1/admin/reading/stats", headers=head).status_code in (401, 403),
+              "铁律 4")
+
+        lib = client.get("/v1/client/library?shelf=all", headers=head).json()
+        check("4.2", "文章清单带难度指标，可切换排序",
+              lib["articles"] and "difficulty" in lib["articles"][0]
+              and len(lib["sortable"]) >= 6,
+              f"{len(lib['articles'])} 篇，可排序字段 {len(lib['sortable'])} 个")
+
+        check("4.3", "身份由令牌推导并回显",
+              lib["learner"]["id"] == 1 and "level" in lib["learner"],
+              f"learner={lib['learner']}（路径里不出现人的编号）")
+
+        caps = lib["capabilities"]
+        check("4.4", "能力声明区分「没数据」与「没实现」",
+              set(caps) >= {"level_estimate", "memory_state", "proper_noun_notes",
+                            "exam_frequency"},
+              ", ".join(f"{k}={v}" for k, v in caps.items()))
+
+        art = client.get(f"/v1/client/articles/{article_id}", headers=head).json()
+        check("4.5", "一次下发全文、标注与已有标记",
+              len(art["sentences"]) > 5 and len(art["tokens"]) > 100 and art["glossary"],
+              f"{len(art['sentences'])} 句 / {len(art['tokens'])} token /"
+              f" {len(art['glossary'])} 个词条")
+
+        # --- 5. 点词查词的各个分支 ---------------------------------------- #
+        print("\n5. 点词查词")
+
+        sample = next((t for t in art["tokens"] if (t["sense_id"] or 0) > 0), None)
+        gloss = art["glossary"][sample["headword"]] if sample else {}
+        sense = next((s for s in gloss.get("senses", []) if s["id"] == sample["sense_id"]), None)
+        check("5.1", "三层释义都在",
+              bool(sense and sense["concept_en"] and gloss.get("translation")
+                   and "exam" in sense),
+              f"① {sample['surface']} = {'／'.join(sense['gloss_zh']) if sense else '?'}"
+              f" ② 词典释义在 ③ 考频槽位在（{'有值' if sense and sense['exam'] else '待统计'}）")
+
+        derived = [t for t in art["tokens"]
+                   if t["headword"] and art["glossary"][t["headword"]].get("derivation")]
+        check("5.2", "派生词给构词分解",
+              len(derived) > 0,
+              f"{len(derived)} 个，例如 "
+              + "、".join(f"{t['surface']}←{art['glossary'][t['headword']]['derivation']['root']}"
+                          for t in derived[:3]))
+
+        check("5.3", "专有名词可点但不计生词率",
+              any(t["kind"] == "proper" for t in art["tokens"]),
+              f"{sum(1 for t in art['tokens'] if t['kind'] == 'proper')} 个，"
+              "不进难度指标、不进复习队列")
+
+        check("5.4", "超纲词：生成文标注，真题不标注",
+              art["article"]["mark_beyond"] is False,
+              "真题里遇到不认识的词本来就是要练的内容（C10）")
+
+        check("5.5", "未来资产留了位置且为空",
+              sample["note"] is None and sense["memory"] is None
+              and art["article"]["difficulty_for_you"] is None
+              and derived and art["glossary"][derived[0]["headword"]]["derivation"]["root_known"] is None,
+              "note / memory / difficulty_for_you / root_known 都在，值为空")
+
+        # --- 6. 事件与记账 ------------------------------------------------ #
+        print("\n6. 事件与记账")
+
+        stamp = str(int(time.time()))
+        hw, sid = sample["headword"], sample["sense_id"]
+        batch = [
+            {"idem_key": f"v2-open-{stamp}", "type": "article.opened",
+             "payload": {"article_id": article_id}},
+            {"idem_key": f"v2-mark-{stamp}", "type": "word.marked",
+             "payload": {"article_id": article_id, "headword": hw, "sense_id": sid,
+                         "kind": "fuzzy"}},
+            {"idem_key": f"v2-prog-{stamp}", "type": "article.progress",
+             "payload": {"article_id": article_id, "sentence_seq": 4, "percent": 30.0}},
+        ]
+        first = client.post("/v1/client/events", headers=head, json={"events": batch}).json()
+        again = client.post("/v1/client/events", headers=head, json={"events": batch}).json()
+        check("6.1", "批量上报，重放不产生重复记录",
+              first["accepted"] == 3 and again["accepted"] == 0 and again["duplicates"] == 3,
+              f"首次 {first['accepted']} 条，重放 {again['duplicates']} 条判为重复")
+
+        raw = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM client_events WHERE idem_key LIKE ?", (f"v2-%-{stamp}",)
+        ).fetchone()[0]
+        check("6.2", "原始事件另存一层，可重放",
+              raw == 3,
+              "业务表改写入逻辑时能拿历史事件重跑，不丢数据")
+
+        art2 = client.get(f"/v1/client/articles/{article_id}", headers=head).json()
+        check("6.3", "标记回读得到，跨文章按义项互通",
+              art2["glossary"][hw]["marks"].get(str(sid)) == "fuzzy",
+              f"{hw} 义项 {sid} = 模糊；同词其他义项的标记也一并下发，供弹层提示")
+
+        check("6.4", "阅读进度保存",
+              art2["progress"]["percent"] >= 30.0,
+              f"{art2['progress']['percent']}%")
+
+        # --- 7. 读完才记账 ------------------------------------------------ #
+        print("\n7. 读完才记账")
+
+        unread = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM reading_articles WHERE read_at IS NULL"
+        ).fetchone()[0]
+        # Words the learner marked by hand are legitimately tracked from the
+        # moment they marked them, whether or not they went on to finish the
+        # article — so they are excluded here. What must never appear is a word
+        # that got into the ledger purely by an article being *ingested*.
+        leaked = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM sense_states s"
+            " WHERE s.introduced_article_id IN"
+            "   (SELECT id FROM reading_articles WHERE read_at IS NULL)"
+            " AND NOT EXISTS (SELECT 1 FROM word_marks m"
+            "   WHERE m.learner_id = s.learner_id AND m.headword = s.headword)"
+        ).fetchone()[0]
+        check("7.1", "入库但没读的文章，其目标词仍在「没学过」",
+              leaked == 0,
+              f"{unread} 篇未读，没有一个词被误记为已学"
+              if leaked == 0 else f"{leaked} 个词被未读文章误记为已学")
+
+        draft = get_connection("learning").execute(
+            "SELECT id FROM generation_drafts WHERE model = 'gpt-5.5'"
+            " AND target_words != '' ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if draft:
+            gen_id = ingest.ingest_draft(int(draft["id"]))
+            targets = get_connection("learning").execute(
+                "SELECT COUNT(DISTINCT headword) FROM reading_tokens"
+                " WHERE article_id = ? AND is_target = 1", (gen_id,)
+            ).fetchone()[0]
+            check("7.2", "生成文章的目标词被标出来",
+                  targets > 0,
+                  f"{targets} 个目标词——这是「这篇为教哪些词而写」，不是「读完会记哪些词」")
+
+            before = repository.state_counts().get("reviewing", 0)
+            service._finish_article(1, gen_id)
+            after = repository.state_counts().get("reviewing", 0)
+            check("7.3", "读完不会自动把目标词塞进复习队列",
+                  after == before,
+                  f"复习中 {before} → {after}，读完本身不加词")
+        else:
+            check("7.2", "生成文章的目标词被标出来", False, "没有带目标词的 gpt-5.5 草稿")
+
+        unmarked = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM sense_states s WHERE s.pool = 'reviewing'"
+            " AND NOT EXISTS (SELECT 1 FROM word_marks m"
+            "   WHERE m.learner_id = s.learner_id AND m.headword = s.headword"
+            "   AND m.sense_id = s.sense_id)"
+        ).fetchone()[0]
+        check("7.4", "复习队列里的每一条都追得到一次标记",
+              unmarked == 0,
+              "进队列只有两条路：你标记，或将来 D3 抽查答错。系统不替你判断你会不会"
+              if unmarked == 0 else f"{unmarked} 条没有对应的标记")
+
+        check("7.5", "调度字段不存在于 P2 的表里",
+              not any(c["name"] in ("due_at", "strength", "difficulty", "interval")
+                      for c in get_connection("learning").execute(
+                          "PRAGMA table_info(sense_states)").fetchall()),
+              "记忆强度、到期时间由 P5 添加；P2 只写状态不做调度")
+
+        # --- 7b. 义项集变动后的引用完整性 ---------------------------------- #
+
+        dangling = {
+            "标注": get_connection("learning").execute(
+                "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses c"
+                " ON c.id = t.sense_id WHERE t.sense_id > 0 AND c.id IS NULL"
+            ).fetchone()[0],
+            "标记": get_connection("learning").execute(
+                "SELECT COUNT(*) FROM word_marks w LEFT JOIN content.senses c"
+                " ON c.id = w.sense_id WHERE w.sense_id > 0 AND c.id IS NULL"
+            ).fetchone()[0],
+            "掌握状态": get_connection("learning").execute(
+                "SELECT COUNT(*) FROM sense_states s LEFT JOIN content.senses c"
+                " ON c.id = s.sense_id WHERE s.sense_id > 0 AND c.id IS NULL"
+            ).fetchone()[0],
+        }
+        check("7.6", "没有指向已删除义项的悬空引用",
+              not any(dangling.values()),
+              "补一个词的义项会换掉全部义项 id；senses.replaced 事件让阅读模块自动修复"
+              if not any(dangling.values())
+              else "、".join(f"{k} {v}" for k, v in dangling.items() if v))
+
+        # --- 8. 模块自包含 ------------------------------------------------ #
+        print("\n8. 模块自包含")
+
+        from backend.core.registry import installed_modules
+        mod = installed_modules().get("reading")
+        check("8.1", "阅读模块自带表、两套接口、管理页与配置",
+              bool(mod and mod.migrations and mod.client_router and mod.admin_router
+                   and mod.admin_pages),
+              f"{len(mod.migrations)} 个迁移，客户端与管理接口各一套，"
+              f"管理页 {[p.path for p in mod.admin_pages]}")
+
+        specs = {s.key for s in __import__(
+            "backend.core.runtime_config", fromlist=["specs"]).specs()}
+        wanted = {"reading_fresh_days", "annotate_batch_words", "difficulty_weights",
+                  "library_default_sort", "progress_report_seconds"}
+        check("8.2", "参数一律配置化",
+              wanted <= specs,
+              "、".join(sorted(wanted)))
+
+        # --- 人工 ---------------------------------------------------------- #
+        print("\n需要人工确认")
+        note("M1", "电脑上真读完一篇",
+             "打开 /admin/reader，挑一篇，点词、标记、读到底，全程不卡")
+        note("M2", "点词弹层的四个分支都对",
+             "普通生词看三层释义；派生词看构词分解；人名地名说可以跳过；"
+             "超纲词说暂时不用学会（只在生成文里）")
+        note("M3", "同词不同义项的提示看得懂",
+             "标记一个多义词的某个义项，再找另一篇它用别的义项的地方，"
+             "应显示「你标记过它的另一个义项」而不是一片空白")
+        note("M4", "把后端停掉，继续读完当前这篇",
+             "标记照常，重启后事件全部补报且不重复——这是唯一真正检验离线形状的一条")
+        note("M5", "批量补跑 447 篇后，考频与熟词僻义非空",
+             "在 /admin/reading 上批量预备，跑完 senses.exam_frequency 与 is_exam_key 不应再全是 0，"
+             "第三层释义随之有内容")
+
+    print("\n" + "=" * 62)
+    print(f"自动检查：{len(passed)} 项通过，{len(failed)} 项失败，{len(manual)} 项待人工")
+    if failed:
+        print("  失败：" + "、".join(failed))
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
