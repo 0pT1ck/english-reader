@@ -31,6 +31,11 @@ SOURCE_LABELS = {
 
 MARK_KINDS = ("unknown", "fuzzy")
 
+#: What a study record can be about. Enforced by a CHECK constraint too — a typo
+#: at one call site would otherwise create a third kind of item that every query
+#: silently skips.
+ITEM_TYPES = ("word", "phrase")
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -215,12 +220,19 @@ def recount_exam_frequency() -> dict[str, int]:
     module's output and only the ``learning`` connection has both databases
     attached. The columns were declared by senses in P0 and left at 0 ever
     since; this is what finally fills them.
+
+    **Tokens inside a confirmed phrase do not count.** The annotator swept the
+    corpus before phrases existed, so where the text said ``account for`` it
+    could only pick one of ``account``'s own senses — and that inflated
+    「account 的『占／构成』出现 22 次」with occurrences that were never about
+    that word. Roughly 4.5% of the annotations are affected. Re-running this
+    after a phrase scan is what corrects the count.
     """
     conn = get_connection("learning")
     counts = conn.execute(
         "SELECT t.sense_id, COUNT(*) AS n FROM reading_tokens t"
         " JOIN reading_articles a ON a.id = t.article_id"
-        " WHERE a.source != 'generated' AND t.sense_id > 0"
+        " WHERE a.source != 'generated' AND t.sense_id > 0 AND t.in_phrase = 0"
         " GROUP BY t.sense_id"
     ).fetchall()
 
@@ -248,12 +260,18 @@ def recount_exam_frequency() -> dict[str, int]:
     # The column stays declared and empty per architecture rule 5.
     scored = int(conn.execute(
         "SELECT COUNT(*) FROM content.senses WHERE exam_frequency > 0").fetchone()[0])
+    excluded = int(conn.execute(
+        "SELECT COUNT(*) FROM reading_tokens t JOIN reading_articles a ON a.id = t.article_id"
+        " WHERE a.source != 'generated' AND t.sense_id > 0 AND t.in_phrase = 1"
+    ).fetchone()[0])
     log.info(
         "senses.exam_frequency.recounted",
-        f"按 452 篇真题的标注结果算出考频：{scored} 个义项在真题里出现过",
-        scored=scored,
+        f"按 452 篇真题的标注结果算出考频：{scored} 个义项在真题里出现过；"
+        f"落在词组里的 {excluded} 个 token 没有计入",
+        scored=scored, excluded_in_phrase=excluded,
     )
     return {"senses_with_frequency": scored, "exam_key_senses": 0,
+            "excluded_in_phrase": excluded,
             "articles_counted": int(conn.execute(
                 "SELECT COUNT(*) FROM reading_articles WHERE source != 'generated'"
                 " AND status = 'ready'").fetchone()[0])}
@@ -369,17 +387,17 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
     repair tool. Idempotent.
     """
     conn = get_connection("learning")
-    scope = " AND {alias}.headword = ?"
+    scope = " AND {alias}.{column} = ?"
     args: list[Any] = [headword] if headword else []
 
-    def where(alias: str) -> str:
-        return scope.format(alias=alias) if headword else ""
+    def where(alias: str, column: str = "item_key") -> str:
+        return scope.format(alias=alias, column=column) if headword else ""
 
     affected_articles = [
         row["article_id"] for row in conn.execute(
             "SELECT DISTINCT t.article_id FROM reading_tokens t"
             " LEFT JOIN content.senses c ON c.id = t.sense_id"
-            f" WHERE t.sense_id > 0 AND c.id IS NULL{where('t')}", args
+            f" WHERE t.sense_id > 0 AND c.id IS NULL{where('t', 'headword')}", args
         ).fetchall()
     ]
     tokens = conn.execute(
@@ -392,38 +410,39 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
     # that may already be there.
     marks = 0
     for row in conn.execute(
-        "SELECT w.id, w.learner_id, w.headword, w.kind FROM word_marks w"
+        "SELECT w.id, w.learner_id, w.item_key, w.kind FROM study_marks w"
         " LEFT JOIN content.senses c ON c.id = w.sense_id"
-        f" WHERE w.sense_id > 0 AND c.id IS NULL{where('w')}", args
+        f" WHERE w.item_type = 'word' AND w.sense_id > 0 AND c.id IS NULL{where('w')}", args
     ).fetchall():
         conn.execute(
-            "UPDATE OR REPLACE word_marks SET sense_id = 0 WHERE id = ?", (row["id"],)
+            "UPDATE OR REPLACE study_marks SET sense_id = 0 WHERE id = ?", (row["id"],)
         )
         marks += 1
 
     states = 0
     for row in conn.execute(
-        "SELECT s.* FROM sense_states s LEFT JOIN content.senses c ON c.id = s.sense_id"
-        f" WHERE s.sense_id > 0 AND c.id IS NULL{where('s')}", args
+        "SELECT s.* FROM study_states s LEFT JOIN content.senses c ON c.id = s.sense_id"
+        f" WHERE s.item_type = 'word' AND s.sense_id > 0 AND c.id IS NULL{where('s')}", args
     ).fetchall():
         existing = conn.execute(
-            "SELECT * FROM sense_states WHERE learner_id = ? AND headword = ? AND sense_id = 0",
-            (row["learner_id"], row["headword"]),
+            "SELECT * FROM study_states WHERE learner_id = ? AND item_type = 'word'"
+            " AND item_key = ? AND sense_id = 0",
+            (row["learner_id"], row["item_key"]),
         ).fetchone()
         if existing is None:
-            conn.execute("UPDATE sense_states SET sense_id = 0 WHERE id = ?", (row["id"],))
+            conn.execute("UPDATE study_states SET sense_id = 0 WHERE id = ?", (row["id"],))
         else:
             # Keep the earlier introduction and the sum of encounters: both rows
             # describe the same word being met, just cut differently.
             conn.execute(
-                "UPDATE sense_states SET encounters = encounters + ?,"
+                "UPDATE study_states SET encounters = encounters + ?,"
                 " introduced_at = MIN(COALESCE(introduced_at, ?), COALESCE(?, introduced_at)),"
                 " pool = CASE WHEN pool = 'new' THEN ? ELSE pool END, updated_at = ?"
                 " WHERE id = ?",
                 (row["encounters"], row["introduced_at"], row["introduced_at"],
                  row["pool"], _now(), existing["id"]),
             )
-            conn.execute("DELETE FROM sense_states WHERE id = ?", (row["id"],))
+            conn.execute("DELETE FROM study_states WHERE id = ?", (row["id"],))
         states += 1
 
     conn.commit()
@@ -461,13 +480,19 @@ def declined_tokens(limit: int = 200) -> list[dict[str, Any]]:
     This is the raw material for the 漏义项报告 the sense design asks for: a
     word whose sense set does not cover a use that actually occurs in the exam
     corpus is a gap worth filling, and the annotator finds them for free.
+
+    Tokens inside a confirmed phrase are excluded, and that is most of what used
+    to make this report hard to read: ``get up``, ``known as`` and ``at least``
+    were its most frequent entries, and no sense of ``get`` or ``least`` will
+    ever cover them. They were never gaps in a sense set — they were phrases the
+    annotator had no way to see. What is left is the real shortfall.
     """
     rows = get_connection("learning").execute(
         "SELECT t.headword, t.surface, t.article_id, s.text AS sentence,"
         " a.title, a.source FROM reading_tokens t"
         " JOIN reading_sentences s ON s.id = t.sentence_id"
         " JOIN reading_articles a ON a.id = t.article_id"
-        " WHERE t.sense_id = -1 ORDER BY t.headword LIMIT ?",
+        " WHERE t.sense_id = -1 AND t.in_phrase = 0 ORDER BY t.headword LIMIT ?",
         (limit,),
     ).fetchall()
     return [dict(r) for r in rows]
@@ -497,64 +522,68 @@ def annotation_progress(article_id: int) -> tuple[int, int]:
 
 # --------------------------------------------------------------------------- #
 # Marks — three levels counting the absence of one
+#
+# One table for both kinds of item. A word sense and a phrase are the same thing
+# to everything downstream: something the learner said they do not know, which
+# review scheduling will one day order into a single list. Two tables would mean
+# writing that ordering twice.
 # --------------------------------------------------------------------------- #
 
 
-def set_mark(learner_id: int, headword: str, sense_id: int, kind: str, *,
-             article_id: int | None = None, sentence_id: int | None = None,
-             token_id: int | None = None) -> None:
-    if kind not in MARK_KINDS:
+def set_mark(learner_id: int, item_key: str, sense_id: int, kind: str, *,
+             item_type: str = "word", article_id: int | None = None,
+             sentence_id: int | None = None, token_id: int | None = None) -> None:
+    if kind not in MARK_KINDS or item_type not in ITEM_TYPES:
         return
     conn = get_connection("learning")
-    # A word is either unknown or fuzzy, never both: marking it one clears the
+    # An item is either unknown or fuzzy, never both: marking it one clears the
     # other, otherwise "I worked it out" would sit alongside "I don't know it".
     other = "fuzzy" if kind == "unknown" else "unknown"
     conn.execute(
-        "DELETE FROM word_marks WHERE learner_id = ? AND headword = ? AND sense_id = ?"
-        " AND kind = ?",
-        (learner_id, headword, sense_id, other),
+        "DELETE FROM study_marks WHERE learner_id = ? AND item_type = ? AND item_key = ?"
+        " AND sense_id = ? AND kind = ?",
+        (learner_id, item_type, item_key, sense_id, other),
     )
     conn.execute(
-        "INSERT OR IGNORE INTO word_marks (learner_id, headword, sense_id, kind,"
-        " article_id, sentence_id, token_id, created_at) VALUES (?,?,?,?,?,?,?,?)",
-        (learner_id, headword, sense_id, kind, article_id, sentence_id, token_id, _now()),
+        "INSERT OR IGNORE INTO study_marks (learner_id, item_type, item_key, sense_id,"
+        " kind, article_id, sentence_id, token_id, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (learner_id, item_type, item_key, sense_id, kind, article_id, sentence_id,
+         token_id, _now()),
     )
     conn.commit()
 
 
-def clear_mark(learner_id: int, headword: str, sense_id: int, kind: str | None = None) -> None:
+def clear_mark(learner_id: int, item_key: str, sense_id: int, kind: str | None = None,
+               *, item_type: str = "word") -> None:
     conn = get_connection("learning")
+    sql = ("DELETE FROM study_marks WHERE learner_id = ? AND item_type = ?"
+           " AND item_key = ? AND sense_id = ?")
+    params: list[Any] = [learner_id, item_type, item_key, sense_id]
     if kind:
-        conn.execute(
-            "DELETE FROM word_marks WHERE learner_id = ? AND headword = ? AND sense_id = ?"
-            " AND kind = ?",
-            (learner_id, headword, sense_id, kind),
-        )
-    else:
-        conn.execute(
-            "DELETE FROM word_marks WHERE learner_id = ? AND headword = ? AND sense_id = ?",
-            (learner_id, headword, sense_id),
-        )
+        sql += " AND kind = ?"
+        params.append(kind)
+    conn.execute(sql, params)
     conn.commit()
 
 
-def marks_for_headwords(learner_id: int, headwords: set[str]) -> dict[tuple[str, int], str]:
-    """Every mark on these words, keyed by (headword, sense_id).
+def marks_for(learner_id: int, keys: set[str], *,
+              item_type: str = "word") -> dict[tuple[str, int], str]:
+    """Every mark on these items, keyed by (item_key, sense_id).
 
-    Deliberately fetched per *headword*, not per (headword, sense): the tap
-    panel has to be able to say "you marked another sense of this word".
-    Without that line the learner sees "unmarked" on a word they know they
-    marked, and concludes the app forgot.
+    Deliberately fetched per *item*, not per (item, sense): the tap panel has to
+    be able to say "you marked another sense of this word". Without that line
+    the learner sees "unmarked" on a word they know they marked, and concludes
+    the app forgot.
     """
-    if not headwords:
+    if not keys:
         return {}
-    placeholders = ",".join("?" * len(headwords))
+    placeholders = ",".join("?" * len(keys))
     rows = get_connection("learning").execute(
-        f"SELECT headword, sense_id, kind FROM word_marks"  # noqa: S608 - count-built
-        f" WHERE learner_id = ? AND headword IN ({placeholders})",
-        [learner_id, *headwords],
+        f"SELECT item_key, sense_id, kind FROM study_marks"  # noqa: S608 - count-built
+        f" WHERE learner_id = ? AND item_type = ? AND item_key IN ({placeholders})",
+        [learner_id, item_type, *keys],
     ).fetchall()
-    return {(r["headword"], int(r["sense_id"])): r["kind"] for r in rows}
+    return {(r["item_key"], int(r["sense_id"])): r["kind"] for r in rows}
 
 
 # --------------------------------------------------------------------------- #
@@ -562,20 +591,21 @@ def marks_for_headwords(learner_id: int, headwords: set[str]) -> dict[tuple[str,
 # --------------------------------------------------------------------------- #
 
 
-def touch_state(learner_id: int, headword: str, sense_id: int, *, pool: str | None = None,
+def touch_state(learner_id: int, item_key: str, sense_id: int, *,
+                item_type: str = "word", pool: str | None = None,
                 article_id: int | None = None, sentence_id: int | None = None,
                 encounters: int = 0) -> None:
-    """Create or update one sense's standing.
+    """Create or update one item's standing.
 
     ``introduced_*`` is written once and never overwritten: it records where the
-    word was first taught, which is what the review card's original sentence
-    comes from.
+    item was first met, which is what the review card's original sentence comes
+    from.
     """
     conn = get_connection("learning")
     conn.execute(
-        "INSERT OR IGNORE INTO sense_states (learner_id, headword, sense_id, updated_at)"
-        " VALUES (?,?,?,?)",
-        (learner_id, headword, sense_id, _now()),
+        "INSERT OR IGNORE INTO study_states (learner_id, item_type, item_key, sense_id,"
+        " updated_at) VALUES (?,?,?,?,?)",
+        (learner_id, item_type, item_key, sense_id, _now()),
     )
     sets = ["encounters = encounters + ?", "updated_at = ?"]
     params: list[Any] = [encounters, _now()]
@@ -589,39 +619,69 @@ def touch_state(learner_id: int, headword: str, sense_id: int, *, pool: str | No
         params.append(article_id)
         sets.append("introduced_sentence_id = COALESCE(introduced_sentence_id, ?)")
         params.append(sentence_id)
-    params.extend([learner_id, headword, sense_id])
+    params.extend([learner_id, item_type, item_key, sense_id])
     conn.execute(
-        f"UPDATE sense_states SET {', '.join(sets)}"  # noqa: S608 - fragments are literals
-        " WHERE learner_id = ? AND headword = ? AND sense_id = ?",
+        f"UPDATE study_states SET {', '.join(sets)}"  # noqa: S608 - fragments are literals
+        " WHERE learner_id = ? AND item_type = ? AND item_key = ? AND sense_id = ?",
         params,
     )
     conn.commit()
 
 
-def states_for_headwords(learner_id: int, headwords: set[str]) -> dict[tuple[str, int], dict]:
-    if not headwords:
+def demote_if_unmarked(learner_id: int, item_key: str, sense_id: int, *,
+                       item_type: str = "word") -> bool:
+    """Send an item back to the 'new' pool once nothing marks it any more.
+
+    The counterpart of the rule that only the learner's own signal puts
+    something in the review queue: withdraw the signal and it comes back out.
+    Without this, unmarking leaves a ``reviewing`` row with no mark behind it —
+    which is precisely the state the acceptance check for that invariant looks
+    for, and it would be there because of an undo rather than a bug.
+    """
+    conn = get_connection("learning")
+    still = conn.execute(
+        "SELECT 1 FROM study_marks WHERE learner_id = ? AND item_type = ?"
+        " AND item_key = ? AND sense_id = ?",
+        (learner_id, item_type, item_key, sense_id),
+    ).fetchone()
+    if still:
+        return False
+    cursor = conn.execute(
+        "UPDATE study_states SET pool = 'new', updated_at = ? WHERE learner_id = ?"
+        " AND item_type = ? AND item_key = ? AND sense_id = ? AND pool = 'reviewing'",
+        (_now(), learner_id, item_type, item_key, sense_id),
+    )
+    conn.commit()
+    return bool(cursor.rowcount)
+
+
+def states_for(learner_id: int, keys: set[str], *,
+               item_type: str = "word") -> dict[tuple[str, int], dict]:
+    if not keys:
         return {}
-    placeholders = ",".join("?" * len(headwords))
+    placeholders = ",".join("?" * len(keys))
     rows = get_connection("learning").execute(
-        f"SELECT * FROM sense_states WHERE learner_id = ?"  # noqa: S608 - count-built
-        f" AND headword IN ({placeholders})",
-        [learner_id, *headwords],
+        f"SELECT * FROM study_states WHERE learner_id = ?"  # noqa: S608 - count-built
+        f" AND item_type = ? AND item_key IN ({placeholders})",
+        [learner_id, item_type, *keys],
     ).fetchall()
-    return {(r["headword"], int(r["sense_id"])): dict(r) for r in rows}
+    return {(r["item_key"], int(r["sense_id"])): dict(r) for r in rows}
 
 
 def state_counts(learner_id: int = 1) -> dict[str, int]:
-    rows = get_connection("learning").execute(
-        "SELECT pool, COUNT(*) AS n FROM sense_states WHERE learner_id = ? GROUP BY pool",
+    conn = get_connection("learning")
+    rows = conn.execute(
+        "SELECT pool, COUNT(*) AS n FROM study_states WHERE learner_id = ? GROUP BY pool",
         (learner_id,),
     ).fetchall()
     counts = {r["pool"]: int(r["n"]) for r in rows}
-    counts["marked_unknown"] = int(get_connection("learning").execute(
-        "SELECT COUNT(*) FROM word_marks WHERE learner_id = ? AND kind = 'unknown'",
-        (learner_id,),
-    ).fetchone()[0])
-    counts["marked_fuzzy"] = int(get_connection("learning").execute(
-        "SELECT COUNT(*) FROM word_marks WHERE learner_id = ? AND kind = 'fuzzy'",
+    for kind in MARK_KINDS:
+        counts[f"marked_{kind}"] = int(conn.execute(
+            "SELECT COUNT(*) FROM study_marks WHERE learner_id = ? AND kind = ?",
+            (learner_id, kind),
+        ).fetchone()[0])
+    counts["marked_phrases"] = int(conn.execute(
+        "SELECT COUNT(*) FROM study_marks WHERE learner_id = ? AND item_type = 'phrase'",
         (learner_id,),
     ).fetchone()[0])
     return counts

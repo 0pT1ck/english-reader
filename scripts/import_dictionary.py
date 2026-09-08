@@ -12,13 +12,20 @@ Source is ECDICT's ``ecdict.csv`` (~66 MB, ~340k entries), not the full release
 (~7.7M entries), because the long tail is dominated by inflected forms, proper
 nouns and noise that would inflate the database without helping a CET learner.
 
-Two things get built here:
+Three things get built here:
 
 * ``words`` — one row per headword, with the syllabus tags and frequency ranks
   everything downstream depends on.
 * ``word_forms`` — surface form to headword, expanded from ECDICT's inflection
   field. This is the cross-check for the NLP lemmatiser, not a replacement: it
   cannot tell ``left`` (leave) from ``left`` (direction) on its own.
+* ``phrases`` — the multi-word entries, in their own table. Pass
+  ``--phrases-only`` to rebuild just those.
+
+**One script, not two.** ``dictionary.db`` is defined as disposable: delete it,
+run this, and it comes back. A second script would make that sentence false, and
+it would fail quietly — the phrase table would simply be empty, tapping half of
+``account for`` would show ``account``, and nothing anywhere would say why.
 """
 
 from __future__ import annotations
@@ -42,6 +49,10 @@ from backend.modules.vocabulary import repository, schema  # noqa: E402
 log = get_logger("scripts.dictionary")
 
 SOURCE_URL = "https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv"
+
+#: Two to four words. One word is not a phrase, and beyond four the matcher
+#: would be searching for sentences — nothing in the corpus needs it.
+MIN_PHRASE_WORDS, MAX_PHRASE_WORDS = 2, 4
 
 # ECDICT inflection codes. Only the ones that produce a distinct surface form
 # are useful for reverse lookup; '0' and '1' describe the relationship in the
@@ -113,6 +124,14 @@ def _unescape(text: str) -> str:
     return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "")
 
 
+def as_int_of(row: dict, key: str) -> int:
+    raw = (row.get(key) or "").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return 0
+
+
 def _parse_exchange(exchange: str) -> list[tuple[str, str]]:
     """Turn ``p:left/d:left/i:leaving`` into ``[(surface, code), ...]``."""
     if not exchange:
@@ -128,23 +147,39 @@ def _parse_exchange(exchange: str) -> list[tuple[str, str]]:
     return out
 
 
-def import_csv(source: Path) -> dict[str, int]:
-    """Load the CSV into ``dictionary.db``, replacing whatever was there."""
+def import_csv(source: Path, *, words_too: bool = True) -> dict[str, int]:
+    """Load the CSV into ``dictionary.db``, replacing whatever was there.
+
+    ``words_too=False`` rebuilds only the phrase table, which is what
+    ``--phrases-only`` is for: it leaves the 404k single-word entries and their
+    inflection table untouched, so re-reading the phrase half costs seconds
+    rather than minutes.
+    """
     # csv fields can be long (ECDICT packs full definitions into one cell).
     csv.field_size_limit(10_000_000)
 
     conn = get_connection("dictionary")
     print("清空旧数据…")
-    conn.execute("DELETE FROM word_forms")
-    conn.execute("DELETE FROM words")
+    if words_too:
+        conn.execute("DELETE FROM word_forms")
+        conn.execute("DELETE FROM words")
+    conn.execute("DELETE FROM phrases")
     conn.commit()
 
     words: list[tuple] = []
     forms: list[tuple] = []
+    phrases: list[tuple] = []
     seen: set[str] = set()
-    stats = {"rows": 0, "words": 0, "forms": 0, "skipped": 0}
+    stats = {"rows": 0, "words": 0, "forms": 0, "phrases": 0, "skipped": 0}
 
     def flush() -> None:
+        if phrases:
+            conn.executemany(
+                "INSERT OR IGNORE INTO phrases (phrase, word_count, head,"
+                " translation, definition, collins, oxford) VALUES (?,?,?,?,?,?,?)",
+                phrases,
+            )
+            phrases.clear()
         if words:
             conn.executemany(
                 "INSERT OR IGNORE INTO words (headword, phonetic, definition,"
@@ -169,11 +204,35 @@ def import_csv(source: Path) -> dict[str, int]:
             stats["rows"] += 1
             headword = (row.get("word") or "").strip().lower()
 
-            # Multi-word entries are phrases, not headwords. Phrasal verbs are a
-            # known gap deferred past P0 — the design says so explicitly — and
-            # letting them in now would pollute the single-word vocabulary model.
-            if not headword or " " in headword or not headword.isascii():
+            if not headword or not headword.isascii():
                 stats["skipped"] += 1
+                continue
+
+            # Multi-word entries go to their own table. P0 dropped them outright
+            # with the note that phrasal verbs were deferred; that was right at
+            # the time, and it meant 366,502 rows of ready-made Chinese glosses
+            # sat unused behind a one-line filter for two phases.
+            if " " in headword:
+                parts = headword.split()
+                # Alphabetic words only: the raw file is full of entries like
+                # "3d printing" and "a.m." that a word-sequence matcher over
+                # running prose can never hit anyway.
+                if (MIN_PHRASE_WORDS <= len(parts) <= MAX_PHRASE_WORDS
+                        and all(part.isalpha() for part in parts)):
+                    phrases.append((
+                        headword, len(parts), parts[0],
+                        _unescape((row.get("translation") or "").strip()) or None,
+                        _unescape((row.get("definition") or "").strip()) or None,
+                        as_int_of(row, "collins"), as_int_of(row, "oxford"),
+                    ))
+                    stats["phrases"] += 1
+                else:
+                    stats["skipped"] += 1
+                if len(phrases) >= 5000:
+                    flush()
+                continue
+
+            if not words_too:
                 continue
             if headword in seen:
                 stats["skipped"] += 1
@@ -181,11 +240,7 @@ def import_csv(source: Path) -> dict[str, int]:
             seen.add(headword)
 
             def as_int(key: str) -> int:
-                raw = (row.get(key) or "").strip()
-                try:
-                    return int(raw)
-                except ValueError:
-                    return 0
+                return as_int_of(row, key)
 
             exchange = (row.get("exchange") or "").strip()
             words.append(
@@ -215,7 +270,7 @@ def import_csv(source: Path) -> dict[str, int]:
                 print(f"\r  已导入 {stats['words']:,} 个词条", end="", flush=True)
 
     flush()
-    print(f"\r  已导入 {stats['words']:,} 个词条")
+    print(f"\r  已导入 {stats['words']:,} 个词条、{stats['phrases']:,} 条词组")
 
     print("建立索引与统计信息…")
     conn.execute("ANALYZE")
@@ -227,6 +282,7 @@ def import_csv(source: Path) -> dict[str, int]:
 
 def main() -> int:
     force = "--force" in sys.argv
+    phrases_only = "--phrases-only" in sys.argv
     settings = get_settings()
 
     with trace() as tid:
@@ -238,7 +294,7 @@ def main() -> int:
         run_migrations("vocabulary", schema.MIGRATIONS)
 
         source = download(settings.data_dir / "ecdict.csv", force=force)
-        stats = import_csv(source)
+        stats = import_csv(source, words_too=not phrases_only)
         repository.clear_caches()
 
         summary = repository.stats()
@@ -251,7 +307,10 @@ def main() -> int:
             if count:
                 label = repository.SYLLABUS_LABELS.get(tag, tag)
                 print(f"    {label:8} {count:,}")
-        print(f"\n  跳过 {stats['skipped']:,} 行（词组、非 ASCII、重复）")
+        print(f"  词组        {summary['phrases']:,}")
+        print("    这不是「值得学的词组」清单——带考纲标签的只有几条，词频全是 0。")
+        print("    它只回答「这个组合在词典里有没有条目」；是不是词组按每一处的上下文判断。")
+        print(f"\n  跳过 {stats['skipped']:,} 行（非 ASCII、五个词以上、重复）")
         print(f"  用时 {stats['seconds']} 秒")
 
         log.info(
@@ -259,6 +318,7 @@ def main() -> int:
             f"词典导入完成，共 {summary['words']} 个词条",
             words=summary["words"],
             forms=summary["forms"],
+            phrases=summary["phrases"],
             seconds=stats["seconds"],
         )
 

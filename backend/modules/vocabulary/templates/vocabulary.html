@@ -27,6 +27,10 @@
     <span class="stat-value">{{ "{:,}".format(stats.forms) }}</span>
   </div>
   <div class="card stat">
+    <span class="stat-label">词组 <span class="muted">（多词条目）</span></span>
+    <span class="stat-value">{{ "{:,}".format(stats.phrases) }}</span>
+  </div>
+  <div class="card stat">
     <span class="stat-label">带词频排名</span>
     <span class="stat-value">{{ "{:,}".format(stats.with_frequency) }}</span>
   </div>

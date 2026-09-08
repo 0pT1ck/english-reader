@@ -14,8 +14,8 @@ Term mapping for the design documents:
     incidental    附带词        met in passing, glossed but never assigned
     sense state   义项掌握状态   what the learner knows, per sense
 
-Three layers store *what happened*: articles, sentences, tokens are the text as
-analysed once at ingest, and never change afterwards. ``word_marks`` is what the
+Three layers store *what happened*: articles, sentences, tokens and phrases are
+the text as analysed once at ingest, and never change afterwards. ``word_marks`` is what the
 learner did. ``sense_states`` is the third thing the design needed and did not
 have — *where each sense stands now*, which is what both review scheduling and
 "which words have not been taught yet" have to read.
@@ -23,7 +23,122 @@ have — *where each sense stands now*, which is what both review scheduling and
 
 from __future__ import annotations
 
+import sqlite3
+
 from backend.core.db import Migration
+
+
+def _merge_study_tables(conn: sqlite3.Connection) -> None:
+    """Rename the two study tables and give them a type column.
+
+    ``word_marks`` becomes ``study_marks`` and ``sense_states`` becomes
+    ``study_states``, each gaining ``item_type`` (word / phrase) and
+    ``item_key`` (``account`` / ``account for``).
+
+    **Why one table per concern rather than one per type.** Review scheduling
+    has to answer "what comes back today", and the answer is one list with words
+    and phrases mixed into it. Split across two tables, P5's scheduler reads both
+    and merges — and that scheduler is the core algorithm of this project, so
+    writing it twice means two copies that drift apart.
+
+    **Why now.** A table called 单词标记 holding phrases is a name that lies. The
+    two tables hold six rows each today, so the migration is free; after half a
+    year of reading, with P5's columns grown onto them, it is not. This is the
+    only free moment there will be.
+
+    ``sense_id`` stays, and is always 0 for a phrase. That is a column only some
+    types use, which is an ordinary shape; splitting further to avoid it would
+    be the worse trade.
+
+    Row counts are asserted rather than trusted. A silent loss here loses the
+    learner's own record, the one thing in this project that cannot be
+    regenerated, so a mismatch aborts the migration — and the automatic
+    pre-migration backup is what it is aborting in favour of.
+    """
+    def count(table: str) -> int:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?",
+            (table,),
+        ).fetchone()
+        if row[0] == 0:
+            return -1
+        return int(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0])  # noqa: S608
+
+    before = {"marks": count("word_marks"), "states": count("sense_states")}
+
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS study_marks (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            learner_id  INTEGER NOT NULL DEFAULT 1,
+
+            -- Constrained in the database rather than by convention: a typo at
+            -- one call site would otherwise create a third kind of item that
+            -- every query silently ignores.
+            item_type   TEXT    NOT NULL DEFAULT 'word'
+                        CHECK (item_type IN ('word', 'phrase')),
+            -- The headword for a word, the dictionary form for a phrase.
+            item_key    TEXT    NOT NULL,
+
+            -- 0 when the item has no sense set at all (about 10% of exam-paper
+            -- vocabulary), and always 0 for a phrase.
+            sense_id    INTEGER NOT NULL DEFAULT 0,
+            -- unknown | fuzzy
+            kind        TEXT    NOT NULL,
+            article_id  INTEGER,
+            sentence_id INTEGER,
+            token_id    INTEGER,
+            created_at  TEXT    NOT NULL,
+            -- `kind` is deliberately *not* part of the key: an item is unknown
+            -- or fuzzy, never both, and the database should say so rather than
+            -- trusting every writer to clear the other one first.
+            UNIQUE (learner_id, item_type, item_key, sense_id)
+        );
+        INSERT INTO study_marks (id, learner_id, item_type, item_key, sense_id, kind,
+                                 article_id, sentence_id, token_id, created_at)
+            SELECT id, learner_id, 'word', headword, sense_id, kind,
+                   article_id, sentence_id, token_id, created_at
+            FROM word_marks;
+        DROP TABLE word_marks;
+        CREATE INDEX IF NOT EXISTS idx_marks_item
+            ON study_marks (learner_id, item_type, item_key);
+
+        CREATE TABLE IF NOT EXISTS study_states (
+            id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+            learner_id            INTEGER NOT NULL DEFAULT 1,
+            item_type             TEXT    NOT NULL DEFAULT 'word'
+                                  CHECK (item_type IN ('word', 'phrase')),
+            item_key              TEXT    NOT NULL,
+            sense_id              INTEGER NOT NULL DEFAULT 0,
+
+            -- new | reviewing | graduated
+            pool                  TEXT    NOT NULL DEFAULT 'new',
+
+            introduced_at         TEXT,
+            introduced_article_id INTEGER,
+            introduced_sentence_id INTEGER,
+            encounters            INTEGER NOT NULL DEFAULT 0,
+            updated_at            TEXT    NOT NULL,
+            UNIQUE (learner_id, item_type, item_key, sense_id)
+        );
+        INSERT INTO study_states (id, learner_id, item_type, item_key, sense_id, pool,
+                                  introduced_at, introduced_article_id,
+                                  introduced_sentence_id, encounters, updated_at)
+            SELECT id, learner_id, 'word', headword, sense_id, pool,
+                   introduced_at, introduced_article_id,
+                   introduced_sentence_id, encounters, updated_at
+            FROM sense_states;
+        DROP TABLE sense_states;
+        CREATE INDEX IF NOT EXISTS idx_states_pool ON study_states (learner_id, pool);
+        CREATE INDEX IF NOT EXISTS idx_states_item
+            ON study_states (learner_id, item_type, item_key);
+    """)
+
+    after = {"marks": count("study_marks"), "states": count("study_states")}
+    if before["marks"] >= 0 and after != before:
+        raise RuntimeError(
+            f"学习记录迁移前后行数对不上：迁移前 {before}，迁移后 {after}。"
+            "已回滚，迁移前的自动备份在 data/backups/ 下。"
+        )
 
 MIGRATIONS = [
     Migration(
@@ -221,6 +336,69 @@ MIGRATIONS = [
             error        TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_events_type ON client_events (type, received_at);
+        """,
+    ),
+    Migration(
+        version=3,
+        name="one study record for words and phrases",
+        database="learning",
+        apply=_merge_study_tables,
+    ),
+    Migration(
+        version=4,
+        name="phrase occurrences",
+        database="learning",
+        # Where a run of tokens is a phrase rather than words that merely stand
+        # next to each other. Two stages produce a row here: a structural filter
+        # (a verb followed by a particle, the pair having a dictionary entry)
+        # proposes, and the model decides per occurrence.
+        #
+        # Rejected candidates are kept, not deleted. `verdict = 0` records that
+        # this one was already asked about; without it every re-run pays again
+        # for the same question and the same negative answer.
+        apply="""
+        CREATE TABLE IF NOT EXISTS reading_phrases (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            article_id  INTEGER NOT NULL REFERENCES reading_articles(id) ON DELETE CASCADE,
+            sentence_id INTEGER NOT NULL REFERENCES reading_sentences(id) ON DELETE CASCADE,
+
+            -- The dictionary form, e.g. "account for". This is what marks and
+            -- study state key on: a phrase is an item in its own right, so
+            -- marking `account for` never touches what is recorded about
+            -- `account` — that separation is the whole point.
+            phrase      TEXT    NOT NULL,
+
+            -- Token span, in article-level token positions, so a client can
+            -- join the words visually and either half opens the phrase.
+            start_seq   INTEGER NOT NULL,
+            end_seq     INTEGER NOT NULL,
+            surface     TEXT    NOT NULL,
+
+            -- NULL not judged yet, 1 a phrase here, 0 adjacent words only.
+            verdict     INTEGER,
+            judged_at   TEXT,
+            created_at  TEXT    NOT NULL,
+            UNIQUE (article_id, start_seq, phrase)
+        );
+        CREATE INDEX IF NOT EXISTS idx_phrases_article
+            ON reading_phrases (article_id, verdict);
+        CREATE INDEX IF NOT EXISTS idx_phrases_pending
+            ON reading_phrases (verdict, article_id);
+        CREATE INDEX IF NOT EXISTS idx_phrases_phrase ON reading_phrases (phrase);
+
+        -- This token is part of a confirmed phrase, so its own sense annotation
+        -- describes something that was never there. The annotator swept the
+        -- whole corpus before phrases existed: meeting `account for` it could
+        -- only pick one of `account`'s four senses, and about 4.5% of the
+        -- 95,058 annotations are wrong in that way.
+        --
+        -- Flagged rather than re-annotated. Re-annotating costs thirteen times
+        -- what a sense-level remap costs, and the planned dictionary swap will
+        -- not clean it up either — §F4 maps old senses to new, which carries
+        -- the error across intact. A flag lets every consumer exclude these for
+        -- the price of one column.
+        ALTER TABLE reading_tokens ADD COLUMN in_phrase INTEGER NOT NULL DEFAULT 0;
+        CREATE INDEX IF NOT EXISTS idx_tokens_in_phrase ON reading_tokens (in_phrase);
         """,
     ),
 ]

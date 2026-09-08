@@ -23,7 +23,7 @@ from backend.core import auth, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import difficulty, ingest, repository
+from backend.modules.reading import difficulty, ingest, phrases, repository
 from backend.modules.senses import repository as senses
 from backend.modules.vocabulary import repository as dictionary
 
@@ -51,9 +51,13 @@ def capabilities() -> dict[str, bool]:
     phase. The fields are present now because architecture rule 5 forbids
     changing a field's meaning later, and sideloaded clients update late.
     """
-    annotated_exams = int(get_connection("learning").execute(
+    conn = get_connection("learning")
+    annotated_exams = int(conn.execute(
         "SELECT COUNT(*) FROM reading_articles WHERE source != 'generated'"
         " AND status = 'ready'"
+    ).fetchone()[0])
+    judged_phrases = int(conn.execute(
+        "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NOT NULL"
     ).fetchone()[0])
     return {
         # P3: ability estimate. Fills learner.level, difficulty.for_you,
@@ -69,6 +73,10 @@ def capabilities() -> dict[str, bool]:
         # field is absent rather than zero, because a zero here would read as
         # "never appears in the exams", which is a different claim.
         "exam_frequency": annotated_exams >= 400,
+        # Whether the phrase pass has run at all. An article with an empty
+        # `phrases` list is otherwise ambiguous — no phrases in this text, or
+        # nobody has looked yet — and those two should not render the same.
+        "phrases": judged_phrases > 0,
     }
 
 
@@ -128,8 +136,8 @@ def library(learner_id: int, *, shelf: str = "fresh", source: str | None = None,
 
 def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
     headwords = {t["headword"] for t in tokens if t.get("headword")}
-    marks = repository.marks_for_headwords(learner_id, headwords)
-    states = repository.states_for_headwords(learner_id, headwords)
+    marks = repository.marks_for(learner_id, headwords)
+    states = repository.states_for(learner_id, headwords)
 
     glossary: dict[str, Any] = {}
     for headword in sorted(headwords):
@@ -218,6 +226,38 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
     return glossary
 
 
+def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
+    """Confirmed phrases in this article, with their glosses and your marks.
+
+    **A phrase is an item in its own right.** Marking ``account for`` records
+    nothing against ``account``: not knowing the phrase says nothing about
+    whether the word inside it is known, and letting one mark stand for both
+    would drop a word the reader understands perfectly well into the review
+    queue.
+
+    The span is sent; how to show it is the client's business. That is not a
+    hedge — the web reader deliberately shows nothing in the text (four kinds of
+    underline and two background colours are already spoken for) while P7's
+    native client will have its own answer.
+    """
+    found = phrases.confirmed_for(article_id)
+    if not found:
+        return []
+    keys = {p["phrase"] for p in found}
+    marks = repository.marks_for(learner_id, keys, item_type="phrase")
+    states = repository.states_for(learner_id, keys, item_type="phrase")
+    out = []
+    for item in found:
+        state = states.get((item["phrase"], 0))
+        out.append({
+            **item,
+            "mark": marks.get((item["phrase"], 0)),
+            "state": ({"pool": state["pool"], "encounters": state["encounters"]}
+                      if state else None),
+        })
+    return out
+
+
 def article(learner_id: int, article_id: int) -> dict[str, Any]:
     row = repository.article_row(article_id)
     if row["status"] != "ready":
@@ -283,6 +323,12 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
                 "headword": t["headword"],
                 "sense_id": t["sense_id"],
                 "sense_ordinal": t["sense_ordinal"],
+                # This token is part of a confirmed phrase, so its own sense
+                # annotation was made without knowing that. A client that shows
+                # the word's gloss here would be showing something wrong, not
+                # merely unhelpful — `account` reads 账目 where the sentence
+                # says `account for`.
+                "in_phrase": bool(t["in_phrase"]),
                 # Proper nouns: the design wants one line explaining what the
                 # place or person is. Generating those is a task nobody has
                 # written, so the slot is here and empty rather than absent.
@@ -290,6 +336,10 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
             }
             for t in tokens
         ],
+        # Spans where the word under the reader's finger is half of something
+        # else. Sent with the article so tapping either half opens the phrase
+        # without a request, like everything else here.
+        "phrases": _phrase_payload(learner_id, article_id),
         "glossary": _glossary(learner_id, tokens),
         "progress": repository.progress_of(learner_id, article_id),
     }
@@ -367,7 +417,7 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
         (article_id,),
     ).fetchall()
 
-    known = repository.states_for_headwords(learner_id, {r["headword"] for r in rows})
+    known = repository.states_for(learner_id, {r["headword"] for r in rows})
     introduced = revisited = 0
 
     # **Nothing enters the review queue by being read.** Only the learner's own
@@ -406,6 +456,26 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
     return {"introduced": introduced, "revisited": revisited}
 
 
+def _item_of(payload: dict[str, Any]) -> tuple[str, str, int]:
+    """Which study item a mark event is about: (item_type, item_key, sense_id).
+
+    ``item_type`` and ``item_key`` were added when phrases arrived; ``headword``
+    is what every event before that carried and what the field means for a word.
+    Rule 5 forbids changing a field's meaning, so the old name keeps working and
+    the new one is optional — a client that predates phrases sends exactly what
+    it always sent and is understood.
+
+    ``sense_id`` is always 0 for a phrase: a phrase is not one meaning of
+    something else.
+    """
+    item_type = str(payload.get("item_type") or "word")
+    if item_type not in repository.ITEM_TYPES:
+        raise InvalidRequest("未知的条目类型", item_type=item_type)
+    key = str(payload.get("item_key") or payload["headword"]).lower()
+    sense_id = 0 if item_type == "phrase" else int(payload.get("sense_id") or 0)
+    return item_type, key, sense_id
+
+
 def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
     if event_type in ("article.opened", "word.tapped"):
         # Recorded verbatim in client_events and nothing more. Taps are the
@@ -428,28 +498,33 @@ def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
         return
 
     if event_type == "word.marked":
+        item_type, key, sense_id = _item_of(payload)
         repository.set_mark(
-            learner_id, str(payload["headword"]).lower(), int(payload.get("sense_id") or 0),
-            str(payload["kind"]),
+            learner_id, key, sense_id, str(payload["kind"]),
+            item_type=item_type,
             article_id=payload.get("article_id"),
             sentence_id=payload.get("sentence_id"),
             token_id=payload.get("token_id"),
         )
-        # A marked word is tracked from now on, whether or not this article was
+        # A marked item is tracked from now on, whether or not this article was
         # written to teach it — the learner said it matters.
         repository.touch_state(
-            learner_id, str(payload["headword"]).lower(),
-            int(payload.get("sense_id") or 0), pool="reviewing",
+            learner_id, key, sense_id, item_type=item_type, pool="reviewing",
             article_id=payload.get("article_id"),
             sentence_id=payload.get("sentence_id"),
         )
         return
 
     if event_type == "word.unmarked":
-        repository.clear_mark(
-            learner_id, str(payload["headword"]).lower(),
-            int(payload.get("sense_id") or 0), payload.get("kind"),
-        )
+        item_type, key, sense_id = _item_of(payload)
+        repository.clear_mark(learner_id, key, sense_id, payload.get("kind"),
+                              item_type=item_type)
+        # Taking the mark back takes the item out of the review pool. There are
+        # only two ways in — a mark, or later a failed spot check — so an item
+        # with neither has no business sitting in the queue, and leaving it
+        # there would make the ledger claim a signal the learner withdrew. The
+        # row itself stays: it still records that the item was met, and when.
+        repository.demote_if_unmarked(learner_id, key, sense_id, item_type=item_type)
         return
 
     raise InvalidRequest("未知的事件类型", type=event_type)

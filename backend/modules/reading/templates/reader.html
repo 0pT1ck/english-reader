@@ -29,6 +29,19 @@
   .prose .w.m-unknown { background: var(--bad-soft); }
   .prose .w.m-fuzzy { background: var(--warn-soft); }
   .prose .w.on { outline: 2px solid var(--accent); }
+  /* A phrase is one thing, so it is one element: both words and the space
+     between them. At rest it carries no style at all — the decision that the
+     body text gets no extra marking still holds. It only becomes visible when
+     you touch it (hover), select it, or mark it, and then it lights up whole
+     rather than half. The words inside keep their own underlines: a phrase must
+     not hide that `account` is also a target word. */
+  .prose .phrase { border-radius: 2px; }
+  .prose .phrase:hover { background: var(--accent-soft); }
+  .prose .phrase .w:hover { background: transparent; }
+  .prose .phrase.m-unknown { background: var(--bad-soft); }
+  .prose .phrase.m-fuzzy { background: var(--warn-soft); }
+  .prose .phrase.on { outline: 2px solid var(--accent); }
+  .prose .phrase.on .w.on { outline: none; }
   .panel { position: sticky; top: 1rem; }
   .layer { border-top: 1px solid var(--rule-soft); padding: 0.65rem 0; }
   .layer:first-of-type { border-top: none; }
@@ -99,6 +112,7 @@ const QUEUE_KEY = 'er.reading.queue';
 
 let current = null;      // the loaded article payload
 let tokenBySeq = {};
+let phraseBySeq = {};    // token position -> the phrase covering it
 let selected = null;
 
 // --- the client API, spoken exactly as a real client would speak it --------- //
@@ -192,6 +206,15 @@ function markOf(headword, senseId) {
   return entry ? (entry.marks[String(senseId || 0)] || null) : null;
 }
 
+// A phrase is an item in its own right, keyed by its dictionary form at sense
+// 0, so the same local-queue lookup serves it.
+function markOfPhrase(phrase) {
+  const local = pendingMarks()[phrase + '|0'];
+  if (local) return local;
+  const ph = current && (current.phrases || []).find(x => x.phrase === phrase);
+  return ph ? (ph.mark || null) : null;
+}
+
 // --- library --------------------------------------------------------------- //
 
 async function loadLibrary() {
@@ -248,6 +271,12 @@ async function openArticle(id) {
   current = data;
   tokenBySeq = {};
   for (const t of data.tokens) tokenBySeq[t.seq] = t;
+  // Every token position inside a phrase points at that phrase, so tapping
+  // either half opens the same panel.
+  phraseBySeq = {};
+  for (const ph of (data.phrases || [])) {
+    for (let q = ph.start_seq; q <= ph.end_seq; q++) phraseBySeq[q] = ph;
+  }
 
   document.getElementById('picker').hidden = true;
   document.getElementById('reader').hidden = false;
@@ -264,26 +293,67 @@ async function openArticle(id) {
   history.replaceState(null, '', '/admin/reader/' + id);
 }
 
+// Phrases get **no marking in the text at all**, deliberately. Two channels are
+// already fully spoken for — underline says target / derived / beyond, and
+// background says marked unknown / fuzzy — so a fifth style would only make the
+// page busier. The first version of this did paint phrases, and measurably lost
+// information: 28 out-of-syllabus words and 34 derived words had their own
+// marking overwritten by the phrase's background. The span is in the payload;
+// how to show it is a client's decision, and P7's native reader will make its
+// own. Architecture rule 8 says the UI effort belongs there, not here.
 function classesFor(t) {
   const cls = ['w'];
   if (t.kind === 'proper') cls.push('proper');
   else if (t.beyond && current.article.mark_beyond) cls.push('beyond');
   else if (t.is_target) cls.push('target');
   else if (t.headword && (current.glossary[t.headword] || {}).derivation) cls.push('derived');
+  // Underlines stay — a phrase must not swallow "this is also a target word".
+  // The mark background does not: inside a phrase, tapping anywhere opens the
+  // phrase, so painting the word's own mark here would point at a record you
+  // cannot reach from this spot. The wrapper carries the phrase's mark instead.
+  if (phraseBySeq[t.seq]) return cls.join(' ');
   const mark = t.headword ? markOf(t.headword, t.sense_id) : null;
+  if (mark) cls.push('m-' + mark);
+  return cls.join(' ');
+}
+
+// The wrapper's own classes. `data-phrase` is the start position, which is what
+// makes each *occurrence* addressable — the same phrase can appear three times
+// in one article and they all light up together, because the mark belongs to
+// the phrase, not to the occurrence.
+function phraseClasses(ph) {
+  const cls = ['phrase'];
+  const mark = markOfPhrase(ph.phrase);
   if (mark) cls.push('m-' + mark);
   return cls.join(' ');
 }
 
 function render() {
   const body = current.article.body;
-  let out = '', pos = 0;
+  let out = '', pos = 0, open = null;
   for (const t of current.tokens) {
-    out += escapeHtml(body.slice(pos, t.char_start));
+    const ph = phraseBySeq[t.seq] || null;
+    // Leaving a phrase: close its wrapper before emitting anything else.
+    if (open && ph !== open) { out += '</span>'; open = null; }
+    const gap = escapeHtml(body.slice(pos, t.char_start));
+    if (open) {
+      // The space between `account` and `for` is part of the phrase. Left
+      // outside the wrapper, a marked phrase paints as two blocks with a hole
+      // between them, which is exactly the "two words" reading we are trying
+      // to get rid of.
+      out += gap;
+    } else {
+      out += gap;
+      if (ph) {
+        out += '<span class="' + phraseClasses(ph) + '" data-phrase="' + ph.start_seq + '">';
+        open = ph;
+      }
+    }
     out += '<span class="' + classesFor(t) + '" data-seq="' + t.seq + '">' +
            escapeHtml(t.surface) + '</span>';
     pos = t.char_end;
   }
+  if (open) out += '</span>';
   out += escapeHtml(body.slice(pos));
   const prose = document.getElementById('prose');
   prose.innerHTML = out;
@@ -311,7 +381,20 @@ function refreshWord(headword) {
 function showPanel(seq) {
   selected = seq;
   const t = tokenBySeq[seq];
-  document.querySelectorAll('.prose .w.on').forEach(e => e.classList.remove('on'));
+  document.querySelectorAll('.prose .on').forEach(e => e.classList.remove('on'));
+
+  // Half of a phrase opens the phrase, whichever half was tapped — and selects
+  // the phrase, whichever half was tapped. Showing `account` here would show
+  // 账目／账户 for a sentence that says `account for`: not an unhelpful gloss,
+  // a wrong one. Highlighting only the half you happened to hit says the same
+  // wrong thing in a quieter way — that this is a word with a neighbour.
+  const ph = phraseBySeq[seq];
+  if (ph) {
+    const box = document.querySelector('.prose .phrase[data-phrase="' + ph.start_seq + '"]');
+    if (box) box.classList.add('on');
+    return showPhrase(ph);
+  }
+
   const el = document.querySelector('.prose .w[data-seq="' + seq + '"]');
   if (el) el.classList.add('on');
 
@@ -351,13 +434,24 @@ function showPanel(seq) {
     return paint(html, null);
   }
 
+  // Out of syllabus: told plainly, and still markable. "Not required" is a fact
+  // about the syllabus; "not allowed" would be the system deciding what you are
+  // allowed to want to learn — the same paternalism that was taken out of the
+  // phrase work ("不建值得学的词组清单——不认识就标"). The gate here was a leftover
+  // of it: the panel simply withheld the buttons. It no longer does.
+  //
+  // What stays true is the *measurement*: an out-of-syllabus word still does not
+  // count towards the article's 生词率, because that number describes the text
+  // against the syllabus, not against you. Marking one is your signal and lands
+  // in the queue like any other.
   const beyondHere = t.beyond && current.article.mark_beyond;
   if (beyondHere) {
     html += '<div class="layer"><h4>超出大纲</h4>' +
-            '<div class="zh">这个词超出当前大纲，<b>暂时不用学会</b>。</div>' +
+            '<div class="zh">这个词超出当前大纲，<b>不用学会也没关系</b>。</div>' +
             '<div class="pile">' + escapeHtml(g.translation || '') + '</div>' +
-            '<div class="pile">给出意思只是让句子读得通，它不计入生词率、不进复习队列。</div></div>';
-    return paint(html, null);
+            '<div class="pile">它不计入这篇的生词率。但<b>要不要学是你的事</b>——' +
+            '想记就标，照样进复习队列。</div></div>';
+    return paint(html, t);
   }
 
   // Derived word: the breakdown replaces the gloss, so it reads as "a word you
@@ -436,6 +530,114 @@ function showPanel(seq) {
   paint(html, t);
 }
 
+function showPhrase(ph) {
+  let html = '<h3 style="margin:0 0 0.2rem">' + escapeHtml(ph.surface) + '</h3>' +
+             '<p class="muted mono" style="margin:0 0 0.5rem">词组 ' +
+             escapeHtml(ph.phrase) + '</p>';
+  html += '<div class="layer"><h4>这里是一个词组</h4>' +
+          '<div class="zh">' + escapeHtml(ph.translation || '（词典里没有中文释义）') + '</div>';
+  if (ph.definition) {
+    html += '<div class="en">' + escapeHtml(ph.definition.split('\n')[0]) + '</div>';
+  }
+  html += '<div class="pile">整体的意思跟拆开来看不一样，所以按词组记，不按单词记。</div></div>';
+
+  const mark = markOfPhrase(ph.phrase);
+  html += '<div class="row" style="margin-top:0.9rem">' +
+    '<button class="' + (mark === 'unknown' ? 'primary' : '') + '"' +
+    ' onclick="markPhrase(\'unknown\')">不认识</button>' +
+    '<button class="' + (mark === 'fuzzy' ? 'primary' : '') + '"' +
+    ' onclick="markPhrase(\'fuzzy\')">模糊</button>' +
+    (mark ? '<button onclick="unmarkPhrase()">撤销</button>' : '') + '</div>';
+
+  // The follow-up, asked at the moment it carries the most information. Not
+  // knowing `account for` says nothing about whether `account` is known — very
+  // likely it is, as 账户, and only 占…比例 is new. Letting the phrase's mark
+  // stand in for the word would drop a word the reader has fully mastered into
+  // the review queue.
+  if (mark) html += constituentsHtml(ph);
+
+  document.getElementById('panel').innerHTML = html;
+  emit('word.tapped', { article_id: current.article.id, item_type: 'phrase',
+                        item_key: ph.phrase, headword: ph.phrase,
+                        sense_id: 0, token_id: ph.start_seq });
+}
+
+// Every content word the phrase spans, each of its senses separately markable.
+// Usually that is just the verb; `take account of` has two, and asking about
+// both is the point — the phrase says nothing about either.
+function constituentsHtml(ph) {
+  let html = '';
+  const seen = {};
+  for (let q = ph.start_seq; q <= ph.end_seq; q++) {
+    const t = tokenBySeq[q];
+    if (!t || t.kind !== 'content' || !t.headword || seen[t.headword]) continue;
+    const g = current.glossary[t.headword];
+    if (!g || !(g.senses || []).length) continue;
+    seen[t.headword] = true;
+
+    html += '<div class="layer" style="margin-top:0.6rem"><h4>那 ' +
+            escapeHtml(g.headword) + ' 本身呢？</h4>' +
+            '<div class="pile">词组不认识，不代表这个词不认识。' +
+            '哪个义项不会就点哪个，都会就不用点。</div>';
+    html += g.senses.map(function (sn) {
+      const m = markOf(g.headword, sn.id);
+      return '<div class="row" style="margin-top:0.35rem">' +
+        '<button style="font-size:0.78rem;padding:0.2rem 0.5rem"' +
+        ' class="' + (m === 'unknown' ? 'primary' : '') + '"' +
+        ' onclick="markSense(\'' + g.headword + '\',' + sn.id + ')">' +
+        (m === 'unknown' ? '已标' : '不认识') + '</button>' +
+        '<span class="pile">' + escapeHtml((sn.gloss_zh || []).join('／')) + '</span></div>';
+    }).join('');
+    html += '</div>';
+  }
+  return html;
+}
+
+function markPhrase(kind) {
+  const ph = phraseBySeq[selected];
+  if (!ph) return;
+  emit('word.marked', { article_id: current.article.id, item_type: 'phrase',
+                        item_key: ph.phrase, headword: ph.phrase,
+                        sense_id: 0, kind: kind, token_id: ph.start_seq });
+  // The mark belongs to the phrase, so every occurrence of it in this article
+  // changes at once — re-render rather than touch the one you clicked.
+  for (const other of current.phrases) {
+    if (other.phrase === ph.phrase) other.mark = kind;
+  }
+  render();
+  showPanel(selected);
+}
+
+function unmarkPhrase() {
+  const ph = phraseBySeq[selected];
+  if (!ph) return;
+  emit('word.unmarked', { article_id: current.article.id, item_type: 'phrase',
+                          item_key: ph.phrase, headword: ph.phrase, sense_id: 0 });
+  for (const other of current.phrases) {
+    if (other.phrase === ph.phrase) other.mark = null;
+  }
+  render();
+  showPanel(selected);
+}
+
+// One sense of one word, from the follow-up. `item_type` is left at its default
+// so this is an ordinary word mark — which is the whole point: the phrase's own
+// mark is a separate row and neither implies the other.
+function markSense(headword, senseId) {
+  const existing = markOf(headword, senseId);
+  emit(existing ? 'word.unmarked' : 'word.marked', {
+    article_id: current.article.id, headword: headword,
+    sense_id: senseId, kind: 'unknown',
+  });
+  const g = current.glossary[headword];
+  if (g) {
+    if (existing) delete g.marks[String(senseId)];
+    else g.marks[String(senseId)] = 'unknown';
+  }
+  render();
+  showPanel(selected);
+}
+
 function paint(html, t) {
   if (t) {
     const mark = markOf(t.headword, t.sense_id);
@@ -503,7 +705,11 @@ function finishArticle() {
     article_id: current.article.id,
     sentence_seq: current.article.sentence_count,
   });
-  toast('读完了。这篇的目标词已记为「学过」，进入复习中。');
+  // Not "these words are now learned". Finishing adds an encounter to items
+  // already tracked and nothing else — only a mark puts something in the review
+  // queue. The toast used to claim otherwise, which is the invariant stated
+  // backwards.
+  toast('读完了。遇见次数已记上；进复习队列的只有你标记过的。');
   flush().then(backToLibrary);
 }
 

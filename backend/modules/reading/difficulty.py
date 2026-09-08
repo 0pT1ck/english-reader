@@ -43,6 +43,7 @@ from typing import Any
 
 from backend.core import runtime_config
 from backend.core.logging import get_logger
+from backend.modules.vocabulary import repository as dictionary
 from backend.modules.vocabulary.analyzer import SentenceAnalysis, TokenAnalysis
 
 log = get_logger("reading.difficulty")
@@ -84,8 +85,29 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 }
 
 
-def _tag_set(token: TokenAnalysis) -> frozenset[str]:
-    return frozenset((token.tags or "").split())
+def syllabus_tags(token: TokenAnalysis) -> frozenset[str]:
+    """This word's syllabus tags, **unioned across its spelling variants**.
+
+    Reading ``token.tags`` directly is wrong, and it was wrong here for a while.
+    ECDICT splits the tags between British and American spellings more or less
+    at random — ``labour`` carries ``zk gk cet4 cet6`` while ``labor`` carries
+    only ``ky``, and ``judgment`` carries none at all — so one spelling of a
+    perfectly ordinary CET-4 word reads as out of syllabus. :mod:`..vocabulary.
+    spelling` exists for exactly this and pairs the two safely (both must be in
+    the dictionary, and their Chinese glosses must share a term, which is what
+    stops the rules inventing ``size``/``sise``).
+
+    Measured before the fix: 21 headwords, 125 tokens, 1.5% of all the
+    out-of-syllabus flags in the corpus, ``labor`` 41 of them.
+
+    **Third time this one field has been read too literally**, after "tags are
+    a levelled list, not cumulative" and the ``there be`` miscount. The standing
+    rule from those: check a new indicator against a sample with a known answer
+    before trusting it — here, ``labor``/``labour`` would have shown it at once.
+    """
+    if not token.headword:
+        return frozenset()
+    return dictionary.tags_of(token.headword)
 
 
 def measure(sentences: list[SentenceAnalysis]) -> dict[str, Any]:
@@ -112,8 +134,8 @@ def measure(sentences: list[SentenceAnalysis]) -> dict[str, Any]:
     if not content:
         return result
 
-    beyond4 = sum(1 for t in content if not (_tag_set(t) & WITHIN_CET4))
-    beyond6 = sum(1 for t in content if not (_tag_set(t) & WITHIN_CET6))
+    beyond4 = sum(1 for t in content if not (syllabus_tags(t) & WITHIN_CET4))
+    beyond6 = sum(1 for t in content if not (syllabus_tags(t) & WITHIN_CET6))
     result["beyond_cet4_pct"] = round(beyond4 / len(content) * 100, 2)
     result["beyond_cet6_pct"] = round(beyond6 / len(content) * 100, 2)
 

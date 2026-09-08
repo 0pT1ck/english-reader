@@ -53,13 +53,25 @@ def _classify(token: analyzer.TokenAnalysis) -> str:
 def _is_beyond(token: analyzer.TokenAnalysis) -> bool:
     """Outside the CET-6 syllabus.
 
-    Tags are cumulative: ``the`` carries only ``zk gk`` and is obviously not
-    beyond anything. Reading this as "lacks the cet6 tag" is the mistake
-    documented at length in :mod:`.difficulty`.
+    Two traps in one line, both documented at length in :mod:`.difficulty`:
+
+    * tags are a *levelled list*, so "within CET-6" means carrying **any** of
+      zk / gk / cet4 / cet6, not "carrying cet6";
+    * they are split between British and American spellings at random, so they
+      have to be unioned across the pair — which is what
+      :func:`difficulty.syllabus_tags` does and what this used to skip. ``labor`` was
+      called out of syllabus 41 times in the corpus while ``labour`` sat in the
+      CET-4 list.
+
+    A word the dictionary does not have at all counts as beyond: there is no
+    evidence it is in any syllabus, and saying nothing about it would let it
+    pass as ordinary.
     """
     if not token.is_word or token.is_proper_noun:
         return False
-    return not (frozenset((token.tags or "").split()) & difficulty.WITHIN_CET6)
+    if not token.headword:
+        return True
+    return not (difficulty.syllabus_tags(token) & difficulty.WITHIN_CET6)
 
 
 def derivation_for(headword: str | None) -> dict[str, Any] | None:
@@ -237,6 +249,15 @@ def finalise_if_annotated(article_id: int) -> bool:
     done, total = repository.annotation_progress(article_id)
     if total and done < total:
         return False
+    # Structural only — no model, so it costs nothing and the judgement can be
+    # queued whenever. An article is readable before its phrases are judged;
+    # they simply do not show until they are.
+    try:
+        from backend.modules.reading import phrases
+        phrases.find_candidates(article_id)
+    except Exception:  # noqa: BLE001 - a phrase scan must never block an article
+        log.exception("phrases.scan.failed", f"文章 {article_id} 的词组扫描失败，不影响阅读",
+                      article_id=article_id)
     repository.set_status(article_id, "ready")
     log.info("article.ready", f"文章 {article_id} 已就绪", article_id=article_id)
     events.emit("article.ready", article_id=article_id)

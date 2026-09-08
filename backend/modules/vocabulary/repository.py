@@ -136,6 +136,34 @@ def parts_of_speech(headword: str) -> frozenset[str]:
     return frozenset(found)
 
 
+@lru_cache(maxsize=20000)
+def phrase_entry(phrase: str) -> dict[str, Any] | None:
+    """Look up one multi-word entry.
+
+    Separate from :func:`lookup` because the tables are separate, and they are
+    separate because no operation ever wants both at once — see the migration
+    note. Cached for the same reason as ``lookup``: one article asks about the
+    same handful of phrases repeatedly.
+    """
+    try:
+        row = get_connection("dictionary").execute(
+            "SELECT phrase, word_count, head, translation, definition, collins, oxford"
+            " FROM phrases WHERE phrase = ?",
+            (phrase.lower(),),
+        ).fetchone()
+    except sqlite3.Error:
+        return None
+    return dict(row) if row else None
+
+
+def phrase_count() -> int:
+    try:
+        return int(get_connection("dictionary").execute(
+            "SELECT COUNT(*) FROM phrases").fetchone()[0])
+    except sqlite3.Error:
+        return 0
+
+
 def is_imported() -> bool:
     """Whether the dictionary has any content at all."""
     return entry_count() > 0
@@ -161,6 +189,12 @@ def stats() -> dict[str, Any]:
     try:
         total = entry_count()
         forms = conn.execute("SELECT COUNT(*) AS n FROM word_forms").fetchone()["n"]
+        try:
+            phrases = conn.execute("SELECT COUNT(*) AS n FROM phrases").fetchone()["n"]
+        except sqlite3.Error:
+            # Imported by the same script, but an older database predates the
+            # table. Zero is the honest answer, not a failure.
+            phrases = 0
 
         # Generated content lives in its own database; missing tables there just
         # mean that phase of the work has not been run yet.
@@ -191,6 +225,7 @@ def stats() -> dict[str, Any]:
             "imported": False,
             "words": 0,
             "forms": 0,
+            "phrases": 0,
             "senses": 0,
             "families": 0,
             "by_tag": {},
@@ -201,6 +236,7 @@ def stats() -> dict[str, Any]:
         "imported": total > 0,
         "words": total,
         "forms": int(forms),
+        "phrases": int(phrases),
         "senses": int(senses),
         "families": int(families),
         "by_tag": by_tag,
@@ -213,6 +249,7 @@ def clear_caches() -> None:
     from backend.modules.vocabulary import spelling
 
     lookup.cache_clear()
+    phrase_entry.cache_clear()
     resolve_surface.cache_clear()
     tags_of.cache_clear()
     parts_of_speech.cache_clear()

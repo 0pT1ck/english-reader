@@ -30,6 +30,7 @@ as read afterwards.
 
 from __future__ import annotations
 
+import sqlite3
 import statistics
 import sys
 import time
@@ -40,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.core import auth  # noqa: E402
+from backend.core.config import get_settings  # noqa: E402
 from backend.core.db import get_connection  # noqa: E402
 from backend.core.logging import get_logger, trace  # noqa: E402
 from backend.main import app  # noqa: E402  installs modules and migrations
@@ -72,6 +74,12 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         client = TestClient(app)
         token = auth.create_device("verify-phase2")
         head = {"Authorization": "Bearer " + token}
+
+        # The admin surface takes the admin credential, never the device token —
+        # that separation is itself check 4.1. The header form exists for the
+        # command line and for the AI reading diagnostics, which is exactly what
+        # this script is doing.
+        admin_head = {"X-Admin-Secret": get_settings().admin_secret}
 
         # --- 1. 入库管线 ------------------------------------------------- #
         print("\n1. 入库管线")
@@ -194,6 +202,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               "the / make / people 没有被判成超纲词"
               if the_beyond == 0 else f"{the_beyond} 个基础词被误判为超纲")
 
+        # And the third way this same field misleads: the tags are split between
+        # British and American spellings at random, so reading one spelling's
+        # tags alone calls the other out of syllabus. `labour` is CET-4 and
+        # `labor` carries only `ky`; `judgement` is CET-4 and `judgment` carries
+        # nothing at all. This is the known-answer sample for that — it went
+        # unchecked for a phase and `labor` read as out of syllabus 41 times.
+        spelling_beyond = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
+            " ('labor','center','judgment','organisation','neighbor','theater','honor')"
+        ).fetchone()[0]
+        check("3.5", "英美拼写的考纲标签是合起来判的",
+              spelling_beyond == 0,
+              "labor / center / judgment 这些没有被判成超纲词——"
+              "ECDICT 把标签随机分给英式或美式其中一边，必须并起来看"
+              if spelling_beyond == 0
+              else f"{spelling_beyond} 处美式／英式拼写被误判为超纲")
+
         # --- 4. 客户端契约 ------------------------------------------------ #
         print("\n4. 客户端契约")
 
@@ -305,11 +330,12 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # article — so they are excluded here. What must never appear is a word
         # that got into the ledger purely by an article being *ingested*.
         leaked = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM sense_states s"
+            "SELECT COUNT(*) FROM study_states s"
             " WHERE s.introduced_article_id IN"
             "   (SELECT id FROM reading_articles WHERE read_at IS NULL)"
-            " AND NOT EXISTS (SELECT 1 FROM word_marks m"
-            "   WHERE m.learner_id = s.learner_id AND m.headword = s.headword)"
+            " AND NOT EXISTS (SELECT 1 FROM study_marks m"
+            "   WHERE m.learner_id = s.learner_id AND m.item_type = s.item_type"
+            "     AND m.item_key = s.item_key)"
         ).fetchone()[0]
         check("7.1", "入库但没读的文章，其目标词仍在「没学过」",
               leaked == 0,
@@ -340,10 +366,10 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
             check("7.2", "生成文章的目标词被标出来", False, "没有带目标词的 gpt-5.5 草稿")
 
         unmarked = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM sense_states s WHERE s.pool = 'reviewing'"
-            " AND NOT EXISTS (SELECT 1 FROM word_marks m"
-            "   WHERE m.learner_id = s.learner_id AND m.headword = s.headword"
-            "   AND m.sense_id = s.sense_id)"
+            "SELECT COUNT(*) FROM study_states s WHERE s.pool = 'reviewing'"
+            " AND NOT EXISTS (SELECT 1 FROM study_marks m"
+            "   WHERE m.learner_id = s.learner_id AND m.item_type = s.item_type"
+            "     AND m.item_key = s.item_key AND m.sense_id = s.sense_id)"
         ).fetchone()[0]
         check("7.4", "复习队列里的每一条都追得到一次标记",
               unmarked == 0,
@@ -353,7 +379,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         check("7.5", "调度字段不存在于 P2 的表里",
               not any(c["name"] in ("due_at", "strength", "difficulty", "interval")
                       for c in get_connection("learning").execute(
-                          "PRAGMA table_info(sense_states)").fetchall()),
+                          "PRAGMA table_info(study_states)").fetchall()),
               "记忆强度、到期时间由 P5 添加；P2 只写状态不做调度")
 
         # --- 7b. 义项集变动后的引用完整性 ---------------------------------- #
@@ -364,12 +390,14 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                 " ON c.id = t.sense_id WHERE t.sense_id > 0 AND c.id IS NULL"
             ).fetchone()[0],
             "标记": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM word_marks w LEFT JOIN content.senses c"
-                " ON c.id = w.sense_id WHERE w.sense_id > 0 AND c.id IS NULL"
+                "SELECT COUNT(*) FROM study_marks w LEFT JOIN content.senses c"
+                " ON c.id = w.sense_id WHERE w.item_type = 'word' AND w.sense_id > 0"
+                " AND c.id IS NULL"
             ).fetchone()[0],
             "掌握状态": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM sense_states s LEFT JOIN content.senses c"
-                " ON c.id = s.sense_id WHERE s.sense_id > 0 AND c.id IS NULL"
+                "SELECT COUNT(*) FROM study_states s LEFT JOIN content.senses c"
+                " ON c.id = s.sense_id WHERE s.item_type = 'word' AND s.sense_id > 0"
+                " AND c.id IS NULL"
             ).fetchone()[0],
         }
         check("7.6", "没有指向已删除义项的悬空引用",
@@ -377,6 +405,170 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               "补一个词的义项会换掉全部义项 id；senses.replaced 事件让阅读模块自动修复"
               if not any(dangling.values())
               else "、".join(f"{k} {v}" for k, v in dangling.items() if v))
+
+        # --- 7c. 词组 ------------------------------------------------------ #
+        print("\n7c. 词组")
+
+        from backend.modules.reading import phrases as phrase_module
+
+        conn = get_connection("learning")
+        pstats = phrase_module.stats()
+        article_count = len(repository.list_articles(shelf="all", limit=10000))
+
+        check("7.7", "词组候选已扫出来",
+              pstats["candidates"] > 100,
+              f"{pstats['candidates']} 处候选，平均每篇 "
+              f"{pstats['candidates'] / max(1, article_count):.1f} 处")
+
+        # The structural filter is what keeps dictionary noise out: `to be`,
+        # `the world` and `there is` all have dictionary entries, and none of
+        # them starts with a verb.
+        noise = conn.execute(
+            "SELECT COUNT(*) FROM reading_phrases WHERE phrase IN"
+            " ('to be','have been','the world','there is','that is','such as')"
+        ).fetchone()[0]
+        check("7.8", "词典噪音没有进候选",
+              noise == 0,
+              "动词+小品词的结构预筛挡住了 to be / the world / there is 这类"
+              if noise == 0 else f"{noise} 处噪音混进来了")
+
+        check("7.9", "候选已逐处判断过",
+              pstats["pending"] == 0 and pstats["confirmed"] > 0,
+              f"判为词组 {pstats['confirmed']} 处（{pstats['distinct']} 个不同），"
+              f"判为字面用法 {pstats['rejected']} 处，待判 {pstats['pending']}")
+
+        # The judgement has to be per occurrence, not per string — `look at` is
+        # a phrase in one sentence and two words in the next. If every
+        # occurrence of a sequence got the same verdict, the model is matching
+        # strings and the sentence is doing nothing.
+        check("7.10", "判断是按上下文做的，不是按字符串",
+              pstats["context_dependent"] > 0,
+              f"{pstats['context_dependent']} 个序列在不同句子里得到了不同判定"
+              if pstats["context_dependent"] else "每个序列的判定都一样，句子没起作用")
+
+        # A confirmed phrase that (a) has a gloss to show and (b) contains a
+        # word the learner already has records for — otherwise "the word's rows
+        # did not change" is true of zero rows and proves nothing. That is the
+        # same trap as a test reporting zero on a known-good sample: it has to
+        # be able to fail before passing means anything.
+        select_phrase = (
+            "SELECT p.article_id, p.phrase, p.start_seq, p.end_seq FROM reading_phrases p"
+            " JOIN dict.phrases d ON d.phrase = p.phrase"
+            " WHERE p.verdict = 1 AND d.translation IS NOT NULL{extra}"
+            " ORDER BY p.article_id LIMIT 1"
+        )
+        phrase_row = conn.execute(select_phrase.format(
+            extra=" AND EXISTS (SELECT 1 FROM study_marks m WHERE m.item_type = 'word'"
+                  "   AND p.phrase LIKE m.item_key || ' %')")).fetchone()
+        if phrase_row is None:
+            phrase_row = conn.execute(select_phrase.format(extra="")).fetchone()
+
+        if phrase_row is None:
+            for number in ("7.11", "7.12", "7.13"):
+                check(number, "词组相关检查", False, "没有已确认的词组")
+        else:
+            payload = service.article(1, int(phrase_row["article_id"]))
+            spans = {p["phrase"]: p for p in payload["phrases"]}
+            sample = spans.get(phrase_row["phrase"])
+            covered = [t for t in payload["tokens"]
+                       if sample and sample["start_seq"] <= t["seq"] <= sample["end_seq"]]
+            check("7.11", "词组随文章下发：跨度、释义，两半都标了 in_phrase",
+                  bool(sample and sample["end_seq"] > sample["start_seq"]
+                       and sample["translation"] and len(covered) >= 2
+                       and all(t["in_phrase"] for t in covered)),
+                  f"{len(payload['phrases'])} 处，例如 {sample['surface']} → "
+                  f"{sample['translation']}（token {sample['start_seq']}–{sample['end_seq']} "
+                  "都指向它，点任一半都开词组面板）" if sample else "这篇没有下发词组")
+
+            # The separation the design insists on, tested by doing it: mark the
+            # phrase, then look at every record belonging to the word inside it.
+            # Not knowing `account for` says nothing about `account`, and one
+            # mark standing for both would put a word the reader has mastered
+            # into the review queue.
+            inside = next((t for t in covered
+                           if t["kind"] == "content" and t["headword"]),
+                          covered[0] if covered else None)
+            word = inside["headword"] if inside else ""
+
+            def word_records() -> list[tuple]:
+                return [tuple(r) for r in conn.execute(
+                    "SELECT item_type, item_key, sense_id, kind FROM study_marks"
+                    " WHERE item_key = ?"
+                    " UNION ALL"
+                    " SELECT item_type, item_key, sense_id, pool FROM study_states"
+                    " WHERE item_key = ?", (word, word)).fetchall()]
+
+            before = word_records()
+            stamp2 = str(int(time.time()))
+            client.post("/v1/client/events", headers=head, json={"events": [
+                {"idem_key": f"v2-ph-mark-{stamp2}", "type": "word.marked",
+                 "payload": {"article_id": phrase_row["article_id"], "item_type": "phrase",
+                             "item_key": phrase_row["phrase"], "headword": phrase_row["phrase"],
+                             "sense_id": 0, "kind": "unknown"}}]})
+            after = word_records()
+            phrase_mark = conn.execute(
+                "SELECT kind FROM study_marks WHERE item_type = 'phrase' AND item_key = ?",
+                (phrase_row["phrase"],)).fetchone()
+            check("7.12", "标记词组不动组成词的任何记录",
+                  after == before and phrase_mark is not None and len(before) > 0,
+                  f"标了「{phrase_row['phrase']}」之后，"
+                  f"「{word}」的标记与掌握状态共 {len(before)} 行一行未变"
+                  if after == before and before
+                  else (f"「{word}」名下一条记录都没有，这条检查等于没查"
+                        if after == before else f"「{word}」的记录被牵连改动了"))
+
+            # And taking it back takes it out of the queue again, which is the
+            # same invariant read backwards.
+            client.post("/v1/client/events", headers=head, json={"events": [
+                {"idem_key": f"v2-ph-unmark-{stamp2}", "type": "word.unmarked",
+                 "payload": {"item_type": "phrase", "item_key": phrase_row["phrase"],
+                             "headword": phrase_row["phrase"], "sense_id": 0}}]})
+            left = conn.execute(
+                "SELECT COUNT(*) FROM study_states WHERE item_type = 'phrase'"
+                " AND item_key = ? AND pool = 'reviewing'", (phrase_row["phrase"],)
+            ).fetchone()[0]
+            check("7.13", "撤销标记后该条目退出复习队列",
+                  left == 0,
+                  "进队列只有你的标记这一条路，撤回标记就退出——"
+                  "遇见记录仍留着" if left == 0 else "撤销后还留在复习中")
+
+        # 落在词组里的 token 打了标记之后，漏义项报告里不该再有 get up / at least
+        # 这类——它们从来不是义项集的缺口，没有哪个 get 的义项能覆盖 get up。
+        missing = client.get("/v1/admin/reading/missing-senses",
+                             headers=admin_head).json()
+        leftover_phrases = [i["headword"] for i in missing.get("items", [])
+                            if i["headword"] in ("get", "least", "known")]
+        check("7.14", "考频清账后，漏义项报告里不再有词组",
+              not leftover_phrases and pstats["tokens_in_phrase"] > 0,
+              f"{pstats['tokens_in_phrase']} 个 token 标为落在词组里，"
+              f"报告剩 {len(missing.get('items', []))} 个词，都是真缺口"
+              if not leftover_phrases else f"仍混着词组：{leftover_phrases}")
+
+        # --- 7d. 学习记录合表 ---------------------------------------------- #
+        print("\n7d. 学习记录合表")
+
+        renamed = {r["name"] for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
+        check("7.15", "word_marks / sense_states 已并成 study_marks / study_states",
+              {"study_marks", "study_states"} <= renamed
+              and not ({"word_marks", "sense_states"} & renamed),
+              "复习调度要把单词和词组混在一张列表里排序，分表就要把核心算法写两遍")
+
+        columns = {c["name"] for c in conn.execute(
+            "PRAGMA table_info(study_marks)").fetchall()}
+        try:
+            conn.execute(
+                "INSERT INTO study_marks (learner_id, item_type, item_key, sense_id,"
+                " kind, created_at) VALUES (1,'bogus','x',0,'unknown','x')")
+            conn.rollback()
+            constrained = False
+        except sqlite3.IntegrityError:
+            conn.rollback()
+            constrained = True
+        check("7.16", "条目类型由数据库约束，不靠自觉",
+              {"item_type", "item_key"} <= columns and constrained,
+              "item_type 只允许 word / phrase，写错直接报错；"
+              "(learner_id, item_type, item_key, sense_id) 唯一")
 
         # --- 8. 模块自包含 ------------------------------------------------ #
         print("\n8. 模块自包含")
@@ -401,6 +593,11 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         print("\n需要人工确认")
         note("M1", "电脑上真读完一篇",
              "打开 /admin/reader，挑一篇，点词、标记、读到底，全程不卡")
+        note("M2b", "词组：整体渲染、整体标记，并追问组成词",
+             "点 account for 的任一半，都应显示词组释义而不是 account 的「账户」，"
+             "且选中框框住整个词组；标记之后整个词组一起变底色，同一词组的每一处都变；"
+             "静止状态正文里不加任何记号——两条通道已经占满了；"
+             "标了不认识之后，下面出现「那 account 本身呢？」，逐义项可单独标")
         note("M2", "点词弹层的四个分支都对",
              "普通生词看三层释义；派生词看构词分解；人名地名说可以跳过；"
              "超纲词说暂时不用学会（只在生成文里）")

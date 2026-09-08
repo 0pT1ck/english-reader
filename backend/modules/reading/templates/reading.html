@@ -20,9 +20,10 @@
     <span class="muted mono">共 {{ stats.tokens }} 个词</span>
   </div>
   <div class="card stat">
-    <span class="stat-label">复习中的义项</span>
+    <span class="stat-label">复习中的条目</span>
     <span class="stat-value">{{ stats.reviewing or 0 }}</span>
-    <span class="muted mono">不认识 {{ stats.marked_unknown }} · 模糊 {{ stats.marked_fuzzy }}</span>
+    <span class="muted mono">不认识 {{ stats.marked_unknown }} · 模糊 {{ stats.marked_fuzzy }}
+      · 其中词组 {{ stats.marked_phrases }}</span>
   </div>
   <div class="card stat">
     <span class="stat-label">客户端事件</span>
@@ -124,6 +125,32 @@
   </table>
 </div>
 
+<h2>词组</h2>
+<div class="card">
+  <p class="muted">
+    每篇约 7 处，你点的那个词其实是词组的一半——点 <code>account</code>，
+    而这句里是 <code>account for</code>。<b>不建「值得学的词组」清单</b>：不认识就标，跟单词一样。
+    识别分两步：先按<b>动词 + 小品词、且词典里有这个组合</b>结构性地筛（不花钱，这一步就挡掉了
+    <code>to be</code>、<code>the world</code> 这类噪音，每篇从 43 处降到 6.8 处），
+    再<b>逐处问模型</b>「在这句话里它是不是一个整体」——判据是<b>透明度不是价值</b>，
+    同一个序列在不同句子里可以不同：<code>ran into an old friend</code> 是，
+    <code>ran into the room</code> 不是。
+  </p>
+  <p class="muted">
+    「清账」把落在词组里的 token 打上标记再重算考频。标注器扫全语料时还不知道有词组，
+    碰到 <code>account for</code> 只能在 <code>account</code> 的义项里挑一个——
+    约 4.5% 的标注这样被污染，而<b>将来换词典不会洗掉它</b>（义项级映射照搬旧标注，
+    连错误一起搬）。判断跑完会自动清一次，这个按钮是全量重来用的。
+  </p>
+  <div class="row" style="margin-top:0.8rem">
+    <button onclick="scanPhrases()">扫描并判断</button>
+    <button onclick="settlePhrases()">清账并重算考频</button>
+    <button onclick="loadPhrases()">刷新</button>
+    <span id="phrase-count" class="muted"></span>
+  </div>
+  <div id="phrases" style="margin-top:0.9rem"></div>
+</div>
+
 <h2>漏义项报告</h2>
 <div class="card">
   <p class="muted">
@@ -208,6 +235,45 @@
     } catch (e) { toast(e.message, true); }
   }
 
+  async function scanPhrases() {
+    toast('扫描是结构性的，不花钱；判断在后台跑…');
+    try {
+      const r = await api('/reading/phrases/scan', { method: 'POST' });
+      toast('新候选 ' + r.found + ' 处，待判断 ' + r.waiting +
+            (r.job_id ? '，任务 ' + r.job_id : ''));
+      loadPhrases();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function settlePhrases() {
+    try {
+      const r = await api('/reading/phrases/settle', { method: 'POST' });
+      toast('打标记 ' + r.tokens_flagged + ' 个 token；考频重算后 ' +
+            r.exam_frequency.senses_with_frequency + ' 个义项有次数，' +
+            '排除了落在词组里的 ' + r.exam_frequency.excluded_in_phrase + ' 处');
+      loadPhrases();
+      loadMissing();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  async function loadPhrases() {
+    const data = await api('/reading/phrases?limit=25');
+    const st = data.stats;
+    document.getElementById('phrase-count').textContent =
+      '候选 ' + st.candidates + ' 处 · 判为词组 ' + st.confirmed +
+      '（' + st.distinct + ' 个不同）· 否掉 ' + st.rejected + ' · 待判 ' + st.pending +
+      ' · 按上下文分歧的序列 ' + st.context_dependent +
+      ' · 已标记的 token ' + st.tokens_in_phrase;
+    const col = (rows, head) =>
+      '<div><b>' + head + '</b><div class="scroll" style="margin-top:0.4rem"><table><tbody>' +
+      rows.map(r => '<tr><td class="mono">' + r.phrase + '</td>' +
+                    '<td class="mono">' + r.n + '</td></tr>').join('') +
+      '</tbody></table></div></div>';
+    document.getElementById('phrases').innerHTML =
+      '<div class="grid">' + col(data.confirmed, '判为词组') +
+      col(data.rejected, '判为字面用法，不显示') + '</div>';
+  }
+
   async function loadMissing() {
     const data = await api('/reading/missing-senses');
     document.getElementById('missing-count').textContent =
@@ -239,6 +305,7 @@
   }
 
   loadPapers();
+  loadPhrases();
   loadMissing();
   loadEvents();
 </script>

@@ -8,11 +8,11 @@ its own right.
 
 What this module contributes, all from inside this directory:
 
-* six tables (articles, sentences, tokens, marks, sense states, progress,
-  client events) via its own migrations
+* eight tables (articles, sentences, tokens, phrases, study marks, study
+  states, progress, client events) via its own migrations
 * the first ``/v1/client`` endpoints in the project
 * admin endpoints and two console pages
-* a batch worker for contextual sense annotation
+* two batch workers: contextual sense annotation, and phrase judgement
 * its own settings
 
 Nothing outside ``backend/modules/reading/`` was edited to mount any of it,
@@ -30,7 +30,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.reading import annotate, repository, routes
+from backend.modules.reading import annotate, phrases, repository, routes
 from backend.modules.reading.schema import MIGRATIONS
 
 log = get_logger("reading")
@@ -75,6 +75,18 @@ runtime_config.register(
         ),
         group="reading",
         order=30,
+    ),
+    runtime_config.ConfigSpec(
+        key="phrase_batch_size",
+        default=20,
+        value_type="int",
+        title="词组判断每批处数",
+        description=(
+            "一次让模型判断多少处「这是不是词组」。每条只是一句话加一个序列，"
+            "比义项标注短得多，所以批次可以大一些。"
+        ),
+        group="reading",
+        order=35,
     ),
     runtime_config.ConfigSpec(
         key="difficulty_weights",
@@ -132,6 +144,7 @@ runtime_config.register(
 
 def _register_workers() -> None:
     jobs.register_worker(annotate.WORKER)
+    jobs.register_worker(phrases.WORKER)
 
 
 def on_senses_replaced(event: Event) -> None:
