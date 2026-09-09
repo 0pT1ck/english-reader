@@ -276,7 +276,8 @@ def check(
     report.avg_sentence = statistics.mean(lengths) if lengths else 0
     report.max_sentence = max(lengths) if lengths else 0
 
-    allowed = set(allowed_tiers)
+    # frozen because the syllabus lookups memoise on it
+    allowed = frozenset(allowed_tiers)
     targets = {w.lower() for w in target_words}
     hits = {w: False for w in target_words}
 
@@ -313,44 +314,27 @@ def check(
         word: shown with its breakdown, worth a third of a slot. Counting
         ``cooperation`` as out of syllabus when ``cooperate`` is a CET-4 word
         would make the zero-out-of-syllabus goal unreachable and meaningless.
-        """
-        from backend.modules.wordfamily import repository as families
 
-        for candidate in (lemma, surface):
-            family = families.family_of(candidate)
-            if family and family["grade"] == "B":
-                root = str(family["root"])
-                if repository.tags_of(root) & allowed:
-                    return root
-        return None
+        The lookup itself lives in :mod:`...vocabulary.syllabus` so that the
+        reading side draws the same line; the bucketing stays here because only
+        generation reports a 派生词率.
+        """
+        from backend.modules.vocabulary import syllabus
+
+        return syllabus.light_root(lemma, surface, allowed)
 
     def in_range(lemma: str, surface: str) -> bool:
         """Whether a word counts as inside the allowed vocabulary.
 
-        Tags are unioned across spelling variants — ECDICT tags ``neighbour``
-        cet4 and ``neighbor`` not, and to a reader they are the same word — and
-        the surface form is checked too: ``data`` carries the syllabus tag while
-        its lemma ``datum`` does not, and it is ``data`` that appears on the page.
+        The four checks this needs — cumulative tags, spelling variants, the
+        dictionary's inflection table, grade-A derivations — used to live here
+        and nowhere else, which is how the reading side came to ship with only
+        the first of them. They now live in :mod:`...vocabulary.syllabus` and
+        this is one call, so the two sides cannot drift apart again.
         """
-        if repository.tags_of(lemma) & allowed:
-            return True
-        if surface != lemma and repository.tags_of(surface) & allowed:
-            return True
-        # `planning` and `debating` are headwords in their own right, untagged,
-        # so the lemmatiser never looks further — but the dictionary's own
-        # inflection table maps them back to `plan` and `debate`. A reader who
-        # knows the verb is not meeting a new word.
-        base = repository.resolve_surface(surface)
-        if base and repository.tags_of(base) & allowed:
-            return True
-        # Grade-A derivations are grammar, not vocabulary: a reader who knows
-        # `careful` is not meeting a new word in `carefully`, and no syllabus
-        # bothers to list it. Imported here rather than at module scope so the
-        # checker still works if the word-family module is absent.
-        from backend.modules.wordfamily import repository as families
+        from backend.modules.vocabulary import syllabus
 
-        root = families.transparent_root(lemma) or families.transparent_root(surface)
-        return bool(root and repository.tags_of(root) & allowed)
+        return syllabus.within(lemma, surface, allowed)
 
     def judge(lemma: str, entry: Any, surface: str) -> None:
         """Count one resolved word, and record it if it is out of range."""

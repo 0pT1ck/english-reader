@@ -451,6 +451,33 @@
     vertical-align: middle;
   }
 
+  tr.archived td { color: var(--ink-soft); opacity: 0.7; }
+  tr.archived td.phase { color: var(--ink-soft); text-decoration: line-through; }
+
+  tr.archived td.phase::after {
+    content: "F52863";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--ink-soft);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+    text-decoration: none;
+  }
+
+  tr.arch-head td {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    background: var(--surface-sub);
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+
   .table-scroll { overflow-x: auto; }
 
   table {
@@ -626,10 +653,6 @@
   </header>
 
   <div class="figures">
-    <div class="fig">
-      <div class="fig-val">30<span>分钟</span></div>
-      <div class="fig-key">每日投入</div>
-    </div>
     <div class="fig">
       <div class="fig-val">3–4<span>篇</span></div>
       <div class="fig-key">每日文章</div>
@@ -874,7 +897,7 @@
       <div class="feat">
         <span class="feat-id">C8</span>
         <span class="feat-name">长文阅读排版</span>
-        <p>字号、行距、页宽可调。这是每天要待 20 分钟的界面，排版质量直接影响能否坚持。</p>
+        <p>字号、行距、页宽可调。这是每天要长时间待着的界面，排版质量直接影响能否坚持。</p>
       </div>
     </div>
   </section>
@@ -998,7 +1021,17 @@
         <span class="feat-id">F5</span>
         <span class="feat-name">大纲标签与真题考频</span>
         <p>每个词标注所属大纲层级（中考 / 高考 / CET-4 / CET-6 / 考研）与词频排名，后者作为难度先验。</p>
-        <p class="feat-why"><b>标签必须累积着用，这是数据的坑。</b>词典的标签记的是「这个词出现在哪几张表上」，而表是分级的——<code>the</code> 只带 <code>zk gk</code>（中考、高考），并不带 <code>cet4</code>。所以「四级水平之内」= 带有 <code>zk</code>／<code>gk</code>／<code>cet4</code> <b>任意一个</b>，而不是「带 cet4」。按后者算，<code>the</code>、<code>make</code>、<code>people</code> 会全被判成超纲词——2026-09 实测差别是超纲率 58% 对 10%。</p>
+        <p class="feat-why"><b>判定要走四步，这是数据的坑，而且踩了四次。<b>①</b> 标签必须累积着用（见下）。
+        <b>②</b> 标签在英式／美式拼写之间随机分配，必须并起来看。
+        <b>③</b> 词形还原会失败——<code>teeth</code>、<code>phenomena</code>、<code>curricula</code>
+        还原不回去，但词典自带的变形表认得它们。
+        <b>④</b> <b>词根在纲内的派生词不算超纲</b>：<code>quickly</code> 不是 <code>quick</code> 之外的新词，
+        而 <code>nationality</code> 要顺着 <code>national → nation</code> 走两步才够。
+        2026-09-09 实测：453 篇里 8,401 处超纲标记中，<b>3,005 处（35.8%）的词根就在纲内</b>，
+        修完降到 4,158 处。四步现在集中在 <code>vocabulary/syllabus.py</code> 一个函数里，
+        生成校验、入库、难度画像三方都调它——先前三方各写一遍，只有生成校验是对的。
+        <b>返回布尔而不是标签集合</b>，因为返回集合就意味着每个调用方自己写比较，而它们正是各自停在了不同的地方。
+        细节见 <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a> §17。<br><br></b>词典的标签记的是「这个词出现在哪几张表上」，而表是分级的——<code>the</code> 只带 <code>zk gk</code>（中考、高考），并不带 <code>cet4</code>。所以「四级水平之内」= 带有 <code>zk</code>／<code>gk</code>／<code>cet4</code> <b>任意一个</b>，而不是「带 cet4」。按后者算，<code>the</code>、<code>make</code>、<code>people</code> 会全被判成超纲词——2026-09 实测差别是超纲率 58% 对 10%。</p>
         <p class="feat-why"><b>但最终的学习优先级以真题统计为准。</b>一个词在近二十年真题里出现 50 次，比它在某份流传的词表里被标成 CET-4 有说服力得多。真题语料同时给出实际考频、常考义项与常见搭配——第三层释义就来自这里。</p>
       </div>
       <div class="feat">
@@ -1068,11 +1101,11 @@
     <div class="flow">
       <div class="step">
         <span class="step-when">打开时</span>
-        <span class="step-what"><b>卡片复习</b><span>当天到期、且塞不进文章的词。渐进提示，5–8 分钟。</span></span>
+        <span class="step-what"><b>复习</b><span>当天到期的词。双向、渐进提示，做完为止——2026-09-09 取消了时间限定，见 §I。</span></span>
       </div>
       <div class="step">
         <span class="step-when">主体</span>
-        <span class="step-what"><b>阅读 3–4 篇</b><span>已提前备好并缓存。点词查词、标记生词，每篇读完做一次词汇抽查。约 20 分钟。</span></span>
+        <span class="step-what"><b>阅读 3–4 篇</b><span>已提前备好并缓存。点词查词、标记生词，每篇读完做一次词汇抽查。</span></span>
       </div>
       <div class="step">
         <span class="step-when">还想读</span>
@@ -1102,8 +1135,8 @@
           <tr><th>参数</th><th>初始值</th><th>依据</th></tr>
         </thead>
         <tbody>
-          <tr><td>每日阅读时长</td><td class="num">30 分钟</td><td>可长期维持的强度</td></tr>
           <tr><td>每日文章数</td><td class="num">3–4 篇</td><td>约 1000 词日阅读量</td></tr>
+          <tr><td>每日总时长</td><td class="num">不限</td><td><b>2026-09-09 取消</b>。原为 30 分钟。复习改成双向（看词想义项 → 看义项想词）、当天不会就重复到会、再加拼写强化之后，光复习就要十几二十分钟；原预算下每天只能复习十个词——那是时间预算在削学习量，而不是学习量该迁就时间</td></tr>
           <tr><td>单篇长度 · CET-4</td><td class="num">330–360 词</td><td>138 篇真题实测：309–363，中位数 346</td></tr>
           <tr><td>单篇长度 · CET-6</td><td class="num">420–460 词</td><td>134 篇真题实测：416–458，中位数 445</td></tr>
           <tr><td>单篇长度 · 考研</td><td class="num">380–470 词</td><td>180 篇真题实测：334–467，中位数 421</td></tr>
@@ -1132,7 +1165,14 @@
     <div class="excluded">
       <div class="ex">
         <span class="ex-tag">不做</span>
-        <span><b>产出型词汇训练</b>——拼写、造句、写作练习。<span>目标是读到能认出（被动词汇）。要求会用，每个词的成本至少翻倍，周期也翻倍，且会把体验拉回「背单词」。</span></span>
+        <span><b>造句与写作练习</b>。<span>目标是读到能认出（被动词汇）。要求会用，每个词的成本至少翻倍，周期也翻倍，且会把体验拉回「背单词」。</span></span>
+      </div>
+      <div class="ex">
+        <span class="ex-tag">改了</span>
+        <span><b>拼写：2026-09-09 从「不做」改为做，但只作强化选项。</b><span>原来跟造句写作一起划进产出型排除掉了。
+        现在的做法是：当天的复习全部走完之后，可选地对当天所有词做一轮拼写；<b>拼错不影响复习时间的安排</b>，
+        只单独记一笔——记下拼错成了什么，将来做主攻拼写的功能时那是现成的数据。
+        这样它不进主调度，也就不会把产出型的难度混进「读到能认出」这条主线。</span></span>
       </div>
       <div class="ex">
         <span class="ex-tag">缓做</span>
@@ -1164,6 +1204,8 @@
       <span class="sec-note">绝不跨 Phase</span>
     </div>
     <p class="lede">排序原则是<b>风险前置</b>——最不确定的东西最早验证，而不是最容易的先做。每个 Phase 结束时都是可用、可验收的状态。</p>
+    <p class="lede"><b>2026-09-09 起只规划当前 Phase。</b>表里只有「已完成的」和「当前这个」，不再排未来。
+    当前 Phase 中发现的未来需求记进 §M 待定，不动手。归档的旧路线原样留在表尾当记录。</p>
 
     <div class="table-scroll">
       <table>
@@ -1176,7 +1218,7 @@
             <td>框架能力（配置 / 日志 / 事件总线 / 模块注册 / 数据库迁移）、三个数据库、词典数据入库、词形还原、API 骨架、管理控制台骨架。<b>方案见 <a href="./phase-0.html" style="color:var(--accent)">Phase 0 文档</a></b></td>
             <td><b>已完成并验收</b>（2026-09-05）。自动检查 29 项全过；词典 404,011 词条；部署验证按决定推迟到项目末期</td>
           </tr>
-          <tr class="now">
+          <tr class="done">
             <td class="phase">P1 生成器</td>
             <td>按约束生成 + 本地校验 + 接 API 自动生成；真题入库；从真题统计句法结构；义项集与词族生成（存入新建的 <code>content.db</code>）。
             <b>择优顺延到 P6</b>（原计划的 P2x，2026-09-07 降格并入）——现在还没有每天生成的需求，
@@ -1185,7 +1227,7 @@
             <td><b>已达成</b>：用词在范围内（超纲率 0.14%）、句法是正常书面语（被动 15.5 对真题基线 17.0）。
             「搭配无误」尚未独立验证——盲测按决定取消，目前只有本人试读</td>
           </tr>
-          <tr>
+          <tr class="done">
             <td class="phase">P2 阅读闭环</td>
             <td>文章入库（句子与逐词分析落表）+ 客户端接口 + Web 阅读页：读文章、点词查词、标记生词、遇见记录落库。<b>真题直读</b>（列表选读）在此接入——它是现成内容，正好当 P2 的素材。
             自 P1 顺延两项：<b>语境释义标注</b>（点词查词第一层的直接依赖）与<b>真题难度画像</b>（列表排序要用）。
@@ -1194,32 +1236,43 @@
             <td><b>已达成（2026-09-08 验收通过）</b>：电脑上真读完一篇，事件完整回传。
             自动检查 45 项、人工 6 项全过。<b>手机端归 P7</b>：Web 阅读页按铁律 8 只是开发期测试工具，不做移动端适配</td>
           </tr>
-          <tr>
+          <tr class="now">
+            <td class="phase">P3 复习</td>
+            <td>标记的词按记忆状态自己回来。<b>双向</b>（看词想义项 → 看义项想词）、解锁与上锁、当天不会就重复到会、
+            伪随机降权让卡住的词自己让路；<b>拼写作强化选项</b>（当天复习完之后可选，拼错不影响调度，只记录）。
+            题面是<b>你没见过的句子</b>，当初读到它的那句原句退居提示位——语料库每义项中位数只有 3 条句子，
+            所以句子池由 AI 大批量生成、机器校验筛出。<b>方案见 <a href="./phase-3.html" style="color:var(--accent)">Phase 3 文档</a></b>（讨论中）</td>
+            <td>标一个词之后不用管它，它会自己回来；回来的时机由记忆状态决定，不由你翻列表决定</td>
+          </tr>
+          <tr class="arch-head">
+            <td colspan="3">以下为原路线 · 2026-09-08 归档 · 原样保留</td>
+          </tr>
+          <tr class="archived">
             <td class="phase">P3 自适应</td>
             <td>初始词汇量测试、水平估计、按水平选文；<b>真题按水平自动筛选推荐</b></td>
             <td>连读几篇，生词率向 3–5% 收敛</td>
           </tr>
-          <tr>
+          <tr class="archived">
             <td class="phase">P4 检验</td>
             <td>读后词汇抽查、题目生成、结果回流修正水平</td>
             <td>能抓出「以为认识」的词</td>
           </tr>
-          <tr>
+          <tr class="archived">
             <td class="phase">P5 复习</td>
             <td>遗忘曲线调度、双通道分流、渐进提示卡片、原句轮换</td>
             <td>到期词自动进文章，塞不下的走卡片</td>
           </tr>
-          <tr>
+          <tr class="archived">
             <td class="phase">P6 日常运转</td>
             <td>提前生成、今日包离线缓存、每日流程串联、负载调节。<b>过量生成择优也在这里</b>——原为独立的 P2x，2026-09-07 降格并入：砍掉定点修补之后它只剩「生成 N 篇、逐句查搭配、零 flag 的留下」，方法已验证、无未知数，而真正需要每天可靠产出文章的正是这个阶段。做法见 §B3</td>
             <td>连续一周打开就能用，无需人工干预；每天备的文章自动筛过一遍</td>
           </tr>
-          <tr>
+          <tr class="archived">
             <td class="phase">P7 iOS 端</td>
             <td>原生客户端，GitHub Actions 构建未签名 IPA，SideStore 安装</td>
             <td>手机上装着自己的 App 在用</td>
           </tr>
-          <tr>
+          <tr class="archived">
             <td class="phase">P8 打磨</td>
             <td>进度统计、旧文重读、UI 精修、TestFlight</td>
             <td>成品</td>
@@ -1228,6 +1281,40 @@
       </table>
     </div>
 
+    <p class="lede" style="margin-top:1.75rem">
+      <b>2026-09-08：P3 及之后全部归档，重新设计。</b>两个原因。
+    </p>
+    <p class="lede">
+      <b>一是 P2 吃掉了原本排在后面的一大半。</b>语境释义标注与真题难度画像（原 P1c 顺延）、
+      第三层释义与真题考频（原本没排进任何 Phase）、词组（原 §J 的「缓做」）、
+      三档标记（原 C4 只有两档）、客户端契约与能力声明——全在 P2 里做完了。
+      于是 P3 那一行「真题按水平自动筛选推荐」的难度画像已经是现成的，
+      整行只剩下「把客观难度换成对你的生词率」这一列，撑不起一个 Phase。
+    </p>
+    <p class="lede">
+      <b>二是切法本身不对。</b>原路线按<b>能力</b>切（自适应／检验／复习／日常运转），
+      而真正缺的东西要按<b>实际在跑的那个循环</b>切才看得清。那个循环是：
+      打开阅读页 → 在 453 篇里挑一篇 → 读 → 点词 → 标记 → 读完 → 结束。
+      它的空洞按痛感排：<b>① 读完之后什么都不发生</b>，标记的词沉进池底再无下文——
+      而这笔账每读一篇涨一次；② 挑哪篇靠自己翻；③ 只能在电脑上读；④ 不知道有没有进步。
+      <b>水平估计不在这个列表里</b>：它是 ② 的手段而不是目的，却在原路线里单占一个 Phase，
+      还排在给它装刹车的 P4 前面——A4 假性认识修正是整个自适应机制最脆弱的一环（见 §A），
+      把它放在下一个 Phase，等于让 P3 交付一个已知会漂移的闭环。
+    </p>
+    <p class="lede">
+      <b>归档不是作废。</b>上面六行原样留着：新路线定案之前，它们仍是唯一写下来过的远期意图，
+      而且里面多数条目会以别的切法回到新表里。<b>排序原则「风险前置」不变。</b>
+    </p>
+    <p class="lede">
+      按这条原则重看，原表里排第四的<b>读后抽查</b>应该大幅提前——它是 A4 刹车的唯一信号源，
+      而且盘过库之后发现它<b>比原以为的便宜得多：出题不需要调模型</b>。
+      D2 问的是「这个词在本文中是什么意思」，正确答案就是 <code>reading_tokens.sense_id</code> 上的语境义项标注
+      （86,349 个 token 已标），干扰项就是同词条的其他义项（义项集里现成，7,227 词中 4,242 个是多义词）。
+      两样都是 P2 已经落库的数据。
+      <b>真正的未验证之处不在模型，在那份标注的质量</b>——漏义项报告还剩 124 个词、310 处，
+      外加 <code>span the ocean</code> 那类误判：标注错了，抽查就会判你错而其实你对。
+      这是可度量的数据问题，不是能力未知。
+    </p>
     <p class="lede" style="margin-top:1.75rem">
       <b>为什么 P1 是命令行生成器而不是界面：</b>整个产品押在一个假设上——AI 能不能写出「词汇受限但句法不降级、且读起来自然」的英语。写不出来的话后面全部白搭，得回头重新想内容来源。验证它不需要界面，跑几篇打印出来读一读就知道。这个答案越早拿到越好。
     </p>
@@ -1281,7 +1368,33 @@
       <div><i>?</i><span>主题偏好清单，以及个人兴趣与真题主题分布的配比</span></div>
       <div><i>?</i><span>文章体裁比例——说明文 / 议论文 / 记叙文</span></div>
       <div><i>?</i><span>旧文重读的触发条件：固定每周，还是按「当初生词数」自动挑选</span></div>
-      <div><i>?</i><span>「毕业」的判定条件——2026-09 已定<b>需要</b>这个机制（C6 三格词池的第三格），但达到什么条件才算毕业没定。要看真实阅读数据，留到 P5</span></div>
+      <div><i>?</i><span>「毕业」的判定条件——2026-09 已定<b>需要</b>这个机制（C6 三格词池的第三格），但达到什么条件才算毕业没定。要看真实阅读数据</span></div>
+      <div><i>!</i><span><b>词组的识别召回率只有 6/22，补法已经量好但没做。</b>
+      2026-09-09 实测：结构预筛只认「动词 + 小品词」，<code>take advantage of</code>、
+      <code>in terms of</code>、<code>rather than</code>、<code>such as</code> 这一整类进不了候选，
+      而它们词典里全都有。放宽到「不含 AUX/PART + 至少一个实词 + 含 ADP/ADV」可以把召回提到 21/22，
+      处数 3,191 → 7,986，模型调用 161 → 约 400 次。<b>没做的原因是它会连带重算
+      <code>in_phrase</code>、真题考频、漏义项报告</b>，是一次独立的数据修正。
+      详见 <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a> §18</span></div>
+
+      <div><i>!</i><span><b>词组要不要进复习，等数据再定。</b>2026-09-09 决定 P3 只做单词的复习，
+      词组保留 P2 已有的识别与释义但不排期。理由：「不给错释义」和「当学习对象」是两个目的，
+      前者 P2y 已完成且价值确凿，后者从未被单独论证过，而现有证据只有「12 条标记里 1 条是词组」。
+      读一两个月之后拿实测的占比再决定。已知缺口：<code>stick to</code> 现在就在
+      <code>reviewing</code> 池里且不会被复习</span></div>
+
+      <div><i>?</i><span><b>ECDICT 的词组释义质量存疑。</b><code>stick to</code> 只有「粘住」，
+      而语料里 9 处全是「坚持」——点词面板一直在给错的意思。Wiktionary 的 46,451 条多词条目有正确的义项拆分，
+      且显式标了字面用法，可以当替换来源（覆盖约四成）</span></div>
+
+      <div><i>?</i><span><b><code>belong to</code> 按现在的规则本该被识别却没有</b>，
+      像是个小 bug，值得单独查一次</span></div>
+
+      <div><i>!</i><span><b>每日复习量的负载均衡算法待优化。</b>2026-09-09 在 Phase 3 讨论中定下<b>暂时不设上限</b>，
+      到期多少复习多少。已知的问题是到期量会成批撞车——某天标了 40 个词，三周后那 40 个会一起回来，
+      再叠上别处到期的，就会撞出一个打开就想关掉的日子。
+      需要的是一套把峰值摊平的办法（提前／延后到期、按优先级顺延、每日软上限），而不是一个硬上限截断。
+      要等真实的复习数据积累出真实的峰值形状才能定，先记在这里</span></div>
     </div>
 
     <h3 style="margin-top:2.5rem">远期：如果要给别人用</h3>
@@ -1317,6 +1430,12 @@
 
       <div><i>?</i><span><b>仓库没有 LICENSE 文件</b>，默认「保留所有权利」</span></div>
 
+      <div><i>!</i><span><b>Anki 是 AGPL，绝对不能抄它的代码</b>——AGPL 会传染整个项目。
+      2026-09-09 查过：复习调度要用的 <code>py-fsrs</code>（PyPI 上叫 <code>fsrs</code>）是 <b>MIT</b>，
+      v6.3.2，Python ≥3.10，调度器本体无第三方依赖，可以直接依赖。
+      但<b>同一个组织（open-spaced-repetition）下的仓库许可不一</b>，有 AGPL 也有 CC0、BSD——
+      每引一个都要单独核对，不能因为「都是这家的」就默认宽松</span></div>
+
       <div><i>!</i><span><b>真正改不动的只有一件：生成成本与个性化的矛盾。</b>
       核心是「按你的生词投放文章」——一千个用户，要么每人每天专属文章（LLM 成本线性涨），
       要么共享文章池（个性化没了，产品也就没了）。<b>这不是重构能解决的</b>，
@@ -1327,7 +1446,7 @@
   <footer>
     <span>English Reader</span>
     <span>功能设计 v1</span>
-    <span>2026-09-05</span>
+    <span>2026-09-05 · 路线 2026-09-08 重切</span>
   </footer>
 
 </div>

@@ -25,7 +25,7 @@ from backend.core.errors import InvalidRequest, NotFound
 from backend.core.logging import get_logger, trace
 from backend.modules.reading import difficulty, repository
 from backend.modules.senses import repository as senses
-from backend.modules.vocabulary import analyzer
+from backend.modules.vocabulary import analyzer, syllabus
 from backend.modules.wordfamily import repository as families
 
 log = get_logger("reading.ingest")
@@ -53,15 +53,10 @@ def _classify(token: analyzer.TokenAnalysis) -> str:
 def _is_beyond(token: analyzer.TokenAnalysis) -> bool:
     """Outside the CET-6 syllabus.
 
-    Two traps in one line, both documented at length in :mod:`.difficulty`:
-
-    * tags are a *levelled list*, so "within CET-6" means carrying **any** of
-      zk / gk / cet4 / cet6, not "carrying cet6";
-    * they are split between British and American spellings at random, so they
-      have to be unioned across the pair — which is what
-      :func:`difficulty.syllabus_tags` does and what this used to skip. ``labor`` was
-      called out of syllabus 41 times in the corpus while ``labour`` sat in the
-      CET-4 list.
+    Every trap in this one line is documented in :mod:`..vocabulary.syllabus`,
+    which is now the only place that decides it. This function used to compare
+    one spelling's tags and stop, which called ``quickly``, ``fully`` and
+    ``cultural`` out of syllabus — 3,005 of 8,401 flags in the corpus, 35.8%.
 
     A word the dictionary does not have at all counts as beyond: there is no
     evidence it is in any syllabus, and saying nothing about it would let it
@@ -71,7 +66,7 @@ def _is_beyond(token: analyzer.TokenAnalysis) -> bool:
         return False
     if not token.headword:
         return True
-    return not (difficulty.syllabus_tags(token) & difficulty.WITHIN_CET6)
+    return not syllabus.known(token.headword, token.text, difficulty.WITHIN_CET6)
 
 
 def derivation_for(headword: str | None) -> dict[str, Any] | None:

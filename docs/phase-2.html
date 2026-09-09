@@ -1604,9 +1604,151 @@ judgment      <b>（无）</b>                    judgement  gk cet4 cet6 ky toe
     有没有被判成超纲。<b>验收脚本 45 项。</b></p>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
+      <h2>验收之后才发现的：超纲判定漏了三步</h2>
+      <span class="sec-note">2026-09-09 · 已修</span>
+    </div>
+    <p class="lede">在 Phase 3 讨论中量句子池时顺手发现的。同一个问题，<b>第四次</b>。</p>
+
+    <p><b>症状</b>：453 篇里判为超纲的实词有 8,401 处，其中 <b>3,005 处（35.8%）的词根就在六级大纲之内</b>——
+    <code>quickly</code>←quick 30 处、<code>fully</code>←full 28 处、<code>cultural</code>←culture 27 处、
+    <code>educational</code>←education 28 处、<code>entirely</code>←entire 18 处。
+    阅读页把 <code>quickly</code> 标成超纲词，还附一句「不用学会也没关系」。</p>
+
+    <p><b>病根</b>：「这个词在不在大纲里」这个问题有<b>三个调用方</b>——生成校验器算超纲率、
+    入库给每个 token 打 <code>beyond</code>、难度画像算超四级／超六级词比例。三方各写了一遍，
+    而<b>只有生成校验器是对的</b>。它做了四件事，另外两方只做了第一件：</p>
+<pre>1  词条自己的标签，并上英美拼写变体      ← 三方都做了
+2  <b>表面形的标签</b>                        ← 漏了。datum 无标签，页面上是 data
+3  <b>词典自带的变形表</b>                    ← 漏了。teeth / phenomena / curricula 还原失败，
+                                          但 ECDICT 的 exchange 认得它们
+4  <b>A 级派生的词根，且要顺着链走到底</b>    ← 漏了。nationality → national → nation，
+                                          一步不够</pre>
+
+    <p><b>修法</b>：新建 <code>vocabulary/syllabus.py</code>，<b>三个调用方都调它</b>，
+    并且把返回值从「标签集合」改成<b>布尔</b>——返回集合就意味着每个调用方自己写比较，
+    而它们正是各自停在了不同的地方。B 级派生仍单独回答（<code>light_root</code>），
+    因为按设计它不算超纲、但算三分之一个目标词，两个答案要能分开数。</p>
+
+    <p><b>重算</b>：<code>reading/recompute.py</code>，只重写词典派生出来的值
+    （<code>beyond</code> 与难度画像），<b>绝不碰 token 的身份、位置、义项标注</b>——
+    那些是遇见记录，标记指着它们。前后各数一次行数，对不上就回滚。
+    入口 <code>POST /v1/admin/reading/recompute</code>，可重复跑。</p>
+
+    <p><b>结果</b>：超纲标记 8,401 → <b>4,158</b>（少 50.5%）。
+    已知答案的样本（三个考试等级必须单调）仍然成立：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>来源</th><th>超四级率 旧</th><th>超四级率 新</th><th>超六级率 新</th><th>难度分</th></tr></thead>
+        <tbody>
+          <tr><td>四级 138 篇</td><td class="num">10.35%</td><td class="num">6.18%</td><td class="num">3.88%</td><td class="num">19.5</td></tr>
+          <tr><td>六级 134 篇</td><td class="num">13.52%</td><td class="num">8.97%</td><td class="num">5.50%</td><td class="num">31.0</td></tr>
+          <tr><td>考研 180 篇</td><td class="num">13.62%</td><td class="num">8.96%</td><td class="num">5.48%</td><td class="num">30.6</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">单调性保住了，「六级 ≈ 考研」这个已知形状也保住了。</p>
+
+    <p><b>写进验收脚本</b>：新增 3.6（<code>quickly / teeth / nationality</code> 这些不许被判超纲）
+    与 3.7（三个调用方问的是同一个函数，靠读源码断言，没有第二份实现）。
+    <b>验收脚本 47 项。</b>回归：P0 29、P1b 28、P1c 16，全过。</p>
+
+    <p><b>这次比前三次多学到一条</b>：坏规则不只是让数字难看，它<b>会让你选错</b>。
+    Phase 3 的模型横评先用坏规则算了一遍合格率，排出来 gpt-5.5 92% 高于 deepseek-v4-flash 88%；
+    换成对的规则重算，变成 <b>96% 对 94%，名次反了</b>——被误判为超纲的那些词碰巧更集中在便宜模型的输出里。
+    差一点就据此把生成句子的活派给了贵四倍、慢四倍的模型。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§18</span>
+      <h2>词组识别的召回率，和一次值得记住的对照实验</h2>
+      <span class="sec-note">2026-09-09 · 量出来了，没动手</span>
+    </div>
+    <p class="lede">在 Phase 3 讨论词组要不要复习时量的。结论是<b>识别漏掉一整类</b>，
+    但补法不是让模型去找。三件事都有数，都没实现——按铁律记在这里，不动手。</p>
+
+    <h3>一、现有的结构预筛只留住 6/22</h3>
+    <p>预筛认的是「<b>动词 + 封闭小品词表</b>」，所以以别的结构开头的词组一个都进不了候选。
+    拿 22 个已知词组测：</p>
+    <p><b>漏掉的：</b><code>take advantage of</code>、<code>pay attention to</code>、<code>in terms of</code>、
+    <code>as a result of</code>、<code>get rid of</code>、<code>on the other hand</code>、
+    <code>make use of</code>、<code>take care of</code>、<code>keep track of</code>、
+    <code>rather than</code>、<code>such as</code>、<code>at least</code>、<code>instead of</code>、
+    <code>due to</code>、<code>a great deal of</code>、<code>in addition to</code>。
+    <b>这十六个词典里一条不少全都有</b>——不是找不到，是筛子把它们扔了。</p>
+
+    <p>试了几档更宽的筛法，拿「22 个该留的 + 22 个该丢的」当已知答案：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>筛法</th><th>处数</th><th>每篇</th><th>该留的留住</th><th>该丢的丢掉</th></tr></thead>
+        <tbody>
+          <tr><td>A · 现在的（动词+小品词）</td><td class="num">3,191</td><td class="num">7.0</td><td class="num"><b>6/22</b></td><td class="num">20/22</td></tr>
+          <tr><td>B · 词典全匹配不筛</td><td class="num">16,471</td><td class="num">36.4</td><td class="num">22/22</td><td class="num"><b>0/22</b></td></tr>
+          <tr><td>C · 不含 AUX/PART + 至少一个实词</td><td class="num">12,838</td><td class="num">28.3</td><td class="num">22/22</td><td class="num">15/22</td></tr>
+          <tr><td><b>E · C + 首词非 DET/PRON + 含 ADP/ADV</b></td><td class="num"><b>7,986</b></td><td class="num">17.6</td><td class="num">21/22</td><td class="num">18/22</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">E 是平衡点：处数多 2.5 倍，召回从 6/22 到 21/22。剩下的噪音
+    （<code>kind of</code>、<code>tend to</code>、<code>that is</code>）交给第二步——
+    那正是它擅长的封闭判断。模型调用从 161 次涨到约 400 次。</p>
+    <p><b>没有实施</b>：换筛法会让 453 篇多出几千处词组，连带重算 <code>in_phrase</code>、
+    真题考频、漏义项报告——P2y 刚清过一次账，这是再清一次。要做要单独排。</p>
+    <p>顺带一个小疑点：<code>belong to</code> 按现在的规则本来就该被找到
+    （<code>belong</code> 是动词，<code>to</code> 在小品词表里），实测却没有。<b>值得单独查一次。</b></p>
+
+    <h3>二、让模型开放式「找出所有词组」——不行，而且是同一个老坑</h3>
+    <p>同一篇六级真题（文章 292，443 词），<code>deepseek-v4-flash</code> 跑三次：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>口径</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>三次各提出</td><td class="num">37 / 28 / 34 个</td></tr>
+          <tr><td>并集 50，交集 19</td><td class="num"><b>稳定率 38%</b></td></tr>
+          <tr><td>在 318,207 条词典里查得到</td><td class="num"><b>21/50（42%）</b></td></tr>
+          <tr><td><b>原文里根本找不到这个字符串</b></td><td class="num"><b>23 个</b></td></tr>
+          <tr><td>现有流水线已知的 13 个，找回来</td><td class="num">10/13</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">编出来的长这样：<code>a you-and-me-against-the-world principle</code>、
+    <code>experience a micro version of</code>、<code>strategic calculations</code>、
+    <code>the cries of</code>、<code>well-being of</code>。
+    <b>而且它连已知的都漏了 3 个。</b></p>
+    <p>同一篇上的直接对照：<b>筛法 E 提出 28 个，全部在词典里，零编造</b>，
+    其中 16 个是现有筛子漏的；模型提出 50 个，只有 21 个在词典里。
+    模型确实赢了三个（<code>belong to</code>、<code>in recognition of</code>、
+    <code>share a common interest</code>），但代价是 23 个幻觉、38% 的稳定率、以及
+    「453 篇 × 每篇 50 个提议 ≈ 两万多条人工复审」。</p>
+    <p><b>这是「开放式找错」那条经验的第二个实例</b>，比第一个更干净——第一个是搭配检查，
+    模型给真题判出均值 5.1 个假问题；这个连「原文里有没有这个字符串」都能错 23 次。
+    <b>要判断就给它具体对象，别让它自己去找。</b></p>
+
+    <h3>三、Wiktionary 有 46,451 条多词条目：适合当义项来源，不适合当清单</h3>
+    <p>P1c 下载的 <code>wiktionary-en.jsonl</code>（1.7 GB）里，14.5% 的条目含空格：
+    <code>noun 33,603 / verb 5,988 / prep_phrase 792 / adv 697 / phrase 543 / proverb 285</code>。</p>
+    <p><b>当义项来源很好</b>——义项分开列，而且<b>显式标了字面用法</b>：</p>
+<pre>stick to  ① To persist; to continue (to use, do, etc.)          ← 「坚持」
+          ② To follow and remain close to.
+          ③ Used other than figuratively or idiomatically: see stick, to.</pre>
+    <p>第三条就是「这里是字面用法」。而 <b>ECDICT 给 <code>stick to</code> 只有一条「粘住」</b>，
+    语料里 9 处却全是「坚持」——<b>点词面板一直在给一个错的意思</b>。Wiktionary 直接修好了它。</p>
+    <p><b>但当候选清单不行</b>：噪音只挡掉 12/22（<code>there is</code>、<code>have to</code>、
+    <code>kind of</code>、<code>a few</code> 都是条目），<b>真词组只留住 11/27</b>——
+    <code>in terms of</code>、<code>regardless of</code>、<code>belong to</code>、
+    <code>come from</code>、<code>result in</code>、<code>refer to</code>、<code>focus on</code>
+    全都不是条目。它收的是习语，不收「学习者可能拆不开的组合」。</p>
+    <p>所以将来真要做词组义项：<b>识别用 ECDICT + 放宽的结构筛，义项用 Wiktionary
+    （覆盖约四成）+ 模型补剩下的</b>。跟 P1c 给单词设计的管线同一个形状，
+    而且词组的粒度问题小得多——实测高频词组平均 <b>2.20 个义项</b>，对照单词的 1.90。</p>
+  </section>
+
   <footer>
     <span>English Reader</span>
-    <span>Phase 2 阅读闭环 · P2y 词组</span>
+    <span>Phase 2 阅读闭环 · P2y 词组 · §17 验收后修复 · §18 词组召回</span>
     <span>2026-09-07 → 09-08</span>
   </footer>
 

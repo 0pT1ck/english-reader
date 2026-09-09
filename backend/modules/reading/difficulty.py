@@ -43,14 +43,16 @@ from typing import Any
 
 from backend.core import runtime_config
 from backend.core.logging import get_logger
-from backend.modules.vocabulary import repository as dictionary
+from backend.modules.vocabulary import syllabus
 from backend.modules.vocabulary.analyzer import SentenceAnalysis, TokenAnalysis
 
 log = get_logger("reading.difficulty")
 
-#: Syllabus tags are cumulative, not exclusive — see the module docstring.
-WITHIN_CET4 = frozenset({"zk", "gk", "cet4"})
-WITHIN_CET6 = WITHIN_CET4 | {"cet6"}
+#: Re-exported so callers keep one import. The sets, and every rule for
+#: reading them, live in :mod:`..vocabulary.syllabus` — this module measures
+#: articles and does not get to have its own opinion about what a syllabus is.
+WITHIN_CET4 = syllabus.WITHIN_CET4
+WITHIN_CET6 = syllabus.WITHIN_CET6
 
 #: Frequency rank above which a word counts as uncommon. Chosen because it sits
 #: where the three exam levels separate cleanly (8.2 / 10.6 / 11.3 percent).
@@ -85,29 +87,21 @@ DEFAULT_WEIGHTS: dict[str, float] = {
 }
 
 
-def syllabus_tags(token: TokenAnalysis) -> frozenset[str]:
-    """This word's syllabus tags, **unioned across its spelling variants**.
+def within(token: TokenAnalysis, tiers: frozenset[str]) -> bool:
+    """Whether this occurrence counts as inside ``tiers``.
 
-    Reading ``token.tags`` directly is wrong, and it was wrong here for a while.
-    ECDICT splits the tags between British and American spellings more or less
-    at random — ``labour`` carries ``zk gk cet4 cet6`` while ``labor`` carries
-    only ``ky``, and ``judgment`` carries none at all — so one spelling of a
-    perfectly ordinary CET-4 word reads as out of syllabus. :mod:`..vocabulary.
-    spelling` exists for exactly this and pairs the two safely (both must be in
-    the dictionary, and their Chinese glosses must share a term, which is what
-    stops the rules inventing ``size``/``sise``).
+    A thin adapter: everything that makes the answer right — cumulative tags,
+    spelling variants, the inflection table, grade-A derivations — lives in
+    :mod:`..vocabulary.syllabus`, which is the only place that answers this
+    question for the whole project.
 
-    Measured before the fix: 21 headwords, 125 tokens, 1.5% of all the
-    out-of-syllabus flags in the corpus, ``labor`` 41 of them.
-
-    **Third time this one field has been read too literally**, after "tags are
-    a levelled list, not cumulative" and the ``there be`` miscount. The standing
-    rule from those: check a new indicator against a sample with a known answer
-    before trusting it — here, ``labor``/``labour`` would have shown it at once.
+    This function used to be ``syllabus_tags`` and returned tags, which meant
+    every caller re-implemented the comparison and **each of them stopped at a
+    different point**. Returning a boolean is what makes that impossible.
     """
     if not token.headword:
-        return frozenset()
-    return dictionary.tags_of(token.headword)
+        return False
+    return syllabus.within(token.headword, token.text, tiers)
 
 
 def measure(sentences: list[SentenceAnalysis]) -> dict[str, Any]:
@@ -134,8 +128,8 @@ def measure(sentences: list[SentenceAnalysis]) -> dict[str, Any]:
     if not content:
         return result
 
-    beyond4 = sum(1 for t in content if not (syllabus_tags(t) & WITHIN_CET4))
-    beyond6 = sum(1 for t in content if not (syllabus_tags(t) & WITHIN_CET6))
+    beyond4 = sum(1 for t in content if not within(t, WITHIN_CET4))
+    beyond6 = sum(1 for t in content if not within(t, WITHIN_CET6))
     result["beyond_cet4_pct"] = round(beyond4 / len(content) * 100, 2)
     result["beyond_cet6_pct"] = round(beyond6 / len(content) * 100, 2)
 

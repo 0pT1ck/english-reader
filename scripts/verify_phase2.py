@@ -219,6 +219,41 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               if spelling_beyond == 0
               else f"{spelling_beyond} 处美式／英式拼写被误判为超纲")
 
+        # The fourth way this same question was got wrong, and the one that hid
+        # the longest: `beyond` was decided from the lemma's own tags alone, so
+        # a word whose root is in the syllabus was called out of it. Measured
+        # before the fix: 3,005 of 8,401 flags in the corpus, 35.8%. These are
+        # the known-answer sample — every one is a word no reader would call
+        # out of CET-6, and each covers a different one of the four checks.
+        derived_beyond = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
+            " ('quickly','fully','entirely','effectively','cultural','educational',"
+            "  'teeth','phenomena','curricula','data','planning','nationality')"
+        ).fetchone()[0]
+        check("3.6", "词根在纲内的派生词与屈折形不算超纲",
+              derived_beyond == 0,
+              "quickly / fully / cultural（A 级派生）、teeth / phenomena（还原失败但词典的"
+              "变形表认得）、nationality（要走 national → nation 两步）都没被判成超纲"
+              if derived_beyond == 0
+              else f"{derived_beyond} 处词根在纲内的词被误判为超纲")
+
+        # One rule, one place. The three callers that ask "is this in the
+        # syllabus" each used to answer it themselves and each stopped at a
+        # different point; this is what stops that happening a fifth time.
+        import inspect
+        from backend.modules.vocabulary import syllabus as _syllabus
+        from backend.modules.generation import checker as _checker
+        callers_share = (
+            "syllabus.known" in inspect.getsource(ingest._is_beyond)
+            and "syllabus.within" in inspect.getsource(difficulty.within)
+            and "syllabus." in inspect.getsource(_checker.check)
+        )
+        check("3.7", "三个调用方问的是同一个函数",
+              callers_share,
+              "ingest、difficulty、generation checker 都走 vocabulary.syllabus，"
+              "没有第二份实现"
+              if callers_share else "有调用方自己实现了考纲判定")
+
         # --- 4. 客户端契约 ------------------------------------------------ #
         print("\n4. 客户端契约")
 

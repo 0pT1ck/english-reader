@@ -30,6 +30,7 @@ from backend.modules.reading import (
     difficulty,
     ingest,
     phrases,
+    recompute,
     repository,
     service,
 )
@@ -207,6 +208,19 @@ async def admin_recount_exam_frequency() -> dict[str, Any]:
     running this again gives the right answer rather than double counting.
     """
     return repository.recount_exam_frequency()
+
+
+@admin_router.post("/reading/recompute", summary="重算超纲标记与难度画像")
+async def admin_recompute() -> dict[str, Any]:
+    """Re-derive ``beyond`` and the difficulty profile for every stored article.
+
+    Needed whenever the syllabus rule changes: the rule lives in
+    :mod:`...vocabulary.syllabus`, but 453 articles carry the answers whatever
+    rule was in force when they were ingested. Only dictionary-derived values
+    are rewritten — never a token's identity, offsets, sense or anything a mark
+    points at — and the token count is checked before and after.
+    """
+    return recompute.recompute_all()
 
 
 @admin_router.post("/reading/phrases/scan", summary="扫描并判断词组")

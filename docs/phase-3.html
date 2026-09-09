@@ -1,0 +1,651 @@
+<title>Phase 3 复习</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 3 · 方案 · 2026-09-09 · 已定稿，未动手</div>
+    <h1>复习</h1>
+    <p class="standfirst">你标记的词会自己回来。回来的时机由记忆状态决定，不由你翻列表决定。</p>
+    <p class="thesis">P2 之后，标记进 <code>reviewing</code> 池就到头了——产品承诺的另一半「也在文章里被复习」一点没兑现，
+    而这笔欠账<b>每读一篇涨一次</b>。这个 Phase 只做一件事：把它补上。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-2.html">Phase 2</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">2</div><div class="fig-key">个方向，双向必做</div></div>
+    <div class="fig"><div class="fig-val">8<span>条</span></div><div class="fig-key">每义项的句子池目标</div></div>
+    <div class="fig"><div class="fig-val">3<span>条</span></div><div class="fig-key">语料库能供的中位数，所以要生成</div></div>
+    <div class="fig"><div class="fig-val">0</div><div class="fig-key">四选一</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>这个 Phase 是怎么来的</h2>
+    </div>
+    <p class="lede">原来的 P3 是「自适应」。2026-09-08 连同 P4–P8 一起整体归档，重新设计。</p>
+
+    <p>归档的两个理由记在主文档 §K 表后。简短说：<b>P2 吃掉了原本排在后面的一大半</b>（语境标注、难度画像、
+    第三层释义、词组、三档标记、客户端契约），旧 P3 那一行只剩下「把客观难度换成对你的生词率」一列；
+    而且<b>旧路线按「能力」切，而缺的东西要按「实际在跑的那个循环」切才看得清</b>。</p>
+
+    <p>那个循环是：打开阅读页 → 在 453 篇里挑一篇 → 读 → 点词 → 标记 → 读完 → 结束。
+    它最大的空洞是<b>第一条：读完之后什么都不发生</b>。所以新的 Phase 3 就是复习。</p>
+
+    <p>同时定下的方法：<b>只规划当前 Phase，不提前规划未来。</b>主文档 §K 从今往后只有「已完成的」和「当前这个」，
+    归档的六行留着当记录。当前 Phase 中发现的未来需求记进 §M 待定，不动手。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>定下来的二十四条</h2>
+      <span class="sec-note">一行一条，钉住</span>
+    </div>
+    <p class="lede">P2y 的教训是「名字只活在对话里，隔天连它指什么都要重新对一遍」。所以讨论的结论先在这里列全，
+    后面各节只是展开。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">1</td><td><b>双向必做</b>。<b>看词想义</b>：句子里的词高亮，想它在这里是什么意思。<b>看义想词</b>：句子挖空、旁边给义项，想空里填哪个词。不是二选一。<br><b>2026-09-09 改名</b>——原来叫「方向一／方向二」，那是位置不是内容，隔天就想不起来指的是什么，跟 P2y 那个名字栽的是同一个坑。</td></tr>
+          <tr><td class="topic">2</td><td><b>语境是题目的一部分，不是提示。</b>按义项分之后，光给一个单词指不出问的是哪个意思。所以两个方向的题面都带句子。</td></tr>
+          <tr><td class="topic">3</td><td><b>看词想义的题面</b>：一个句子，要考的词高亮。问它在这里是什么意思。</td></tr>
+          <tr><td class="topic">4</td><td><b>看义想词的题面</b>：一个句子，那个词挖空，旁边给义项。问空里填哪个词。</td></tr>
+          <tr><td class="topic">5</td><td><b>题面用的是你没见过的句子</b>，每个义项要备 5–10 条随机抽。<b>你当初读到它的那句原句退居提示位。</b></td></tr>
+          <tr><td class="topic">6</td><td><b>句子不够就让 AI 大批量生成。</b>语料库中位数只有 3 条，供不上。</td></tr>
+          <tr><td class="topic">7</td><td><b>解锁与上锁</b>：看词想义通过才解锁看义想词；看义想词失败，看义想词重新上锁，退回看词想义。</td></tr>
+          <tr><td class="topic">8</td><td><b>一轮 = 一天的一次复习</b>，一轮里两个方向都要走。</td></tr>
+          <tr><td class="topic">9</td><td><b>当天不会就重复到会</b>，直到当天两个方向都通过。短期记忆也是实打实记了很多遍。</td></tr>
+          <tr><td class="topic">10</td><td><b>不定重复次数上限，改用伪随机降权</b>。一个词老不会，被抽中的概率就往下降，自己让路，不阻碍别的词。</td></tr>
+          <tr><td class="topic">11</td><td><b>评分看两个维度，但不写加权公式</b>（2026-09-09 按 FSRS 修正措辞）：<b>当次表现</b>（当天被问了几次才过）映射成评分喂给算法；<b>累计的难</b>由算法的难度参数自己攒——它是结果不是输入，见 §5。</td></tr>
+          <tr><td class="topic">12</td><td><b>绝对不要四选一。</b>给了选项就能排除法蒙。判定靠自评：点开答案，你自己说想对了没有。</td></tr>
+          <tr><td class="topic">13</td><td><b>拼写做，但只作强化选项</b>：当天复习全部走完之后可选，针对当天所有词。<b>拼错不影响复习时间的安排</b>，只单独记一笔（含拼错成了什么），留给将来主攻拼写的功能。</td></tr>
+          <tr><td class="topic">14</td><td><b>每日复习量暂不设上限</b>，到期多少复习多少。负载均衡算法待优化，已记入主文档 §M。</td></tr>
+          <tr><td class="topic">15</td><td><b>当天收尾只看一条：池子空了。</b>降权是让路，不是出口——今天过不去的词，今天结束不了。</td></tr>
+          <tr><td class="topic">16</td><td><b>句子优先不重复，池子抽空了才允许重复。</b>是优先，不是禁止。</td></tr>
+          <tr><td class="topic">17</td><td><b>P3 的复习只做单词，词组不做</b>（2026-09-09 定）。词组保留 P2 现有的识别与释义，但不排期复习。理由与已知缺口见 §7。</td></tr>
+          <tr><td class="topic">18</td><td><b>「不认识」当天就复习一次；「模糊」当天不复习，第二天开始</b>，第二天记住了就多隔几天。P2 定的「模糊只记录不调度」到此为止——那句话的前提是 P2 根本没有调度。</td></tr>
+          <tr><td class="topic">19</td><td><b>两个池子分开记：当天标记的一个，算法到期的一个。</b>怎么呈现（混着抽／一个入口先后走／两个入口）<b>留着以后选</b>，现在只要数据上分得开。</td></tr>
+          <tr><td class="topic">20</td><td><b>看义想词的题面给中文义项</b>，可点开看英文概念定义。给英文容易泄题——<code>nationality</code> 的定义里就带着 <code>nation</code>。</td></tr>
+          <tr><td class="topic">21</td><td><b>挖空里填句中的实际形式</b>（<code>addressed</code> 而不是 <code>address</code>）。题面是完整句子，填原形语法不通；而「读到能认出」本来就包含认出变形。</td></tr>
+          <tr><td class="topic">22</td><td><b>看义想词也有四级渐进提示</b>，第 1 级是<b>首字母</b>。专治「着手解决也可以是 deal with」这类歧义，见 §3。</td></tr>
+          <tr><td class="topic">23</td><td><b>句子在读完文章那一刻就生成</b>，夜间批次补足、有余力就往前建。<b>句库是长期资产</b>，不是够用就停。</td></tr>
+          <tr><td class="topic">24</td><td><b>调度用 FSRS，依赖 <code>py-fsrs</code>（MIT）</b>，不自己抄公式。<b>关掉它自带的 learning steps</b>——当天重复到会我们已经用伪随机降权做了，两个都开会重复计数。<b>一天算一次复习。</b>细节与理由见 §5。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>一次复习长什么样</h2>
+      <span class="sec-note">决定 7–12</span>
+    </div>
+    <p class="lede">当天到期的词进一个池子，每次<b>按权重随机抽一个</b>，问它当前解锁到的那个方向。</p>
+
+<pre>抽中一个词 → 问它当前解锁到的方向
+
+<b>看词想义</b>  句子里的词高亮，问：这里是什么意思？
+        想出来了 → 点「会了」→ <b>显示答案让你核对</b> → 确认对了
+                  → 解锁看义想词，<b>放回池子</b>
+        想不起来 → 点一层：出现你当初读到它的那句原话
+                  → 再点一层：出中文意思
+                  → 再点一层：跳回原文
+                  → 记一次没答上，<b>权重降低</b>，放回池子
+
+<b>看义想词</b>  同一个义项，换一条句子，词挖空，旁边给义项
+        填出来了 → 这个词今天完成，<b>出池</b>
+        填不出来 → 看义想词<b>重新上锁</b>，退回看词想义
+                  → 权重降低，放回池子
+
+池子空了 → 当天结束 → 可选：对当天所有词做一轮拼写强化</pre>
+
+    <h3>为什么「放回池子」比「接着问」好</h3>
+    <p>看词想义过了之后不是立刻问看义想词，而是放回池子、隔几个词才轮到它。
+    <b>刚看完答案就问，考的是几秒钟的短期记忆</b>；隔了几个词再问，那才是真想起来了。
+    随机抽取自动做到了这一点，不用额外设计。</p>
+
+    <h3>为什么不定次数上限</h3>
+    <p>「重复到会」需要一个出口，但硬性的「问四次就放过」不妥当——它按次数一刀切，
+    而不同的词该给的机会本来就不一样。改成<b>权重按失败次数衰减</b>（例如每错一次减半）：
+    错得越多越抽不到，但不是禁止，运气好还是会轮到。</p>
+    <p><b>当天的收尾条件只有一条：池子空了。</b>降权只是让卡住的词少出现、给别的词让路，
+    <b>不是给它一个出口</b>——「一直重复直到学会」就是字面意思，今天过不去的词，今天就结束不了。</p>
+    <p>代价要认：状态特别差的一天可能会被一两个词拖长。这是明确接受的，
+    换来的是<b>「今天复习完了」这句话没有水分</b>——不存在「今天有三个词没拿下但也算完成」的中间状态。</p>
+
+    <h3>看义想词的四层提示，以及「着手解决也可以是 deal with」</h3>
+    <p>给中文让你想英文，答案常常不唯一：<b>「着手解决」对得上 address，也对得上 deal with、solve、tackle。</b>
+    这个歧义是真的，但它撞上了已经定过的第 12 条——<b>不要四选一，判定靠自评</b>。</p>
+    <p>那么这一步天然是<b>练习</b>而不是<b>检验</b>：系统不判你对错，是你自己看到答案后说「我想起来了没有」。
+    你想到 <code>deal with</code>、点开看到 <code>address</code>，你自己知道没想起来那个词——
+    而调动这个义项的过程本身已经是一次有效的提取。<b>换成四选一，歧义才会变成硬伤。</b></p>
+    <p>但还是不该让人白想，所以对称地做四层，<b>第 1 级给首字母</b>：</p>
+<pre>第 0 层  挖空的句子 + 中文义项
+         The government must ＿＿＿＿ the problem of air pollution.（着手解决）
+
+想不出 → 第 1 层  <b>首字母</b>          a＿＿＿＿＿＿
+想不出 → 第 2 层  你当初读到它的那句原句
+想不出 → 第 3 层  答案</pre>
+    <p><b>首字母几乎零成本，却把歧义砍掉九成</b>——<code>deal with</code>、<code>solve</code>、
+    <code>tackle</code> 全排除。它不改变自评的性质，只是少让你白想。
+    而「用到第几层就是评分」这条原样适用：第 0 层想出来的，和要看首字母才想起来的，本来就该记不同的分。</p>
+    <p>还有一层天然的收窄：那个空要填的<b>不是「任何一个意思是着手解决的词」，而是你标记过的那个词</b>。
+    整场复习里每一个词都是你自己标的，这是上下文自明的。中文 + 句子 + 首字母叠起来，实际歧义比孤立看小得多。</p>
+
+    <h3>两个池子，以及「模糊」什么时候开始</h3>
+    <p>当天的复习由两批词组成，<b>数据上分开记</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>池子</th><th>装什么</th><th>第一次复习</th></tr></thead>
+        <tbody>
+          <tr><td>当天池</td><td>今天读文章时新标记的</td><td>标「不认识」的<b>当天就来一次</b>；标「模糊」的<b>当天不来，第二天开始</b></td></tr>
+          <tr><td>算法池</td><td>记忆状态算出今天到期的</td><td>由调度决定</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p><b>怎么呈现留着以后选</b>——混着抽、一个入口先当天后算法、或者两个入口，三种都行，
+    差别在体验不在数据。现在只要求两批分得开。</p>
+    <p><b>「模糊」这一档到这里才真正生效。</b>P2 定的是「只记录不调度」，但那句话的前提是
+    <b>P2 根本没有调度</b>；P3 有了调度，它就必须回答。答案是：当天不问（你刚读完，现在懂），
+    第二天开始进队列，第二天还记得就多隔几天——起始间隔和衰减归算法。</p>
+
+    <h3>句子优先不重复，池子抽空了才允许重复</h3>
+    <p>看词想义刚给你看过含 <code>address</code> 的 A 句，看义想词再拿 A 句挖空，答案等于白送。
+    所以<b>优先抽当天没用过的句子</b>——这也是句子池要备 5–10 条的原因之一。</p>
+    <p>但这是<b>优先，不是禁止</b>：当天这个词反复没拿下、池子里的句子都用过一遍了，就允许重复用。
+    重复一条旧句子，总好过因为没句子可出而把这个词放过——而按上面那条，当天本来也没有「放过」这个选项。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>句子从哪来</h2>
+      <span class="sec-note">决定 5–6</span>
+    </div>
+    <p class="lede">要点是<b>不能只用一条句子</b>：只见过一句的话，你记住的很可能是那句话，
+    换到另一句就又不认识了。所以每个义项要备一池子句子，随机抽。</p>
+
+    <h3>语料库供不上，这是实测</h3>
+    <p>把 453 篇里每个被标注过的义项，能找到多少条不同的句子数了一遍：</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>筛选条件</th><th>有 ≥3 句</th><th>有 ≥5 句</th><th>有 ≥8 句</th><th>中位数</th></tr></thead>
+        <tbody>
+          <tr><td>完全不筛</td><td class="num">58.8%</td><td class="num">43.0%</td><td class="num">30.8%</td><td class="num">3 句</td></tr>
+          <tr><td>只限句长 8–30 词</td><td class="num">45.8%</td><td class="num">31.3%</td><td class="num">20.9%</td><td class="num">2 句</td></tr>
+          <tr><td>句长 + 除目标词外零超纲</td><td class="num">27.9%</td><td class="num">17.0%</td><td class="num">10.1%</td><td class="num">1 句</td></tr>
+          <tr><td>句长 + 允许 2 个其他超纲词</td><td class="num">43.8%</td><td class="num">29.8%</td><td class="num">19.8%</td><td class="num">2 句</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1rem"><b>即使完全不挑，中位数也只有 3 条。</b>原因不难理解：真题一句 23–27 词，
+    平均带着两个超六级词，挑一挑就掉得很快。补到 8 条的话，平均每个义项要生成 4–6 句。</p>
+    <p>所以<b>AI 生成是主力，不是补充</b>——这一条跟讨论刚开始时的判断相反，是量完数才改过来的。</p>
+
+    <h3>怎么保证生成的句子不跑偏</h3>
+    <p>用现成的机器，不让模型自己判断自己：</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>过量生成</b>
+        <span>一次多要几条（比如 12 条），不要求它「写 8 条好的」——本项目已三次证明模型对数量约束无感。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>逐句机器校验</b>
+        <span>还原词形 → 查词典 → 算超纲。生成文章那套校验器本来就在做这件事，是纯查表，零误判、零模型成本。
+        再加长度、目标词是否真的出现、有没有把答案直接写进句子。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>不合格的直接丢</b>
+        <span>留够 8 条就行。这跟主文档 §B3「过量生成择优」是同一个做法，而且这里的判定完全是机器的。</span></span></div>
+    </div>
+
+    <h3>什么时候生成，以及句库是资产</h3>
+    <p><b>读完文章那一刻就生成</b>：这篇里刚标记的词起一个后台批次。第一次复习就在当天，
+    但也要用没见过的新句子，所以不能等到晚上。复习最早也在几小时后，来得及。</p>
+    <p><b>夜间批次补足，并且有余力就往前建。</b>句子池不是「够用就停」——它跟义项绑定，
+    换算法、换客户端、将来给别人用都还在，是长期资产。</p>
+    <p>全量建一遍的规模，算得起：</p>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">11<span>万句</span></div><div class="fig-key">13,741 义项 × 8 句</div></div>
+      <div class="fig"><div class="fig-val">13,741</div><div class="fig-key">次调用（一次出 12 句）</div></div>
+      <div class="fig"><div class="fig-val">11.5<span>小时</span></div><div class="fig-key">中转站限速 20 rpm</div></div>
+      <div class="fig"><div class="fig-val">9<span>MB</span></div><div class="fig-key">存储</div></div>
+    </div>
+    <p style="margin-top:1rem">所以夜间批次做成「按需补足 + 有余力往前建」，同一个任务加个参数即可。
+    生成失败不阻塞：那个词第二天只走已有的句子。</p>
+
+    <h3>三个池子，会自动流动</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>池子</th><th>装什么</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>考句池</td><td>语料库里<b>你没读过</b>的文章中的句子，加上 AI 生成的句子</td><td>出题，两个方向都从这里抽</td></tr>
+          <tr><td>提示池</td><td>你<b>当初读到它</b>的那些句子</td><td>看词想义的第一层提示</td></tr>
+          <tr><td>流动</td><td colspan="2">你以后读了某篇文章，那篇里的句子就自动从考句池挪进提示池</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">你读得越多，带记忆钩子的原句越多，这个不用额外做什么。
+    真实句子优先于生成句子——它是真实语料，不必担心地不地道。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>评分与调度</h2>
+      <span class="sec-note">决定 11 · 24</span>
+    </div>
+    <p class="lede">「一次就想起来说明记得牢，反复才想起来说明不牢」——这个直觉要落成两个维度。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>维度</th><th>数的是什么</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>当次表现</td><td>今天这个词被问了几次才两个方向都过</td><td>这一次的评分。一次过等于最好</td></tr>
+          <tr><td>累计轮数</td><td>到今天为止总共复习过几轮</td><td>这个词的难度。轮数少就稳下来了，说明牢</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>用 FSRS，而且不自己抄公式</h3>
+    <p><b>FSRS</b>（Free Spaced Repetition Scheduler）是 Anki 现在的默认调度器，
+    从数百万条真实复习记录拟合出来，而不是像 1987 年的 SM-2 那样拍出来的公式。
+    <b>依赖 <code>py-fsrs</code>（PyPI 上叫 <code>fsrs</code>，MIT 许可，v6.3.2，Python ≥3.10，
+    调度器本体无第三方依赖）。</b></p>
+    <p><b>不自己实现</b>：v6 有 21 个默认参数，<b>记错一个就是一个安静的错误</b>——
+    这个项目已经三次栽在「数字看着对其实错了」上（累积标签、英美拼写、超纲派生词）。
+    引一个 MIT 的无依赖库，比抄一遍公式便宜也安全。</p>
+    <p><b>许可上要小心的是另一件事</b>：<code>py-fsrs</code> 是 MIT，可以直接依赖；
+    但 <b>Anki 本身是 AGPL，绝对不能抄它的代码</b>——AGPL 会传染整个项目。
+    同一个组织下别的仓库也有 AGPL 的，引之前逐个核对。</p>
+
+    <h3>它的状态量正好就是我们留的字段</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>FSRS</th><th>是什么</th><th>我们 §8 留的字段</th></tr></thead>
+        <tbody>
+          <tr><td><b>Difficulty</b></td><td>这个词对你有多难，答差了就涨</td><td>难度</td></tr>
+          <tr><td><b>Stability</b></td><td>现在这个记忆能撑多久</td><td>记忆强度</td></tr>
+          <tr><td><b>due</b></td><td>下次该问的时间</td><td>下次到期时间</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem"><b>一个字段都不用改。</b>当初那条「状态字段按算法无关的形状留，
+    别把某个算法的内部参数焊死进表结构」，守对了。</p>
+
+    <h3>「累计轮数」是结果，不是输入——所以不写加权公式</h3>
+    <p>FSRS 的输入只有三样：<b>旧的 D 与 S、这次隔了多久、这次答得怎样</b>。
+    <b>复习过几轮本身不进公式。</b></p>
+    <p>那决定 11 的第二个维度怎么办？<b>它已经在 D 里了</b>：一个词你复习了八轮还在队列里，
+    必然是因为答差过好几次，而每次答差 D 都涨了一点。
+    <b>所以不需要我们再写一套加权——写了就是重复计数。</b>这条是 2026-09-09 查清 FSRS 之后
+    对决定 11 措辞的修正，写在这里是因为不写的话实施时一定会去写那套多余的公式。</p>
+
+    <h3>评分怎么映射</h3>
+    <p>FSRS 吃四档评分（<code>Again 1 / Hard 2 / Good 3 / Easy 4</code>），
+    我们的信号更细——当天问了几次才两个方向都过：</p>
+<pre>1 次过   → Easy
+2 次过   → Good
+3 次过   → Hard
+4 次及以上 → Again</pre>
+
+    <h3>关掉 FSRS 自带的 learning steps</h3>
+    <p>FSRS 有自己的「当天多次重复」机制（<code>learning_steps</code>，默认像 1 分钟／10 分钟）。
+    <b>我们已经用伪随机降权做了同一件事</b>（决定 9、10），两个都开就会重复计数。</p>
+    <p>所以口径必须写死：<b>当天整体算一次复习，评分反映当天重复了几次</b>，
+    而不是每重复一次就算一次。<code>learning_steps</code> 设为空。</p>
+
+    <h3>optimizer 先不装</h3>
+    <p><code>py-fsrs</code> 的参数优化器是可选依赖（<code>fsrs[optimizer]</code>），
+    能拿你自己的复习历史重新拟合成你个人的遗忘曲线。<b>但没数据的时候做了也没用</b>——
+    先用公开的默认参数跑，攒几个月再说。这正是「复习历史完整落表」那条要换来的东西。</p>
+    <p>参数本身进配置项，控制台可改。</p>
+
+    <h3>怎么验它是对的</h3>
+    <p>调度器是个<b>纯函数</b>（旧状态 + 评分 → 新状态 + 到期时间），没有数据库、没有网络。
+    所以能用注入的时间直接跑，这正是验收 A 要的。除此之外拿能直接看的已知答案验：
+    <b>连续答对，间隔必须递增；连续答错，间隔必须塌回去。</b>
+    照抄一个库不代表接对了，接错了同样是安静的错误。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>拼写强化</h2>
+      <span class="sec-note">决定 13</span>
+    </div>
+    <p class="lede">主文档 §J 原本把拼写和造句写作一起划进「产出型训练」排除掉了。2026-09-09 拆开：
+    造句写作仍然不做，<b>拼写改为做，但只作强化选项</b>。</p>
+
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>什么时候</b>：当天的复习全部走完之后，可选。不是穿插在复习里。</span></div>
+      <div class="not"><i>·</i><span><b>针对谁</b>：当天复习过的所有词。<b>按词去重</b>——同一个词的几个义项，拼写是同一个。</span></div>
+      <div class="not"><i>·</i><span><b>题面</b>：就是看义想词那个挖空句子，只不过从「心里想」变成「真拼一遍」。不用另造题面。</span></div>
+      <div class="not"><i>·</i><span><b>拼错不影响下次复习时间。</b>主线要的是「读到能认出」，让拼写反过来控制主线调度，
+        等于把两件难度不同的事混进一个调度里。</span></div>
+    </div>
+
+    <h3>留位置，不实现</h3>
+    <p>将来想做一个主攻拼写的功能，把拼错的整理起来。按铁律「数据结构可以为未来预留字段，但不实现未来逻辑」，
+    P3 的做法是：<b>每次拼写落一条记录，只写不读。</b></p>
+    <p>记三样：<b>哪个词、拼对没有、拼错成了什么</b>。第三样是关键——只记「错了」没用，
+    记下你把 <code>existence</code> 拼成了 <code>existance</code>，将来那个功能才能看出你是老在同一个地方栽
+    （<code>-ence</code> 和 <code>-ance</code>、双写辅音、<code>ie</code> 和 <code>ei</code>）。</p>
+    <p>P3 里<b>没有任何东西读这张表</b>。将来做的时候，历史数据是现成的。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>明确不做</h2>
+      <span class="sec-note">边界</span>
+    </div>
+    <p class="lede">这个 Phase 只做复习一件事。下面这些不是「以后再做」的承诺，只是不在这里。</p>
+    <div class="nots">
+      <div class="not"><i>✕</i><span><b>水平估计、按水平选文、今日包</b>——原 P3 的内容，已归档，不在这里恢复。</span></div>
+      <div class="not"><i>✕</i><span><b>读后抽查</b>。它和复习是同一条链（答错进队列），但它是<b>另一件事</b>，
+        塞进来会让这个 Phase 说不清自己做完了没有。</span></div>
+      <div class="not"><i>✕</i><span><b>把到期词塞进当天文章复习</b>（双通道里的阅读那一条）。它需要按到期词生成文章，
+        而 P3 用现成的 453 篇真题就能跑完，不引入生成依赖。</span></div>
+      <div class="not"><i>✕</i><span><b>「毕业」的判定</b>。C6 词池的第三格已定<b>需要</b>，但达到什么条件才算毕业没定，见主文档 §M。</span></div>
+      <div class="not"><i>✕</i><span><b>词组的复习。</b>这一条是讨论到最后才砍掉的，理由值得写清楚——见下。</span></div>
+      <div class="not"><i>✕</i><span><b>手机端、日常自动生成、进度统计</b>。</span></div>
+      <div class="not"><i>✕</i><span><b>造句与写作练习</b>。§J 那条不变。</span></div>
+    </div>
+    <h3>词组为什么不做</h3>
+    <p><b>两个目的被混在一起了，而它们的价值差很远。</b></p>
+    <p><b>目的一，不给错释义</b>：你点 <code>account</code>，句子是
+    <code>sources account for a third of supply</code>，系统不能回你「账目／账户」。
+    错误输入是这个项目唯一最怕的东西，实测每篇约 5 处。<b>这一层 P2y 已经做完了</b>，
+    成本付过、收益在手。</p>
+    <p><b>目的二，把词组当学习对象</b>：建义项集、进复习队列、挖两个空、拼写、句子池。
+    <b>这一层从来没有被单独论证过</b>——它是顺着「词组也进 <code>study_states</code>」被带出来的。
+    P2y 定案的六条里没有一条承诺复习；合表那条说的是「复习调度要混着排序」，那是留位置，不是承诺。</p>
+    <p>而它现在唯一的证据是：<b>已有的 12 条标记里，1 条是词组。</b>
+    与此同时它是 P3 里最贵的一块——义项存哪张表、挖空要挖两个词、拼写拼一个词组、
+    句子池几乎全靠生成（词组在语料里中位数 <b>1 句</b>，56.5% 只出现过一次）。</p>
+    <p><b>推迟几乎没有代价</b>：识别和释义照常跑，你照样能标词组，只是暂时不排期。
+    读一两个月之后，「标记里词组占多少」就是个实测数字，那时候再决定，而且起点更好
+    （Wiktionary 的多词条目已经在手，见 <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a> §18）。
+    这跟 P1c 的教训是同一条：<b>在使用它的功能出现之前先定格式，就是在没有反馈的情况下猜。</b></p>
+    <p><b>代价要认，而且必须验</b>：<code>stick to</code> 现在就躺在 <code>reviewing</code> 池里，
+    P3 之后它仍然不会被复习。这是<b>明确的已知缺口，不是遗漏</b>——
+    所以验收里有一条专门查它<b>确实是被有意跳过的，而不是被静默漏掉的</b>。</p>
+
+    <p style="margin-top:1.2rem">界面按<b>铁律 8</b> 做在 Web 上，认它是开发期测试工具、将来重做。
+    要不要改铁律 8 是另一场对话，不在 P3 里开。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>要加的东西</h2>
+      <span class="sec-note">形状，不是实现</span>
+    </div>
+    <p class="lede">按架构铁律 6，新功能自带表、路由、管理页、任务、配置，一处登记自动挂载。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>加在哪</th><th>装什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>study_states</code> 加列</td><td>记忆强度、难度、下次到期时间、上次复习时间、累计复习轮数、<b>解锁到第几步</b></td></tr>
+          <tr><td>句子池（新表）</td><td>义项对应若干条句子。来源（真题语料或 AI 生成）、句中该词的实际形式、挖空位置、是否已转入提示池</td></tr>
+          <tr><td>复习历史（新表）</td><td>哪一轮、哪个义项、哪个方向、用了哪条句子、揭示到第几层、结果。<b>换算法时靠它重放</b></td></tr>
+          <tr><td>拼写记录（新表）</td><td>哪个词、拼对没有、拼错成了什么。<b>只写不读</b></td></tr>
+          <tr><td>批次任务</td><td>给新进复习队列的义项生成句子：过量生成，机器校验，留够目标条数</td></tr>
+          <tr><td>配置项</td><td>句子池目标条数、权重衰减系数、是否开启拼写强化、生成用哪个提供商</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>客户端契约</h3>
+    <p>复习的结构复杂，P2 当初明确<b>没有猜它的形状</b>，说好将来以<b>新增端点</b>接入。P3 就是那个「将来」：</p>
+<pre>GET  /v1/client/reviews   今天要复习的全部内容，含每条句子与提示（离线形状）
+POST /v1/client/events    复习结果按事件上报，沿用 P2 的幂等键机制</pre>
+    <p>另外 P2 在契约里<b>留好的两个位置正好在这里填上</b>：顶层 <code>capabilities.memory_state</code>
+    从 <code>false</code> 转 <code>true</code>，每条义项上的 <code>sense.memory</code> 从 <code>null</code> 变成真值。
+    <b>老客户端一行不用改</b>——这正是当初留位置要换来的东西。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>还没定的</h2>
+      <span class="sec-note">没有了</span>
+    </div>
+    <p class="lede">讨论中五条全部答完，都写进 §2 的决定表了：
+    <b>看义想词给中文</b>（英文定义会被同源词泄题）、<b>挖空填句中的实际形式</b>、
+    <b>生成模型用 <code>deepseek-v4-flash-0731</code></b>（横评见 §11）、
+    <b>读完即生成 + 夜间补足</b>、<b>调度用 FSRS</b>（见 §5）。</p>
+    <p>剩下的都是实施时照着做就行的量，不是需要先讨论的决定：FSRS 的 21 个默认参数
+    （照参考实现抄，然后拿已知答案验）、伪随机的衰减系数、句子池目标条数——<b>这些一律进配置项</b>，
+    跑起来不合适随时改，不必现在拍。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>验收标准</h2>
+      <span class="sec-note">10 项</span>
+    </div>
+    <p class="lede">调度是按天算的，验收要么等时间流逝，要么造时间。两条都要。</p>
+
+    <div class="checks">
+      <div class="check"><span class="check-n">A</span><span class="check-what"><b>自动检查：用注入的时间跑调度</b>
+        <span>今天标一个词，把「现在」拨到三天后，看它该不该出现、出现在哪个方向、
+        答错之后下次到期有没有提前。不靠真等。</span></span></div>
+      <div class="check"><span class="check-n">B</span><span class="check-what"><b>自动检查：不变量没破</b>
+        <span>复习不改变词池位置（那是 P2 的不变量）；撤销标记后条目退回 <code>new</code> 但遇见记录保留；
+        句子池里每条句子都过了超纲校验；拼写记录只写不读。</span></span></div>
+      <div class="check"><span class="check-n">C</span><span class="check-what"><b>自动检查：句子池够用</b>
+        <span>随机抽 50 个进了队列的义项，每个都凑够了目标条数；生成的句子里目标词确实出现，
+        且除它以外没有超纲词。</span></span></div>
+      <div class="check"><span class="check-n">C2</span><span class="check-what"><b>自动检查：词组是被有意跳过的</b>
+        <span><code>item_type='phrase'</code> 的条目留在 <code>reviewing</code> 池里、遇见记录照常，
+        但一条都不出现在复习队列里。<b>查的是「有意跳过」而不是「碰巧没查到」</b>——
+        所以断言的是「池里确有词组条目，且复习队列里一个都没有」，两边都要成立。</span></span></div>
+      <div class="check"><span class="check-n">C3</span><span class="check-what"><b>自动检查：「模糊」当天不出现</b>
+        <span>同一篇里标一个「不认识」、一个「模糊」：当天的队列里有前者、没有后者；
+        把时间拨到第二天，两个都在。<b>这是 P2「模糊只记录不调度」那句话到期的地方</b>，
+        必须验出差别，否则三档就白分了。</span></span></div>
+      <div class="check"><span class="check-n">C4</span><span class="check-what"><b>自动检查：看义想词的题面锁得住</b>
+        <span>挖空处填的是句中的实际形式（<code>addressed</code> 不是 <code>address</code>）；
+        第 1 级提示给的是首字母；同一天里看词想义与看义想词<b>抽的不是同一条句子</b>，
+        除非句子池已经抽空。</span></span></div>
+      <div class="check"><span class="check-n">D</span><span class="check-what"><b>人工：真跑三到五天</b>
+        <span>验的是脚本验不了的东西——原句是不是真能勾起记忆、生成的句子读着自不自然、
+        当天重复到会会不会烦，以及<b>看义想词的歧义到底烦不烦</b>——
+        「着手解决」也对得上 deal with，设计上靠首字母那一级挡，
+        <b>但挡得够不够只有真做几天才知道</b>。</span></span></div>
+      <div class="check"><span class="check-n">E</span><span class="check-what"><b>人工：句子质量抽验</b>
+        <span>抽 50 条生成的句子人工看：用的是不是那个义项、有没有把答案写进句子里。
+        <b>这条是这个 Phase 唯一会让人扔掉它的失败方式</b>——题目本身错了，比没有题目更糟。</span></span></div>
+    </div>
+
+    <p style="margin-top:1.5rem"><b>完成的定义</b>：标一个词之后不用管它，它会自己回来；
+    回来的时机由记忆状态决定，不由你翻列表决定。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>模型横评</h2>
+      <span class="sec-note">2026-09-09 · 实测</span>
+    </div>
+    <p class="lede">23 个模型 × 6 个义项 = 138 次调用。义项挑的是难写的那一类：五个「常见词的次要义项」
+    加一个简单对照。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>调用</th><th>句数</th><th>合格率</th><th>凑够 8 条</th><th>均耗时</th></tr></thead>
+        <tbody>
+          <tr><td>kimi-k2.6</td><td class="num">6/6</td><td class="num">72</td><td class="num">100%</td><td class="num">6/6</td><td class="num">40.0s</td></tr>
+          <tr><td>deepseek-v4.1-flash</td><td class="num">6/6</td><td class="num">72</td><td class="num">97%</td><td class="num">6/6</td><td class="num">5.5s</td></tr>
+          <tr><td>kimi-k2.7-code</td><td class="num">6/6</td><td class="num">72</td><td class="num">97%</td><td class="num">6/6</td><td class="num">16.6s</td></tr>
+          <tr><td>qwen3.7-max</td><td class="num">6/6</td><td class="num">72</td><td class="num">97%</td><td class="num">6/6</td><td class="num">49.6s</td></tr>
+          <tr><td><b>deepseek-v4-flash-0731</b>（现默认）</td><td class="num">6/6</td><td class="num">72</td><td class="num">96%</td><td class="num">6/6</td><td class="num">9.8s</td></tr>
+          <tr><td>gpt-5.5</td><td class="num">6/6</td><td class="num">72</td><td class="num">94%</td><td class="num">6/6</td><td class="num">44.8s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1rem"><b>结论：合格率 92–100%，不需要用贵模型。</b>
+    这跟项目里「写文章要用 gpt-5.5」（超纲率 3.64% 对 0.32%）<b>不冲突</b>——
+    那是写 350 词的整篇文章，这是写一句话带一个指定的词，任务小得多。<b>别把两个结论搞混。</b></p>
+
+    <p>义项正确性机器判不了，人工抽看了 <code>address</code>（着手解决）与 <code>sustain</code>（遭受）——
+    四个模型全对，没有一句滑回「地址」或「维持」。</p>
+
+    <p><b>跑不通的</b>：<code>seed-2.1-pro</code>、<code>seed-2.1-turbo</code>、<code>qwen3.8-max</code>
+    全部 504（中转站 60 秒网关就断）；<code>minimax-m2.7</code> 全部 429。
+    <b>中转站限速 20 rpm</b>——1000 个义项约 50 分钟，而且这条限速<b>比模型延迟更决定总耗时</b>，
+    所以选模型时快慢的权重比看起来小。</p>
+
+    <h3>这次横评差点选错，原因值得记住</h3>
+    <p>第一版合格率是用当时那套<b>坏了的超纲判定</b>算的，排出来 gpt-5.5 92% 高于
+    deepseek-v4-flash 88%，看着像「贵模型确实更守规矩」。
+    修好判定重算之后变成 <b>96% 对 94%，名次反了</b>——那些被误判为超纲的词
+    （<code>quickly</code>、<code>fully</code> 这类）碰巧更集中在便宜模型的输出里。</p>
+    <p>差一点就据此把生成句子的活派给了贵四倍、慢四倍的模型。<b>一个错误的度量比没有度量更危险</b>——
+    这条项目里已经写过一次，这次它差点直接改变一个决定。判定的修复见
+    <a href="./phase-2.html" style="color:var(--accent)">Phase 2 文档</a> §17。</p>
+
+    <h3>建议</h3>
+    <p>用 <b><code>deepseek-v4-flash-0731</code></b>：96%、6/6 凑够、9.8 秒，而且已经是默认提供商。
+    要再高几个点就换 <code>kimi-k2.6</code>（100%，但样本只有 72 句，别当成确定的差距）。
+    <code>deepseek-v4.1-flash</code> 97% / 5.5 秒最好，正式版发布之后<b>值得重测一次再定</b>。</p>
+
+    <h3>句式重复度：一个次要发现</h3>
+    <p><code>sustain</code> 的 175 句里，<code>she sustained</code> 出现 19 次、<code>he sustained</code> 14 次，
+    合起来占 19%。同一个模型内部更集中。<b>句子池由多个模型混合生成</b>能天然增加多样性，
+    成本不变——反正每个义项本来就要多要几条再筛。</p>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 3 方案 · 已定稿</span>
+    <span>2026-09-09</span>
+  </footer>
+
+</div>
