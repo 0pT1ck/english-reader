@@ -1,0 +1,1075 @@
+<title>English Reader · 归档</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:      #FAFAFC;
+    --surface:     #FFFFFF;
+    --surface-sub: #F2F2F7;
+    --ink:         #1B1D26;
+    --ink-mid:     #4E5364;
+    --ink-soft:    #757B8E;
+    --rule:        #E3E4ED;
+    --rule-soft:   #EDEEF4;
+    --accent:      #37429B;
+    --accent-soft: #E8EAF7;
+    --mark:        #B37A0C;
+    --mark-soft:   #FBF2DE;
+
+    --f-serif: "Newsreader", Georgia, serif;
+    --f-sans:  "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei",
+               "Noto Sans SC", "Hiragino Sans GB", sans-serif;
+    --f-mix:   "Newsreader", "PingFang SC", "HarmonyOS Sans SC",
+               "Microsoft YaHei", "Noto Sans SC", serif;
+    --f-mono:  "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+    --col: 45rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #101119;
+      --surface:     #171922;
+      --surface-sub: #1D202B;
+      --ink:         #E7E8F0;
+      --ink-mid:     #ADB2C4;
+      --ink-soft:    #868CA0;
+      --rule:        #2A2D3B;
+      --rule-soft:   #22252F;
+      --accent:      #98A1EE;
+      --accent-soft: #232741;
+      --mark:        #DFAB49;
+      --mark-soft:   #2C2718;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #101119;
+    --surface:     #171922;
+    --surface-sub: #1D202B;
+    --ink:         #E7E8F0;
+    --ink-mid:     #ADB2C4;
+    --ink-soft:    #868CA0;
+    --rule:        #2A2D3B;
+    --rule-soft:   #22252F;
+    --accent:      #98A1EE;
+    --accent-soft: #232741;
+    --mark:        #DFAB49;
+    --mark-soft:   #2C2718;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--f-sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+    padding: 0 1.5rem 6rem;
+  }
+
+  .wrap {
+    max-width: var(--col);
+    margin: 0 auto;
+  }
+
+  /* ---------- masthead ---------- */
+
+  .masthead {
+    padding: 4.5rem 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+
+  h1 {
+    font-family: var(--f-serif);
+    font-size: clamp(2.6rem, 8vw, 3.6rem);
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0;
+    text-wrap: balance;
+  }
+
+  .standfirst {
+    font-family: var(--f-mix);
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--ink-mid);
+    margin: 0;
+    max-width: 34rem;
+    text-wrap: pretty;
+  }
+
+  .thesis {
+    font-family: var(--f-mix);
+    font-size: 1.02rem;
+    color: var(--ink);
+    margin: 0;
+    padding-left: 1.1rem;
+    border-left: 2px solid var(--accent);
+    max-width: 34rem;
+  }
+
+  /* ---------- key figures ---------- */
+
+  .figures {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 3rem 0 0;
+  }
+
+  .fig {
+    background: var(--surface);
+    padding: 1.1rem 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .fig-val {
+    font-family: var(--f-mono);
+    font-size: 1.35rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    line-height: 1.2;
+  }
+
+  .fig-val span {
+    font-size: 0.82rem;
+    font-weight: 400;
+    color: var(--ink-soft);
+    margin-left: 0.15em;
+  }
+
+  .fig-key {
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+
+  /* ---------- sections ---------- */
+
+  section {
+    margin-top: 4.5rem;
+  }
+
+  .sec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    padding-bottom: 0.7rem;
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 1.75rem;
+  }
+
+  .sec-mark {
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0.06em;
+  }
+
+  h2 {
+    font-family: var(--f-mix);
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    margin: 0;
+    line-height: 1.3;
+  }
+
+  .sec-note {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: var(--ink-soft);
+    font-family: var(--f-mono);
+  }
+
+  .lede {
+    font-family: var(--f-mix);
+    color: var(--ink-mid);
+    margin: 0 0 1.75rem;
+    max-width: 36rem;
+  }
+
+  /* ---------- premises ---------- */
+
+  .premises {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .premise {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr;
+    gap: 0 0.9rem;
+    align-items: baseline;
+  }
+
+  .premise-n {
+    font-family: var(--f-mono);
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--mark);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .premise h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0;
+    font-family: var(--f-mix);
+  }
+
+  .premise p {
+    grid-column: 2;
+    margin: 0.3rem 0 0;
+    color: var(--ink-mid);
+    font-size: 0.95rem;
+  }
+
+  /* ---------- feature list ---------- */
+
+  .features {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .feat {
+    display: grid;
+    grid-template-columns: 3.1rem 1fr;
+    gap: 0 0.9rem;
+    padding: 1.1rem 0;
+    border-top: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+
+  .feat:first-child { border-top: none; padding-top: 0; }
+
+  .feat-id {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: 0.03em;
+  }
+
+  .feat-name {
+    font-weight: 600;
+    font-size: 0.98rem;
+    font-family: var(--f-mix);
+    line-height: 1.5;
+  }
+
+  .feat p {
+    grid-column: 2;
+    margin: 0.25rem 0 0;
+    color: var(--ink-mid);
+    font-size: 0.93rem;
+  }
+
+  .feat p + p { margin-top: 0.55rem; }
+
+  .feat-why {
+    color: var(--ink-soft);
+    font-size: 0.87rem;
+  }
+
+  .feat-why b {
+    font-weight: 600;
+    color: var(--ink-mid);
+  }
+
+  /* ---------- gloss (the reader's own gesture) ---------- */
+
+  .g {
+    border-bottom: 1px dashed var(--mark);
+    cursor: help;
+    position: relative;
+    color: inherit;
+  }
+
+  .g::after {
+    content: attr(data-def);
+    position: absolute;
+    left: 0;
+    top: calc(100% + 0.45rem);
+    width: max-content;
+    max-width: min(20rem, 72vw);
+    background: var(--surface);
+    color: var(--ink-mid);
+    border: 1px solid var(--rule);
+    border-left: 2px solid var(--mark);
+    padding: 0.5rem 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    font-family: var(--f-sans);
+    border-radius: 2px;
+    box-shadow: 0 6px 20px rgba(20, 22, 35, 0.14);
+    opacity: 0;
+    transform: translateY(-3px);
+    transition: opacity 0.14s ease, transform 0.14s ease;
+    pointer-events: none;
+    z-index: 20;
+  }
+
+  .g:hover::after,
+  .g:focus-visible::after {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .g:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- ladder (progressive hint) ---------- */
+
+  .ladder {
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    margin-top: 0.75rem;
+    grid-column: 2;
+  }
+
+  .rung {
+    display: grid;
+    grid-template-columns: 2.2rem 1fr 5.2rem;
+    gap: 0.8rem;
+    align-items: baseline;
+    padding: 0.7rem 0.9rem;
+    border-top: 1px solid var(--rule-soft);
+    font-size: 0.88rem;
+  }
+
+  .rung:first-child { border-top: none; }
+
+  .rung-n {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rung-grade {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    text-align: right;
+    color: var(--accent);
+    letter-spacing: 0.04em;
+  }
+
+  .rung em {
+    font-style: normal;
+    color: var(--ink-mid);
+  }
+
+  /* ---------- params table ---------- */
+
+  .rules {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+
+  .rule {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    gap: 0.7rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .rule i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+  }
+
+  .rule b { font-weight: 600; }
+  .rule span { color: var(--ink-mid); }
+
+  td.phase {
+    font-family: var(--f-mono);
+    font-weight: 500;
+    color: var(--accent);
+    white-space: nowrap;
+  }
+
+  tr.now td { background: var(--accent-soft); }
+
+  tr.done td { color: var(--ink-soft); }
+  tr.done td.phase { color: var(--ink-soft); }
+
+  tr.done td.phase::after {
+    content: "完成";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--ink-soft);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  tr.now td.phase::after {
+    content: "当前";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--accent);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+  }
+
+  tr.archived td { color: var(--ink-soft); opacity: 0.7; }
+  tr.archived td.phase { color: var(--ink-soft); text-decoration: line-through; }
+
+  tr.archived td.phase::after {
+    content: "F52863";
+    font-family: var(--f-sans);
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    color: var(--surface);
+    background: var(--ink-soft);
+    padding: 0.08rem 0.28rem;
+    border-radius: 2px;
+    margin-left: 0.4rem;
+    vertical-align: middle;
+    text-decoration: none;
+  }
+
+  tr.arch-head td {
+    font-family: var(--f-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    color: var(--ink-soft);
+    background: var(--surface-sub);
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.91rem;
+    min-width: 30rem;
+  }
+
+  th {
+    text-align: left;
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 0 0.9rem 0.55rem 0;
+    border-bottom: 1px solid var(--ink);
+    white-space: nowrap;
+  }
+
+  td {
+    padding: 0.65rem 0.9rem 0.65rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: baseline;
+    color: var(--ink-mid);
+  }
+
+  td:first-child {
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  td.num {
+    font-family: var(--f-mono);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  /* ---------- flow ---------- */
+
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .step {
+    background: var(--surface);
+    padding: 1rem 1.1rem;
+    display: grid;
+    grid-template-columns: 4.6rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+  }
+
+  .step-when {
+    font-family: var(--f-mono);
+    font-size: 0.73rem;
+    color: var(--mark);
+    letter-spacing: 0.03em;
+  }
+
+  .step-what { font-size: 0.93rem; }
+
+  .step-what b {
+    display: block;
+    font-weight: 600;
+    font-size: 0.97rem;
+    font-family: var(--f-mix);
+    margin-bottom: 0.15rem;
+  }
+
+  .step-what span { color: var(--ink-mid); }
+
+  /* ---------- out of scope ---------- */
+
+  .excluded {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .ex {
+    display: grid;
+    grid-template-columns: 3.6rem 1fr;
+    gap: 0.9rem;
+    align-items: baseline;
+    font-size: 0.93rem;
+  }
+
+  .ex-tag {
+    font-family: var(--f-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    border: 1px solid var(--rule);
+    padding: 0.1rem 0.35rem;
+    text-align: center;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+
+  .ex b { font-weight: 600; }
+  .ex span { color: var(--ink-soft); }
+
+  /* ---------- open questions ---------- */
+
+  .open {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: 1.25rem 1.4rem;
+    background: var(--surface-sub);
+    border-left: 2px solid var(--mark);
+  }
+
+  .open div {
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    gap: 0.6rem;
+    font-size: 0.93rem;
+    color: var(--ink-mid);
+    align-items: baseline;
+  }
+
+  .open i {
+    font-style: normal;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    color: var(--mark);
+  }
+
+  footer {
+    margin-top: 4.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-family: var(--f-mono);
+  }
+
+  @media (max-width: 34rem) {
+    body { padding: 0 1.15rem 4rem; }
+    .masthead { padding-top: 3rem; }
+    .feat, .premise { grid-template-columns: 1fr; gap: 0; }
+    .feat p, .premise p, .ladder { grid-column: 1; }
+    .feat-id, .premise-n { margin-bottom: 0.2rem; }
+    .rung { grid-template-columns: 1.6rem 1fr; }
+    .rung-grade { grid-column: 2; text-align: left; }
+    .step { grid-template-columns: 1fr; gap: 0.25rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+
+  /* ---------- archive ---------- */
+
+  .arch-item {
+    border-top: 1px solid var(--rule);
+    padding-top: 1.4rem;
+    margin-top: 1.4rem;
+  }
+
+  .arch-item:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+
+  .arch-where {
+    font-family: var(--f-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .arch-item h3 {
+    font-family: var(--f-mix);
+    font-size: 1.02rem;
+    font-weight: 600;
+    margin: 0.35rem 0 0.7rem;
+    line-height: 1.4;
+  }
+
+  .orig {
+    background: var(--surface-sub);
+    border-left: 2px solid var(--rule);
+    padding: 0.9rem 1.1rem;
+    margin: 0 0 0.85rem;
+    font-family: var(--f-mix);
+    font-size: 0.93rem;
+    color: var(--ink-mid);
+  }
+
+  .orig p { margin: 0; }
+  .orig p + p { margin-top: 0.5rem; }
+  .orig b { color: var(--ink); font-weight: 600; }
+  .orig .table-scroll { margin-top: 0.6rem; }
+  .orig .figs-quote {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.6rem;
+    font-family: var(--f-mono);
+    font-size: 0.85rem;
+    color: var(--ink);
+  }
+
+  .why {
+    font-size: 0.9rem;
+    color: var(--ink-mid);
+    margin: 0;
+  }
+
+  .why + .why { margin-top: 0.5rem; }
+  .why b { color: var(--ink); font-weight: 600; }
+
+  .backlink {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 0.78rem;
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid var(--accent-soft);
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">归档 · 2026-09-10</div>
+    <h1>归档</h1>
+    <p class="standfirst">从主文档 <a href="./english-reader.html" style="color:var(--accent)">english-reader.html</a> 移出的内容，按主题分组，原文照录。</p>
+    <p class="thesis">移出不等于作废。这些是当时真实的决定与实测数据，只是不再描述现在的系统——留在主文档里，它们会被当成现行口径去执行。每条记原位置、原文、为什么移出。</p>
+  </header>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§A</span>
+      <h2>每日配额与周期预测</h2>
+      <span class="sec-note">6 处</span>
+    </div>
+    <p class="lede">一整套「每天读几篇、每天引入几个新词、多久能学完」的账。它们互相依赖，也一起失效：
+    P2 定下「读完一篇只增加遇见次数，不改变词池位置」（主文档 §C6）之后，
+    <b>覆盖速度取决于标记率，不再可预测</b>；而每日总时长已于 2026-09-09 取消，配额的另一端也没了。
+    做到今天，系统里没有今日包、没有选文、没有每日调度——读几篇一直是自己挑。</p>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档页首 · 关键数字</div>
+      <h3>首页的四个数字</h3>
+      <div class="orig">
+        <div class="figs-quote">
+          <span>3–4 篇 · 每日文章</span>
+          <span>3–5% · 目标生词率</span>
+          <span>12 个 · 每日新目标词</span>
+          <span>~7 个月 · CET-4 → CET-6</span>
+        </div>
+      </div>
+      <p class="why"><b>为什么移出：</b>四个数字里有三个在文档内部已被自己推翻。
+      目标生词率 2026-09 上调为 <b>6–8%</b>（「95–98% 已知词才能理解」的前提是读的时候查不了词，
+      而我们点词即查）；每篇新目标词上调为 <b>25 个</b>；周期折算随之从 ~7 个月变成 3.2 个月，
+      又随 §C6 变成不可预测。放在页首，等于每次打开文档都先读到三个错数字。</p>
+      <p class="why">「每日文章数」与「每日新目标词上限」则是从未实现、也从未验证过的计划值。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §I · 关键参数</div>
+      <h3>三行参数：每日文章数、每日新目标词上限、预计周期</h3>
+      <div class="orig">
+        <div class="table-scroll"><table>
+          <thead><tr><th>参数</th><th>初始值</th><th>依据</th></tr></thead>
+          <tbody>
+            <tr><td>每日文章数</td><td class="num">3–4 篇</td><td>约 1000 词日阅读量</td></tr>
+            <tr><td>每日新目标词上限</td><td class="num">12 个</td><td>硬上限，队列不爆的关键</td></tr>
+            <tr><td>预计周期</td><td class="num">~3 个月</td><td>7226 个目标词 ÷ 每篇 25 个 ÷ 每天 3 篇</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+      <p class="why"><b>为什么移出：</b>「每日新目标词上限 12 个」与同一张表里的「每篇新目标词 25 个」
+      直接矛盾——按每天 3–4 篇算，一天会引入 75–100 个新目标词，是上限的六到八倍。
+      <b>这个矛盾在表里躺了很久没被发现，因为两个数都没有任何代码在读。</b>
+      预计周期是前两行的乘除结果，前两行走了它也就不成立。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §B1、§I</div>
+      <h3>把篇数折成月份的那半句</h3>
+      <div class="orig">
+        <p>（§B1）……原来每篇只放 8 个目标词，算下来覆盖全部目标词要读 903 篇、<b>每天三篇读十个月</b>。</p>
+        <p>（§I）<b>2026-09 上调，从 8 个</b>。按 8 个算，覆盖 7226 个目标词要 903 篇、<b>每天 3 篇读十个月</b>；25 个是 289 篇、3.2 个月。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>「903 篇对 289 篇」是密度决定的真正依据，与日程无关，<b>留在主文档</b>；
+      乘上「每天几篇」折成月份的那半句依赖已归档的每日配额，移出。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §H · 每日流程</div>
+      <h3>「阅读 3–4 篇」</h3>
+      <div class="orig">
+        <p><b>主体 · 阅读 3–4 篇</b>——已提前备好并缓存。点词查词、标记生词，每篇读完做一次词汇抽查。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>只移出篇数。流程这一步本身还在，只是不再规定一天读几篇。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §E2 · 双通道复习</div>
+      <h3>卡片缺口的那笔算术</h3>
+      <div class="orig">
+        <p><b>为什么需要卡片：</b>稳态下每天到期约 80 次，而 3–4 篇文章最多自然容纳 60 个复现位。卡片是这个缺口的泄压阀，不是主菜。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>80 与 60 都是从每日配额推出来的。
+      <b>缺口本身是真的</b>——P3 讨论中已确认到期量会成批撞车（主文档 §M「每日复习量负载均衡」），
+      只是不该再用这两个凭空的数去说它。§E2 里换成一句不带数字的说法。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §I · 关键参数</div>
+      <h3>每日卡片上限</h3>
+      <div class="orig">
+        <div class="table-scroll"><table>
+          <thead><tr><th>参数</th><th>初始值</th><th>依据</th></tr></thead>
+          <tbody><tr><td>每日卡片上限</td><td class="num">~20 张</td><td>兜底性质，不喧宾夺主</td></tr></tbody>
+        </table></div>
+      </div>
+      <p class="why"><b>为什么移出：</b>§I 里最后一行每日配额，和上面三行一起走。
+      两个理由，第二个更硬。</p>
+      <p class="why"><b>一是它的依据已经不在了。</b>「兜底性质，不喧宾夺主」说的是 E2 双通道分流里
+      卡片相对于文章复现的地位——那套分流属于原 P5，已随旧路线于 2026-09-08 归档（本文档 §E），
+      而 20 这个数是从「每天 3–4 篇文章容纳 60 个复现位、到期 80 次」倒推出来的差额。
+      被减数和减数都归档了，差还留着。</p>
+      <p class="why"><b>二是它和已经做出来的东西说反话。</b>P3 在 2026-09-09 定的是
+      <b>暂时不设上限、到期多少复习多少</b>（主文档 §M「每日复习量的负载均衡算法待优化」），
+      代码就是这么跑的。留着一行写死的「~20 张」，读文档的人会以为系统里有这个闸门。
+      <b>真正要做的不是硬上限截断，而是把峰值摊平</b>（提前／延后到期、按优先级顺延、每日软上限），
+      那条待定项留在主文档 §M，等真实的复习数据长出真实的峰值形状再定。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§B</span>
+      <h2>「句法复杂度始终对齐 CET 真题」</h2>
+      <span class="sec-note">4 处</span>
+    </div>
+    <p class="lede">设计前提 01 里的一句无条件保证，以及围绕它长出来的一整段冲突。
+    2026-09-10 的实测把这句保证证伪了，而证伪它的不是模型不行，<b>是我们自己的另一个决定</b>——
+    生词密度从每篇 8 个提到 25 个。归档这句保证，等于在这场取舍里<b>选了密度</b>：
+    不再宣称句法始终对齐，也就不再有「二选一」这个悬案挂在那里。
+    <b>数据全部保留在下面</b>，将来想把句法收紧回去，从这里取数接着做。</p>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §0 · 设计前提 01</div>
+      <h3>那句保证</h3>
+      <div class="orig">
+        <p>因此只在<b>词汇维度</b>降低难度，<b>句法复杂度始终对齐 CET 真题</b>——长难句、从句嵌套、学术议论文体全部保留。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>「始终」是一句无条件保证，而实测下它不成立。
+      前提 01 的其余部分——学习者词汇薄弱但语法扎实，因此排除同时简化句式的分级读物——仍然成立，留在主文档。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §B1 · 按约束生成文章</div>
+      <h3>2026-09-10 的实测对照（数据原样保留）</h3>
+      <div class="orig">
+        <p><b>2026-09-10 实测：这个决定把句法复杂度压垮了。</b>
+        库里的生成稿正好构成一次自然对照——30 篇是每篇 8 个目标词的旧稿，5 篇是改成 25 个之后的。
+        同一套句法统计、同一条真题基线：</p>
+        <div class="table-scroll"><table>
+          <thead><tr><th>指标</th><th>真题基线</th><th>8 个目标词</th><th>25 个目标词</th></tr></thead>
+          <tbody>
+            <tr><td>平均句长</td><td class="num">18.91</td><td class="num">18.25（−3%）</td><td class="num">16.50（−13%）</td></tr>
+            <tr><td>被动语态</td><td class="num">16.95</td><td class="num">14.67（−13%）</td><td class="num"><b>4.13（−76%）</b></td></tr>
+            <tr><td>定语从句</td><td class="num">14.71</td><td class="num">14.12（−4%）</td><td class="num"><b>8.26（−44%）</b></td></tr>
+            <tr><td>名词化</td><td class="num">33.18</td><td class="num"><b>33.92（+2%）</b></td><td class="num"><b>9.69（−71%）</b></td></tr>
+            <tr><td>形式主语</td><td class="num">5.58</td><td class="num"><b>5.63（+1%）</b></td><td class="num"><b>2.35（−58%）</b></td></tr>
+          </tbody>
+        </table></div>
+        <p><b>8 个目标词时句法几乎完全对齐基线，25 个时塌了</b>——
+        四个互相独立的指标同向，幅度都在四成到八成之间。原因不难想：450 个词里要塞进 25 个指定的词，
+        句子只能变短变直，名词化和从句是第一批被挤掉的。</p>
+        <p><b>这撞上了设计前提 01</b>——「只在词汇维度降低难度，<b>句法复杂度始终对齐 CET 真题</b>」。
+        而这个降级不是模型不行，是我们自己的另一个决定造成的。前提与密度，两者要保一个。
+        <b>样本是 5 篇对 30 篇，新的那侧偏小</b>，但效应量太大、四个指标又一致，不像噪音。
+        没有立刻改密度：改回去等于放弃「3.2 个月覆盖」那笔账，这是个要单独算的取舍，记在 §M。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>数据没有过期，它是「密度会压垮句法」这件事的唯一证据。
+      移出的是它服务的那个结论——「这撞上了设计前提 01，两者要保一个」。<b>前提走了，冲突也就不存在了。</b></p>
+      <p class="why"><b>留给将来：</b>三条没验过的出路——密度回调到中间值（比如 15）、
+      篇长放宽到 550–600 词让句子有地方伸展、在提示词里对句法给出「什么时候该用」的条件。
+      第三条是这个项目验证过有效的手法（被动语态就是靠给条件加自查，从 30.8 压到 15.5 的），
+      而「不要超过五六处」这类数量约束已三次证明模型对它无感。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §I · 每篇新目标词</div>
+      <h3>参数表里的冲突批注</h3>
+      <div class="orig">
+        <p>……<b>但 2026-09-10 量出它的另一个代价：句法复杂度塌了</b>——被动 −76%、名词化 −71%、形式主语 −58%、定语从句 −44%，而 8 个目标词时这四项几乎完全对齐真题。<b>这条参数与设计前提 01 冲突，取舍未定</b>，见 §B1 与 §M</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>同上。<b>「每篇 25 个目标词」这条参数本身留在主文档</b>，只是不再标「取舍未定」。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §M · 待定</div>
+      <h3>待定项「生词密度与句法前提二选一，还没选」</h3>
+      <div class="orig">
+        <p><b>生词密度与句法前提二选一，还没选。</b>2026-09-10 实测（见 §B1）：
+        每篇目标词从 8 个提到 25 个之后，被动 −76%、名词化 −71%、形式主语 −58%、定语从句 −44%，
+        而 8 个目标词时这四项几乎完全对齐真题基线。<b>设计前提 01 说「句法复杂度始终对齐 CET 真题」，
+        现在没有对齐。</b>可能的出路：把密度调回中间值（比如 15）、把篇长放宽到 550–600 词让句子有地方伸展、
+        或者在提示词里对句法给出「什么时候该用」的条件（被动语态就是这么从 30.8 压到 15.5 的）。
+        三条都没验过，而且改密度要重算覆盖周期那笔账</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>已经选了——留密度，归档前提。
+      三条出路记在上一条的「留给将来」里，<b>但它不再是一个卡着的待定项</b>。
+      顺带一提，「改密度要重算覆盖周期那笔账」这句本身也已作废：覆盖周期在 §A 里一起归档了。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§C</span>
+      <h2>「单用户系统」</h2>
+      <span class="sec-note">3 处</span>
+    </div>
+    <p class="lede">三处把「只有一个人用」写成<b>系统性质</b>的地方。
+    它作为事实仍然成立——现在确实只有一个人在用——但作为设计前提，它已经和实际做出来的东西对不上：
+    P2 的客户端契约按「留位置」原则做了身份口子（身份由设备令牌推导，响应顶层回显 <code>learner</code>，
+    路径里不出现人的编号），主文档 §M 末尾还有一整节在算多用户、合规与生成成本的账。
+    <b>留着「单用户系统」这条前提，等于让文档跟代码说反话。</b></p>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §0 · 设计前提 03</div>
+      <h3>设计前提 03「单用户系统」</h3>
+      <div class="orig">
+        <p><b>03 · 单用户系统</b></p>
+        <p>不需要为陌生用户做通用难度分级。每一篇文章都可以为唯一的这个人当天的词汇状态量身定制，这是通用产品做不到、也不划算做的事。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>前半句「不需要为陌生用户……」正是被 P2 契约否掉的那句。
+      后半句的价值主张——按个人词汇状态定制——在主文档 §A、§B1、§F3 里都独立成立，不靠这条前提撑着。
+      <b>设计前提的编号不重排</b>：01、02、04 留在原位，中间的空号本身就是这次归档的记号。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档页首 · 导语</div>
+      <h3>导语里的「单人使用」</h3>
+      <div class="orig">
+        <p>以阅读为唯一入口的 CET-4 / CET-6 词汇习得系统。<b>单人使用，</b>内容完全按本人的真实阅读表现定制。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>只去掉「单人使用」四个字，其余保留。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §J · 明确不做</div>
+      <h3>两条「不做」的理由</h3>
+      <div class="orig">
+        <p><b>社交、排行榜、打卡分享</b>。<b>单人使用，没有观众。</b></p>
+        <p><b>通用难度分级体系</b>。<b>不服务陌生用户，</b>所有难度判断都相对于本人当前的词汇状态。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>两条「不做」本身都保留，<b>只换掉理由</b>。
+      它们不做的真正原因与用户数无关：社交外壳对词汇习得没有贡献；
+      难度判断相对于个人状态是这个系统的做法本身，不是因为没有别人在用。
+      <b>把理由挂在「只有一个人」上，将来真有第二个人时会连带把结论一起推翻</b>——
+      而这两个结论其实不该跟着变。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§D</span>
+      <h2>按分钟数定的时间限定</h2>
+      <span class="sec-note">2 处</span>
+    </div>
+    <p class="lede">每日 30 分钟的总预算已于 2026-09-09 取消，理由记在主文档 §I：
+    复习改成双向、当天不会就重复到会、再加拼写强化之后光复习就要十几二十分钟，
+    原预算下每天只能复习十个词——<b>那是时间预算在削学习量，而不是学习量该迁就时间</b>。
+    这里收的是同一类里剩下的两处：按环节规定的分钟数。</p>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §D · 读后检验</div>
+      <h3>开场的「每篇 1–2 分钟」</h3>
+      <div class="orig">
+        <p><b>每篇 1–2 分钟。</b>存在的唯一目的是抓出「以为自己认识」的词。</p>
+      </div>
+      <p class="why"><b>为什么移出：</b>这是给一个<b>还没做出来的环节</b>定的时长——
+      读后抽查原在 P4，已随旧路线于 2026-09-08 归档。
+      而它约束的其实是题量和判定深度，这两件事该由「够不够抓出以为认识的词」决定，
+      不该由分钟数倒推。<b>后半句保留</b>，那才是这一节的定义。</p>
+    </div>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §I · 读后抽查</div>
+      <h3>参数表里的「1–2 分钟内完成」</h3>
+      <div class="orig">
+        <div class="table-scroll"><table>
+          <thead><tr><th>参数</th><th>初始值</th><th>依据</th></tr></thead>
+          <tbody><tr><td>读后抽查</td><td class="num">3–5 题</td><td>1–2 分钟内完成</td></tr></tbody>
+        </table></div>
+      </div>
+      <p class="why"><b>为什么移出：</b>同上。<b>题量 3–5 题保留</b>，依据换成不带时长的说法。</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§E</span>
+      <h2>原开发路线 P3–P8</h2>
+      <span class="sec-note">2026-09-08 归档</span>
+    </div>
+    <p class="lede">这六行在主文档里早就标着「归档 · 原样保留」，但仍占着 §K 表格的下半截。
+    原样搬到这里，连同当时写下的归档理由一起。主文档 §K 从此只有「已完成的」和「当前这个」。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Phase</th><th>内容</th><th>完成的定义</th></tr>
+        </thead>
+        <tbody>
+          <tr class="archived">
+            <td class="phase">P3 自适应</td>
+            <td>初始词汇量测试、水平估计、按水平选文；<b>真题按水平自动筛选推荐</b></td>
+            <td>连读几篇，生词率向 3–5% 收敛</td>
+          </tr>
+          <tr class="archived">
+            <td class="phase">P4 检验</td>
+            <td>读后词汇抽查、题目生成、结果回流修正水平</td>
+            <td>能抓出「以为认识」的词</td>
+          </tr>
+          <tr class="archived">
+            <td class="phase">P5 复习</td>
+            <td>遗忘曲线调度、双通道分流、渐进提示卡片、原句轮换</td>
+            <td>到期词自动进文章，塞不下的走卡片</td>
+          </tr>
+          <tr class="archived">
+            <td class="phase">P6 日常运转</td>
+            <td>提前生成、今日包离线缓存、每日流程串联、负载调节。<b>过量生成择优也在这里</b>——原为独立的 P2x，2026-09-07 降格并入：砍掉定点修补之后它只剩「生成 N 篇、逐句查搭配、零 flag 的留下」，方法已验证、无未知数，而真正需要每天可靠产出文章的正是这个阶段。做法见主文档 §B3</td>
+            <td>连续一周打开就能用，无需人工干预；每天备的文章自动筛过一遍</td>
+          </tr>
+          <tr class="archived">
+            <td class="phase">P7 iOS 端</td>
+            <td>原生客户端，GitHub Actions 构建未签名 IPA，SideStore 安装</td>
+            <td>手机上装着自己的 App 在用</td>
+          </tr>
+          <tr class="archived">
+            <td class="phase">P8 打磨</td>
+            <td>进度统计、旧文重读、UI 精修、TestFlight</td>
+            <td>成品</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="lede" style="margin-top:1.75rem">
+      <b>2026-09-08：P3 及之后全部归档，重新设计。</b>两个原因。
+    </p>
+    <p class="lede">
+      <b>一是 P2 吃掉了原本排在后面的一大半。</b>语境释义标注与真题难度画像（原 P1c 顺延）、
+      第三层释义与真题考频（原本没排进任何 Phase）、词组（原 §J 的「缓做」）、
+      三档标记（原 C4 只有两档）、客户端契约与能力声明——全在 P2 里做完了。
+      于是 P3 那一行「真题按水平自动筛选推荐」的难度画像已经是现成的，
+      整行只剩下「把客观难度换成对你的生词率」这一列，撑不起一个 Phase。
+    </p>
+    <p class="lede">
+      <b>二是切法本身不对。</b>原路线按<b>能力</b>切（自适应／检验／复习／日常运转），
+      而真正缺的东西要按<b>实际在跑的那个循环</b>切才看得清。那个循环是：
+      打开阅读页 → 在 453 篇里挑一篇 → 读 → 点词 → 标记 → 读完 → 结束。
+      它的空洞按痛感排：<b>① 读完之后什么都不发生</b>，标记的词沉进池底再无下文——
+      而这笔账每读一篇涨一次；② 挑哪篇靠自己翻；③ 只能在电脑上读；④ 不知道有没有进步。
+      <b>水平估计不在这个列表里</b>：它是 ② 的手段而不是目的，却在原路线里单占一个 Phase，
+      还排在给它装刹车的 P4 前面——A4 假性认识修正是整个自适应机制最脆弱的一环（见主文档 §A），
+      把它放在下一个 Phase，等于让 P3 交付一个已知会漂移的闭环。
+    </p>
+    <p class="lede">
+      <b>归档不是作废。</b>上面六行原样留着：新路线定案之前，它们仍是唯一写下来过的远期意图，
+      而且里面多数条目会以别的切法回到新表里。<b>排序原则「风险前置」不变。</b>
+    </p>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>归档 · 主文档移出内容</span>
+    <span>2026-09-10 建立</span>
+  </footer>
+
+  <p style="text-align:center;margin-top:2rem">
+    <a class="backlink" href="./english-reader.html">← 回到主文档</a>
+  </p>
+
+</div>
