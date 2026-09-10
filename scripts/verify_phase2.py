@@ -411,11 +411,20 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               "进队列只有两条路：你标记，或将来 D3 抽查答错。系统不替你判断你会不会"
               if unmarked == 0 else f"{unmarked} 条没有对应的标记")
 
-        check("7.5", "调度字段不存在于 P2 的表里",
-              not any(c["name"] in ("due_at", "strength", "difficulty", "interval")
-                      for c in get_connection("learning").execute(
-                          "PRAGMA table_info(study_states)").fetchall()),
-              "记忆强度、到期时间由 P5 添加；P2 只写状态不做调度")
+        # This check used to assert that the scheduling columns did **not**
+        # exist, guarding "P2 must not build scheduling". P3 built it, so the
+        # columns are there legitimately and that phrasing expired. What still
+        # matters is the half that was always the point: **P2's own pipeline
+        # must not touch them.** Ingest analysing an article may not give a word
+        # a due date any more than it may put one in the review pool.
+        scheduled_but_unread = get_connection("learning").execute(
+            "SELECT COUNT(*) FROM study_states WHERE due_at IS NOT NULL AND reps = 0"
+        ).fetchone()[0]
+        check("7.5", "入库与阅读都不碰调度字段",
+              scheduled_but_unread == 0,
+              "有到期时间的条目都真复习过——入库、读完、标记都不写调度，那是复习模块的事"
+              if scheduled_but_unread == 0
+              else f"{scheduled_but_unread} 条有到期时间却从没复习过")
 
         # --- 7b. 义项集变动后的引用完整性 ---------------------------------- #
 

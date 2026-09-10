@@ -12,20 +12,18 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
-
     # Admin console is server-rendered on purpose: no build chain, no node_modules.
     # Adding a page = writing a template + registering it.
     "jinja2>=3.1",
     "python-multipart>=0.0.12",
-
     # Outbound HTTP (Bark push, dictionary download). Always proxy-aware.
     "httpx>=0.27",
-
     # NLP. Only ever runs at article-ingest time, never at request time.
     # spaCy supplies part-of-speech tagging, which is what disambiguates
     # left/saw/leaves; lemminflect improves lemma accuracy on irregular forms.
     "spacy>=3.8",
     "lemminflect>=0.2.3",
+    "fsrs>=6.3.2",
 ]
 
 [tool.uv]

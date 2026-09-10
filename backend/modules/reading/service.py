@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from backend.core import auth, runtime_config
+from backend.core import auth, events, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
@@ -60,11 +60,16 @@ def capabilities() -> dict[str, bool]:
         "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NOT NULL"
     ).fetchone()[0])
     return {
-        # P3: ability estimate. Fills learner.level, difficulty.for_you,
-        # token.root_known.
+        # The ability estimate. Fills learner.level, difficulty.for_you and
+        # token.root_known. Belonged to the archived P3; not scheduled since the
+        # roadmap was re-cut on 2026-09-08.
         "level_estimate": False,
-        # P5: per-sense memory parameters and due dates.
-        "memory_state": False,
+        # Per-sense memory parameters and due dates. Detected rather than
+        # hard-coded: the review module owns this, and removing that directory
+        # should flip the capability back rather than leave the contract lying.
+        "memory_state": bool(conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='review_queue'"
+        ).fetchone()),
         # A generation task nobody has written yet: one line saying what a
         # proper noun is.
         "proper_noun_notes": False,
@@ -453,6 +458,12 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
         "（复习队列只由你的标记决定，读完本身不加词）",
         article_id=article_id, revisited=revisited,
     )
+    # Announced rather than acted on. Reading does not know what review wants
+    # doing when an article is finished, and architecture rule 6 says a new
+    # feature attaches by subscribing rather than by editing this function —
+    # which is how the sentence pool gets filled without reading importing it.
+    events.emit("article.finished", article_id=article_id, learner_id=learner_id,
+                revisited=revisited, introduced=introduced)
     return {"introduced": introduced, "revisited": revisited}
 
 

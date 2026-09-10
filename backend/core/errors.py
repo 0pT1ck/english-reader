@@ -131,8 +131,24 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(StarletteHTTPException)
     async def _http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-        # Mostly 404s for unknown paths. Kept at INFO: a mistyped URL is not an
-        # incident, and logging it louder would train the user to ignore alerts.
+        # Mostly 404s for unknown paths. INFO rather than WARNING: a mistyped
+        # URL is not an incident, and logging it louder would train the user to
+        # ignore alerts.
+        #
+        # **It has to be logged at all, though**, and for a while it was not:
+        # the comment above described the intent and no call implemented it. A
+        # routing 404 went out carrying a trace_id and left nothing behind, so
+        # handing that trace_id over — the whole point of putting it in the
+        # response — turned up an empty result. Found on 2026-09-09 when a 404
+        # from the review page could not be traced to a path.
+        log.info(
+            "request.http_error",
+            f"HTTP {exc.status_code}：{exc.detail}",
+            status=exc.status_code,
+            path=request.url.path,
+            method=request.method,
+            query=str(request.url.query) or None,
+        )
         return JSONResponse(
             status_code=exc.status_code,
             content=error_body("http_error", str(exc.detail)),

@@ -22,6 +22,20 @@ add_template_dir(Path(__file__).parent / "templates")
 
 runtime_config.register(
     runtime_config.ConfigSpec(
+        key="llm_stream",
+        default=True,
+        value_type="bool",
+        title="用流式接收模型回复",
+        description=(
+            "网关掐的是「沉默」，不是「长度」。写一篇 450 词的文章，gpt-5.5 要先思考约 109 秒"
+            "才吐出第一个可见 token——中转站在 120 秒上掐断空闲连接，于是每次都 524，"
+            "而模型其实还在写。开了流式，同一个请求 139 秒写完。"
+            "**关掉它，长文生成会直接不可用。**短请求开着也无害。"
+        ),
+        group="llm",
+        order=45,
+    ),
+    runtime_config.ConfigSpec(
         key="llm_spend_cap",
         default=30.0,
         value_type="float",

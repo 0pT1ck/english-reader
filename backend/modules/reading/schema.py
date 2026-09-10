@@ -401,4 +401,38 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_tokens_in_phrase ON reading_tokens (in_phrase);
         """,
     ),
+    Migration(
+        version=5,
+        name="memory state on study_states, for P3 review",
+        database="learning",
+        apply="""
+        -- P3 needs somewhere to keep each item's memory state, and this is the
+        -- table that already answers "where does this sense stand now".
+        --
+        -- **Added here rather than by the review module on purpose.** The rule
+        -- established in P2 is that whoever owns a table adds the column —
+        -- ``devices.learner_id`` was added by core auth for the same reason.
+        -- The alternative, a parallel ``review_states`` keyed the same way,
+        -- would split one answer across two tables and make every consumer
+        -- join to find out where a sense stands.
+        --
+        -- The columns are FSRS's state, but named for what they mean rather
+        -- than for the algorithm: swapping schedulers must not require a
+        -- migration. ``fsrs_state``/``fsrs_step`` are the exception — they are
+        -- opaque scheduler bookkeeping, stored and handed back untouched, and
+        -- a different scheduler would simply leave them NULL.
+        ALTER TABLE study_states ADD COLUMN stability      REAL;
+        ALTER TABLE study_states ADD COLUMN difficulty     REAL;
+        ALTER TABLE study_states ADD COLUMN due_at         TEXT;
+        ALTER TABLE study_states ADD COLUMN last_review_at TEXT;
+        ALTER TABLE study_states ADD COLUMN reps           INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE study_states ADD COLUMN lapses         INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE study_states ADD COLUMN fsrs_state     INTEGER;
+        ALTER TABLE study_states ADD COLUMN fsrs_step      INTEGER;
+
+        -- The review queue reads this every day: "what is due, oldest first".
+        CREATE INDEX IF NOT EXISTS idx_states_due
+            ON study_states (learner_id, due_at) WHERE due_at IS NOT NULL;
+        """,
+    ),
 ]

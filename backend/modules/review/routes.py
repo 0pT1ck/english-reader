@@ -1,0 +1,364 @@
+"""Endpoints for review.
+
+Two surfaces that never touch, same as reading: ``/v1/client`` behind a device
+token, ``/v1/admin`` behind the admin credential.
+
+**This is the "new endpoint" P2 promised.** ``docs/phase-2.html`` §6 refused to
+guess what a review card looks like and said the shape would arrive as its own
+endpoint rather than as fields bolted onto the article response. This is it.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, Field
+
+from backend.admin.templating import render, require_page_auth
+from backend.core import auth, runtime_config
+from backend.core.db import get_connection
+from backend.core.logging import get_logger
+from backend.modules.review import clock, repository, scheduler, sentences, session
+
+log = get_logger("review.routes")
+
+client_router = APIRouter()
+admin_router = APIRouter(dependencies=[Depends(auth.require_admin)])
+pages_router = APIRouter()
+
+DeviceId = Annotated[int, Depends(auth.require_device)]
+
+
+def _learner(device_id: int) -> int:
+    return auth.learner_for_device(device_id)
+
+
+def _payload(learner_id: int, *, now: datetime | None = None) -> dict[str, Any]:
+    """Everything today's review needs, in one response.
+
+    Architecture rule 2 asks for an offline shape: the client should be able to
+    take this and work through the whole day without another request. So every
+    item ships with its sentences and its hint already attached, rather than
+    being fetched one question at a time.
+    """
+    now = now or clock.now()
+    state = session.ensure(learner_id, now)
+    rows = repository.queue_rows(state["id"])
+    finished = repository.finished_article_ids(learner_id)
+
+    items = []
+    for row in rows:
+        questions, hints = sentences.split_pools(row["item_key"], row["sense_id"], finished)
+        items.append({
+            "queue_id": row["id"],
+            "item_type": row["item_type"],
+            "item_key": row["item_key"],
+            "sense_id": row["sense_id"],
+            "bucket": row["bucket"],
+            "direction": int(row["step"]),
+            "asks": int(row["asks"]),
+            "misses": int(row["misses"] or 0),
+            "weight": float(row["weight"]),
+            "done": bool(row["done_at"]),
+            "sense": _sense_of(row["sense_id"]),
+            "questions": [sentences.as_card(s) for s in questions],
+            "hints": [sentences.as_card(s) for s in hints],
+        })
+
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "day": state["day"],
+        "session_id": state["id"],
+        "finished_at": state["finished_at"],
+        "weight_decay": float(runtime_config.get("review_weight_decay")),
+        "spelling_enabled": bool(runtime_config.get("review_spelling")),
+        "progress": session.progress(learner_id, now),
+        "clock": clock.status(),
+        "items": items,
+    }
+
+
+def _sense_of(sense_id: int) -> dict[str, Any] | None:
+    if not sense_id:
+        return None
+    row = get_connection("content").execute(
+        "SELECT id, headword, ordinal, pos, concept_en, gloss_zh, exam_frequency"
+        " FROM senses WHERE id = ?", (sense_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    import json
+    item = dict(row)
+    try:
+        item["gloss_zh"] = json.loads(item["gloss_zh"] or "[]")
+    except (TypeError, ValueError):
+        item["gloss_zh"] = [str(item["gloss_zh"] or "")]
+    return item
+
+
+# --------------------------------------------------------------------------- #
+# Client surface
+# --------------------------------------------------------------------------- #
+
+@client_router.get("/reviews", summary="今天要复习的全部内容")
+async def reviews(device_id: DeviceId) -> dict[str, Any]:
+    return _payload(_learner(device_id))
+
+
+class AnswerIn(BaseModel):
+    queue_id: int
+    passed: bool
+    revealed: int = Field(default=0, ge=0, le=session.MAX_REVEAL)
+    sentence_id: int | None = None
+    #: "That was trivial." Only honoured on a round with no misses — the server
+    #: checks, so a client cannot talk its way into a longer interval.
+    easy: bool = False
+
+
+@client_router.post("/reviews/answer", summary="上报一次作答")
+async def report_answer(device_id: DeviceId, body: AnswerIn) -> dict[str, Any]:
+    learner_id = _learner(device_id)
+    result = session.answer(
+        learner_id, body.queue_id,
+        passed=body.passed, revealed=body.revealed, sentence_id=body.sentence_id,
+        easy=body.easy,
+    )
+    return {**result, "progress": session.progress(learner_id)}
+
+
+class SpellingIn(BaseModel):
+    item_key: str
+    typed: str
+
+
+@client_router.post("/reviews/spelling", summary="上报一次拼写")
+async def report_spelling(device_id: DeviceId, body: SpellingIn) -> dict[str, Any]:
+    """Recorded, never scheduled on.
+
+    决定 13 keeps spelling out of the scheduler entirely: it is an optional
+    reinforcement, and letting it move due dates would mix a productive-recall
+    difficulty into a recognition track. What is stored is what was typed, not
+    just whether it was right — that is the whole value of the record.
+    """
+    learner_id = _learner(device_id)
+    state = repository.session_for(learner_id, repository.today())
+    typed = body.typed.strip()
+    correct = typed.lower() == body.item_key.strip().lower()
+    repository.record_spelling(learner_id, state["id"] if state else None,
+                               body.item_key, body.item_key, typed, correct)
+    return {"correct": correct, "expected": body.item_key}
+
+
+# --------------------------------------------------------------------------- #
+# Admin surface
+# --------------------------------------------------------------------------- #
+
+@admin_router.get("/review/today", summary="今天的复习队列")
+async def admin_today(learner_id: int = Query(1)) -> dict[str, Any]:
+    return _payload(learner_id)
+
+
+@admin_router.post("/review/sentences/generate", summary="给缺句子的义项生成例句")
+async def admin_generate(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = payload or {}
+    job_id = sentences.start_for(
+        payload.get("senses"),
+        learner_id=int(payload.get("learner_id", 1)),
+        provider_id=payload.get("provider_id"),
+    )
+    return {"job_id": job_id}
+
+
+@admin_router.get("/review/pool", summary="句子池的覆盖情况")
+async def admin_pool(learner_id: int = Query(1), limit: int = Query(200, ge=1, le=2000)
+                     ) -> dict[str, Any]:
+    target = int(runtime_config.get("review_pool_target"))
+    rows = get_connection("learning").execute(
+        """
+        SELECT s.item_key, s.sense_id,
+               (SELECT COUNT(*) FROM review_sentences r
+                 WHERE r.item_key = s.item_key AND r.sense_id = s.sense_id) AS total,
+               (SELECT COUNT(*) FROM review_sentences r
+                 WHERE r.item_key = s.item_key AND r.sense_id = s.sense_id
+                   AND r.source = 'generated') AS generated
+          FROM study_states s
+         WHERE s.learner_id = ? AND s.item_type = 'word' AND s.pool = 'reviewing'
+         ORDER BY total ASC LIMIT ?
+        """,
+        (learner_id, limit),
+    ).fetchall()
+    items = [dict(r) for r in rows]
+    return {
+        "target": target,
+        "items": items,
+        "short": [i for i in items if i["total"] < target],
+    }
+
+
+@admin_router.post("/review/clock", summary="模拟时钟：跳到下一天 / 归零")
+async def admin_clock(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Move the review module's clock forward, or put it back.
+
+    A development tool. Review is scheduled in days, so without this the first
+    honest look at the schedule would be a week after writing it. It lies about
+    the date on purpose, so it says so loudly: the page shows a banner while the
+    offset is non-zero, and acceptance refuses to run in a simulated future.
+    """
+    payload = payload or {}
+    if payload.get("reset"):
+        clock.reset()
+    else:
+        clock.advance(int(payload.get("days", 1)))
+    return clock.status()
+
+
+@admin_router.get("/review/clock", summary="模拟时钟现在停在哪")
+async def admin_clock_status() -> dict[str, Any]:
+    return clock.status()
+
+
+RATING_NAME = {1: "Again 没记住", 2: "Hard 磕绊", 3: "Good 答对", 4: "Easy 太简单"}
+MARK_NAME = {"unknown": "不认识", "fuzzy": "模糊"}
+
+
+def _band(stability: float | None) -> str:
+    """A plain-language read of the memory strength.
+
+    Purely a rendering of ``stability`` — the number is right there beside it,
+    and no new concept is being introduced. Bands exist because "S=1.2" says
+    nothing to a person and "撑一两天" does.
+    """
+    if stability is None:
+        return "还没复习过"
+    if stability < 3:
+        return "刚开始，撑一两天"
+    if stability < 14:
+        return "有印象，撑一两周"
+    if stability < 60:
+        return "记住了，撑一两个月"
+    return "稳固"
+
+
+@admin_router.get("/review/words", summary="所有标记过的词：评级、下次复习、出处、句子")
+async def admin_words(learner_id: int = Query(1), limit: int = Query(500, ge=1, le=2000),
+                      ) -> dict[str, Any]:
+    now = clock.now()
+    out = []
+    for row in repository.overview(learner_id, limit=limit):
+        due = row["due_at"]
+        days = None
+        if due:
+            days = round((datetime.fromisoformat(due) - now).total_seconds() / 86400, 1)
+        out.append({
+            **row,
+            "sense": _sense_of(row["sense_id"]),
+            "mark_label": MARK_NAME.get(row["mark_kind"] or "", row["mark_kind"]),
+            "rating_label": RATING_NAME.get(row["last_rating"] or 0, "还没结算过"),
+            "band": _band(row["stability"]),
+            "due_in_days": days,
+            "overdue": bool(due and days is not None and days <= 0),
+        })
+    return {"count": len(out), "clock": clock.status(), "items": out}
+
+
+@admin_router.get("/review/words/{item_key}/sentences", summary="这个词编好的句子")
+async def admin_word_sentences(item_key: str, sense_id: int = Query(0),
+                               item_type: str = Query("word")) -> dict[str, Any]:
+    rows = repository.sentences_of(item_type, item_key, sense_id)
+    finished = repository.finished_article_ids(1)
+    out = []
+    for row in rows:
+        card = sentences.as_card(row)
+        is_hint = row["source"] == "corpus" and row["article_id"] in finished
+        out.append({**card,
+                    "pool": "提示池（你读过这篇）" if is_hint else "考句池",
+                    "article_title": row["article_title"],
+                    "article_source": row["article_source"],
+                    "model": row["model"]})
+    return {"item_key": item_key, "sense_id": sense_id,
+            "sense": _sense_of(sense_id), "count": len(out), "sentences": out}
+
+
+@admin_router.get("/review/history", summary="复习历史")
+async def admin_history(limit: int = Query(100, ge=1, le=1000)) -> dict[str, Any]:
+    rows = get_connection("learning").execute(
+        "SELECT * FROM review_history ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return {"history": [dict(r) for r in rows]}
+
+
+@admin_router.get("/review/schedule-preview", summary="调度预览：这次评分之后什么时候再来")
+async def admin_preview(item_key: str, sense_id: int = Query(0),
+                        learner_id: int = Query(1)) -> dict[str, Any]:
+    """What each grade would do to this item, without changing anything.
+
+    A diagnostic, and the quickest way to see whether the scheduler is wired up
+    the way the plan says: the four intervals must come out Easy > Good > Hard >
+    Again.
+    """
+    state = repository.state_of(learner_id, "word", item_key, sense_id)
+    now = clock.now()
+    out = {}
+    for misses in (0, 1, 2):
+        outcome = scheduler.review(state, misses, now, fuzz=False)
+        out[misses] = {
+            "rating": outcome.rating.name,
+            "interval_days": round(outcome.interval_days, 2),
+            "due_at": outcome.due_at.isoformat(timespec="seconds") if outcome.due_at else None,
+        }
+    out["easy"] = {
+        "rating": (e := scheduler.review(state, 0, now, easy=True, fuzz=False)).rating.name,
+        "interval_days": round(e.interval_days, 2),
+        "due_at": e.due_at.isoformat(timespec="seconds") if e.due_at else None,
+    }
+    return {"item_key": item_key, "sense_id": sense_id, "state": state, "by_misses": out}
+
+
+# --------------------------------------------------------------------------- #
+# Page — a development-period tool, per architecture rule 8
+# --------------------------------------------------------------------------- #
+
+WEB_REVIEW_DEVICE = "Web 复习页（开发期）"
+
+
+def _web_review_token() -> str:
+    """A device token for the development review page.
+
+    Same reasoning as the reading page: served under the admin session it could
+    have skipped the client contract entirely, and the client contract is the
+    thing that has to be right. So it registers as a device and goes through
+    ``/v1/client`` like any other client.
+    """
+    token = runtime_config.get("review_web_token")
+    if token:
+        return str(token)
+    issued = auth.create_device(WEB_REVIEW_DEVICE)
+    runtime_config.set("review_web_token", issued)
+    return issued
+
+
+@pages_router.get("/admin/review/words", response_class=HTMLResponse)
+async def words_page(request: Request) -> Response:
+    if (redirect := require_page_auth(request)) is not None:
+        return redirect
+    response = render(request, "review_words.html")
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@pages_router.get("/admin/review", response_class=HTMLResponse)
+async def review_page(request: Request) -> Response:
+    if (redirect := require_page_auth(request)) is not None:
+        return redirect
+    response = render(request, "review.html",
+                      token=_web_review_token(),
+                      target=int(runtime_config.get("review_pool_target")))
+    # The page carries its own logic, and during development that logic changes
+    # several times a day. A cached copy looks exactly like a bug that was not
+    # fixed — which is how half an hour went into a bug that had already been
+    # fixed but not reloaded.
+    response.headers["Cache-Control"] = "no-store"
+    return response

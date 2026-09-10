@@ -123,7 +123,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 3 · 方案 · 2026-09-09 · 已定稿，未动手</div>
+    <div class="eyebrow">Phase 3 · 方案与实施 · 2026-09-09 · 自动全过，人工验收推迟到 P7</div>
     <h1>复习</h1>
     <p class="standfirst">你标记的词会自己回来。回来的时机由记忆状态决定，不由你翻列表决定。</p>
     <p class="thesis">P2 之后，标记进 <code>reviewing</code> 池就到头了——产品承诺的另一半「也在文章里被复习」一点没兑现，
@@ -159,7 +159,7 @@
   <section>
     <div class="sec-head">
       <span class="sec-mark">§2</span>
-      <h2>定下来的二十四条</h2>
+      <h2>定下来的二十八条</h2>
       <span class="sec-note">一行一条，钉住</span>
     </div>
     <p class="lede">P2y 的教训是「名字只活在对话里，隔天连它指什么都要重新对一遍」。所以讨论的结论先在这里列全，
@@ -179,7 +179,7 @@
           <tr><td class="topic">8</td><td><b>一轮 = 一天的一次复习</b>，一轮里两个方向都要走。</td></tr>
           <tr><td class="topic">9</td><td><b>当天不会就重复到会</b>，直到当天两个方向都通过。短期记忆也是实打实记了很多遍。</td></tr>
           <tr><td class="topic">10</td><td><b>不定重复次数上限，改用伪随机降权</b>。一个词老不会，被抽中的概率就往下降，自己让路，不阻碍别的词。</td></tr>
-          <tr><td class="topic">11</td><td><b>评分看两个维度，但不写加权公式</b>（2026-09-09 按 FSRS 修正措辞）：<b>当次表现</b>（当天被问了几次才过）映射成评分喂给算法；<b>累计的难</b>由算法的难度参数自己攒——它是结果不是输入，见 §5。</td></tr>
+          <tr><td class="topic">11</td><td><b>评分按当天失误几次</b>（2026-09-09 两次修正，见 §14）：0 次 Good、1 次 Hard、2 次及以上 Again。<b>Easy 只在你自己按下「太简单了」时才给</b>，磕过就不认。<b>累计的难</b>由算法的难度参数自己攒——它是结果不是输入，不再写加权公式。</td></tr>
           <tr><td class="topic">12</td><td><b>绝对不要四选一。</b>给了选项就能排除法蒙。判定靠自评：点开答案，你自己说想对了没有。</td></tr>
           <tr><td class="topic">13</td><td><b>拼写做，但只作强化选项</b>：当天复习全部走完之后可选，针对当天所有词。<b>拼错不影响复习时间的安排</b>，只单独记一笔（含拼错成了什么），留给将来主攻拼写的功能。</td></tr>
           <tr><td class="topic">14</td><td><b>每日复习量暂不设上限</b>，到期多少复习多少。负载均衡算法待优化，已记入主文档 §M。</td></tr>
@@ -192,6 +192,10 @@
           <tr><td class="topic">21</td><td><b>挖空里填句中的实际形式</b>（<code>addressed</code> 而不是 <code>address</code>）。题面是完整句子，填原形语法不通；而「读到能认出」本来就包含认出变形。</td></tr>
           <tr><td class="topic">22</td><td><b>看义想词也有四级渐进提示</b>，第 1 级是<b>首字母</b>。专治「着手解决也可以是 deal with」这类歧义，见 §3。</td></tr>
           <tr><td class="topic">23</td><td><b>句子在读完文章那一刻就生成</b>，夜间批次补足、有余力就往前建。<b>句库是长期资产</b>，不是够用就停。</td></tr>
+          <tr><td class="topic">28</td><td><b>控制台加一张词表</b>（2026-09-09 加）：标记过的每个词，一行上并列显示上次评级、记忆强度、难度、轮次与失误、下次到期、当初在哪遇见、以及给它编好的句子。<b>「排期看着不对」在没有它之前是无法证伪的</b>——你只看得到哪天，看不到凭什么。</td></tr>
+          <tr><td class="topic">27</td><td><b>最长间隔压到 180 天</b>。FSRS 默认 36500 天是给「终身记住」设计的；这个项目瞄的是<b>有日期的考试</b>，排到考试之后等于没排。配置项 <code>fsrs_maximum_interval</code>。</td></tr>
+          <tr><td class="topic">26</td><td><b>点了提示就算这次不会</b>（2026-09-09 人工验收当场定）。看了提示想起来也不算——那不牢固。判定在第一次点提示时就下了，降权、放回池子，后面几级只是让你看清答案。</td></tr>
+          <tr><td class="topic">25</td><td><b>复习页带一个「模拟跳到下一天」</b>（2026-09-09 实施时加）。复习是按天调度的，不快进就得真等几天才看得到第二次复习。它在骗系统说今天是哪天，所以<b>非零时页面一直挂提示，验收脚本直接判失败</b>——在模拟的未来里通过验收什么也证明不了。</td></tr>
           <tr><td class="topic">24</td><td><b>调度用 FSRS，依赖 <code>py-fsrs</code>（MIT）</b>，不自己抄公式。<b>关掉它自带的 learning steps</b>——当天重复到会我们已经用伪随机降权做了，两个都开会重复计数。<b>一天算一次复习。</b>细节与理由见 §5。</td></tr>
         </tbody>
       </table>
@@ -585,6 +589,20 @@ POST /v1/client/events    复习结果按事件上报，沿用 P2 的幂等键�
 
     <p style="margin-top:1.5rem"><b>完成的定义</b>：标一个词之后不用管它，它会自己回来；
     回来的时机由记忆状态决定，不由你翻列表决定。</p>
+
+    <h3>D 与 E 推迟到 P7 iOS 端之后（2026-09-10 定）</h3>
+    <p><b>两项人工验收不在这个 Phase 做了</b>，等手机上装着自己的 App、每天真的在用的时候再验。
+    理由是这两项验的都是<b>体感</b>——原句能不能勾起记忆、当天重复到会烦不烦、歧义烦不烦——
+    而现在唯一能跑复习的是电脑上的管理页。按架构铁律 8 它是开发期测试工具，
+    <b>在它上面坐三到五天，验出来的是「凑合跑」的体感，不是真实使用的体感</b>。
+    用错的场地量出来的体感数据，会让人对着错的东西改。</p>
+    <p><b>代价要认，有两条。</b>① 铁律说「验收通过才进下一个 Phase」，这条被绕过了——
+    P3 会以未验收状态跟着走好几个 Phase。② <b>E「句子质量抽验」是这个 Phase
+    唯一会让人扔掉它的失败方式</b>，而它要拖到 P7 才会被发现；期间句子池只会越攒越大，
+    错了也是照着错的批量攒。</p>
+    <p><b>缓解只有一条，而且只覆盖一半</b>：自动的 42 项守着回归，
+    句子池的超纲校验、「目标词确实出现」、「答案没被写进句子」这些机器查得了的部分一直在查（检查 C）。
+    <b>机器查不了的是「用的是不是那个义项」</b>——那正是 E 要人看的那一半，没有替代品。</p>
   </section>
 
   <section>
@@ -636,15 +654,398 @@ POST /v1/client/events    复习结果按事件上报，沿用 P2 的幂等键�
     要再高几个点就换 <code>kimi-k2.6</code>（100%，但样本只有 72 句，别当成确定的差距）。
     <code>deepseek-v4.1-flash</code> 97% / 5.5 秒最好，正式版发布之后<b>值得重测一次再定</b>。</p>
 
+    <h3>2026-09-10 补测：deepseek-v4.1-flash</h3>
+    <p>正式版发布，用预览版（<code>…-expires-on-0910</code>，同一批权重）在<b>同样 6 个义项、
+    同一套校验器</b>上重跑，数字与上表可比：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>合格率</th><th>凑够 8 条</th><th>均耗时</th></tr></thead>
+        <tbody>
+          <tr><td><b>deepseek-v4.1-flash</b></td><td class="num"><b>97%</b></td><td class="num"><b>6/6</b></td><td class="num">11.4s</td></tr>
+          <tr><td>deepseek-v4-flash-0731（现用）</td><td class="num">86%</td><td class="num">5/6</td><td class="num">9.4s</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">4.0 的失败里<b>有 6 条是句长不达标</b>（5–7 个词，要求 8–30），4.1 一条没有——
+    它更听得懂约束。<b>造例句这件事该换 4.1</b>，没有权衡。</p>
+    <p><b>但先别急着改配置</b>：正式版名 <code>deepseek-v4.1-flash</code> 在中转站上是
+    <code>MODEL_DISABLED</code>，而预览版名字里的过期日就是 2026-09-10。等中转站放开再换，记在主文档 §M。</p>
+
+    <h3>一个新的坑：思考型模型在流式下也会「成功地」返回空正文</h3>
+    <p>拿 4.1 写文章，四篇全部返回空。流是通的、<code>finish_reason</code> 也有，就是没有正文。
+    把流里的字段打出来才看清：</p>
+<pre>completion_tokens: 4000   <b>reasoning_tokens: 4000</b>   finish_reason=length
+delta 里只有 <b>reasoning_content</b>（15,968 字符），<b>content 一次都没出现</b></pre>
+    <p><b>4000 个输出 token 全部烧在思考上，正文一个字没写。</b>三条路都能解：
+    预算给到 16000（12.9 秒）、<code>enable_thinking: false</code>（<b>9.9 秒</b>）、
+    <code>thinking: {"type": "disabled"}</code>（13.1 秒）。</p>
+    <p>关掉思考之后，四个种子与 gpt-5.5 头对头：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>成功</th><th>均耗时</th><th>超纲率</th><th>目标词命中</th><th>均句长</th></tr></thead>
+        <tbody>
+          <tr><td>ds4.1-flash 关思考</td><td class="num"><b>4/4</b></td><td class="num"><b>8.9s</b></td><td class="num"><b>0.62%</b></td><td class="num">22.8/25</td><td class="num">14.7</td></tr>
+          <tr><td>gpt-5.5</td><td class="num">3/4</td><td class="num">140s</td><td class="num">0.96%</td><td class="num"><b>24.7/25</b></td><td class="num">15.8</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">快 16 倍、超纲更低、更可靠，代价是每篇少用 2 个目标词（覆盖速度慢约 9%）。
+    <b>样本只有 4 篇，那 2 个的差距还不算定论。</b></p>
+
     <h3>句式重复度：一个次要发现</h3>
     <p><code>sustain</code> 的 175 句里，<code>she sustained</code> 出现 19 次、<code>he sustained</code> 14 次，
     合起来占 19%。同一个模型内部更集中。<b>句子池由多个模型混合生成</b>能天然增加多样性，
     成本不变——反正每个义项本来就要多要几条再筛。</p>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>实施结果</h2>
+      <span class="sec-note">2026-09-09 · 自动 34 项全过</span>
+    </div>
+    <p class="lede">方案定稿当天实现完。<b>先验调度器，再写别的</b>——照抄一个库不等于接对了，
+    而接错了不报错，只是间隔悄悄算歪。</p>
+
+    <h3>调度器：七条已知答案，先验后用</h3>
+    <p>装 <code>fsrs==6.3.2</code>（MIT），配置 <code>learning_steps=()</code>、
+    <code>relearning_steps=()</code>，然后拿肉眼能核的答案验：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>验的是</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>连续答对，间隔递增</td><td class="num">8 → 66 → 397 → 1875 → 7265 天</td></tr>
+          <tr><td>答错，间隔塌回</td><td class="num">7265 天 → 16 天</td></tr>
+          <tr><td>问的次数越多，回来越快</td><td class="num">1次 66 / 2次 39 / 3次 27 / 4次 1 天</td></tr>
+          <tr><td>状态存进库再取出</td><td>同一张卡，间隔一致</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem"><b>头一遍跑出三个「失败」，全是测试自己写错的</b>——
+    把 <code>now</code> 推到到期时间之后再算间隔，当然是 0 天。
+    但同一遍里挖出一件真的：<b><code>relearning_steps=()</code> 之后根本不会进
+    <code>Relearning</code> 状态</b>，存下来的状态只可能是 Learning 或 Review。
+    要是照假设写，这一条会安静地错下去。</p>
+    <p><b>fuzzing 保持开着</b>：实测同样的连续答对，间隔会散在 152–188 天之间。
+    它不解决主文档 §M 记着的到期撞车，但它是免费的、方向是对的。验收脚本关掉它，否则不可复现。</p>
+
+    <h3>三处跟方案不一样的地方</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>「解锁到第几步」没有放在 <code>study_states</code>，放进了
+        <code>review_queue</code>。</b>写方案时以为它是持久状态，实现时才看清它是<b>会话状态</b>——
+        决定 7 的解锁每一轮都要重挣一次，放成持久列会暗示它能过夜。</span></div>
+      <div class="not"><i>·</i><span><b>句子属于考句池还是提示池，是算出来的，没有存。</b>
+        读过的文章里的句子是提示，其余是考题。决定 5 要的「多读一篇就自动搬家」于是零维护，
+        也没有会漂移的字段。</span></div>
+      <div class="not"><i>·</i><span><b>记忆列由 <code>reading</code> 的迁移 5 添加，不是复习模块加的。</b>
+        表是 reading 的——跟 P2 里 <code>devices.learner_id</code> 由 core auth 添加同一条规矩：
+        <b>谁拥有表谁加列</b>。另起一张平行的状态表会把「这个义项现在处在哪」劈成两半。</span></div>
+    </div>
+
+    <h3>模拟时钟：让 M1 不用真等一周</h3>
+    <p>验收 M1 要「真跑三到五天」，而复习是按天调度的——<b>没有快进，第一次看到第二轮复习会在写完代码一周之后</b>。
+    所以复习页上加了「模拟跳到下一天」。</p>
+    <p>一个偏移量，存在配置里，加在复习模块看到的「现在」上：<b>到期判断、会话属于哪一天、
+    交给调度器的时间、写进历史的时间戳，全都一起挪</b>。挪一部分不挪另一部分会造出真实使用中
+    永远不会出现的状态，那时候找到的 bug 就在测试装置里。</p>
+    <p>实测（那天结算出的到期时间是 09-10 与 09-11）：</p>
+<pre>+1 天（09-10）  account / address / approach 回来了
++2 天（09-11）  member 加入
++3 天（09-12）  没有新的——09-12 没有到期的
+归零           偏移回到 0</pre>
+    <p><b>它在骗系统说今天是哪天，所以它大声说出来</b>：偏移非零时复习页一直挂着提示，
+    而 <code>verify_phase3.py</code> 的 0.1 在时钟被挪动时<b>直接判失败</b>。
+    在模拟的未来里通过验收，什么也证明不了。</p>
+    <p>范围只限复习模块：阅读仍按真实时间写标记，这正是模拟忠实的地方——
+    往前跳一天，昨天的标记就真的是昨天的。</p>
+
+    <h3>实测</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">3<span>义项</span></div><div class="fig-key">生成任务试跑，19 秒</div></div>
+      <div class="fig"><div class="fig-val">11–12<span>条</span></div><div class="fig-key">每个义项留下的句子</div></div>
+      <div class="fig"><div class="fig-val">3–20<span>条</span></div><div class="fig-key">语料库能采到的</div></div>
+      <div class="fig"><div class="fig-val">34</div><div class="fig-key">自动检查全过</div></div>
+    </div>
+    <p style="margin-top:1rem">义项对不对机器判不了，人工核了三个：
+    <code>yield#4</code>（产量）、<code>account#2</code>（叙述）、<code>approach#2</code>（方法），
+    生成的句子<b>全部用对了义项</b>，没有一句滑到别的意思上。</p>
+
+    <h3>顺带改掉一条过期的验收</h3>
+    <p><code>verify_phase2.py</code> 的 7.5 原本断言<b>调度字段不存在</b>——它守的是「P2 不许跨 Phase 做调度」。
+    P3 做了，字段就合法存在了，这条措辞到期。</p>
+    <p>改成守住那一半始终成立的：<b>入库与阅读都不许碰调度字段</b>——
+    有到期时间的条目必须真复习过。<b>删掉它会丢一个守卫，留着原样会天天报假警</b>，
+    两个都不对。P2 验收因此仍是 47 项。</p>
+
+    <h3>验收现状</h3>
+    <p><b>自动 42 项全过</b>（<code>uv run python scripts/verify_phase3.py</code>）。
+    回归：P0 32、P1b 28、P1c 16、P2 47，全过。</p>
+    <p><b>三项人工推迟到 P7 iOS 端之后</b>（2026-09-10 定，理由与代价见 §10 末尾、主文档 §M）——
+    它们验的是体感，而体感要在真正使用的场地上才量得准。
+    其中 M3「抽 50 条生成的句子人工看」是这个 Phase 唯一会让人扔掉它的失败方式，
+    <b>推迟意味着这个风险要一直挂着</b>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>人工验收当场改出来的七件事</h2>
+      <span class="sec-note">2026-09-09</span>
+    </div>
+    <p class="lede">自动检查全过之后，第一次真用就撞出七个问题。<b>两个是脚本永远查不出来的，
+    一个是脚本查得出但我没写</b>。</p>
+
+    <h3>一、看词想义把英文词当成了答案</h3>
+    <p>它问的是「这里是什么意思」，最深一级提示却给出 <code>yields</code>——
+    <b>答了一个没人问的问题</b>。看词想义的答案是中文义项，看义想词的答案才是那个词。
+    第一版两个方向都写成了后者。</p>
+    <p>顺带把第三级改回方案原本写的<b>跳回原文</b>（生成句没有出处时退回英文定义）——
+    中文在第二级已经给过了，第三级再给一遍是空的。</p>
+    <p>验收补了 <b>6.6</b>：断言同一份响应里两个方向的答案都齐备。<b>这条脚本查得出，是我漏写了。</b></p>
+
+    <h3>二、按钮点不动，因为异常被吞了</h3>
+    <p>症状是点「对了」毫无反应。真因有两层：</p>
+    <p><b>第一层</b>：揭到最后一级提示时，页面<b>替你偷偷提交</b>了。条目在服务端已经翻篇，
+    屏幕上还停在那道题；再点「对了」，服务端回 <code>400 这个词今天已经过了</code>——
+    而页面没有任何地方接这个异常，按钮就静静地死了。</p>
+    <p><b>第二层</b>：改了之后仍然复现，因为<b>浏览器还在跑旧的 JS</b>。
+    页面自带逻辑而开发期一天要改好几遍，缓存的副本看起来和「没修好」一模一样。
+    复习页现在返回 <code>Cache-Control: no-store</code>。</p>
+    <p>三处一起改：不再偷偷提交（揭完提示后由你点「下一个」）；
+    所有提交走一个 <code>guard()</code>，进行中禁用按钮、<b>出错显示在页面上并自动重取</b>；
+    错误行挪到面板<b>外面</b>——第一版把它放在题面 div 里，于是答案面板打开时报错写进了隐藏元素，
+    页面看着就是冻住的。</p>
+
+    <h3>三、按钮的可用性靠样式守，不算守</h3>
+    <p>修完之后在假 DOM 里重放，发现「答案面板没打开时点『对了』」照样会提交——
+    <code>hidden</code> 只是不显示，处理器还在。</p>
+    <p>改成一个显式的状态机：<code>asking</code>（题面）／<code>revealing</code>（答案面板），
+    <b>四个按钮各自检查状态</b>。<b>一条写在 style 属性里的规则不是规则。</b></p>
+
+    <h3>四、404 带着 trace_id 发出去，却什么都不写</h3>
+    <p>页面报「出错了：Not Found（trace e7369f…）」。拿这个 trace 去 <code>logs.db</code> 查——
+    <b>零条记录</b>。</p>
+    <p>病根在 <code>core/errors.py</code> 的 <code>StarletteHTTPException</code> 处理器：
+    上面写着注释「多半是路径写错的 404，保持 INFO 级：拼错地址不算事故」，
+    <b>而下面没有任何一行 log 调用</b>。注释描述了意图，实现从来没有跟上。</p>
+    <p>后果正好打在日志规范承诺的那一点上——「trace_id 贯穿一次请求，并出现在错误响应里，
+    <b>用户复制给 AI 就能定位完整链路</b>」。把 trace 贴过来查出来是空的，
+    那把 trace_id 放进响应的全部理由就没了。</p>
+    <p>补上之后，同一个 trace 查回来是：<code>{"status":404,"path":"/v1/client/…","method":"POST"}</code>。
+    <b>写进验收脚本 9.4</b>（P0，因为这是地基层的保证，不是 P3 的），P0 因此从 29 项变成 30 项。</p>
+    <p><b>这次那个 404 的路径仍然不知道</b>——它发生在补日志之前，没留下任何东西。
+    活服务和磁盘上的代码路由表一模一样，页面用到的地址在活服务上全部存在（401/405，不是 404），
+    所以它是个页面之外的地址。<b>重启服务之后再复现一次，一条查询就能定位。</b></p>
+
+    <h3>五、页面继承了控制台的全局作用域，撞了名字</h3>
+    <p>补上 404 日志之后，同一个 trace 立刻查出了路径：</p>
+<pre>{"status": 404, "path": "<b>/v1/admin/reviews/answer</b>", "method": "POST"}</pre>
+    <p>页面在往 <code>/v1/admin</code> 发本该发去 <code>/v1/client</code> 的请求。
+    原因是 <code>base.html</code> 里有个全局 <code>async function api()</code> 走
+    <code>/v1/admin</code>，而复习页也定义了一个同名的走 <code>/v1/client</code>——
+    <b>同名函数声明在同一个作用域，后解析的赢</b>，而 base 的脚本排在内容块之后。</p>
+    <p>于是症状极具迷惑性：<b>页面加载正常</b>（首次请求早于 base 被解析），
+    <b>之后每一次点击都 404</b>。看起来就是「按钮点不动」。
+    连报错文案都是 base 那个 <code>api()</code> 的格式（<code>msg（trace …）</code>），
+    这本可以早点提醒我，但当时错误被吞了根本没显示出来。</p>
+    <p>P2 的阅读页把自己的 helper 命名为 <code>client()</code>，没撞——<b>是这一版抄错了名字</b>。
+    改名之外，整段脚本包进了 IIFE：<b>把碰撞变成不可能，而不是只是不太可能</b>。</p>
+    <p>写进 <code>verify_phase0.py</code> <b>4.9</b>：扫描每个继承 base.html 的模板，
+    顶层声明不许覆盖控制台的全局名（<code>api</code>／<code>toast</code>／<code>humanBytes</code>）。
+    按惯例做了对照——阴性：现在的复习页零撞车；<b>阳性：故意重定义 <code>api</code> 与
+    <code>toast</code> 的模板被准确报出</b>。P0 因此 30 → 31 项。</p>
+
+    <h3>六、验收脚本只在「今天碰巧有到期词」时才跑得动</h3>
+    <p>复现完这一轮之后再跑验收，2.1 和 4.x 全红——不是代码坏了，是<b>今天的词已经复习完了，
+    队列空了没得走</b>。</p>
+    <p><b>一个只在某些日子能过的验收脚本，等于没有验收脚本。</b>改成自己种一个到期的探针条目、
+    连同两条句子，走完再全部删掉——第 3 节本来就是这么做的，其余几节忘了照做。
+    现在连跑两次结果一致，四张表零残留。</p>
+
+    <h3>七、<code>hidden</code> 没能隐藏，于是按钮「看得见但点不动」</h3>
+    <p>最后一个，也是最阴的一个。<code>base.html</code> 里有：</p>
+<pre>button, .btn { … <b>display: inline-block;</b> }</pre>
+    <p>这条比浏览器自带的 <code>[hidden] { display: none }</code> <b>优先级高</b>，
+    所以给按钮设 <code>el.hidden = true</code> <b>只让它失效，没让它消失</b>。</p>
+    <p>于是：点了提示 → 这一轮判为不会、<code>btn-know</code> 被「隐藏」（其实还在）→
+    你去点它 → <b>逻辑守卫正确地拒绝了</b> → 看起来一点反应都没有。
+    代码是对的，屏幕是骗人的——<b>这种最难查，因为没有任何东西出错</b>。</p>
+    <p>修在 <code>base.html</code> 加一行 <code>[hidden] { display: none !important; }</code>，
+    不修在复习页——<b>任何模块页藏一个按钮都会踩到它</b>。
+    写进 <code>verify_phase0.py</code> <b>4.10</b>，P0 因此 31 → 32 项。</p>
+
+    <h3>怎么找出来的：把页面的 JS 抽出来在 node 里重放</h3>
+    <p>前两轮都在猜。第三轮把 <code>&lt;script&gt;</code> 抽出来，配一个假 DOM 和假服务端，
+    照着人工验收的点击顺序重放——<b>一次就看清了哪一步没动、哪一步动错了</b>，
+    包括「面板没开时点对了照样提交」这个用眼睛看不出来的。
+    这跟这个项目一贯的做法是同一条：<b>要判断就给它具体对象，别靠猜。</b></p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§14</span>
+      <h2>算法验证，以及它挖出来的两个标定错误</h2>
+      <span class="sec-note">2026-09-09</span>
+    </div>
+    <p class="lede">单元检查只能证明「调用参数递对了」。<b>整套跑一年会不会出问题是另一回事</b>，
+    要验它得先有一个可以被排期的学习者。</p>
+
+    <h3>接线是对的，这一条测得很干净</h3>
+    <p>做法：让仿真里的学习者<b>严格按 FSRS 自己的可提取性曲线遗忘</b>。
+    这样两个记忆模型不会分歧，剩下能出错的只有接线——单位、评分映射、一天算一次、状态存取往返。
+    400 词 × 400 天：</p>
+    <div class="table-scroll">
+      <table>
+        <tbody>
+          <tr><td>到期那一刻的可提取性均值</td><td class="num"><b>0.901</b></td></tr>
+          <tr><td>目标保持率</td><td class="num">0.900</td></tr>
+          <tr><td>偏离</td><td class="num"><b>0.0005</b></td></tr>
+          <tr><td>实测一次过率</td><td class="num">0.905</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">秒当天、评分反了、当天重复被算成多次复习——任何一处接错，这个数都会明显跑偏。</p>
+
+    <h3>换一个遗忘模型：这不是 bug，是 optimizer 存在的理由</h3>
+    <p>把学习者换成半衰期式、且比默认参数假设的更健忘，FSRS 就排得太晚
+    （<b>3.5 个半衰期，该是 0.152</b>），一次过率掉到 <b>0.28</b>。</p>
+    <p>任何间隔重复系统面对「跟训练数据里的人不一样的学习者」都会这样。
+    但这给方案里那条决定配上了数：<b>如果你的遗忘比默认参数快，一次过率会从 0.90 掉到 0.28</b>。
+    所以「攒够历史再用 optimizer 拟合成自己的曲线」不是锦上添花。</p>
+
+    <h3>标定错误一：把「答对」当成了「太简单」</h3>
+    <p>仿真里一路顺利的间隔是 <code>8 → 66 → 180 → 180</code>，看着就太远。追下去是映射的问题：
+    原本写的是 <b>一次过 → Easy</b>。</p>
+    <p>但在 FSRS 里 <b>Good = 答对了</b>，<b>Easy = 毫不费力，别再拿它烦我</b>，后者带额外加成。
+    「第一次问就答对」只是答对。<b>而我们根本没有能区分两者的信号</b>——那需要量「答得多快多轻松」，
+    我们不收这个数据。<b>硬造一个出来就是无中生有。</b></p>
+    <p>定案（本人 2026-09-09）：<b>默认从 Good 起评，Easy 由你自己标。</b>
+    界面上「对了」旁边多一个「太简单了」，只在这一轮零失误时出现，
+    而且<b>服务端也要检查</b>——磕过就不认，客户端说了不算。</p>
+
+    <h3>标定错误二：数的是「问了几道题」，而一轮天生两道</h3>
+    <p>更要命的一个，是顺着上一条查出来的。<code>asks</code> 数的是问了几道题，
+    可一轮必然包含两个方向两道题。于是实测：</p>
+<pre>完美一轮   asks=2 → 按当时的映射是 <b>Good</b>（而 Easy 永远够不着）
+磕绊一次   asks=4 → <b>Again</b>，最差的评分</pre>
+    <p><b>只磕了一下就被判成完全没记住。</b>改成数<b>失误次数</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>当天失误</th><th>评分</th><th>新词的下次间隔</th></tr></thead>
+        <tbody>
+          <tr><td>0 次</td><td>Good</td><td class="num">2 天</td></tr>
+          <tr><td>0 次 + 你标了「太简单」</td><td><b>Easy</b></td><td class="num">7 天</td></tr>
+          <tr><td>1 次</td><td>Hard</td><td class="num">1 天</td></tr>
+          <tr><td>2 次及以上</td><td>Again</td><td class="num">1 天</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">一路顺利的间隔随之变成 <code>2 → 11 → 46 → 163 → 180</code>，
+    磕绊的词从「也推到半年」变成「两周内反复问」——<b>后者才是「一个词要遇见 8–12 次」要的东西</b>。</p>
+
+    <h3>这两个错，单元检查都查不出来</h3>
+    <p>1.1–1.6 全过的时候，这两个标定错误一直在。它们不让任何东西报错，只是让间隔安排得不对。
+    <b>能把它们暴露出来的只有「让它跑一年然后看涌现出什么」。</b></p>
+    <p>验收补了三条：<b>1.3</b>（失误越多来得越快，标了太简单则更远）、
+    <b>1.4 / 1.4b</b>（按失误数评分；Easy 只由本人标且磕过不认）、
+    <b>1.7</b>（最长间隔压到半年）、<b>4.8</b>（结算走失误数）。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§15</span>
+      <h2>词表：把「凭什么排到那天」摊开</h2>
+      <span class="sec-note">/admin/review/words</span>
+    </div>
+    <p class="lede">算法对不对，最终要靠真实使用来判。但<b>「排期看着不对」在没有这张表之前是无法证伪的</b>——
+    你看得到一个词十一天后回来，看不到它凭什么。</p>
+    <p>所以每一行把算出那个日子的<b>全部依据</b>并排放着：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>列</th><th>它回答的问题</th></tr></thead>
+        <tbody>
+          <tr><td>词 / 义项</td><td>标的是哪个意思——同一个词的不同义项各占一行</td></tr>
+          <tr><td>标记</td><td>不认识，还是模糊</td></tr>
+          <tr><td>上次评级</td><td>Again / Hard / Good / Easy，以及「还没结算过」</td></tr>
+          <tr><td>记忆强度</td><td>S，天，外加一句人话（「撑一两天」／「撑一两个月」）</td></tr>
+          <tr><td>难度</td><td>D。它只随失误上涨、不因一次成功抹掉，是同样表现下间隔更短的原因</td></tr>
+          <tr><td>轮次 · 失误</td><td>复习过几轮、总共失误几次</td></tr>
+          <tr><td>下次复习</td><td>日期，以及还有几天；已到期的标出来</td></tr>
+          <tr><td>当初在哪遇见</td><td>文章标题与来源，加上那一句原文</td></tr>
+          <tr><td>句子</td><td>点开看全部句子，<b>按考句池／提示池分开</b>，注明是语料还是哪个模型生成的</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">这张表放在控制台而不是阅读页，按<b>铁律 8</b>：
+    控制台是诊断通道，要长期存在；Web 阅读页用完即弃。</p>
+    <p>一个容易被当成 bug 的细节也在表上说明了：<b>用模拟时钟跳到未来时结算的条目，
+    「上次复习」的时间戳在未来</b>。那是有意的——时间戳跟着模拟时钟走，历史才能重放——
+    但不说一句就会像出错了。</p>
+    <p>验收 <b>6.8 / 6.9</b> 守着这两件事：每一行确实带齐了那八项依据；句子确实按两个池子分开列。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§16</span>
+      <h2>端到端跑一遍生成，撞出的三件事</h2>
+      <span class="sec-note">2026-09-09</span>
+    </div>
+    <p class="lede">目的是验「读完一篇新生成的文章 → 标几个词 → 第二天能不能真复习」。
+    结果第一步就卡住了。</p>
+
+    <h3>一、生成完全跑不动了：网关掐的是沉默，不是长度</h3>
+    <p>配置的写手 <code>gpt-5.5</code> 三次重试全部超时，中转站的模型也全部 504。查下来：</p>
+<pre>gpt-5.5 非流式    127 秒 → HTTP 524（网关超时）
+gpt-5.5 <b>流式</b>       139 秒 → 写完 532 词，<b>首字节在第 109 秒</b></pre>
+    <p><b>模型没有写不完，它是在思考的 109 秒里一个字节都不发，把网关熬死了。</b>
+    加上流式（<code>llm/client.py</code>，配置项 <code>llm_stream</code>，默认开），
+    同一个任务 60 秒完成：453 词、<b>超纲率 0.85%、目标词命中 24/25</b>、均句长 15.6。</p>
+    <p>顺带量了中转站上谁能写文章（非流式，同一份提示词）：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>耗时</th><th>正文</th><th>结局</th></tr></thead>
+        <tbody>
+          <tr><td>minimax-m2.5</td><td class="num">21s</td><td class="num">464 词</td><td>唯一写完的</td></tr>
+          <tr><td>deepseek-v4.1-flash</td><td class="num">13s</td><td class="num">0 词</td><td>预算烧在思维链</td></tr>
+          <tr><td>deepseek-v4-flash / longcat / qwen3.8-flash / glm-5.3-flash</td><td class="num">28–63s</td><td class="num">0 词</td><td>同上</td></tr>
+          <tr><td>kimi-k2.6 / k2.7-code / qwen3.7-max</td><td class="num">61–64s</td><td>—</td><td>504</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1rem">这正是主文档记过的那条「<b>这些任务要的是不思考的模型</b>」——
+    但对<b>写文章</b>而言，能写完的那个（minimax-m2.5）目标词只命中 <b>10/25</b>、均句长 12.4。
+    <b>能写完和守约束是两回事</b>，gpt-5.5 加流式仍然是唯一同时做到的。</p>
+
+    <h3>二、决定 23 写进了方案，没写进代码</h3>
+    <p>标了四个词、读完、把时钟拨到第二天——四个词<b>确实进了队列</b>，但：</p>
+<pre>automobile   bucket=due   句子池 <b>0 条</b>
+residence    bucket=due   句子池 <b>0 条</b>
+…
+抽一题 → 有没有句子：<b>False</b></pre>
+    <p>决定 23 说「句子在读完文章那一刻就生成」，而 <code>sentences.start_for</code>
+    <b>只有管理接口在调</b>，复习模块什么事件都没订阅。方案上写着的事，代码里没有。</p>
+    <p>补法按架构铁律 6，<b>用订阅接入而不是改阅读的流程</b>：阅读读完时 <code>events.emit</code>
+    一条 <code>article.finished</code>，复习模块订阅它去补池子。
+    <b>阅读模块不需要知道复习模块存在。</b>实测：读完 → 起批次 → <b>38 秒补了 94 条句子</b>，
+    四个词各 14–25 条。再拨一天，抽到的题有考句、有挖空、有首字母，
+    而提示句正是刚读完那篇里的原句——<b>两个池子的分工在真实数据上成立了</b>。</p>
+    <p>验收补了 <b>5.5</b>：断言复习模块确实订阅了 <code>article.finished</code>。</p>
+
+    <h3>三、生成不知道你学过哪些词——口子留了，没接</h3>
+    <p><code>plan_and_build</code> 有 <code>exclude</code> 参数，一路传到 <code>pick_target_words</code>，
+    <b>但没有任何调用方填它</b>。所以新文章的目标词是从词频段里随机抽的，
+    不排除已经在复习队列里的词。</p>
+    <p>接上它很便宜（把 <code>study_states</code> 里非 <code>new</code> 的词传进去就行），
+    但那属于内容供给（§B），不是 P3。<b>按铁律记进待办，不动手。</b></p>
+
+    <h3>自动生成文章：确认没有，而且不该有</h3>
+    <p>拨到第二天，新增文章 0 篇、新增任务 0 个。那是 B9「每天备几篇」与 B5「提前备好」，
+    在这个 Phase 的<b>明确不做</b>清单里。测出来是 0，是对的。</p>
+  </section>
+
   <footer>
     <span>English Reader</span>
-    <span>Phase 3 方案 · 已定稿</span>
+    <span>Phase 3 方案与实施 · 自动全过，人工验收推迟到 P7</span>
     <span>2026-09-09</span>
   </footer>
 

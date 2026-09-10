@@ -15,6 +15,7 @@ else; errors are logged with the provider id and the status code.
 
 from __future__ import annotations
 
+import json
 import random
 import threading
 import time
@@ -128,7 +129,7 @@ def _client(timeout: float) -> httpx.Client:
 
 def _openai_request(provider: Provider, key: str, messages: list[dict[str, str]],
                     *, max_tokens: int, temperature: float,
-                    json_mode: bool) -> tuple[str, dict, dict]:
+                    json_mode: bool, stream: bool = False) -> tuple[str, dict, dict]:
     body: dict[str, Any] = {
         "model": provider.model,
         "messages": messages,
@@ -137,6 +138,11 @@ def _openai_request(provider: Provider, key: str, messages: list[dict[str, str]]
     }
     if json_mode:
         body["response_format"] = {"type": "json_object"}
+    if stream:
+        body["stream"] = True
+        # Ask for the token counts in the final chunk. Providers that do not
+        # know this option ignore it, and the accounting simply comes out zero.
+        body["stream_options"] = {"include_usage": True}
     return (
         f"{provider.base_url}/chat/completions",
         {"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -146,7 +152,7 @@ def _openai_request(provider: Provider, key: str, messages: list[dict[str, str]]
 
 def _anthropic_request(provider: Provider, key: str, messages: list[dict[str, str]],
                        *, max_tokens: int, temperature: float,
-                       json_mode: bool) -> tuple[str, dict, dict]:
+                       json_mode: bool, stream: bool = False) -> tuple[str, dict, dict]:
     # Anthropic takes the system prompt as a top-level field rather than as a
     # message, so it has to be lifted out of the list.
     system = " ".join(m["content"] for m in messages if m["role"] == "system")
@@ -168,6 +174,51 @@ def _anthropic_request(provider: Provider, key: str, messages: list[dict[str, st
         },
         body,
     )
+
+
+def _read_stream(client: httpx.Client, url: str, headers: dict, body: dict
+                 ) -> tuple[str, int, int, str]:
+    """Read a server-sent-event completion, returning the same tuple as a parse.
+
+    **Why streaming exists here at all: gateways time out on silence, not on
+    length.** Writing a 450-word article takes gpt-5.5 about 109 seconds of
+    thinking before its first visible token — and a relay that cuts idle
+    connections at ~120s killed every attempt with HTTP 524 while the model was
+    still working. Streaming keeps bytes moving, and the same request then
+    finishes in 139 seconds. Measured 2026-09-09; without it, article generation
+    simply could not complete.
+    """
+    text: list[str] = []
+    tokens_in = tokens_out = 0
+    finish = ""
+    with client.stream("POST", url, headers=headers, json=body) as response:
+        if response.status_code >= 400:
+            response.read()
+            detail = response.text[:400]
+            raise LLMError(f"HTTP {response.status_code}: {detail}",
+                           status=response.status_code,
+                           retryable=response.status_code in RETRY_STATUS)
+        for line in response.iter_lines():
+            if not line.startswith("data: "):
+                continue
+            chunk = line[6:].strip()
+            if chunk == "[DONE]":
+                break
+            try:
+                event = json.loads(chunk)
+            except ValueError:
+                continue
+            usage = event.get("usage") or {}
+            if usage:
+                tokens_in = int(usage.get("prompt_tokens", tokens_in) or tokens_in)
+                tokens_out = int(usage.get("completion_tokens", tokens_out) or tokens_out)
+            for choice in event.get("choices") or []:
+                piece = (choice.get("delta") or {}).get("content")
+                if piece:
+                    text.append(piece)
+                if choice.get("finish_reason"):
+                    finish = str(choice["finish_reason"])
+    return "".join(text), tokens_in, tokens_out, finish
 
 
 def _parse_openai(data: dict[str, Any]) -> tuple[str, int, int, str]:
@@ -206,6 +257,7 @@ def complete(
     json_mode: bool = False,
     timeout: float | None = None,
     max_attempts: int | None = None,
+    stream: bool | None = None,
 ) -> Completion:
     """One completion, with retries. Raises :class:`LLMError` when it cannot.
 
@@ -217,6 +269,11 @@ def complete(
     max_attempts = (
         int(runtime_config.get("llm_max_attempts")) if max_attempts is None else max_attempts
     )
+    if stream is None:
+        stream = bool(runtime_config.get("llm_stream"))
+    # Anthropic's event format is a different shape and nothing here needs it
+    # yet; falling back keeps that branch honest rather than half-implemented.
+    stream = stream and provider.kind == "openai"
     key = secrets_store.get_key(provider.id)
     if not key:
         raise LLMError(f"提供商 {provider.id} 还没有配置 API 密钥")
@@ -229,14 +286,20 @@ def complete(
         url, headers, body = build(
             provider, key, messages,
             max_tokens=budget, temperature=temperature, json_mode=json_mode,
+            stream=stream,
         )
         wait_hint: float | None = None
         try:
             _await_slot()
-            with _client(timeout) as client:
-                response = client.post(url, headers=headers, json=body)
+            if stream:
+                with _client(timeout) as client:
+                    streamed = _read_stream(client, url, headers, body)
+                data = None
+            else:
+                with _client(timeout) as client:
+                    response = client.post(url, headers=headers, json=body)
 
-            if response.status_code >= 400:
+            if not stream and response.status_code >= 400:
                 # The body often explains what is wrong; it is bounded here
                 # because some gateways return an entire HTML error page.
                 detail = response.text[:400]
@@ -248,14 +311,18 @@ def complete(
                     retryable=retryable,
                 )
 
-            data = response.json()
+            if not stream:
+                data = response.json()
         except httpx.HTTPError as exc:
             last = LLMError(f"网络错误：{exc}", retryable=True)
         except LLMError as exc:
             last = exc
         else:
-            parse = _parse_openai if provider.kind == "openai" else _parse_anthropic
-            text, tokens_in, tokens_out, finish = parse(data)
+            if stream:
+                text, tokens_in, tokens_out, finish = streamed
+            else:
+                parse = _parse_openai if provider.kind == "openai" else _parse_anthropic
+                text, tokens_in, tokens_out, finish = parse(data)
 
             # A reasoning model spends most of its output budget on the chain of
             # thought before writing anything visible. Ask a 27B thinking model

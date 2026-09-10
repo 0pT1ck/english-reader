@@ -19,7 +19,8 @@ import sys
 import zipfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -221,6 +222,69 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
         r = client.get("/health")
         check("9.3", "响应带 trace 编号", bool(r.headers.get("X-Trace-Id")),
               r.headers.get("X-Trace-Id", ""))
+
+        # 一个 404 也必须留下能按 trace 查回的记录。它曾经不留：处理器上写着
+        # 「保持 INFO 级」，下面却没有任何 log 调用，于是 404 带着 trace_id 发了
+        # 出去、什么也没写下。用户把 trace 贴过来，查出来是空的——而「贴 trace
+        # 就能定位」正是把它放进响应里的全部理由。2026-09-09 发现并补上。
+        # 每个管理页都继承 base.html，也就继承了它的全局作用域。P3 的复习页在这里
+        # 栽过：它定义了自己的 `api()` 走 /v1/client，而 base.html 也有一个同名的
+        # `api()` 走 /v1/admin——两个函数声明同名同作用域，后解析的赢。base 的脚本
+        # 排在内容块之后，于是页面加载正常（首次请求早于 base 解析），之后每一次
+        # 点击都发到 /v1/admin 去，404。**页面看着是「按钮点不动」，日志里才是真相。**
+        def top_level_names(text: str) -> set[str]:
+            """Declarations at brace depth 0 of a template's <script> blocks."""
+            import re as _re
+            names, depth = set(), 0
+            js = "\n".join(m.group(1) for m in
+                           _re.finditer(r"<script>(.*?)</script>", text, _re.S))
+            for line in js.splitlines():
+                bare = _re.sub(r"//.*", "", line)
+                if depth == 0:
+                    m = _re.match(r"\s*(?:async\s+)?(?:function|const|let|var)\s+"
+                                  r"([A-Za-z_$][\w$]*)", bare)
+                    if m:
+                        names.add(m.group(1))
+                depth += bare.count("{") + bare.count("(") - bare.count("}") - bare.count(")")
+                depth = max(0, depth)
+            return names
+
+        base_names = top_level_names(
+            (ROOT / "backend/admin/templates/base.html").read_text(encoding="utf-8"))
+        clashes = []
+        for tpl in sorted((ROOT / "backend").rglob("templates/*.html")):
+            text = tpl.read_text(encoding="utf-8")
+            if "{% extends" not in text:
+                continue
+            hit = top_level_names(text) & base_names
+            if hit:
+                clashes.append(f"{tpl.name}: {'、'.join(sorted(hit))}")
+        check("4.9", "管理页没有覆盖控制台的全局名",
+              not clashes,
+              f"base.html 的全局有 {'、'.join(sorted(base_names))}，没有页面重定义它们"
+              if not clashes else "；".join(clashes))
+
+        # `hidden` has to actually hide. base.html styles every button with a
+        # `display` rule, which outranks the browser's own `[hidden]` rule — so
+        # hiding a button left it visible but inert, and the page looked frozen
+        # while behaving correctly. One line of CSS fixes it for every module
+        # page; this check is here so nobody deletes that line.
+        base_css = (ROOT / "backend/admin/templates/base.html").read_text(encoding="utf-8")
+        check("4.10", "[hidden] 压得过控制台自己的 display 规则",
+              "[hidden]" in base_css and "display: none !important" in base_css,
+              "按钮上有 display 规则，不加这条 [hidden] 就只是让按钮失效而不隐藏——"
+              "页面看着像卡死")
+
+        r = client.get("/v1/client/__no_such_path__?probe=1")
+        tid404 = r.json().get("error", {}).get("trace_id", "")
+        rows = get_connection("logs").execute(
+            "SELECT event, context FROM logs WHERE trace_id = ?", (tid404,)
+        ).fetchall()
+        paths = [x["context"] for x in rows if "__no_such_path__" in (x["context"] or "")]
+        check("9.4", "404 也查得回，且记着是哪个地址",
+              r.status_code == 404 and bool(tid404) and bool(paths),
+              f"trace {tid404} → {len(rows)} 条，含路径与方法"
+              if paths else "404 带了 trace_id 却没有对应的日志——贴 trace 也查不出东西")
 
     # --- summary ---------------------------------------------------------- #
     print("\n" + "=" * 62)

@@ -117,6 +117,13 @@
     border-radius: 3px; text-decoration: none; display: inline-block;
   }
   button:hover, .btn:hover { border-color: var(--accent); color: var(--accent); }
+  /* The rule above sets `display` on every button, which outranks the browser's
+     own `[hidden] { display: none }` — so `el.hidden = true` stopped hiding
+     buttons and only stopped them working. A page then looks frozen: the button
+     is right there and clicking it does nothing. Found on 2026-09-09 in the
+     review page; this belongs here rather than in that page because any module
+     page that hides a button hits it. */
+  [hidden] { display: none !important; }
   button.primary, .btn.primary {
     background: var(--accent); border-color: var(--accent); color: #fff;
   }

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}词表{% endblock %}
+
+{#
+  The diagnostic view for review. "The schedule looks wrong" is unfalsifiable
+  without it: you can see a word is due in eleven days, not why. Every number
+  that produced that date is on the same row — rounds, misses, last grade,
+  memory strength — and the sentences it will be asked with are one click away.
+
+  Console, not reader: architecture rule 8 says the console is the diagnostic
+  channel and outlives the web reading page.
+#}
+
+{% block content %}
+<h1>词表</h1>
+<p class="subtitle">
+  每个标记过的词：现在的评级、下次什么时候复习、当初在哪遇见的、以及给它编好的句子。
+  <b>下次到期那个日子是算出来的，不是拍的</b>——同一行上就是算它的全部依据。
+</p>
+
+<div class="grid" id="stats">
+  <div class="card stat">
+    <span class="stat-label">标记过的条目</span>
+    <span class="stat-value" id="s-count">–</span>
+    <span class="muted mono" id="s-kinds"></span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">今天或更早到期</span>
+    <span class="stat-value" id="s-due">–</span>
+    <span class="muted mono">到点了还没复习的</span>
+  </div>
+  <div class="card stat">
+    <span class="stat-label">还没复习过</span>
+    <span class="stat-value" id="s-fresh">–</span>
+    <span class="muted mono">标了但一次都没轮到</span>
+  </div>
+</div>
+
+<p id="clock-note" class="muted mono" hidden style="margin-top:1rem"></p>
+
+<div style="margin:1.2rem 0;display:flex;gap:.6rem;flex-wrap:wrap;align-items:center">
+  <input id="filter" type="search" placeholder="筛词…" autocomplete="off"
+         style="font:inherit;padding:.35rem .6rem;min-width:12rem">
+  <label class="muted"><input type="checkbox" id="only-due"> 只看到期的</label>
+  <span class="muted mono" id="shown"></span>
+</div>
+
+<div class="table-scroll">
+  <table id="words">
+    <thead>
+      <tr>
+        <th>词 / 义项</th><th>标记</th><th>上次评级</th>
+        <th>记忆强度</th><th>难度</th><th>轮次·失误</th>
+        <th>下次复习</th><th>当初在哪遇见</th><th>句子</th>
+      </tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="9" class="muted">正在读取……</td></tr></tbody>
+  </table>
+</div>
+
+<div class="card" id="detail" hidden style="margin-top:1.5rem">
+  <h3 id="d-title" style="margin-top:0"></h3>
+  <p class="muted" id="d-sense"></p>
+  <div id="d-sentences"></div>
+</div>
+
+<script>
+(() => {
+const el = (id) => document.getElementById(id);
+let all = [];
+
+function esc(t) {
+  return String(t == null ? '' : t).replace(/[&<>"]/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function dueText(item) {
+  if (!item.due_at) return '<span class="muted">未排期</span>';
+  const d = item.due_in_days;
+  const when = esc(item.due_at.slice(0, 10));
+  if (item.overdue) return `<b style="color:var(--mark)">${when}（已到期）</b>`;
+  if (d < 1) return `${when}（今天）`;
+  return `${when}（${Math.round(d)} 天后）`;
+}
+
+function render() {
+  const q = el('filter').value.trim().toLowerCase();
+  const onlyDue = el('only-due').checked;
+  const rows = all.filter(i =>
+    (!q || i.item_key.toLowerCase().includes(q)) && (!onlyDue || i.overdue));
+
+  el('shown').textContent = `显示 ${rows.length} / ${all.length}`;
+  el('rows').innerHTML = rows.map(i => {
+    const gloss = i.sense && i.sense.gloss_zh ? i.sense.gloss_zh.join(' / ')
+                                             : '<span class="muted">无义项集</span>';
+    const from = i.from_title
+      ? `<span class="mono">${esc(i.from_source || '')}</span> ${esc(i.from_title)}`
+      : '<span class="muted">不详</span>';
+    return `<tr>
+      <td><b>${esc(i.item_key)}</b>${i.item_type === 'phrase' ? ' <span class="muted mono">词组</span>' : ''}
+          <br><span class="muted">${gloss}</span></td>
+      <td>${esc(i.mark_label || '')}</td>
+      <td>${esc(i.rating_label)}</td>
+      <td>${i.stability == null ? '<span class="muted">—</span>'
+            : `${i.stability.toFixed(1)} 天<br><span class="muted">${esc(i.band)}</span>`}</td>
+      <td>${i.difficulty == null ? '<span class="muted">—</span>' : i.difficulty.toFixed(1)}</td>
+      <td class="mono">${i.reps} 轮 · 失误 ${i.total_misses}</td>
+      <td>${dueText(i)}</td>
+      <td>${from}${i.from_sentence
+            ? `<br><span class="muted">${esc(i.from_sentence.slice(0, 90))}…</span>` : ''}</td>
+      <td><a href="#" data-key="${esc(i.item_key)}" data-sense="${i.sense_id}"
+             data-type="${i.item_type}">${i.pool_total} 条</a></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="muted">没有匹配的词</td></tr>';
+
+  el('rows').querySelectorAll('a[data-key]').forEach(a => {
+    a.onclick = (e) => { e.preventDefault(); showSentences(a.dataset); };
+  });
+}
+
+async function showSentences(d) {
+  const res = await fetch(`/v1/admin/review/words/${encodeURIComponent(d.key)}/sentences`
+    + `?sense_id=${d.sense}&item_type=${d.type}`, {credentials: 'same-origin'});
+  const body = await res.json();
+  el('detail').hidden = false;
+  el('d-title').textContent = `${body.item_key} — ${body.count} 条句子`;
+  el('d-sense').textContent = body.sense
+    ? `${body.sense.concept_en}　（${(body.sense.gloss_zh || []).join(' / ')}）` : '这个词还没有义项集';
+  el('d-sentences').innerHTML = body.sentences.map(s => {
+    const hl = esc(s.text.slice(0, s.blank_start))
+      + '<b style="color:var(--accent)">' + esc(s.text.slice(s.blank_start, s.blank_end)) + '</b>'
+      + esc(s.text.slice(s.blank_end));
+    const origin = s.source === 'generated'
+      ? `<span class="mono">生成 · ${esc(s.model || '')}</span>`
+      : `<span class="mono">${esc(s.article_source || '')} ${esc(s.article_title || '')}</span>`;
+    return `<p style="margin:.7rem 0">${hl}<br>
+      <span class="muted mono">${esc(s.pool)} · ${origin}</span></p>`;
+  }).join('') || '<p class="muted">还没有句子——去复习页跑一次生成</p>';
+  el('detail').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+el('filter').oninput = render;
+el('only-due').onchange = render;
+
+(async () => {
+  const res = await fetch('/v1/admin/review/words?limit=2000', {credentials: 'same-origin'});
+  const body = await res.json();
+  all = body.items;
+  el('s-count').textContent = all.length;
+  const kinds = {};
+  all.forEach(i => { kinds[i.mark_label] = (kinds[i.mark_label] || 0) + 1; });
+  el('s-kinds').textContent = Object.entries(kinds).map(([k, v]) => `${k} ${v}`).join(' · ');
+  el('s-due').textContent = all.filter(i => i.overdue).length;
+  el('s-fresh').textContent = all.filter(i => i.stability == null).length;
+  // Rows settled while the simulated clock was forward carry timestamps in the
+  // future. That is on purpose — history has to be replayable — but seeing
+  // "last reviewed tomorrow" without a word of explanation reads as a bug.
+  const ahead = all.filter(i => i.last_review_at && i.last_review_at > new Date().toISOString());
+  if (ahead.length) {
+    el('clock-note').hidden = false;
+    el('clock-note').textContent =
+      `${ahead.length} 个条目的「上次复习」时间在未来——那是用模拟时钟跳到未来时结算的，`
+      + `时间戳跟着模拟时钟走（否则历史没法重放）。不是错。`;
+  }
+  if (body.clock && body.clock.simulated) {
+    el('clock-note').hidden = false;
+    el('clock-note').textContent =
+      `注意：模拟时钟开着，复习模块以为今天是 ${body.clock.simulated_now.slice(0, 10)}`
+      + `（比真实快 ${body.clock.offset_days} 天）——下面的「几天后」都是按这个算的。`;
+  }
+  render();
+})().catch(e => { el('rows').innerHTML =
+  `<tr><td colspan="9" style="color:var(--stop)">出错了：${esc(e.message)}</td></tr>`; });
+})();
+</script>
+{% endblock %}
