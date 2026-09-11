@@ -46,8 +46,8 @@ def save_state(learner_id: int, item_type: str, item_key: str, sense_id: int,
     """Write back the memory columns. Never touches ``pool``.
 
     That omission is the P2 invariant: what pool an item sits in is decided by
-    the learner's own signal (marking it, or getting it wrong in a quiz), and
-    reviewing is neither. A review moves the due date, not the pool.
+    the learner's own signal — marking it, and as of 2026-09-11 nothing else —
+    and reviewing is not that signal. A review moves the due date, not the pool.
     """
     assert "pool" not in fields, "复习不改变词池位置，那是 P2 的不变量"
     columns = ", ".join(f"{k} = ?" for k in fields)

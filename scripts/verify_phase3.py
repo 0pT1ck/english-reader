@@ -451,13 +451,14 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                 if runtime_config.get(k) is not None]
         check("8.2", "参数一律配置化", len(keys) == 7, "、".join(keys))
 
+        # M1「真跑三到五天」与 M2「歧义烦不烦」were withdrawn on 2026-09-11: both
+        # measure how the thing *feels*, and the only place that can run a review
+        # today is the admin page — a development tool by architecture rule 8.
+        # Days spent there measure a stand-in, not the product. The phone client
+        # is the next phase and will answer them in ordinary use, so leaving them
+        # printed here would be a checklist item that can never be ticked.
+        # M3 stays: reading 50 sentences never needed a phone.
         print("\n需要人工确认")
-        note("M1", "真跑三到五天",
-             "打开 /admin/review，每天走完。验的是脚本验不了的：原句能不能勾起记忆、"
-             "生成的句子读着自不自然、当天重复到会会不会烦")
-        note("M2", "看义想词的歧义烦不烦",
-             "「着手解决」也对得上 deal with。设计上靠首字母那一级挡，"
-             "挡得够不够只有真做几天才知道")
         note("M3", "抽 50 条生成的句子人工看",
              "用的是不是那个义项、有没有把答案写进句子里。"
              "题目本身错了比没有题目更糟——这是这个 Phase 唯一会让人扔掉它的失败方式")

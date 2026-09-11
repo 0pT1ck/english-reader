@@ -426,8 +426,11 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
     introduced = revisited = 0
 
     # **Nothing enters the review queue by being read.** Only the learner's own
-    # signal puts a word there: a mark (「我不会」), or later a failed spot check
-    # (D3, 「你以为你会」). Finishing an article records that words were *met*,
+    # signal puts a word there, and since 2026-09-11 there is exactly one such
+    # signal: a mark (「我不会」). The design once had a second — a failed
+    # post-reading spot check — and that whole feature was dropped: not marking
+    # a word you do not know means you do not want to learn it, and the system
+    # does not go checking. Finishing an article records that words were *met*,
     # never that they were *needed*.
     #
     # Two versions were tried and both rejected. Exam papers adopted 25 unmet

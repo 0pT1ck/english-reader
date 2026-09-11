@@ -408,7 +408,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         ).fetchone()[0]
         check("7.4", "复习队列里的每一条都追得到一次标记",
               unmarked == 0,
-              "进队列只有两条路：你标记，或将来 D3 抽查答错。系统不替你判断你会不会"
+              "进队列只有一条路：你自己标记。系统不替你判断你会不会"
               if unmarked == 0 else f"{unmarked} 条没有对应的标记")
 
         # This check used to assert that the scheduling columns did **not**
