@@ -14,7 +14,8 @@ from pathlib import Path
 from backend.admin.templating import add_template_dir
 from backend.core import runtime_config
 from backend.core.registry import AdminPage, Module
-from backend.modules.generation import routes, schema, workers
+from backend.core.tasks import Task
+from backend.modules.generation import daily, routes, schema, workers
 
 add_template_dir(Path(__file__).parent / "templates")
 
@@ -108,13 +109,86 @@ runtime_config.register(
         group="generation",
         order=22,
     ),
+
+    # --- 合格线：只有这三条会丢弃草稿（决定 4）------------------------------ #
+    runtime_config.ConfigSpec(
+        key="gen_max_beyond_rate",
+        default=1.0,
+        value_type="float",
+        title="超纲率上限（%）",
+        description="超过就丢弃。实测 gpt-5.5 与 deepseek-flash（关思考）的超纲率"
+        "中位数都在 0.4% 上下，失败的那几篇都落在 1%–2.3%。",
+        group="generation",
+        order=30,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_min_target_ratio",
+        default=0.8,
+        value_type="float",
+        title="目标词命中下限（比例）",
+        description="每篇要教的词里至少用上这个比例，否则丢弃。0.8 即 25 个里至少 20 个。"
+        "实测 gpt-5.5 命中均值 24.4/25，deepseek 关思考 22.3/25。",
+        group="generation",
+        order=31,
+    ),
+
+    # --- 每日供给（决定 2、3、11）------------------------------------------ #
+    runtime_config.ConfigSpec(
+        key="gen_daily_count",
+        default=3,
+        value_type="int",
+        title="每天备几篇",
+        description="一次生成一篇、当场校验、够数为止。没读的不会删，会转入往期。",
+        group="generation",
+        order=40,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_daily_attempt_cap",
+        default=12,
+        value_type="int",
+        title="单次备稿的生成次数上限",
+        description="这是熔断不是配额。实测合格率 60%–80%，凑够 3 篇期望 4–5 次；"
+        "12 次还凑不够的概率在 0.3% 以下，真发生了基本可以断定是链路坏了，"
+        "所以到顶就停并推送通知。",
+        group="generation",
+        order=41,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_topup_enabled",
+        default=True,
+        value_type="bool",
+        title="读完一篇就补库存",
+        description="三层保险的第一层：读完触发，库存低于下限时补一篇。"
+        "第二层是每天定时备稿，第三层是控制台手动触发。",
+        group="generation",
+        order=42,
+    ),
+    runtime_config.ConfigSpec(
+        key="gen_stock_floor",
+        default=3,
+        value_type="int",
+        title="库存下限（未读的生成文篇数）",
+        description="低于这个数才补。只数生成的文章，真题不算——真题是现成的语料，不会用完。",
+        group="generation",
+        order=43,
+    ),
 )
 
 MODULE = Module(
     name="generation",
     title="生成",
-    description="P1a 生成实验：构造提示词、解析回复、本地校验出体检报告",
+    description="按约束写文章、本地校验出体检报告，以及每天自动备稿",
     migrations=schema.MIGRATIONS,
+    tasks=[
+        Task(
+            name="generation.daily",
+            title="每天备稿",
+            description="一次生成一篇、当场校验、够数为止。夜里跑完，早上打开就有。",
+            run=daily.run_scheduled,
+            schedule="04:00",
+        )
+    ],
+    subscriptions={"article.finished": [daily.on_article_finished]},
     admin_router=routes.admin_router,
     admin_router_pages=routes.pages_router,
     admin_pages=[

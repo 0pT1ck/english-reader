@@ -13,6 +13,8 @@ matters when starting over costs real money.
 
 from __future__ import annotations
 
+from typing import Any
+
 from backend.core.db import Migration
 
 MIGRATIONS = [
@@ -94,4 +96,43 @@ MIGRATIONS = [
             ON llm_jobs (status);
         """,
     ),
+    Migration(
+        version=2,
+        name="move the three hand-placed provider settings onto the per-worker keys",
+        database="learning",
+        apply=lambda conn: _adopt_provider_settings(conn),
+    ),
 ]
+
+
+#: Old key -> the worker whose new setting replaces it. Three settings existed
+#: before 决定 19 generalised them; the other six kinds of work had no way to
+#: name a provider at all and silently used the default one.
+_ADOPTED = {
+    "gen_provider": "generate_article",
+    "review_gen_provider": "review_sentences",
+    "annotate_provider": "annotate_article",
+}
+
+
+def _adopt_provider_settings(conn: Any) -> None:
+    """Carry the values across. The old keys were tuned by hand — losing them
+    would quietly move article writing back onto the default provider, which is
+    the cheap data-wrangling model, and the symptom would be a slow drift in
+    article quality rather than an error.
+
+    Copies only into keys that have no value yet, so re-running is harmless and
+    a value set after the upgrade is never overwritten.
+    """
+    for old_key, kind in _ADOPTED.items():
+        row = conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (old_key,)
+        ).fetchone()
+        value = (row["value"] if row else "") or ""
+        if not value.strip():
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO settings (key, value, updated_at)"
+            " VALUES (?, ?, datetime('now'))",
+            (f"llm_provider_{kind}", value),
+        )

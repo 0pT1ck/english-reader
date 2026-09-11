@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}任务{% endblock %}
+
+{% block content %}
+<h1>定时任务</h1>
+<p class="subtitle">
+  模块自己声明的定时工作。调度每 {{ tick }} 秒检查一次，到点就跑；
+  <b>服务停着的时候错过的，下次启动补跑一次</b>——错过几天也只补一次，不是几次。
+  周期和开关在 <a href="/admin/config">配置</a> 页的「定时任务」一组里改，也可以在这里直接手动触发。
+</p>
+
+{% if not tasks %}
+<p class="muted">还没有任何模块声明定时任务。</p>
+{% else %}
+<div class="scroll">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:26%">任务</th>
+        <th style="width:10%">周期</th>
+        <th style="width:16%">下次</th>
+        <th style="width:16%">上次</th>
+        <th style="width:14%">累计</th>
+        <th>操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for t in tasks %}
+      <tr>
+        <td>
+          <div>{{ t.title }}{% if not t.enabled %} <span class="muted">（已关闭）</span>{% endif %}</div>
+          <div class="muted mono">{{ t.name }}</div>
+          {% if t.description %}<div class="muted" style="margin-top:0.2rem">{{ t.description }}</div>{% endif %}
+        </td>
+        <td class="mono">{{ t.schedule }}</td>
+        <td class="mono muted">
+          {% if not t.enabled %}—
+          {% elif t.next_due_at %}{{ t.next_due_at | replace('T', ' ') }}
+          {% else %}未排{% endif %}
+        </td>
+        <td>
+          {% if t.last_status == 'ok' %}
+            <span>成功</span>
+            <div class="muted mono">{{ (t.last_elapsed_ms or 0) / 1000 }} 秒</div>
+          {% elif t.last_status == 'failed' %}
+            <span style="color:var(--bad, #b3261e)">失败</span>
+            <div class="muted mono">{{ t.last_trace_id or '' }}</div>
+          {% elif t.last_status == 'running' %}
+            <span>进行中</span>
+          {% else %}
+            <span class="muted">还没跑过</span>
+          {% endif %}
+          {% if t.last_finished_at %}
+          <div class="muted mono">{{ t.last_finished_at | replace('T', ' ') }}</div>
+          {% endif %}
+        </td>
+        <td class="mono muted">{{ t.runs }} 次{% if t.failures %}，失败 {{ t.failures }}{% endif %}</td>
+        <td>
+          <button data-run="{{ t.name }}">手动触发</button>
+        </td>
+      </tr>
+      {% if t.last_error %}
+      <tr>
+        <td colspan="6" class="muted mono" style="padding-top:0">
+          上次错误：{{ t.last_error }}
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// IIFE：管理页共用 base.html 的全局作用域，api / toast / humanBytes 已被占用（坑 §3.2）。
+(function () {
+  document.querySelectorAll('[data-run]').forEach(function (btn) {
+    btn.onclick = async function () {
+      const name = btn.dataset.run;
+      btn.disabled = true;
+      const was = btn.textContent;
+      btn.textContent = '跑着…';
+      try {
+        const res = await api('/tasks/' + encodeURIComponent(name) + '/run', { method: 'POST' });
+        if (res.status === 'ok') {
+          toast(name + ' 完成，用时 ' + ((res.elapsed_ms || 0) / 1000).toFixed(1) + ' 秒');
+        } else if (res.status === 'running') {
+          toast(name + ' 已经在跑了', true);
+        } else {
+          toast(name + ' 失败：' + (res.error || '原因见日志'), true);
+        }
+        setTimeout(function () { location.reload(); }, 900);
+      } catch (e) {
+        toast(e.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = was;
+      }
+    };
+  });
+})();
+</script>
+{% endblock %}

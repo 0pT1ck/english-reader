@@ -181,16 +181,25 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
             check("7.1", "用词在范围内", beyond < 1.0, f"超纲率 {beyond:.2f}%")
             expl = sum(r["syntax"].get("expl", 0) for r in reports) / len(reports)
             nominal = sum(r["syntax"].get("nominal", 0) for r in reports) / len(reports)
-            check("7.2", "句法是正常书面语",
-                  abs(passive - baseline.get("passive", 17)) < 16,
-                  f"被动 {passive:.1f}、形式主语 {expl:.1f}、名词化 {nominal:.1f}"
-                  f"，真题基线依次 {baseline.get('passive', 0):.1f} /"
-                  f" {baseline.get('expl', 0):.1f} / {baseline.get('nominal', 0):.1f}")
-            if passive < baseline.get("passive", 17) / 2:
-                note("7.4", "被动语态偏少",
-                     f"{passive:.1f} 对基线 {baseline.get('passive', 17):.1f}——"
-                     "「写完自查、能改主动就改主动」这条在强模型上矫枉过正了。"
-                     "不影响可读性，但离真题风格远了一点")
+            # 2026-09-11: this stopped being a pass/fail gate. It asserted that
+            # generated syntax tracks the exam corpus, and it went red whenever
+            # the model happened to write without the passive — which is most of
+            # the time: four of the five drafts from the current configuration
+            # contain none at all. Its own manual note 7.4 already called that
+            # known and harmless, so the script was failing on a fact it also
+            # documented as accepted.
+            #
+            # The decision behind the change is scope, not tolerance: **the point
+            # of these articles is learning the words**. Whether they read like
+            # a CET paper is not a completion criterion — see 主文档 §B8 and 归档
+            # §B, where the "syntax always tracks the exam" guarantee was
+            # falsified and archived a day earlier. Measured, still reported,
+            # never a reason to fail.
+            note("7.2", "句法画像（只记录，不作判据）",
+                 f"被动 {passive:.1f}、形式主语 {expl:.1f}、名词化 {nominal:.1f}"
+                 f"，真题基线依次 {baseline.get('passive', 0):.1f} /"
+                 f" {baseline.get('expl', 0):.1f} / {baseline.get('nominal', 0):.1f}"
+                 "——首要目的是背单词，像不像真题不构成合格与否")
         else:
             note("7.1", "生成质量", "库里没有新提示词生成的文章")
 

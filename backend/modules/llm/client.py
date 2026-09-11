@@ -15,11 +15,13 @@ else; errors are logged with the provider id and the status code.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import random
 import threading
 import time
 from collections import deque
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
@@ -32,6 +34,27 @@ from backend.modules.llm import secrets_store
 from backend.modules.llm.providers import Provider
 
 log = get_logger("llm.client")
+
+# Which way the chain of thought is set for the work currently running in this
+# thread. Set by the batch runner around each item (see ``llm.jobs``); unset
+# everywhere else, which means "do not send the field at all".
+_thinking: contextvars.ContextVar[bool | None] = contextvars.ContextVar(
+    "llm_thinking", default=None
+)
+
+
+def current_thinking() -> bool | None:
+    return _thinking.get()
+
+
+@contextmanager
+def thinking(value: bool | None):
+    """Apply a thinking setting to every completion made inside this block."""
+    token = _thinking.set(value)
+    try:
+        yield
+    finally:
+        _thinking.reset(token)
 
 RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 
@@ -129,13 +152,25 @@ def _client(timeout: float) -> httpx.Client:
 
 def _openai_request(provider: Provider, key: str, messages: list[dict[str, str]],
                     *, max_tokens: int, temperature: float,
-                    json_mode: bool, stream: bool = False) -> tuple[str, dict, dict]:
+                    json_mode: bool, stream: bool = False,
+                    thinking: bool | None = None) -> tuple[str, dict, dict]:
     body: dict[str, Any] = {
         "model": provider.model,
         "messages": messages,
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
+    # Only sent when someone asked for it. Omitted means "whatever the model
+    # does by default", which is the right answer for the eight jobs where
+    # turning the chain of thought off has never been measured.
+    #
+    # Measured where it has been (2026-09-11, writing articles on ten identical
+    # seeds): thinking off took the pass rate from 5/10 to 8/10 and the time
+    # per piece from 61.6s to 9.1s, because 91% of the output tokens were going
+    # to the chain of thought and the budget escalation was burning two wasted
+    # calls per article. That is one task, not a general rule — 坑 §2.4.
+    if thinking is not None:
+        body["enable_thinking"] = thinking
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     if stream:
@@ -152,7 +187,8 @@ def _openai_request(provider: Provider, key: str, messages: list[dict[str, str]]
 
 def _anthropic_request(provider: Provider, key: str, messages: list[dict[str, str]],
                        *, max_tokens: int, temperature: float,
-                       json_mode: bool, stream: bool = False) -> tuple[str, dict, dict]:
+                       json_mode: bool, stream: bool = False,
+                       thinking: bool | None = None) -> tuple[str, dict, dict]:
     # Anthropic takes the system prompt as a top-level field rather than as a
     # message, so it has to be lifted out of the list.
     system = " ".join(m["content"] for m in messages if m["role"] == "system")
@@ -258,6 +294,7 @@ def complete(
     timeout: float | None = None,
     max_attempts: int | None = None,
     stream: bool | None = None,
+    thinking: bool | None = None,
 ) -> Completion:
     """One completion, with retries. Raises :class:`LLMError` when it cannot.
 
@@ -271,6 +308,12 @@ def complete(
     )
     if stream is None:
         stream = bool(runtime_config.get("llm_stream"))
+    # Not passed explicitly -> whatever the running job's setting says. The
+    # framework applies it rather than each worker remembering to, because a
+    # switch that every call site has to opt into is a switch that the tenth
+    # call site will miss — the shape 坑 §5.1 cost four rounds to learn.
+    if thinking is None:
+        thinking = current_thinking()
     # Anthropic's event format is a different shape and nothing here needs it
     # yet; falling back keeps that branch honest rather than half-implemented.
     stream = stream and provider.kind == "openai"
@@ -286,7 +329,7 @@ def complete(
         url, headers, body = build(
             provider, key, messages,
             max_tokens=budget, temperature=temperature, json_mode=json_mode,
-            stream=stream,
+            stream=stream, thinking=thinking,
         )
         wait_hint: float | None = None
         try:

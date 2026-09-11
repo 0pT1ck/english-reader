@@ -32,6 +32,8 @@ How to add a module — the shape to copy::
         admin_router=admin_router,
         admin_pages=[AdminPage(title="示例", path="/admin/example", order=90)],
         subscriptions={"reading.finished": [on_reading_finished]},
+        tasks=[Task(name="example.nightly", title="示例夜间任务",
+                    run=do_the_thing, schedule="04:00")],
     )
 """
 
@@ -44,9 +46,10 @@ from dataclasses import dataclass, field
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from backend.core import events
+from backend.core import events, tasks
 from backend.core.db import Migration, run_migrations
 from backend.core.logging import get_logger
+from backend.core.tasks import Task
 
 if TYPE_CHECKING:  # pragma: no cover
     from fastapi import APIRouter, FastAPI
@@ -97,6 +100,11 @@ class Module:
 
     #: event name -> handlers. Registered at startup.
     subscriptions: dict[str, list[events.Handler]] = field(default_factory=dict)
+
+    #: Work that runs on a clock rather than on a request. Each task also gets
+    #: two settings of its own (on/off, and the schedule) registered for it, so
+    #: declaring one here is the whole job — see :mod:`backend.core.tasks`.
+    tasks: list["Task"] = field(default_factory=list)
 
     #: Called once after migrations, for warm-up work (loading a model, etc).
     on_startup: Callable[[], None] | None = None
@@ -182,6 +190,9 @@ def install_modules(app: "FastAPI", modules: list[Module] | None = None) -> list
             for handler in handlers:
                 events.subscribe(event_name, handler, owner=module.name)
 
+        if module.tasks:
+            tasks.register(*module.tasks)
+
         if module.client_router is not None:
             app.include_router(
                 module.client_router,
@@ -214,6 +225,7 @@ def install_modules(app: "FastAPI", modules: list[Module] | None = None) -> list
             client_routes=module.client_router is not None,
             admin_routes=module.admin_router is not None,
             pages=[p.path for p in module.admin_pages],
+            tasks=[t.name for t in module.tasks],
         )
 
     return modules

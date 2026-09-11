@@ -30,7 +30,8 @@ import random
 from datetime import datetime, timedelta
 from typing import Any
 
-from backend.core import runtime_config
+from backend.core import auth, runtime_config
+from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest, NotFound
 from backend.core.logging import get_logger
 from backend.modules.review import clock, repository, scheduler, sentences
@@ -88,7 +89,6 @@ def collect(learner_id: int, now: datetime) -> list[dict[str, Any]]:
 
     # Items that have never been scheduled at all: everything marked before P3,
     # plus everything marked since the last session ran.
-    from backend.core.db import get_connection
     rows = get_connection("learning").execute(
         "SELECT * FROM study_states WHERE learner_id = ? AND item_type = 'word'"
         "  AND pool = 'reviewing' AND due_at IS NULL",
@@ -168,7 +168,6 @@ def answer(learner_id: int, queue_id: int, *, passed: bool, revealed: int = 0,
     once per item, when 看义想词 passes and the item leaves the pool.
     """
     now = _now(now)
-    from backend.core.db import get_connection
     row = get_connection("learning").execute(
         "SELECT * FROM review_queue WHERE id = ?", (queue_id,)
     ).fetchone()
@@ -283,3 +282,70 @@ def spelling_words(learner_id: int, now: datetime | None = None) -> list[dict[st
         seen.add(row["item_key"])
         out.append({"item_key": row["item_key"], "sense_id": row["sense_id"]})
     return out
+
+
+def day_payload(learner_id: int, *, now: datetime | None = None) -> dict[str, Any]:
+    """Everything today's review needs, in one response.
+
+    Public because 今日包 composes it next to the day's articles (P4 决定 8);
+    ``review.routes`` delegates here so there is one builder, not two.
+
+    Architecture rule 2 asks for an offline shape: the client should be able to
+    take this and work through the whole day without another request. So every
+    item ships with its sentences and its hint already attached, rather than
+    being fetched one question at a time.
+    """
+    now = now or clock.now()
+    state = ensure(learner_id, now)
+    rows = repository.queue_rows(state["id"])
+    finished = repository.finished_article_ids(learner_id)
+
+    items = []
+    for row in rows:
+        questions, hints = sentences.split_pools(row["item_key"], row["sense_id"], finished)
+        items.append({
+            "queue_id": row["id"],
+            "item_type": row["item_type"],
+            "item_key": row["item_key"],
+            "sense_id": row["sense_id"],
+            "bucket": row["bucket"],
+            "direction": int(row["step"]),
+            "asks": int(row["asks"]),
+            "misses": int(row["misses"] or 0),
+            "weight": float(row["weight"]),
+            "done": bool(row["done_at"]),
+            "sense": sense_of(row["sense_id"]),
+            "questions": [sentences.as_card(s) for s in questions],
+            "hints": [sentences.as_card(s) for s in hints],
+        })
+
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "day": state["day"],
+        "session_id": state["id"],
+        "finished_at": state["finished_at"],
+        "weight_decay": float(runtime_config.get("review_weight_decay")),
+        "spelling_enabled": bool(runtime_config.get("review_spelling")),
+        "progress": progress(learner_id, now),
+        "clock": clock.status(),
+        "items": items,
+    }
+
+
+def sense_of(sense_id: int) -> dict[str, Any] | None:
+    """One sense, as a card shows it. Public: routes renders it too."""
+    if not sense_id:
+        return None
+    row = get_connection("content").execute(
+        "SELECT id, headword, ordinal, pos, concept_en, gloss_zh, exam_frequency"
+        " FROM senses WHERE id = ?", (sense_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    import json
+    item = dict(row)
+    try:
+        item["gloss_zh"] = json.loads(item["gloss_zh"] or "[]")
+    except (TypeError, ValueError):
+        item["gloss_zh"] = [str(item["gloss_zh"] or "")]
+    return item

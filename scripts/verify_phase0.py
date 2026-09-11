@@ -25,6 +25,7 @@ sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend.core.config import get_settings  # noqa: E402
+from backend.core import notifications  # noqa: E402
 from backend.core.db import Migration, get_connection, run_migrations  # noqa: E402
 from backend.core.logging import get_logger, trace  # noqa: E402
 from backend.main import app  # noqa: E402
@@ -205,7 +206,9 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
         # --- 9. traceability ----------------------------------------------- #
         print("\n9. 错误可追溯")
         log = get_logger("verify")
-        with trace() as tid:
+        # 这一段故意报一条 ERROR 来验追溯链路，而 ERROR 会推到手机——
+        # 验收不该把假警报推给用户（notifications 自己说的：狼来了的通道会被忽略）。
+        with notifications.muted(), trace() as tid:
             log.debug("verify.detail", "这条 DEBUG 平时只留在内存里", step=1)
             log.debug("verify.detail", "这条也是", step=2)
             log.error("verify.failure", "故意触发的错误，用于验证追溯链路")

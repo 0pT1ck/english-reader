@@ -54,6 +54,7 @@
     <span class="stat-label">句子池目标</span>
     <span class="stat-value">{{ target }}</span>
     <span class="muted mono" id="s-pool"></span>
+    <span class="muted mono" id="s-queue"></span>
   </div>
 </div>
 
@@ -123,6 +124,59 @@ async function client(path, options) {
   }, options || {}));
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+// --- 作答队列：离线形状 ------------------------------------------------- //
+//
+// 复习一直缺这一半。`/reviews` 早就是离线形状（每张卡片带着句子一起下发），
+// 但作答是一次一答的在线 POST，没有幂等键也没有队列——地铁里每答一题都失败，
+// 而阅读那边照常工作。架构铁律 2 被破了一半。
+//
+// 形状照抄阅读页：先进 localStorage，再批量上传，服务端按幂等键去重。
+// 在线时用服务端返回的结果推进界面；离线时用本地镜像先走着，重连补报之后
+// 重新拉一次 /reviews 以服务端为准——服务端始终是唯一事实来源（铁律 3）。
+const QUEUE_KEY = 'er.review.queue';
+
+function queue() {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); }
+  catch (e) { return []; }
+}
+
+function setQueue(items) {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items)); } catch (e) { /* full */ }
+  const box = el('s-queue');
+  if (box) box.textContent = items.length ? ('待补报 ' + items.length + ' 条') : '';
+}
+
+function enqueue(answer) {
+  const items = queue();
+  items.push(Object.assign({
+    idem_key: 'rv-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+    occurred_at: new Date().toISOString(),
+  }, answer));
+  setQueue(items);
+  return items[items.length - 1];
+}
+
+let flushing = false;
+async function flush() {
+  if (flushing) return null;
+  const items = queue();
+  if (!items.length) return null;
+  flushing = true;
+  try {
+    const r = await client('/reviews/answers', {
+      method: 'POST', body: JSON.stringify({ answers: items.slice(0, 200) }),
+    });
+    // 只丢掉服务端确实处理过的。重复算已处理——补报本来就会重发。
+    const done = new Set(r.results.filter(x => x.status !== 'failed').map(x => x.idem_key));
+    setQueue(queue().filter(x => !done.has(x.idem_key)));
+    return r;
+  } catch (e) {
+    return null;                 // 还没联上，留在队列里
+  } finally {
+    flushing = false;
+  }
 }
 
 let day = null;           // the whole day, fetched once
@@ -389,31 +443,49 @@ el('btn-wrong').onclick = () => {
 
 async function answer(passed, opts) {
   const item = current.item;
-  const res = await client('/reviews/answer', {
-    method: 'POST',
-    body: JSON.stringify({
-      queue_id: item.queue_id,
-      passed,
-      revealed,
-      sentence_id: current.sentence ? current.sentence.id : null,
-      easy: !!(opts && opts.easy),
-    }),
+  const queued = enqueue({
+    queue_id: item.queue_id,
+    passed,
+    revealed,
+    sentence_id: current.sentence ? current.sentence.id : null,
+    easy: !!(opts && opts.easy),
   });
-  // Mirror what the server just did, so the local copy stays usable offline.
+
   day.used = (day.used || []).concat(current.sentence ? [current.sentence.id] : []);
-  item.asks = res.asks;
-  item.misses = res.misses;
-  if (res.done) {
-    item.done = true;
-    if (res.settled) {
-      const s = res.settled;
-      el('s-pool').textContent = `${item.item_key}：${s.rating_name}，${s.interval_days} 天后再来`;
+
+  const batch = await flush();
+  const mine = batch && batch.results.find(x => x.idem_key === queued.idem_key);
+  const res = mine && mine.result;
+
+  if (res) {
+    // 在线：服务端说了算。
+    item.asks = res.asks;
+    item.misses = res.misses;
+    if (res.done) {
+      item.done = true;
+      if (res.settled) {
+        const s = res.settled;
+        el('s-pool').textContent = `${item.item_key}：${s.rating_name}，${s.interval_days} 天后再来`;
+      }
+    } else if (passed) {
+      item.direction = 2;
+    } else {
+      item.direction = 1;
+      item.weight = Math.max(item.weight * day.weight_decay, 0.0001);
     }
-  } else if (passed) {
-    item.direction = 2;
   } else {
-    item.direction = 1;
-    item.weight = Math.max(item.weight * day.weight_decay, 0.0001);
+    // 离线：先按规则往前走，好让这一天能做完。服务端补报之后会覆盖，
+    // 所以这里只镜像那几条明写在契约里的规则，不自己发明任何东西。
+    item.asks = (item.asks || 0) + 1;
+    if (!passed) item.misses = (item.misses || 0) + 1;
+    if (passed && item.direction === 1) {
+      item.direction = 2;
+    } else if (passed) {
+      item.done = true;
+    } else {
+      item.direction = 1;
+      item.weight = Math.max(item.weight * day.weight_decay, 0.0001);
+    }
   }
   render();
 }
@@ -463,7 +535,15 @@ el('sp-go').onclick = async () => {
 };
 el('sp-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') el('sp-go').click(); });
 
-reload().catch(err => { el('loading').textContent = '出错了：' + err.message; });
+// 开页先把上次离线攒下的补报发掉，再拉当天——顺序要紧：先补报再取，
+// 取回来的才是把补报算进去之后的状态，否则界面会短暂显示已经作废的进度。
+setQueue(queue());
+flush()
+  .then(() => reload())
+  .catch(err => { el('loading').textContent = '出错了：' + err.message; });
+
+// 网络回来时自动补报一次。做完一天之后关页也没关系——队列在 localStorage 里。
+window.addEventListener('online', () => { flush(); });
 })();
 </script>
 {% endblock %}

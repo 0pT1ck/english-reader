@@ -23,7 +23,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from backend.core import auth, events, notifications, runtime_config
+from backend.core import auth, events, notifications, runtime_config, tasks
 from backend.core.config import get_settings
 from backend.core.db import (
     BACKED_UP,
@@ -597,3 +597,36 @@ async def backup_page(request: Request) -> Response:
             name for name in BACKED_UP if _staged_path(name).exists()
         ),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Scheduled tasks
+# --------------------------------------------------------------------------- #
+
+
+@admin_api.get("/tasks", summary="定时任务的状态")
+async def task_status() -> dict[str, Any]:
+    return {"tick_seconds": tasks.TICK_SECONDS, "tasks": tasks.status()}
+
+
+@admin_api.post("/tasks/{name}/run", summary="立刻跑一次这个任务")
+async def task_run(name: str) -> dict[str, Any]:
+    """The third of the three safety nets (主文档 §H): read, clock, and by hand.
+
+    Runs in the request thread on purpose. These jobs take minutes, so the
+    response is slow — but a fire-and-forget button that returns instantly and
+    then fails silently is exactly the shape this project keeps getting bitten
+    by, and the console is the diagnostic channel.
+    """
+    try:
+        return tasks.run_now(name)
+    except KeyError as exc:
+        raise InvalidRequest(f"没有这个任务：{name}", task=name) from exc
+
+
+@admin_pages.get("/admin/tasks", response_class=HTMLResponse)
+async def tasks_page(request: Request) -> Response:
+    if (redirect := require_page_auth(request)) is not None:
+        return redirect
+    return render(request, "tasks.html",
+                  tasks=tasks.status(), tick=tasks.TICK_SECONDS)

@@ -29,7 +29,7 @@ import threading
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.core import events, runtime_config
@@ -95,12 +95,98 @@ class Worker:
 _workers: dict[str, Worker] = {}
 
 
+#: Three-state, because "use the model's default" is a real answer and not the
+#: same as "force it on". Only the article writer has measured grounds to change
+#: it away from the default (决定 19).
+THINKING_CHOICES = ("default", "on", "off")
+
+
+def provider_key(kind: str) -> str:
+    return f"llm_provider_{kind}"
+
+
+def thinking_key(kind: str) -> str:
+    return f"llm_thinking_{kind}"
+
+
 def register_worker(worker: Worker) -> None:
+    """Register a worker and the two settings that belong to it.
+
+    Declaring the settings here rather than in each module is what makes 决定 19
+    hold for workers written later: adding a worker cannot forget to add its own
+    switches, because it does not add them.
+    """
     _workers[worker.kind] = worker
+
+    # Seed the setting's default from the hint the worker was written with, so
+    # the console shows the provider that is actually going to be used instead
+    # of an empty box that silently means something else. Without this there
+    # would be two places expressing one decision, and the older one would win
+    # invisibly — which is how 坑 §5.1 started.
+    try:
+        inherited = (worker.default_provider() or "") if worker.default_provider else ""
+    except Exception:  # noqa: BLE001 - a hint that cannot be read is just absent
+        inherited = ""
+
+    runtime_config.register(
+        runtime_config.ConfigSpec(
+            key=provider_key(worker.kind),
+            default=inherited,
+            value_type="str",
+            title=f"「{worker.title}」用哪个提供商",
+            description="留空＝用默认提供商。写提供商的 id，例如 shuai 或 dsflash。"
+                        "写文章与整理数据要的是不同的模型，所以这里按任务分开设。",
+            group="models",
+            order=10,
+        ),
+        runtime_config.ConfigSpec(
+            key=thinking_key(worker.kind),
+            default="default",
+            value_type="str",
+            title=f"「{worker.title}」的思考开关",
+            description="default 跟随模型自己、on 强制开、off 强制关。"
+                        "关掉思考只在「写文章」这一处实测过（合格率 5/10 → 8/10、"
+                        "每篇 61.6 秒 → 9.1 秒），别处改之前先拿数说话。",
+            group="models",
+            order=11,
+        ),
+    )
+
+
+def configured_provider(kind: str) -> str | None:
+    """The provider this kind of work is set to use, if any."""
+    try:
+        return str(runtime_config.get(provider_key(kind))).strip() or None
+    except Exception:  # noqa: BLE001 - an unregistered worker has no setting yet
+        return None
+
+
+def configured_thinking(kind: str) -> bool | None:
+    """``True`` / ``False`` to force it, ``None`` to leave the model alone."""
+    try:
+        value = str(runtime_config.get(thinking_key(kind))).strip().lower()
+    except Exception:  # noqa: BLE001
+        return None
+    if value == "on":
+        return True
+    if value == "off":
+        return False
+    return None
 
 
 def workers() -> list[Worker]:
     return sorted(_workers.values(), key=lambda w: w.title)
+
+
+def running_entries() -> list["_Running"]:
+    """The jobs running right now, so a caller can wait for them.
+
+    Exposed rather than letting callers reach into the private dict: the daily
+    supply task has to wait for annotation to finish before judging phrases,
+    and waiting on the ``status`` column instead would mean waiting on a value
+    the waiter's own work changes (坑 §7.2).
+    """
+    return list(_running.values())
 
 
 def get_worker(kind: str) -> Worker:
@@ -139,6 +225,10 @@ def create(
     """Plan a job and store its items. Does not start it."""
     worker = get_worker(kind)
     params = params or {}
+    # Precedence: what the caller asked for, then this worker's own setting,
+    # then the hint the worker was written with, then the default provider.
+    if not provider_id:
+        provider_id = configured_provider(kind)
     if not provider_id and worker.default_provider is not None:
         provider_id = worker.default_provider()
     provider = providers.get(provider_id) if provider_id else providers.default_provider()
@@ -324,11 +414,21 @@ def recover_interrupted() -> int:
     process is happily working through it, which is exactly what happened the
     first time a long job was run alongside a diagnostic script.
     """
+    # The cutoff is built in Python, not by SQLite's datetime(). Both describe
+    # the same instant, but `updated_at` is stored as ISO-8601 ("…T13:14:15+00:00")
+    # while datetime('now') yields "… 13:14:15" with a space — and 'T' sorts
+    # after ' ', so a same-day comparison between the two is always false.
+    # Measured 2026-09-11: nothing interrupted today was ever recovered, only
+    # things left over from a previous date, and the symptom was an article
+    # stuck at `annotating` for good with nothing logged. 坑 §6.1.
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(minutes=STALE_MINUTES)
+    ).isoformat(timespec="seconds")
     conn = get_connection("learning")
     cursor = conn.execute(
         "UPDATE llm_jobs SET status = 'paused', updated_at = ?"
-        " WHERE status = 'running' AND updated_at < datetime('now', ?)",
-        (_now(), f"-{STALE_MINUTES} minutes"),
+        " WHERE status = 'running' AND updated_at < ?",
+        (_now(), cutoff),
     )
     conn.commit()
     if cursor.rowcount:
@@ -460,7 +560,11 @@ def _run(job_id: int) -> None:
 
                 attempts = int(item["attempts"]) + 1
                 try:
-                    outcome = worker.run_item(provider, item["payload"], job["params"])
+                    # Applied here, in the thread that will make the call, so
+                    # every completion inside run_item inherits it without the
+                    # worker having to know the setting exists.
+                    with client.thinking(configured_thinking(worker.kind)):
+                        outcome = worker.run_item(provider, item["payload"], job["params"])
                 except client.LLMError as exc:
                     _record_item(job_id, item["seq"], status="failed", outcome=None,
                                  cost=0.0, error=str(exc), attempts=attempts)

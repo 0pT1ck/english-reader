@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import threading
 import time
+from contextlib import contextmanager
 from typing import Any
 from urllib.parse import quote
 
@@ -94,6 +95,30 @@ def send_async(title: str, body: str, *, group: str = "EnglishReader", url: str 
     thread.start()
 
 
+#: Process-local mute. Verification scripts deliberately produce errors — a
+#: task that raises, a schedule that cannot be parsed — and every one of them
+#: used to reach the phone. That is worse than noise: this module's whole design
+#: rests on "an alerting channel that cries wolf gets ignored", and an acceptance
+#: run that pushes two alerts every time is how the wolf arrives.
+#:
+#: Deliberately a variable and not a setting. Turning the setting off for the
+#: duration would leave alerts disabled for good if the script crashed halfway —
+#: the one failure mode worse than a spurious push is a silent phone.
+_muted = False
+
+
+@contextmanager
+def muted():
+    """Suppress pushes inside this block. Logging is untouched."""
+    global _muted
+    previous = _muted
+    _muted = True
+    try:
+        yield
+    finally:
+        _muted = previous
+
+
 def _should_send(event: str) -> bool:
     """Deduplicate by event name within the configured window."""
     window_seconds = max(0, int(runtime_config.get("alert_dedupe_minutes"))) * 60
@@ -112,6 +137,8 @@ def _alert_handler(record: dict[str, Any]) -> None:
     Registered rather than imported by :mod:`backend.core.logging`, which keeps
     logging free of any dependency on configuration or HTTP.
     """
+    if _muted:
+        return
     event = record.get("event", "unknown")
     if not _should_send(event):
         return

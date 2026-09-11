@@ -15,17 +15,13 @@ before there is anything to choose between would be the wrong order again.
 
 from __future__ import annotations
 
-import json
 import random
-from datetime import datetime, timezone
 from typing import Any
 
 from backend.core import runtime_config
-from backend.core.db import get_connection
 from backend.core.logging import get_logger
-from backend.modules.generation import checker, parser, prompts
-from backend.modules.llm import client, jobs
-from backend.modules.llm.parsing import ItemFailed
+from backend.modules.generation import pipeline
+from backend.modules.llm import jobs
 from backend.modules.llm.providers import Provider
 
 log = get_logger("generation.jobs")
@@ -61,75 +57,20 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]):
-    text, plan = prompts.plan_and_build(
-        scheme=payload["scheme"],
-        assumed_tiers=_tiers("gen_assumed_tiers"),
-        allowed_tiers=_tiers("gen_allowed_tiers"),
-        learn_tier=str(runtime_config.get("gen_learn_tier")),
-        target_count=int(runtime_config.get("gen_target_count")),
-        anchor_count=int(runtime_config.get("gen_anchor_count")),
-        length=int(runtime_config.get("gen_length")),
-        seed=payload["seed"],
-        topic=payload.get("topic"),
-        targets_per_paragraph=int(runtime_config.get("gen_targets_per_paragraph")),
-    )
-
-    completion = client.complete(
+    """One article. The seven steps live in :mod:`.pipeline`, shared with the
+    daily supply task — a second copy of them here is exactly how one judgement
+    becomes two different judgements (坑 §5.1)."""
+    written = pipeline.write_one(
         provider,
-        [{"role": "user", "content": text}],
-        max_tokens=2500,
-        # Higher than the data-building jobs on purpose: this is writing, and
-        # eight drafts at temperature 0.2 would read like eight copies.
-        temperature=0.8,
+        seed=payload["seed"],
+        scheme=payload.get("scheme", "anchor"),
+        topic=payload.get("topic"),
+        note="api",
     )
-
-    try:
-        article = parser.parse(completion.text)
-    except parser.ParseError as exc:
-        raise ItemFailed(f"无法解析这段回复：{exc}", raw=completion.text) from exc
-
-    report = checker.check(
-        article.body,
-        target_words=plan.target_words,
-        allowed_tiers=_tiers("gen_allowed_tiers"),
-        exam=str(runtime_config.get("gen_learn_tier")),
-    )
-
-    conn = get_connection("learning")
-    conn.execute(
-        "INSERT INTO generation_drafts (title, body, model, scheme, prompt_version,"
-        " word_set, target_words, prompt, report, created_at, note)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            article.title,
-            article.body,
-            provider.model,
-            payload["scheme"],
-            prompts.PROMPT_VERSION,
-            plan.topic or "",
-            json.dumps(plan.target_words, ensure_ascii=False),
-            text,
-            json.dumps(report.as_dict(), ensure_ascii=False),
-            datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "api",
-        ),
-    )
-    conn.commit()
-
-    log.info(
-        "draft.generated",
-        f"{provider.model} 生成一篇（{report.words} 词，超纲 {len(report.beyond)}，"
-        f"目标词 {sum(report.target_hits.values())}/{len(report.target_hits)}）",
-        model=provider.model,
-        words=report.words,
-        beyond=len(report.beyond),
-        beyond_rate=round(report.beyond_rate, 2),
-    )
-
     return jobs.ItemOutcome(
-        result=completion.text,
-        tokens_in=completion.tokens_in,
-        tokens_out=completion.tokens_out,
+        result=written.raw,
+        tokens_in=written.tokens_in,
+        tokens_out=written.tokens_out,
     )
 
 

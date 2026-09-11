@@ -23,7 +23,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import RedirectResponse
 
 from backend.admin.routes import admin_api, admin_pages
-from backend.core import auth, events, notifications, runtime_config
+from backend.core import auth, events, notifications, runtime_config, tasks
 from backend.core.config import get_settings
 from backend.core.db import apply_pending_restore, close_connections, run_migrations
 from backend.core.errors import install_error_handlers
@@ -44,6 +44,7 @@ def _run_core_migrations() -> None:
     run_migrations("core.logging", LOG_MIGRATIONS)
     run_migrations("core.config", runtime_config.MIGRATIONS)
     run_migrations("core.auth", auth.MIGRATIONS)
+    run_migrations("core.tasks", tasks.MIGRATIONS)
 
 
 @asynccontextmanager
@@ -69,8 +70,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         except Exception:  # noqa: BLE001 - never block startup on housekeeping
             log.exception("logs.prune.failed", "清理过期日志失败，服务继续启动")
 
+        # Started here rather than at import time: the loop is a runtime concern
+        # and needs a running event loop, and a task that fires during module
+        # assembly would be touching half-installed state.
+        try:
+            tasks.start_loop()
+        except Exception:  # noqa: BLE001 - a broken scheduler must not stop the service
+            log.exception("task.loop.start.failed", "定时任务调度启动失败，服务继续运行")
+
     yield
 
+    await tasks.stop_loop()
     with trace():
         log.info("app.stopping", "服务正在关闭")
     close_connections()

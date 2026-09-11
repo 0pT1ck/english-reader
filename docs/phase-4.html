@@ -122,7 +122,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 4 · 方案讨论稿 · 2026-09-11 · 未定案</div>
+    <div class="eyebrow">Phase 4 · 方案与实施 · 2026-09-11 · 代码完成，自动 36 项全过，人工 3 项待验</div>
     <h1>每日供给与今日包</h1>
     <p class="standfirst">今天读什么、复习什么，在你打开之前就备好并打成一个包。断网也能把这一天走完。</p>
     <p class="thesis">P3 之后，复习会自己回来了，但<b>内容不会自己来</b>——库里的生成文一共 2 篇，
@@ -133,7 +133,7 @@
   </header>
 
   <div class="figures">
-    <div class="fig"><div class="fig-val">2<span>篇</span></div><div class="fig-key">现在的生成文库存</div></div>
+    <div class="fig"><div class="fig-val">36<span>项</span></div><div class="fig-key">自动验收，全过</div></div>
     <div class="fig"><div class="fig-val">3<span>篇</span></div><div class="fig-key">每天自动备好，一次生成一篇</div></div>
     <div class="fig"><div class="fig-val">8<span>分钟</span></div><div class="fig-key">每天的机时，约 67k 输入 token</div></div>
     <div class="fig"><div class="fig-val">0</div><div class="fig-key">复习作答的离线队列（现在）</div></div>
@@ -411,6 +411,48 @@
   <section>
     <div class="sec-head">
       <span class="sec-mark">§8</span>
+      <h2>实施结果</h2>
+    </div>
+    <p class="lede">三块都做完了，端到端跑通：生成 → 校验 → 入库 → 标注 → 判词组 → <code>ready</code> →
+    进今日包 → 断网作答 → 重连补报。<b>自动 36 项全过</b>（<code>verify_phase4.py</code>），
+    回归 P0 32 / P1b 28 / P1c 15 / P2 47 / P3 42 也全过。</p>
+
+    <h3 style="margin-top:1.6rem">路上抓到四个静默失败</h3>
+    <p class="lede">都是「不报错、但东西悄悄不工作」那一类，这个 Phase 的价值有一半在这里。</p>
+    <div class="nots">
+      <div class="not"><i>✕</i><span><b><code>recover_interrupted()</code> 只恢复得了「昨天以前」中断的任务。</b>
+      <code>updated_at</code> 存 ISO（<code>T</code> 分隔），却拿 SQLite 的 <code>datetime('now')</code>（空格分隔）比——
+      <code>'T'</code> 的码位大于空格，<b>同一天的比较永远为假</b>。当天崩溃的任务永远停在 <code>running</code>，
+      文章永远打不开。已有的 bug，坑 §6.1 的新实例，已修。</span></div>
+      <div class="not"><i>✕</i><span><b>标注任务能「成功」地什么都不做。</b>文章被重新分析之后 token id 全变，
+      而任务攥着旧 id：每批都找不到活干、报成功、任务显示「全部完成」、文章永远停在 <code>annotating</code>。
+      <b>全程零日志。</b>修法是<b>按文章自愈而不是按任务</b>——备稿开头把所有「备好但没就绪」的文章
+      按当下真实缺的 token 重新排上。</span></div>
+      <div class="not"><i>✕</i><span><b>每天备的文章都留下未判的词组候选。</b>入库只做结构扫描（不花钱），
+      判定是另一步；不接上的话，词组在阅读页里直接不显示，而且不报错。
+      三篇文章留了 12 处，是 <code>verify_phase2.py</code> 7.9 变红才发现的。
+      现在备稿收尾会等标注跑完再判词组。</span></div>
+      <div class="not"><i>✕</i><span><b>我自己引入又修掉的一个：</b>把单篇生成抽成共用函数时
+      <code>scheme</code> 被写死成 <code>anchor</code>，控制台上选的约束方案会被静默忽略。</span></div>
+    </div>
+
+    <h3 style="margin-top:1.6rem">与方案的三处出入</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>决定 5 收紧了：均句长连「记录」都不做。</b>
+      2026-09-11 定的范围决定——<b>首要目的是背单词，文章像不像真题不构成合格与否</b>。
+      连带把 <code>verify_phase1c</code> 的 7.2 从判据降为记录项：它要求被动语态接近真题基线，
+      而实测改动之前的 draft 40–43 里四篇被动语态为零，<b>同一个脚本的人工项 7.4 又写着这是已知且可接受的</b>——
+      一条自动项和一条人工项互相矛盾，且能不能过取决于当天模型碰巧写出什么（坑 §4.1）。</span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>多了一步「自愈」。</b>方案里没有，
+      是实施中被上面第一、第二个静默失败逼出来的。备稿开头先把半途而废的文章接上，再写新的。</span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>验收从 18 项变成 36 项。</b>
+      方案里按块列的，实施时拆细了：每条只断言一件事，失败时看一眼就知道是哪儿。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
       <h2>风险与未定</h2>
     </div>
     <div class="nots">

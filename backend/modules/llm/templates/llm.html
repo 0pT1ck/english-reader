@@ -82,6 +82,53 @@
   </form>
 </div>
 
+<h2>每种工作用哪个模型</h2>
+<p class="subtitle">
+  写文章和整理数据要的是不同的模型——<b>同一套提示词，超纲率 0.32% 对 3.64%</b>，所以这里按工作分开设，
+  不是一个「默认模型」管到底。提供商留空＝用默认提供商。
+</p>
+<p class="subtitle">
+  <b>思考开关只有「写文章」这一处有实测依据</b>：2026-09-11 同样十个种子，关掉思考把合格率从 5/10 提到 8/10、
+  每篇从 61.6 秒降到 9.1 秒（九成输出本来烧在思维链上）。<b>其余八处从没测过，默认一律不动</b>——
+  别拿这个结论去推别处（坑 §2.4 就是把「写文章」和「造例句」的横评结论搞混那次）。
+</p>
+<div class="scroll">
+  <table>
+    <thead>
+      <tr><th style="width:30%">工作</th><th style="width:22%">提供商</th><th style="width:18%">思考</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      {% for w in worker_settings %}
+      <tr>
+        <td>
+          <div>{{ w.title }}</div>
+          <div class="muted mono">{{ w.kind }}</div>
+        </td>
+        <td>
+          <select data-cfg="{{ w.provider_key }}">
+            <option value="" {{ 'selected' if not w.provider else '' }}>（默认提供商）</option>
+            {% for p in providers %}
+            <option value="{{ p.id }}" {{ 'selected' if w.provider == p.id else '' }}>{{ p.id }} · {{ p.model }}</option>
+            {% endfor %}
+          </select>
+        </td>
+        <td>
+          <select data-cfg="{{ w.thinking_key }}">
+            <option value="default" {{ 'selected' if w.thinking == 'default' else '' }}>跟随模型</option>
+            <option value="on" {{ 'selected' if w.thinking == 'on' else '' }}>强制开</option>
+            <option value="off" {{ 'selected' if w.thinking == 'off' else '' }}>强制关</option>
+          </select>
+        </td>
+        <td class="muted">{{ w.description }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="row" style="margin-top:0.8rem">
+  <button class="primary" id="save-worker-settings">保存模型设置</button>
+</div>
+
 <h2>批次任务</h2>
 <div class="grid">
   <div class="card stat">
@@ -172,6 +219,30 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+// IIFE：这个页面和 base.html 共用全局作用域，api / toast / humanBytes 已被占用（坑 §3.2）。
+(function () {
+  const btn = document.getElementById('save-worker-settings');
+  if (!btn) return;
+  btn.onclick = async function () {
+    const fields = Array.from(document.querySelectorAll('[data-cfg]'));
+    let saved = 0;
+    for (const el of fields) {
+      try {
+        await api('/config/' + encodeURIComponent(el.dataset.cfg), {
+          method: 'PUT',
+          body: JSON.stringify({ value: el.value }),
+        });
+        saved += 1;
+      } catch (e) {
+        toast(el.dataset.cfg + '：' + e.message, true);
+        return;
+      }
+    }
+    toast('已保存 ' + saved + ' 项，下一个批次任务就会按新设置跑');
+  };
+})();
+</script>
 <script>
   function fillPreset(preset) {
     const form = document.getElementById('provider-form');

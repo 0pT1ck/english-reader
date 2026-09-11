@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
 from backend.admin.templating import render, require_page_auth
-from backend.core import auth
+from backend.core import auth, runtime_config
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
 from backend.modules.llm import client, jobs, providers, secrets_store
@@ -196,6 +196,19 @@ async def page(request: Request) -> Response:
         presets=providers.PRESETS,
         job_kinds=[
             {"kind": w.kind, "title": w.title, "description": w.description}
+            for w in jobs.workers()
+        ],
+        # 决定 19: every place that calls a model gets its own two switches.
+        worker_settings=[
+            {
+                "kind": w.kind,
+                "title": w.title,
+                "description": w.description,
+                "provider": runtime_config.get(jobs.provider_key(w.kind)) or "",
+                "provider_key": jobs.provider_key(w.kind),
+                "thinking": runtime_config.get(jobs.thinking_key(w.kind)) or "default",
+                "thinking_key": jobs.thinking_key(w.kind),
+            }
             for w in jobs.workers()
         ],
         jobs=jobs.listing(30),

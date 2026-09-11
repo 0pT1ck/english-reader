@@ -43,6 +43,7 @@ CORE_PAGES = [
     AdminPage(title="状态", path="/admin", order=10, description="服务与数据概览"),
     AdminPage(title="日志", path="/admin/logs", order=20, description="技术日志与决策日志"),
     AdminPage(title="配置", path="/admin/config", order=30, description="可热改的运行参数"),
+    AdminPage(title="任务", path="/admin/tasks", order=35, description="定时任务的状态与手动触发"),
     AdminPage(title="备份", path="/admin/backup", order=40, description="下载与恢复学习数据"),
 ]
 
