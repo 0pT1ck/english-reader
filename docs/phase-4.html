@@ -122,7 +122,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 4 · 方案与实施 · 2026-09-11 · 代码完成，自动 36 项全过，人工 3 项待验</div>
+    <div class="eyebrow">Phase 4 · 方案与实施 · 2026-09-11 验收通过 · 自动 38 项全过，人工 M2 过、M1 推迟</div>
     <h1>每日供给与今日包</h1>
     <p class="standfirst">今天读什么、复习什么，在你打开之前就备好并打成一个包。断网也能把这一天走完。</p>
     <p class="thesis">P3 之后，复习会自己回来了，但<b>内容不会自己来</b>——库里的生成文一共 2 篇，
@@ -133,7 +133,7 @@
   </header>
 
   <div class="figures">
-    <div class="fig"><div class="fig-val">36<span>项</span></div><div class="fig-key">自动验收，全过</div></div>
+    <div class="fig"><div class="fig-val">38<span>项</span></div><div class="fig-key">自动验收，全过</div></div>
     <div class="fig"><div class="fig-val">3<span>篇</span></div><div class="fig-key">每天自动备好，一次生成一篇</div></div>
     <div class="fig"><div class="fig-val">8<span>分钟</span></div><div class="fig-key">每天的机时，约 67k 输入 token</div></div>
     <div class="fig"><div class="fig-val">0</div><div class="fig-key">复习作答的离线队列（现在）</div></div>
@@ -154,7 +154,7 @@
     <p>所以 P4 排在手机端前面：<b>把内容供给和今日包补上，手机端拿到的才是一个每天真能用的后端。</b>
     （那两项人工验收本身已于 2026-09-11 处理：D「真跑三到五天」撤销，E「句子质量抽验」保留，见 §8。）</p>
 
-    <p>所以先补供给与今日包，再做手机端。补完之后，P7 开工时后端已经是终局形状。</p>
+    <p>所以先补供给与今日包，再做手机端。补完之后，手机端开工时后端已经是终局形状。</p>
 
     <p>同一次盘点还清掉了两组设计：<b>读后抽查（原 §D 三项）连同 A4 假性认识修正、A5 隐式信号采集</b>
     （归档 §F），以及 <b>E2 双通道复习</b>（归档 §G）。两组清掉的理由是同一条原则——
@@ -182,7 +182,7 @@
           <tr><td class="topic">6</td><td><b>目标词排除已经在学的。</b><code>pick_target_words</code> 的 <code>exclude</code> 参数一直存在、从来没有调用方填过——填上 <code>study_states</code> 里不在 <code>new</code> 格的词。不接的话，每天备的文章会拿你正在复习的词当新词教。</td></tr>
           <tr><td class="topic">7</td><td><b>同一天的三篇之间目标词互斥</b>，避免三篇教同一批词。</td></tr>
           <tr><td class="topic">8</td><td><b>新增 <code>GET /v1/client/today</code>，内联全文。</b>实测一篇约 300 KB，三篇不到 1 MB。清单式的话联不上网就只剩清单，那就不叫今日包了。<code>/library</code>、<code>/articles/{id}</code>、<code>/reviews</code> 全部保留不动（铁律 5 只增不减）。</td></tr>
-          <tr><td class="topic">9</td><td><b>今日包不装真题。</b>真题走专门入口 <code>/library?source=cet4|cet6|kaoyan</code>（P2 已有）。<b>推论要写进契约文档：今日包 ≠ 今天的全部内容</b>，否则 P7 写客户端时会以为拿了今日包就够了。</td></tr>
+          <tr><td class="topic">9</td><td><b>今日包不装真题。</b>真题走专门入口 <code>/library?source=cet4|cet6|kaoyan</code>（P2 已有）。<b>推论要写进契约文档：今日包 ≠ 今天的全部内容</b>，否则写手机端客户端时会以为拿了今日包就够了。</td></tr>
           <tr><td class="topic">10</td><td><b>兜底生成默认 04:00，控制台可改。</b></td></tr>
           <tr><td class="topic">11</td><td><b>三层保险一次做齐</b>（主文档 §H）：读完即补（订阅 <code>article.finished</code>，库存低于下限就补一篇）、定时兜底、管理台手动触发。补库存走<b>订阅事件</b>接入，不改阅读那条流程（铁律 6）。</td></tr>
           <tr><td class="topic">12</td><td><b>复习作答新增批量端点</b>，带客户端生成的幂等键；单条端点保留不动。选新增而不是给老端点加字段，因为<b>契约只增不减，焊进去就改不了</b>，新增端点将来还能再加。</td></tr>
@@ -378,7 +378,7 @@
     <div class="sec-head">
       <span class="sec-mark">§7</span>
       <h2>验收清单</h2>
-      <span class="sec-note">草稿</span>
+      <span class="sec-note">已跑完</span>
     </div>
     <p class="lede">按坑 §4.1：<b>不许依赖「今天碰巧有数据」</b>——自己种探针、用完删掉，前后各清一次。</p>
 
@@ -398,7 +398,7 @@
       <div class="check"><span class="check-n">C3</span><span class="check-what"><b>离线重放</b>：断网做完一天的复习再补报，最终状态与在线逐条上报<b>完全一致</b></span></div>
       <div class="check"><span class="check-n">C4</span><span class="check-what">重复上报同一批作答不重复计分（幂等）</span></div>
       <div class="check"><span class="check-n">D1</span><span class="check-what">不变量回归：入库不写 <code>study_states</code>；今日包组装不改词池、不碰调度字段</span></div>
-      <div class="check"><span class="check-n">D2</span><span class="check-what">全套回归：P0 32 项、P1b 28 项、P1c 16 项、P2 47 项、P3 42 项</span></div>
+      <div class="check"><span class="check-n">D2</span><span class="check-what">全套回归：P0 32 项、P1b 28 项、P1c 15 项、P2 47 项、P3 42 项</span></div>
     </div>
 
     <p style="margin-top:1.4rem"><b>人工两项：</b></p>
@@ -414,16 +414,23 @@
       <h2>实施结果</h2>
     </div>
     <p class="lede">三块都做完了，端到端跑通：生成 → 校验 → 入库 → 标注 → 判词组 → <code>ready</code> →
-    进今日包 → 断网作答 → 重连补报。<b>自动 36 项全过</b>（<code>verify_phase4.py</code>），
+    进今日包 → 断网作答 → 重连补报。<b>自动 38 项全过</b>（<code>verify_phase4.py</code>），
     回归 P0 32 / P1b 28 / P1c 15 / P2 47 / P3 42 也全过。</p>
 
-    <h3 style="margin-top:1.6rem">路上抓到四个静默失败</h3>
+    <h3 style="margin-top:1.6rem">路上抓到五个静默失败</h3>
     <p class="lede">都是「不报错、但东西悄悄不工作」那一类，这个 Phase 的价值有一半在这里。</p>
     <div class="nots">
       <div class="not"><i>✕</i><span><b><code>recover_interrupted()</code> 只恢复得了「昨天以前」中断的任务。</b>
       <code>updated_at</code> 存 ISO（<code>T</code> 分隔），却拿 SQLite 的 <code>datetime('now')</code>（空格分隔）比——
       <code>'T'</code> 的码位大于空格，<b>同一天的比较永远为假</b>。当天崩溃的任务永远停在 <code>running</code>，
-      文章永远打不开。已有的 bug，坑 §6.1 的新实例，已修。</span></div>
+      文章永远打不开。已有的 bug，已修，并单独记成坑 §6.3。</span></div>
+      <div class="not"><i>✕</i><span><b>「下次运行时间为空」＝这个任务永远不再跑。</b>
+      夜间备稿二十七分钟一次没跑，<code>runs</code> 一直是 0，<b>全程零日志</b>——
+      <code>task_runs.next_due_at</code> 是 NULL，而判定是 <code>due &lt;= now</code>，<code>None</code> 永远不满足；
+      播种又只在行不存在时才写。这个状态真实可达：收尾时周期解析失败就会写成 NULL，
+      <b>从此永远不跑，把周期改回正确的也救不回来</b>。修法是值为空就重排并记 WARNING，
+      且重排到<b>下一次</b>而不是「立刻」——修复动作不该顺手多跑一次生成。
+      已记成坑 §6.4，守卫 <code>verify_phase4.py</code> A3.3。</span></div>
       <div class="not"><i>✕</i><span><b>标注任务能「成功」地什么都不做。</b>文章被重新分析之后 token id 全变，
       而任务攥着旧 id：每批都找不到活干、报成功、任务显示「全部完成」、文章永远停在 <code>annotating</code>。
       <b>全程零日志。</b>修法是<b>按文章自愈而不是按任务</b>——备稿开头把所有「备好但没就绪」的文章
@@ -445,8 +452,22 @@
       一条自动项和一条人工项互相矛盾，且能不能过取决于当天模型碰巧写出什么（坑 §4.1）。</span></div>
       <div class="step"><span class="step-n">2</span><span class="step-what"><b>多了一步「自愈」。</b>方案里没有，
       是实施中被上面第一、第二个静默失败逼出来的。备稿开头先把半途而废的文章接上，再写新的。</span></div>
-      <div class="step"><span class="step-n">3</span><span class="step-what"><b>验收从 18 项变成 36 项。</b>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>验收从 18 项变成 38 项。</b>
       方案里按块列的，实施时拆细了：每条只断言一件事，失败时看一眼就知道是哪儿。</span></div>
+    </div>
+
+    <h3 style="margin-top:1.6rem">人工两项，与收尾做的事</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">M2</span><span class="step-what"><b>通过。</b>无人干预、时钟没动，04:00 到点自触发，
+      三次生成三篇全过，入库标注判词组后全部可读并进了今日包，耗时 300 秒。</span></div>
+      <div class="step"><span class="step-n">M1</span><span class="step-what"><b>推迟到做手机端时验</b>（主文档 §M）。
+      机器能验的部分已经验完——批量端点收得下补报、幂等键去重、坏条目不拖垮整批（自动 C3/C4），
+      复习页的队列也用假 DOM 重放过。剩下的是「在真设备上对着真停掉的服务点一遍」，
+      而按铁律 8，现在唯一能跑复习的是开发期的管理页。</span></div>
+      <div class="step"><span class="step-n">✓</span><span class="step-what"><b>旧路线的 Phase 编号已批量剔除</b>（2026-09-11 收尾）。
+      主文档、CLAUDE.md 与各 Phase 文档里凡是指向旧路线编号的说法，全部改写成事情本身；
+      没排期的三条（过量生成择优、覆盖出洞的兜底与备多读少那笔账、JSON 导出）记进主文档 §M。
+      同时对齐了各处的验收项数——<b>一律以脚本实跑值为准</b>。</span></div>
     </div>
   </section>
 
@@ -460,15 +481,17 @@
       <div class="not"><i>?</i><span><b>关思考只在写文章这一处验过。</b>决定 19 给九个用模型的地方都加了开关，但另外八处（标注、造句、判词组、义项集、词族）关掉会怎样<b>一次都没测</b>，所以默认全部保持现状。<b>坑 §2.4 就是把「写文章」和「造例句」的横评结论搞混那次</b>——别拿这次的结论去推别处。</span></div>
       <div class="not"><i>?</i><span><b>选文规则是明知临时的</b>（决定 17）。§A 上线之前，「今天读哪三篇」只能按新备未读排，谈不上因材施教。</span></div>
       <div class="not"><i>!</i><span><b>每日复习量的负载均衡仍未解决</b>（主文档 §M）。P3 定的是不设上限、到期多少复习多少；供给自动化之后标记会变多，到期撞车的日子会更早到来。</span></div>
-      <div class="not"><i>!</i><span><b>P3 还欠一项人工验收：E「句子质量抽验」。</b>2026-09-11 把 P3 的两项人工拆开——<b>D「真跑三到五天」撤销</b>（体感只有在每天真用的场地上才量得准，而那是手机端那个 Phase 的事）；<b>E 保留，且不依赖手机</b>，抽 50 条句子人工看就行。<b>E 没做完 P3 就不算验收通过</b>，而 P4 正建在 P3 上面：句子池会随着每天的供给继续攒，错了也是照着错的批量攒。<b>建议在 P4 动手之前先把 E 做掉。</b></span></div>
-      <div class="not"><i>?</i><span><b>文档里的 Phase 编号有残留</b>：主文档 §K、§B9 与 CLAUDE.md 仍写着「顺延到 P6」「留到 P6」，而旧路线 P3–P8 已于 2026-09-10 归档，<b>P6 没有指称对象</b>。铁律 6 的「P1 到 P8」同理。<b>按 2026-09-11 的决定，等这个 Phase 完成后批量修订。</b></span></div>
+      <div class="not"><i>✓</i><span><b>P3 的人工 E「句子质量抽验」已于 2026-09-11 通过</b>，P3 至此验收通过（D 撤销）。
+      105 条生成句盲判、混 15 条阳性对照、三方独立判断，查出并删除 2 条歧义句。
+      <b>但结论有边界</b>：三个判断者都是语言模型，共有盲区看不出来；只覆盖 7 个词。
+      而 P4 的每日供给会让句子池持续变大——<b>词一多要重验</b>，记在主文档 §M。</span></div>
     </div>
   </section>
 
   <footer>
     <span>English Reader</span>
-    <span>Phase 4 · 方案讨论稿</span>
-    <span>2026-09-11 · 未定案</span>
+    <span>Phase 4 · 方案与实施</span>
+    <span>2026-09-11 · 验收通过</span>
   </footer>
 
 </div>

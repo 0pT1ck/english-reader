@@ -1,7 +1,7 @@
 """Module declaration for sense sets (P1b).
 
 The body of P1b. Without sense sets there is no three-layer gloss in P2, no
-sense-level mastery in P5, and no way to arrange a familiar word's unfamiliar
+sense-level mastery later, and no way to arrange a familiar word's unfamiliar
 meaning — which is the thing CET reading tests most.
 
 Everything expensive here runs as a batch job, so it resumes after an

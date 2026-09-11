@@ -7,7 +7,7 @@ assembling a reading payload, and applying the events that come back from it.
 word, marking it, scrolling — none of it makes a request. That is the offline
 shape of architecture rule 2, honoured at the level P2 can honour it: the page
 itself is not offline-capable (no service worker — the web reader is a
-development tool that P7's native client replaces), but the protocol is, and
+development tool that the native client will replace), but the protocol is, and
 events queue locally and upload in batches with idempotency keys.
 
 **Glosses are sent once per headword, not once per occurrence.** A 450-word
@@ -199,7 +199,7 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                         }
                         if s.get("exam_frequency") else None
                     ),
-                    # P5's slot. Whole object null rather than invented fields.
+                    # Review's slot. Whole object null rather than invented fields.
                     "memory": None,
                 }
                 for s in sense_list
@@ -242,7 +242,7 @@ def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
 
     The span is sent; how to show it is the client's business. That is not a
     hedge — the web reader deliberately shows nothing in the text (four kinds of
-    underline and two background colours are already spoken for) while P7's
+    underline and two background colours are already spoken for) while the
     native client will have its own answer.
     """
     found = phrases.confirmed_for(article_id)
@@ -374,7 +374,7 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
     # another full set of encounters on top: `colony` came out at 55 encounters
     # in a 430-word article that way. `read_at` and `finished_at` are already
     # once-only (both COALESCE), so the ledger matches them. A genuine re-read
-    # is E6's 旧文重读, which is P8 and will bring its own event.
+    # is E6's 旧文重读, which is not built yet and will bring its own event.
     row = get_connection("learning").execute(
         "SELECT read_at, status FROM reading_articles WHERE id = ?", (article_id,)
     ).fetchone()

@@ -13,7 +13,7 @@ this file from becoming the place every phase has to edit.
 Deliberately *not* declared here yet: study parameters like target unknown-word
 rate or the daily new-target-word cap. Those belong to the phases that
 implement the behaviour they control — declaring them now would be building
-P3 and P5 during P0.
+the learning phases during P0.
 """
 
 from __future__ import annotations

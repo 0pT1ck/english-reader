@@ -37,13 +37,13 @@ def _merge_study_tables(conn: sqlite3.Connection) -> None:
 
     **Why one table per concern rather than one per type.** Review scheduling
     has to answer "what comes back today", and the answer is one list with words
-    and phrases mixed into it. Split across two tables, P5's scheduler reads both
+    and phrases mixed into it. Split across two tables, the review scheduler reads both
     and merges — and that scheduler is the core algorithm of this project, so
     writing it twice means two copies that drift apart.
 
     **Why now.** A table called 单词标记 holding phrases is a name that lies. The
     two tables hold six rows each today, so the migration is free; after half a
-    year of reading, with P5's columns grown onto them, it is not. This is the
+    year of reading, with review's columns grown onto them, it is not. This is the
     only free moment there will be.
 
     ``sense_id`` stays, and is always 0 for a phrase. That is a column only some
@@ -282,7 +282,7 @@ MIGRATIONS = [
         -- never when it is ingested — that single rule is what makes "words
         -- used in articles I never read stay available" true.
         --
-        -- P5 owns scheduling and will add its own columns here (strength,
+        -- Review owns scheduling and will add its own columns here (strength,
         -- difficulty, due date). None of them exist yet, on purpose: P2 records
         -- state, it does not decide when anything comes back.
         CREATE TABLE IF NOT EXISTS sense_states (
@@ -293,7 +293,7 @@ MIGRATIONS = [
 
             -- new | reviewing | graduated
             -- "graduated" is never set in P2; the condition for it needs real
-            -- reading data and belongs to P5. The value exists so the column
+            -- reading data and belongs to review. The value exists so the column
             -- does not have to change meaning later.
             pool                  TEXT    NOT NULL DEFAULT 'new',
 
@@ -318,7 +318,7 @@ MIGRATIONS = [
 
         -- Reported events, stored verbatim before anything is derived from
         -- them. Two reasons for the extra layer: the idempotency key needs
-        -- somewhere to be unique, and P4/P5 will add many more event types —
+        -- somewhere to be unique, and later phases will add many more event types —
         -- when the code that turns events into state changes, history can be
         -- replayed instead of lost.
         CREATE TABLE IF NOT EXISTS client_events (

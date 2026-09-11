@@ -1,7 +1,7 @@
 """Batch jobs: run thousands of calls, survive interruption, stop at a budget.
 
 The sense set needs roughly 280 calls, word families a few hundred more, and
-from P6 onwards every night's articles are the same shape of work. So this is
+the nightly article generation added later is the same shape of work. So this is
 built once, as infrastructure, rather than as a script for the sense set.
 
 Four properties are the reason it is not a for-loop:

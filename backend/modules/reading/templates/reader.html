@@ -3,7 +3,7 @@
 
 {# Development reading tool. Desktop only, deliberately.
 
-   Architecture rule 8: this page is a test instrument, thrown away when P7's
+   Architecture rule 8: this page is a test instrument, thrown away when the
    native iOS client arrives, and the UI effort belongs there. So: no responsive
    layout, no touch gestures, no font/leading/width controls (the browser's own
    zoom already does that), no service worker.
@@ -59,7 +59,7 @@
 
 <h1 id="title">阅读页</h1>
 <p class="subtitle" id="meta">
-  开发期测试工具，只在电脑上跑。手机端是 P7 的原生应用。
+  开发期测试工具，只在电脑上跑。手机端是将来的原生应用。
 </p>
 
 <div id="picker">
@@ -299,7 +299,7 @@ async function openArticle(id) {
 // page busier. The first version of this did paint phrases, and measurably lost
 // information: 28 out-of-syllabus words and 34 derived words had their own
 // marking overwritten by the phrase's background. The span is in the payload;
-// how to show it is a client's decision, and P7's native reader will make its
+// how to show it is a client's decision, and the native reader will make its
 // own. Architecture rule 8 says the UI effort belongs there, not here.
 function classesFor(t) {
   const cls = ['w'];

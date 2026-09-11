@@ -5,7 +5,7 @@ should attach by subscribing, not by editing existing flows.**
 
 Most features in this project are shaped like "when X happens, also do Y".
 Reading finishes → update the ability estimate, update sense states, and later
-(P8) update streak counters and weekly reports. Without a bus, each of those
+(later) update streak counters and weekly reports. Without a bus, each of those
 additions means editing the reading flow, and that file slowly becomes the
 place where every feature has a finger. With one, the reading flow only ever
 announces what happened.

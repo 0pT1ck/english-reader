@@ -6,7 +6,7 @@ never writes prose. That choice is deliberate:
 
 * a chosen ordinal can be checked — it must exist and belong to that headword —
   so a bad batch is detectable and rerunnable, where free text is not;
-* it is the same identifier the review state hangs on, so P5 inherits it;
+* it is the same identifier the review state hangs on, so review inherits it;
 * it costs a number of output tokens instead of a sentence of them.
 
 **Coverage is the whole article, not just the unknown words.** Measured on
