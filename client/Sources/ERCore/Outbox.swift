@@ -24,6 +24,12 @@ public struct OutboxEntry: Codable, Equatable, Sendable {
     /// on a train.
     public let idemKey: String
     public let kind: Kind
+    /// Which reading event this is - word.marked, article.finished and so on.
+    /// Empty for the review kinds, which have one shape each and need no
+    /// discriminator. A separate field rather than a magic key inside the
+    /// payload, because the outbox stores event bodies without interpreting
+    /// them and a reserved key would be an interpretation.
+    public let eventType: String
     /// The event body, exactly as the endpoint expects it.
     public let payload: [String: JSONValue]
     /// The device's clock, which may be wrong. Sent anyway — the server keeps
@@ -43,10 +49,12 @@ public struct OutboxEntry: Codable, Equatable, Sendable {
 
     public init(idemKey: String = UUID().uuidString,
                 kind: Kind,
+                eventType: String = "",
                 payload: [String: JSONValue],
                 occurredAt: Date = Date()) {
         self.idemKey = idemKey
         self.kind = kind
+        self.eventType = eventType
         self.payload = payload
         self.occurredAt = ISO8601DateFormatter.contract.string(from: occurredAt)
     }

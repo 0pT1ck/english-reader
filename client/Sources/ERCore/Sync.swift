@@ -1,0 +1,305 @@
+import Foundation
+import ERContract
+
+/// 同步 syncing: fetching the day, and draining the outbox.
+///
+/// **The contract's shape is the offline shape.** One request in the morning
+/// brings the whole day — three articles with every gloss attached and every
+/// review card with its sentences — and everything the learner does goes into
+/// the outbox to be reported whenever there is a network. Online and offline
+/// are the same code path, not two.
+public struct DayPackage: Sendable {
+    /// The bytes exactly as they arrived. Kept because a field this version of
+    /// the client does not understand must still survive to the next one.
+    public let raw: Data
+    public let decoded: Components.Schemas.TodayResponse
+
+    public init(raw: Data) throws {
+        self.raw = raw
+        do {
+            self.decoded = try JSONDecoder().decode(
+                Components.Schemas.TodayResponse.self, from: raw)
+        } catch {
+            throw TransportError.malformed("今日包解不开：\(error)")
+        }
+    }
+
+    public var articles: [Components.Schemas.ArticleResponse] { decoded.articles }
+    public var reviews: Components.Schemas.ReviewDayResponse { decoded.reviews }
+
+    /// **今日包 ≠ 今天能读的全部。** The server says so in the payload rather
+    /// than only in the documentation, because a client that assumed otherwise
+    /// would silently hide 452 exam papers and look complete while doing it.
+    public var excludesExamPapers: Bool { decoded.excludes_exam_papers }
+
+    public var metadata: [ArticleMeta] {
+        decoded.articles.map { article in
+            ArticleMeta(
+                id: article.article.id,
+                title: article.article.title,
+                source: article.article.source ?? "generated",
+                wordCount: article.article.word_count ?? 0,
+                sentenceCount: article.article.sentence_count ?? 0,
+                readAt: article.article.read_at,
+                percent: article.progress?.percent ?? 0
+            )
+        }
+    }
+}
+
+/// What one attempt to drain the outbox achieved.
+public struct SyncReport: Sendable, Equatable {
+    public var landed = 0
+    public var duplicates = 0
+    public var rejected = 0
+    /// Entries still in the queue afterwards — rejected ones, and anything the
+    /// server never mentioned.
+    public var remaining = 0
+    /// Set when the attempt did not reach the server at all. Not a failure to
+    /// report: it is the normal state on a train.
+    public var offline = false
+
+    public init() {}
+}
+
+public actor SyncEngine {
+    private let transport: any Transport
+    private let outbox: Outbox
+    private let articles: ArticleCache
+    private let day: DayCache
+
+    public init(transport: any Transport, outbox: Outbox,
+                articles: ArticleCache, day: DayCache) {
+        self.transport = transport
+        self.outbox = outbox
+        self.articles = articles
+        self.day = day
+    }
+
+    // MARK: Fetching
+
+    /// Fetch today's package and cache it whole.
+    ///
+    /// Falls back to the cached copy when there is no network — which is the
+    /// point of caching it, and the reason this returns a package rather than
+    /// throwing on an absent one.
+    public func fetchDay() async throws -> DayPackage {
+        do {
+            let response = try await transport.send(
+                HTTPRequest(method: .get, path: "/v1/client/today"))
+            guard response.isOK else {
+                throw TransportError.server(
+                    status: response.status,
+                    body: String(decoding: response.body.prefix(400), as: UTF8.self))
+            }
+            let package = try DayPackage(raw: response.body)
+            try day.store(response.body)
+            try articles.remember(package.metadata)
+            for article in package.articles where article.preparing == nil {
+                // Cached individually as well as inside the package: an article
+                // is opened long after the package is stale, and the two paths
+                // must return the same thing.
+                if let body = try? JSONEncoder().encode(article) {
+                    try articles.storeBody(article.article.id, body)
+                }
+            }
+            return package
+        } catch let error as TransportError {
+            guard case .offline = error, let cached = day.load() else { throw error }
+            return try DayPackage(raw: cached)
+        }
+    }
+
+    /// One article, from the cache when it is there and from the server when it
+    /// is not. This is what makes clearing the cache safe: a cleared article is
+    /// one request away.
+    public func article(_ id: Int) async throws -> Components.Schemas.ArticleResponse {
+        if let cached = try? articles.body(id),
+           let decoded = try? JSONDecoder().decode(
+               Components.Schemas.ArticleResponse.self, from: cached) {
+            return decoded
+        }
+        let response = try await transport.send(
+            HTTPRequest(method: .get, path: "/v1/client/articles/\(id)"))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        let decoded = try JSONDecoder().decode(
+            Components.Schemas.ArticleResponse.self, from: response.body)
+        // An article still being annotated comes back with `preparing` rather
+        // than an error — asking for one is normal. Don't cache that: it is a
+        // progress report, not an article.
+        if decoded.preparing == nil {
+            try articles.storeBody(id, response.body)
+        }
+        return decoded
+    }
+
+    public func library(shelf: String = "fresh", source: String? = nil)
+        async throws -> Components.Schemas.LibraryResponse {
+        var path = "/v1/client/library?shelf=\(shelf)"
+        if let source { path += "&source=\(source)" }
+        let response = try await transport.send(HTTPRequest(method: .get, path: path))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return try JSONDecoder().decode(
+            Components.Schemas.LibraryResponse.self, from: response.body)
+    }
+
+    // MARK: Draining
+
+    /// Report everything waiting, in order, and delete only what landed.
+    ///
+    /// **Three destinations, sent separately**, because they are three
+    /// endpoints — but all three are drained in one pass so that "sync" means
+    /// one thing to the caller.
+    ///
+    /// **Answers go in the order they were made.** A review session is a state
+    /// machine, so replaying them out of order would produce a different day on
+    /// the server than the learner saw on the device.
+    @discardableResult
+    public func drain() async throws -> SyncReport {
+        var report = SyncReport()
+        let pending = try outbox.pending()
+        if !pending.damaged.isEmpty {
+            // Left in place rather than discarded here: throwing away an event
+            // is a loss, and it should be a decision the caller makes out loud.
+            report.rejected += pending.damaged.count
+        }
+        guard !pending.entries.isEmpty else {
+            report.remaining = outbox.count
+            return report
+        }
+
+        for kind in [OutboxEntry.Kind.reading, .answer, .spelling] {
+            let batch = pending.entries.filter { $0.kind == kind }
+            guard !batch.isEmpty else { continue }
+            do {
+                let verdicts = try await post(kind, batch)
+                try outbox.acknowledge(verdicts)
+                for verdict in verdicts.values {
+                    switch verdict {
+                    case .landed: report.landed += 1
+                    case .duplicate: report.duplicates += 1
+                    case .rejected: report.rejected += 1
+                    }
+                }
+            } catch let error as TransportError {
+                guard case .offline = error else { throw error }
+                report.offline = true
+                break
+            }
+        }
+        report.remaining = outbox.count
+        return report
+    }
+
+    private func post(_ kind: OutboxEntry.Kind, _ batch: [OutboxEntry])
+        async throws -> [String: OutboxVerdict] {
+        let path: String
+        let payload: Data
+        switch kind {
+        case .reading:
+            path = "/v1/client/events"
+            payload = try JSONEncoder.contract.encode(
+                ["events": batch.map { EventEnvelope($0) }])
+        case .answer:
+            path = "/v1/client/reviews/answers"
+            payload = try JSONEncoder.contract.encode(
+                ["answers": batch.map { FlatEnvelope($0) }])
+        case .spelling:
+            path = "/v1/client/reviews/spellings"
+            payload = try JSONEncoder.contract.encode(
+                ["spellings": batch.map { FlatEnvelope($0) }])
+        }
+
+        let response = try await transport.send(
+            HTTPRequest(method: .post, path: path, body: payload))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return try Self.verdicts(from: response.body)
+    }
+
+    /// Read the server's per-item answers.
+    ///
+    /// **The verdict is per key, never per batch.** An entry the server did not
+    /// mention gets no verdict and therefore stays — silence is not consent, and
+    /// deleting on the strength of a 200 is how a partly-applied batch loses the
+    /// half that failed.
+    static func verdicts(from body: Data) throws -> [String: OutboxVerdict] {
+        struct Result: Decodable {
+            let idem_key: String
+            let status: String
+            let reason: String?
+        }
+        struct Envelope: Decodable { let results: [Result] }
+
+        guard let envelope = try? JSONDecoder().decode(Envelope.self, from: body) else {
+            throw TransportError.malformed("上报的回应里没有逐条结果")
+        }
+        var verdicts: [String: OutboxVerdict] = [:]
+        for result in envelope.results {
+            switch result.status {
+            case "accepted": verdicts[result.idem_key] = .landed
+            case "duplicate": verdicts[result.idem_key] = .duplicate
+            default: verdicts[result.idem_key] = .rejected(result.reason ?? result.status)
+            }
+        }
+        return verdicts
+    }
+}
+
+// MARK: - Wire shapes
+
+/// `/events` nests the body under `payload`; the review endpoints take the
+/// fields flat. Two envelopes rather than one guessed compromise.
+private struct EventEnvelope: Encodable {
+    let idem_key: String
+    let type: String
+    let payload: [String: JSONValue]
+    let occurred_at: String
+
+    init(_ entry: OutboxEntry) {
+        idem_key = entry.idemKey
+        type = entry.eventType
+        payload = entry.payload
+        occurred_at = entry.occurredAt
+    }
+}
+
+private struct FlatEnvelope: Encodable {
+    let idem_key: String
+    let occurred_at: String
+    let fields: [String: JSONValue]
+
+    init(_ entry: OutboxEntry) {
+        idem_key = entry.idemKey
+        occurred_at = entry.occurredAt
+        fields = entry.payload
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: DynamicKey.self)
+        try container.encode(idem_key, forKey: DynamicKey("idem_key"))
+        try container.encode(occurred_at, forKey: DynamicKey("occurred_at"))
+        for (key, value) in fields {
+            try container.encode(value, forKey: DynamicKey(key))
+        }
+    }
+}
+
+private struct DynamicKey: CodingKey {
+    let stringValue: String
+    var intValue: Int? { nil }
+    init(_ value: String) { stringValue = value }
+    init?(stringValue: String) { self.stringValue = stringValue }
+    init?(intValue: Int) { nil }
+}
