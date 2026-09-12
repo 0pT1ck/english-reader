@@ -198,3 +198,25 @@ class SpellingResponse(BaseModel):
 
     correct: bool
     expected: str
+
+
+class SpellingResult(BaseModel):
+    idem_key: str
+    status: str = Field(description="accepted 收下了 / duplicate 重复 / failed 处理失败")
+    reason: str | None = Field(default=None, description="failed 才有")
+    result: SpellingResponse | None = Field(
+        default=None, description="accepted 才有"
+    )
+
+
+class SpellingsResponse(BaseModel):
+    """离线补报的一批拼写。
+
+    No progress block, unlike the answers batch: spelling happens after the
+    day's review is already finished, so there is nothing left for it to move.
+    """
+
+    accepted: int
+    duplicates: int
+    failed: int
+    results: list[SpellingResult]

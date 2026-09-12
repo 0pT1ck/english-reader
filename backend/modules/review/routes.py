@@ -28,6 +28,7 @@ from backend.modules.review.contract import (
     AnswersResponse,
     ReviewDayResponse,
     SpellingResponse,
+    SpellingsResponse,
 )
 
 log = get_logger("review.routes")
@@ -197,13 +198,92 @@ async def report_spelling(device_id: DeviceId, body: SpellingIn) -> dict[str, An
     difficulty into a recognition track. What is stored is what was typed, not
     just whether it was right — that is the whole value of the record.
     """
+    return _apply_spelling(_learner(device_id), body.item_key, body.typed)
+
+
+def _apply_spelling(learner_id: int, item_key: str, typed: str) -> dict[str, Any]:
+    """One spelling attempt, recorded. Shared by the single and batch paths.
+
+    One function rather than two copies of four lines: what counts as correct is
+    a rule, and a rule written twice is a rule that will disagree with itself.
+    """
+    session_row = repository.session_for(learner_id, repository.today())
+    typed = typed.strip()
+    correct = typed.lower() == item_key.strip().lower()
+    repository.record_spelling(learner_id, session_row["id"] if session_row else None,
+                               item_key, item_key, typed, correct)
+    return {"correct": correct, "expected": item_key}
+
+
+class SpellingItem(SpellingIn):
+    idem_key: str = Field(min_length=8, max_length=128, description="客户端生成的幂等键")
+    occurred_at: str | None = Field(default=None, description="客户端时钟，可能不准")
+
+
+class SpellingsIn(BaseModel):
+    spellings: list[SpellingItem] = Field(default_factory=list, max_length=500)
+
+
+@client_router.post("/reviews/spellings", summary="批量上报拼写（离线补报用）",
+                    response_model=SpellingsResponse)
+async def report_spellings(device_id: DeviceId, body: SpellingsIn) -> dict[str, Any]:
+    """The offline path for spelling, which P4 gave answers and not this.
+
+    決定 12 of P4 added a batch endpoint for answers because "地铁里每答一题都
+    失败" broke 架构前提 2 for half the product. Spelling was out of scope that
+    day and kept its one-at-a-time online POST, so the last step of the day was
+    still the one step that needed a network. Same store, same idempotency key,
+    same per-item verdict as the answers batch — a client that already speaks
+    that one needs no new vocabulary here.
+
+    **Order does not matter here**, unlike answers: each attempt is an
+    independent record, and spelling never touches the scheduler (决定 13). They
+    are applied in the order given anyway, because replaying in sequence is
+    what the client's outbox does.
+
+    Re-applying an attempt whose first try failed writes a second row in
+    `spelling_attempts`. That is a duplicate record rather than a wrong one —
+    nothing reads the table to make a decision — and the alternative is the
+    attempt being silently dropped.
+    """
     learner_id = _learner(device_id)
-    state = repository.session_for(learner_id, repository.today())
-    typed = body.typed.strip()
-    correct = typed.lower() == body.item_key.strip().lower()
-    repository.record_spelling(learner_id, state["id"] if state else None,
-                               body.item_key, body.item_key, typed, correct)
-    return {"correct": correct, "expected": body.item_key}
+    accepted = duplicates = failed = 0
+    results: list[dict[str, Any]] = []
+
+    for item in body.spellings:
+        record = reading_repository.record_event(
+            item.idem_key, device_id, learner_id, "review.spelled",
+            item.model_dump(), item.occurred_at,
+        )
+        if record is None:
+            duplicates += 1
+            results.append({"idem_key": item.idem_key, "status": "duplicate"})
+            continue
+        try:
+            outcome = _apply_spelling(learner_id, item.item_key, item.typed)
+        except Exception as exc:  # noqa: BLE001 - one bad entry must not sink the batch
+            reading_repository.finish_event(record.id, str(exc))
+            failed += 1
+            results.append({"idem_key": item.idem_key, "status": "failed",
+                            "reason": str(exc)})
+            log.warning(
+                "review.spelling.failed",
+                f"补报的一条拼写没能记下：{exc}",
+                idem_key=item.idem_key, item_key=item.item_key,
+            )
+            continue
+        reading_repository.finish_event(record.id)
+        accepted += 1
+        results.append({"idem_key": item.idem_key, "status": "accepted",
+                        "result": outcome})
+
+    log.info(
+        "review.spellings.replayed",
+        f"补报 {len(body.spellings)} 条拼写：接受 {accepted}、重复 {duplicates}、失败 {failed}",
+        accepted=accepted, duplicates=duplicates, failed=failed,
+    )
+    return {"accepted": accepted, "duplicates": duplicates,
+            "failed": failed, "results": results}
 
 
 # --------------------------------------------------------------------------- #

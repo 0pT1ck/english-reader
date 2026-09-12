@@ -1,0 +1,2807 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "English Reader 客户端接口",
+    "version": "0.1.0",
+    "description": "只含 /v1/client。由 scripts/export_contract.py 导出，不要手改。\n\n**只增不减**（架构铁律 5）：可以加字段，不能删字段或改字段含义。侧载安装的客户端更新滞后，手机上大概率长期跑着旧版本。\n\n**capabilities 区分「没数据」和「没实现」**：一个 null 字段本身是歧义的，`root_known: null` 可能是「这个词没有词根」，也可能是「水平估计还没做」，而客户端要把这两种画成不同的样子。\n\n**幂等键重复上报算正常，不算错误**：离线客户端会把拿不准的都重发一遍。\n\n**今日包不含真题**：真题走 /library?source=cet4|cet6|kaoyan。"
+  },
+  "paths": {
+    "/v1/client/library": {
+      "get": {
+        "tags": [
+          "client:reading"
+        ],
+        "summary": "文章清单",
+        "description": "The library.\n\nThere is no ``/today``: deciding what someone should read today needs the\nability estimate and the selection logic, both of which are P3. The library\nis not a stopgap for that — the intended shape is \"a few articles are\nprepared each day, you pick the ones you feel like\", which is a list and a\nchoice. ``/today`` will be *added* later, which rule 5 permits.",
+        "operationId": "library_v1_client_library_get",
+        "parameters": [
+          {
+            "name": "shelf",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "fresh 新备的 / archive 往期 / unread / read / all",
+              "default": "fresh",
+              "title": "Shelf"
+            },
+            "description": "fresh 新备的 / archive 往期 / unread / read / all"
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "generated / cet4 / cet6 / kaoyan",
+              "title": "Source"
+            },
+            "description": "generated / cet4 / cet6 / kaoyan"
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按哪个指标排序，留空则用配置里的默认值",
+              "title": "Sort"
+            },
+            "description": "按哪个指标排序，留空则用配置里的默认值"
+          },
+          {
+            "name": "desc",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "description": "降序",
+              "default": false,
+              "title": "Desc"
+            },
+            "description": "降序"
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/articles/{article_id}": {
+      "get": {
+        "tags": [
+          "client:reading"
+        ],
+        "summary": "一篇文章的全部内容",
+        "description": "Text, sentences, every token's analysis, every gloss, and your marks.\n\nOne response, then no further requests while reading. An article still being\nprepared comes back with a ``preparing`` block instead of an error — lazy\ningest means asking for one is normal, not a mistake.",
+        "operationId": "article_v1_client_articles__article_id__get",
+        "parameters": [
+          {
+            "name": "article_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Article Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArticleResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/events": {
+      "post": {
+        "tags": [
+          "client:reading"
+        ],
+        "summary": "批量上报交互事件",
+        "description": "Accepts duplicates by design — a retry is the protocol working.",
+        "operationId": "report_events_v1_client_events_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventBatch"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventBatchResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/reviews": {
+      "get": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "今天要复习的全部内容",
+        "operationId": "reviews_v1_client_reviews_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewDayResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/reviews/answer": {
+      "post": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "上报一次作答",
+        "operationId": "report_answer_v1_client_reviews_answer_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/reviews/answers": {
+      "post": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "批量上报作答（离线补报用）",
+        "description": "Replay a day's answers in order, skipping anything already recorded.\n\n**Why this exists at all.** ``/reviews`` has always been offline-shaped —\nevery card ships with its sentences — but the answer path was one online\nPOST per question with no key and no queue, so review failed on every\nquestion without a connection while reading carried on fine. That broke\n架构铁律 2 for half the product, and 读后抽查 being dropped left review as\nthe only place the learner produces anything.\n\n**Order matters and is the client's.** A review session is a state machine:\npassing 看词想义 unlocks 看义想词, failing it locks it again. So the batch is\napplied in the order given, not concurrently, and a failure in the middle\nstops nothing — the remaining answers still apply, and the one that failed\nis reported with its key so the client can decide.\n\nThe single-answer endpoint stays exactly as it was. 架构铁律 5 is only\nadditive, and a client written against it keeps working untouched.",
+        "operationId": "report_answers_v1_client_reviews_answers_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswersIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnswersResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/reviews/spelling": {
+      "post": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "上报一次拼写",
+        "description": "Recorded, never scheduled on.\n\n决定 13 keeps spelling out of the scheduler entirely: it is an optional\nreinforcement, and letting it move due dates would mix a productive-recall\ndifficulty into a recognition track. What is stored is what was typed, not\njust whether it was right — that is the whole value of the record.",
+        "operationId": "report_spelling_v1_client_reviews_spelling_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpellingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpellingResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/reviews/spellings": {
+      "post": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "批量上报拼写（离线补报用）",
+        "description": "The offline path for spelling, which P4 gave answers and not this.\n\n決定 12 of P4 added a batch endpoint for answers because \"地铁里每答一题都\n失败\" broke 架构前提 2 for half the product. Spelling was out of scope that\nday and kept its one-at-a-time online POST, so the last step of the day was\nstill the one step that needed a network. Same store, same idempotency key,\nsame per-item verdict as the answers batch — a client that already speaks\nthat one needs no new vocabulary here.\n\n**Order does not matter here**, unlike answers: each attempt is an\nindependent record, and spelling never touches the scheduler (决定 13). They\nare applied in the order given anyway, because replaying in sequence is\nwhat the client's outbox does.\n\nRe-applying an attempt whose first try failed writes a second row in\n`spelling_attempts`. That is a duplicate record rather than a wrong one —\nnothing reads the table to make a decision — and the alternative is the\nattempt being silently dropped.",
+        "operationId": "report_spellings_v1_client_reviews_spellings_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpellingsIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpellingsResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/client/today": {
+      "get": {
+        "tags": [
+          "client:today"
+        ],
+        "summary": "今日包：当天的文章与复习，一次拿全",
+        "description": "One response the client can work from all day without a network.\n\nNew endpoint rather than fields added to an existing one — 架构铁律 5 lets\nus add, never change, and P2 deliberately left this shape unguessed\n(`phase-2.html` §6) rather than bolting an invented one onto `/articles`.\n\n**Does not include exam papers** (决定 9). They have their own entrance at\n``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in\n``excludes_exam_papers`` so a client cannot conclude otherwise by accident.",
+        "operationId": "today_v1_client_today_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TodayResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnswerIn": {
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "title": "Queue Id"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "revealed": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Revealed",
+            "default": 0
+          },
+          "sentence_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Id"
+          },
+          "easy": {
+            "type": "boolean",
+            "title": "Easy",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "queue_id",
+          "passed"
+        ],
+        "title": "AnswerIn"
+      },
+      "AnswerItem": {
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "title": "Queue Id"
+          },
+          "passed": {
+            "type": "boolean",
+            "title": "Passed"
+          },
+          "revealed": {
+            "type": "integer",
+            "maximum": 3.0,
+            "minimum": 0.0,
+            "title": "Revealed",
+            "default": 0
+          },
+          "sentence_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Id"
+          },
+          "easy": {
+            "type": "boolean",
+            "title": "Easy",
+            "default": false
+          },
+          "idem_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idem Key",
+            "description": "客户端生成的幂等键"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At",
+            "description": "客户端时钟，可能不准"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queue_id",
+          "passed",
+          "idem_key"
+        ],
+        "title": "AnswerItem"
+      },
+      "AnswerOutcome": {
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "title": "Done",
+            "description": "这个条目今天过了——两个方向都答对了"
+          },
+          "asks": {
+            "type": "integer",
+            "title": "Asks"
+          },
+          "misses": {
+            "type": "integer",
+            "title": "Misses"
+          },
+          "easy": {
+            "type": "boolean",
+            "title": "Easy",
+            "description": "「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算"
+          },
+          "settled": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Settlement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "过了才有。没过是 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "asks",
+          "misses",
+          "easy"
+        ],
+        "title": "AnswerOutcome",
+        "description": "What one answer did to one item."
+      },
+      "AnswerResponse": {
+        "properties": {
+          "done": {
+            "type": "boolean",
+            "title": "Done",
+            "description": "这个条目今天过了——两个方向都答对了"
+          },
+          "asks": {
+            "type": "integer",
+            "title": "Asks"
+          },
+          "misses": {
+            "type": "integer",
+            "title": "Misses"
+          },
+          "easy": {
+            "type": "boolean",
+            "title": "Easy",
+            "description": "「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算"
+          },
+          "settled": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Settlement"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "过了才有。没过是 null"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReviewProgress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done",
+          "asks",
+          "misses",
+          "easy",
+          "progress"
+        ],
+        "title": "AnswerResponse"
+      },
+      "AnswerResult": {
+        "properties": {
+          "idem_key": {
+            "type": "string",
+            "title": "Idem Key"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "accepted 收下了 / duplicate 重复 / failed 处理失败"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "failed 才有"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AnswerOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "accepted 才有。重复与失败都是 null"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idem_key",
+          "status"
+        ],
+        "title": "AnswerResult"
+      },
+      "AnswersIn": {
+        "properties": {
+          "answers": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerItem"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Answers"
+          }
+        },
+        "type": "object",
+        "title": "AnswersIn",
+        "description": "A batch of answers that happened while the device was on its own.\n\n``idem_key`` is generated by the client, not the server: the client is the\nonly party that knows whether this is the same answer it failed to upload\nten minutes ago on a train. Same reasoning, same field name and same table\nas the reading events — one event store, not two (see ``client_events``,\nwhose own comment anticipated this phase)."
+      },
+      "AnswersResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerResult"
+            },
+            "type": "array",
+            "title": "Results"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReviewProgress"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "duplicates",
+          "failed",
+          "results",
+          "progress"
+        ],
+        "title": "AnswersResponse",
+        "description": "Replay of a day's answers, in the order the client sent them.\n\n**Order matters and it is the client's.** A review session is a state\nmachine — passing 看词想义 unlocks 看义想词, failing it locks it again — so\nthe batch is applied in sequence, not concurrently. A failure in the middle\nstops nothing: the rest still apply, and the one that failed comes back with\nits key so the client can decide."
+      },
+      "ArticleBody": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body",
+            "description": "原文。跟 tokens 一起下发而不是二选一：token 的下标指进这里，客户端不用重新分词就能还原空格和分段。还没准备好时是 null"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "source_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Label"
+          },
+          "word_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Word Count"
+          },
+          "sentence_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Count"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DifficultyProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "difficulty_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty Score"
+          },
+          "difficulty_for_you": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty For You",
+            "description": "要水平估计，现在恒为 null"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "mark_beyond": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark Beyond",
+            "description": "这篇要不要标出超纲词。生成文标，**真题不标**——在真题里碰到生词正是要练的那件事"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status",
+            "description": "还没准备好时才有，说明卡在哪一步"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "ArticleBody"
+      },
+      "ArticleProgress": {
+        "properties": {
+          "sentence_seq": {
+            "type": "integer",
+            "title": "Sentence Seq"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sentence_seq",
+          "percent"
+        ],
+        "title": "ArticleProgress",
+        "description": "How far through this article you are.\n\nThree keys whether or not a row exists. `progress_of` used to return the\nwhole row when there was one, which leaked `learner_id`, `article_id` and\n`updated_at` — server bookkeeping, present only half the time, read by\nnothing. Narrowed on 2026-09-12 rather than declared, because declaring\nthem would have written an accident into every future client's types."
+      },
+      "ArticleResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "article": {
+            "$ref": "#/components/schemas/ArticleBody"
+          },
+          "preparing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Preparing"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "非空就说明还没准备好，正文那几块都是空的"
+          },
+          "sentences": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Sentence"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentences"
+          },
+          "tokens": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Token"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokens"
+          },
+          "phrases": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Phrase"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phrases",
+            "description": "确认过的词组。空列表在 capabilities.phrases 为假时意思是「还没看过」"
+          },
+          "glossary": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/GlossaryEntry"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glossary",
+            "description": "文中每个词的释义，按词条。**这就是离线也能点词查词的原因**"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArticleProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "capabilities",
+          "article"
+        ],
+        "title": "ArticleResponse",
+        "description": "One response, then no further requests while reading.\n\n**Two shapes in one model.** An article still being prepared comes back with\n`preparing` filled and the reading fields null; a ready one has `preparing`\nnull and the rest filled. A client checks `preparing` first. Declaring it as\na union would generate a neater Swift enum, but it would also make the two\nshapes independently extensible — and the day someone adds a field to only\none of them, the contract has two answers to the same question."
+      },
+      "Capabilities": {
+        "properties": {
+          "level_estimate": {
+            "type": "boolean",
+            "title": "Level Estimate",
+            "description": "水平估计。它填的是 learner.level、difficulty_for_you 和 root_known"
+          },
+          "memory_state": {
+            "type": "boolean",
+            "title": "Memory State",
+            "description": "每个义项的记忆状态与到期时间"
+          },
+          "proper_noun_notes": {
+            "type": "boolean",
+            "title": "Proper Noun Notes",
+            "description": "专有名词的一句话说明"
+          },
+          "exam_frequency": {
+            "type": "boolean",
+            "title": "Exam Frequency",
+            "description": "真题考频。为假时 exam 整块缺席而不是为零——零会被读成「真题里从没出现过」，那是另一回事"
+          },
+          "phrases": {
+            "type": "boolean",
+            "title": "Phrases",
+            "description": "词组识别跑过没有。为假时，空的 phrases 列表意思是「还没看过」而不是「这篇没有词组」"
+          }
+        },
+        "type": "object",
+        "required": [
+          "level_estimate",
+          "memory_state",
+          "proper_noun_notes",
+          "exam_frequency",
+          "phrases"
+        ],
+        "title": "Capabilities",
+        "description": "Which reserved slots actually carry values yet.\n\nA null alone is ambiguous: `root_known: null` could mean \"this word has no\nroot\" or \"the ability estimate does not exist\", and a client renders those\ntwo differently — nothing at all, versus 功能待开发. The distinction belongs\nin the contract rather than being guessed from the value."
+      },
+      "ClientEvent": {
+        "properties": {
+          "idem_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idem Key",
+            "description": "客户端生成的幂等键"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "事件类型"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At",
+            "description": "客户端时钟，可能不准"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idem_key",
+          "type"
+        ],
+        "title": "ClientEvent",
+        "description": "One reported interaction.\n\n``idem_key`` is generated by the client, not the server: the client is the\nonly party that knows whether this is the same event it failed to upload ten\nminutes ago on a train."
+      },
+      "ClockStatus": {
+        "properties": {
+          "offset_days": {
+            "type": "integer",
+            "title": "Offset Days"
+          },
+          "simulated_now": {
+            "type": "string",
+            "title": "Simulated Now"
+          },
+          "real_now": {
+            "type": "string",
+            "title": "Real Now"
+          },
+          "simulated": {
+            "type": "boolean",
+            "title": "Simulated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "offset_days",
+          "simulated_now",
+          "real_now",
+          "simulated"
+        ],
+        "title": "ClockStatus",
+        "description": "The review clock, which can be moved for testing.\n\nIn the payload because a client that quietly used the device clock while the\nserver was running days ahead would disagree with it about what is due, and\nthe disagreement would look like a scheduling bug."
+      },
+      "Derivation": {
+        "properties": {
+          "root": {
+            "type": "string",
+            "title": "Root"
+          },
+          "affix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Affix"
+          },
+          "breakdown_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Breakdown Zh"
+          },
+          "root_known": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Root Known",
+            "description": "你认不认得这个词根。要水平估计才知道，所以现在恒为 null——在那之前，每个合格的派生词都照样给拆解"
+          }
+        },
+        "type": "object",
+        "required": [
+          "root"
+        ],
+        "title": "Derivation",
+        "description": "How a derived word is built, shown instead of a new gloss to memorise."
+      },
+      "DifficultyProfile": {
+        "properties": {
+          "word_count": {
+            "type": "integer",
+            "title": "Word Count"
+          },
+          "sentence_count": {
+            "type": "integer",
+            "title": "Sentence Count"
+          },
+          "content_word_count": {
+            "type": "integer",
+            "title": "Content Word Count",
+            "description": "实词数，不含标点与虚词"
+          },
+          "mean_sentence_length": {
+            "type": "number",
+            "title": "Mean Sentence Length"
+          },
+          "beyond_cet4_pct": {
+            "type": "number",
+            "title": "Beyond Cet4 Pct",
+            "description": "超出四级大纲的实词占比"
+          },
+          "beyond_cet6_pct": {
+            "type": "number",
+            "title": "Beyond Cet6 Pct"
+          },
+          "frequency_median": {
+            "type": "number",
+            "title": "Frequency Median",
+            "description": "词频排名的中位数，越大越生僻"
+          },
+          "frequency_p90": {
+            "type": "number",
+            "title": "Frequency P90"
+          },
+          "rare_word_pct": {
+            "type": "number",
+            "title": "Rare Word Pct"
+          }
+        },
+        "type": "object",
+        "required": [
+          "word_count",
+          "sentence_count",
+          "content_word_count",
+          "mean_sentence_length",
+          "beyond_cet4_pct",
+          "beyond_cet6_pct",
+          "frequency_median",
+          "frequency_p90",
+          "rare_word_pct"
+        ],
+        "title": "DifficultyProfile",
+        "description": "难度画像：这篇文章相对大纲有多难。\n\nMeasured, not judged — every number here describes the text against the\nsyllabus. What it is *for you* lives in `difficulty_for_you`, which needs\nthe ability estimate and is therefore still null.\n\n**判超纲一定要走 `vocabulary/syllabus.py`**，别自己比对 `tags`：那个字段栽了\n四次，最贵的一次让 8,401 处超纲标记里有 3,005 处（35.8%）的词根其实就在纲内，\n而且它不只让数字难看——P3 的模型横评用坏规则算出来名次是反的。"
+      },
+      "EventBatch": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/ClientEvent"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Events"
+          }
+        },
+        "type": "object",
+        "title": "EventBatch"
+      },
+      "EventBatchResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/EventResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "duplicates",
+          "failed",
+          "results"
+        ],
+        "title": "EventBatchResponse",
+        "description": "Duplicates are the protocol working, not a fault.\n\nAn offline client retries whatever it is unsure about. What matters to the\nclient is the per-item verdict: 决定 11 says it may delete an outbox file\nonly for a key this list reports as landed — never on the strength of the\nHTTP status alone."
+      },
+      "EventResult": {
+        "properties": {
+          "idem_key": {
+            "type": "string",
+            "title": "Idem Key"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "accepted 收下了 / duplicate 重复 / failed 处理失败 / rejected 不认识"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idem_key",
+          "status"
+        ],
+        "title": "EventResult"
+      },
+      "GlossaryEntry": {
+        "properties": {
+          "headword": {
+            "type": "string",
+            "title": "Headword"
+          },
+          "phonetic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phonetic"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "词典那一堆逗号隔开的释义，原样。义项集缺席时的退路"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags",
+            "description": "ECDICT 的分级标签。别直接比对它——判大纲走 syllabus.py"
+          },
+          "frq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frq",
+            "description": "词频排名"
+          },
+          "senses": {
+            "items": {
+              "$ref": "#/components/schemas/Sense"
+            },
+            "type": "array",
+            "title": "Senses"
+          },
+          "derivation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Derivation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "marks": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Marks",
+            "description": "这个词上的全部标记，按义项 id。**包括屏幕上这个义项之外的**——没有它，点词面板说不出「你标过这个词的另一个义项」，而学习者会把一个自己明明标过的词读成「App 忘了」"
+          },
+          "states": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ItemState"
+            },
+            "type": "object",
+            "title": "States",
+            "description": "这个词各义项的词池位置，按义项 id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "headword",
+          "tags",
+          "senses",
+          "marks",
+          "states"
+        ],
+        "title": "GlossaryEntry"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ItemState": {
+        "properties": {
+          "pool": {
+            "type": "string",
+            "title": "Pool",
+            "description": "new 没学过 / reviewing 在学 / known 已掌握"
+          },
+          "encounters": {
+            "type": "integer",
+            "title": "Encounters",
+            "description": "遇见次数。读完一篇 +1，词池位置不动"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pool",
+          "encounters"
+        ],
+        "title": "ItemState",
+        "description": "One item's position in the three-bucket pool, and how often it was met.\n\nShared because a word's sense and a phrase carry the same two facts."
+      },
+      "Learner": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level",
+            "description": "词汇量估计。水平评估（主文档 §A）尚未实现，所以现在恒为 null——由 capabilities.level_estimate 区分「没数据」和「没实现」。"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "Learner",
+        "description": "Who this response is about, echoed at the top of every client response.\n\nLets a client notice it is looking at someone else's cache and drop it. The\nlearner is derived from the device token — no learner id appears in a path."
+      },
+      "LibraryArticle": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source",
+            "description": "generated 生成文 / cet4 / cet6 / kaoyan"
+          },
+          "source_label": {
+            "type": "string",
+            "title": "Source Label"
+          },
+          "word_count": {
+            "type": "integer",
+            "title": "Word Count"
+          },
+          "sentence_count": {
+            "type": "integer",
+            "title": "Sentence Count"
+          },
+          "prepared_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepared At"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At",
+            "description": "读完的时刻。没读完是 null"
+          },
+          "percent": {
+            "type": "number",
+            "title": "Percent",
+            "description": "读到百分之几"
+          },
+          "target_count": {
+            "type": "integer",
+            "title": "Target Count",
+            "description": "这篇为教几个词而写。真题恒为 0——它们不为教任何词而写，读完只记下你亲手标记的东西"
+          },
+          "difficulty": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DifficultyProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "difficulty_score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty Score",
+            "description": "把画像压成一个数，用来排序"
+          },
+          "difficulty_for_you": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Difficulty For You",
+            "description": "这篇对你的预期生词率。要水平估计才算得出来，所以现在恒为 null——看 capabilities.level_estimate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "source",
+          "source_label",
+          "word_count",
+          "sentence_count",
+          "percent",
+          "target_count"
+        ],
+        "title": "LibraryArticle"
+      },
+      "LibraryResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "shelf": {
+            "type": "string",
+            "title": "Shelf"
+          },
+          "sort": {
+            "type": "string",
+            "title": "Sort"
+          },
+          "descending": {
+            "type": "boolean",
+            "title": "Descending"
+          },
+          "sortable": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Sortable",
+            "description": "支持的排序方式：键是 sort 参数的值，值是中文标签。客户端照着它出选项——写死的话，服务端加一种排序客户端就看不见"
+          },
+          "fresh_days": {
+            "type": "integer",
+            "title": "Fresh Days",
+            "description": "「新备的」这个书架算几天之内"
+          },
+          "articles": {
+            "items": {
+              "$ref": "#/components/schemas/LibraryArticle"
+            },
+            "type": "array",
+            "title": "Articles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "capabilities",
+          "shelf",
+          "sort",
+          "descending",
+          "sortable",
+          "fresh_days",
+          "articles"
+        ],
+        "title": "LibraryResponse"
+      },
+      "Phrase": {
+        "properties": {
+          "phrase": {
+            "type": "string",
+            "title": "Phrase"
+          },
+          "surface": {
+            "type": "string",
+            "title": "Surface",
+            "description": "原文里的样子，含中间的空格"
+          },
+          "start_seq": {
+            "type": "integer",
+            "title": "Start Seq"
+          },
+          "end_seq": {
+            "type": "integer",
+            "title": "End Seq"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation"
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition"
+          },
+          "mark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mark",
+            "description": "unknown 不认识 / fuzzy 模糊，没标是 null"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ItemState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "phrase",
+          "surface",
+          "start_seq",
+          "end_seq"
+        ],
+        "title": "Phrase",
+        "description": "A phrase is an item in its own right.\n\nMarking `account for` records nothing against `account`: not knowing the\nphrase says nothing about whether the word inside it is known, and letting\none mark stand for both would drop a word the reader understands perfectly\nwell into the review queue.\n\nThe span is sent; how to show it is the client's business — but 跨 Phase\n不变量 fixes one half of that: selection and marking happen to the phrase as\na whole, on every client."
+      },
+      "Preparing": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "annotated": {
+            "type": "integer",
+            "title": "Annotated",
+            "description": "已标注的实词数"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "annotated",
+          "total"
+        ],
+        "title": "Preparing",
+        "description": "Not an error: lazy ingest means asking for an unprepared article is normal.\n\nEnough detail to show progress rather than a spinner of unknown length."
+      },
+      "ReviewDayResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "session_id": {
+            "type": "integer",
+            "title": "Session Id"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "weight_decay": {
+            "type": "number",
+            "title": "Weight Decay",
+            "description": "答错之后权重乘以它。**规则来自服务端**，客户端只负责从袋子里摸"
+          },
+          "spelling_enabled": {
+            "type": "boolean",
+            "title": "Spelling Enabled"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/ReviewProgress"
+          },
+          "clock": {
+            "$ref": "#/components/schemas/ClockStatus"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "day",
+          "session_id",
+          "weight_decay",
+          "spelling_enabled",
+          "progress",
+          "clock",
+          "items"
+        ],
+        "title": "ReviewDayResponse",
+        "description": "Everything today's review needs, in one response."
+      },
+      "ReviewItem": {
+        "properties": {
+          "queue_id": {
+            "type": "integer",
+            "title": "Queue Id",
+            "description": "上报作答时带上它。**不是义项 id**，是今天这一轮的排队号"
+          },
+          "item_type": {
+            "type": "string",
+            "title": "Item Type",
+            "description": "word 单词 / phrase 词组"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "sense_id": {
+            "type": "integer",
+            "title": "Sense Id",
+            "description": "词组恒为 0——词组不是别的东西的一个义项"
+          },
+          "bucket": {
+            "type": "string",
+            "title": "Bucket",
+            "description": "today 今天刚标的 / due 到期该复习的"
+          },
+          "direction": {
+            "type": "integer",
+            "title": "Direction",
+            "description": "1 看词想义项，2 看义项想词。答对 1 解锁 2，答错 2 退回 1 并重新上锁"
+          },
+          "asks": {
+            "type": "integer",
+            "title": "Asks",
+            "description": "今天问过几次，两个方向合计。**它就是成绩**"
+          },
+          "misses": {
+            "type": "integer",
+            "title": "Misses"
+          },
+          "weight": {
+            "type": "number",
+            "title": "Weight",
+            "description": "抽题权重。答错减半，让卡住的词自己让路，但永不排除"
+          },
+          "done": {
+            "type": "boolean",
+            "title": "Done"
+          },
+          "sense": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SenseCard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/SentenceCard"
+            },
+            "type": "array",
+            "title": "Questions",
+            "description": "用来出题的句子，你没读到过的"
+          },
+          "hints": {
+            "items": {
+              "$ref": "#/components/schemas/SentenceCard"
+            },
+            "type": "array",
+            "title": "Hints",
+            "description": "提示用的句子，当初读到它的那一句"
+          }
+        },
+        "type": "object",
+        "required": [
+          "queue_id",
+          "item_type",
+          "item_key",
+          "sense_id",
+          "bucket",
+          "direction",
+          "asks",
+          "misses",
+          "weight",
+          "done",
+          "questions",
+          "hints"
+        ],
+        "title": "ReviewItem"
+      },
+      "ReviewProgress": {
+        "properties": {
+          "session": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReviewSession"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "done": {
+            "type": "integer",
+            "title": "Done"
+          },
+          "remaining": {
+            "type": "integer",
+            "title": "Remaining"
+          },
+          "buckets": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Buckets",
+            "description": "各桶各有几条"
+          },
+          "spelling_available": {
+            "type": "boolean",
+            "title": "Spelling Available",
+            "description": "拼写这一轮开没开。当天复习全部走完之后才为真——它是强化选项，不进调度，拼错只记一笔"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "done",
+          "remaining",
+          "buckets",
+          "spelling_available"
+        ],
+        "title": "ReviewProgress"
+      },
+      "ReviewSession": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "started_at": {
+            "type": "string",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "spelling_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spelling At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "day",
+          "started_at"
+        ],
+        "title": "ReviewSession"
+      },
+      "Sense": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "concept_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concept En",
+            "description": "用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文"
+          },
+          "gloss_zh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gloss Zh",
+            "description": "中文释义"
+          },
+          "exam": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SenseExam"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "真题考频。整块缺席而不是为零，看 capabilities.exam_frequency"
+          },
+          "memory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory",
+            "description": "这个义项的记忆状态与到期时间。复习模块的位置，**整块为 null**——跨 Phase 不变量只允许留形状显而易见的位置，而记忆状态的形状不显而易见，所以留一个可整体为 null 的对象，而不是猜几个字段出来。由 capabilities.memory_state 说明它是「没数据」还是「没实现」"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ordinal"
+        ],
+        "title": "Sense"
+      },
+      "SenseCard": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "headword": {
+            "type": "string",
+            "title": "Headword"
+          },
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "pos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos"
+          },
+          "concept_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concept En"
+          },
+          "gloss_zh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gloss Zh"
+          },
+          "exam_frequency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Frequency",
+            "description": "真题考频"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "headword",
+          "ordinal"
+        ],
+        "title": "SenseCard",
+        "description": "One sense, as a review card shows it."
+      },
+      "SenseExam": {
+        "properties": {
+          "frequency": {
+            "type": "integer",
+            "title": "Frequency"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share",
+            "description": "占这个词全部真题出现的百分之几。总数为零时是 null"
+          },
+          "is_exam_key": {
+            "type": "boolean",
+            "title": "Is Exam Key",
+            "description": "永久为 false。规则本身成立，但它依赖可信的义项排序，而现在的序号是模型猜的（主文档 §F4）。留着而不是删掉，是因为铁律 5 不删字段"
+          }
+        },
+        "type": "object",
+        "required": [
+          "frequency",
+          "is_exam_key"
+        ],
+        "title": "SenseExam",
+        "description": "How often this sense appears in the exam corpus. Facts, no verdict.\n\nThe label this replaced (熟词僻义) was retired on 2026-09-07: `address`\nmeans 着手解决 38 times against 地址 twice, so that sense is not obscure —\nit is the dominant one in written English. Calling it obscure takes the\nlearner's first impression as the baseline instead of the language."
+      },
+      "Sentence": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "char_start": {
+            "type": "integer",
+            "title": "Char Start"
+          },
+          "char_end": {
+            "type": "integer",
+            "title": "Char End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "text",
+          "char_start",
+          "char_end"
+        ],
+        "title": "Sentence"
+      },
+      "SentenceCard": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "blank_start": {
+            "type": "integer",
+            "title": "Blank Start",
+            "description": "要挖空的区间，在 text 里的字符下标"
+          },
+          "blank_end": {
+            "type": "integer",
+            "title": "Blank End"
+          },
+          "surface": {
+            "type": "string",
+            "title": "Surface",
+            "description": "被挖掉的那个词在句子里的原样"
+          },
+          "first_letter": {
+            "type": "string",
+            "title": "First Letter",
+            "description": "看义想词的第一级提示。**在服务端算**——什么算首字母是一条规则，而规则按架构前提 1 留在这边"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source",
+            "description": "generated 生成的 / corpus 语料里的"
+          },
+          "article_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article Id",
+            "description": "最深一级提示可以跳回原文。生成的句子没有，客户端退回英文释义"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "blank_start",
+          "blank_end",
+          "surface",
+          "first_letter"
+        ],
+        "title": "SentenceCard",
+        "description": "A sentence the item appears in.\n\nTwo pools, and which one a sentence lands in is not a property of the\nsentence: 决定 of P3 puts the sentence you originally *read* it in into the\nhint slot, and asks with one you have not seen. So the same row is a\nquestion for one learner and a hint for another."
+      },
+      "Settlement": {
+        "properties": {
+          "rating": {
+            "type": "integer",
+            "title": "Rating"
+          },
+          "rating_name": {
+            "type": "string",
+            "title": "Rating Name"
+          },
+          "interval_days": {
+            "type": "number",
+            "title": "Interval Days"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rating",
+          "rating_name",
+          "interval_days"
+        ],
+        "title": "Settlement",
+        "description": "What the scheduler decided when an item left the pool.\n\nStored as well as returned, so an algorithm change can be replayed against\nreal history instead of re-derived from assumptions."
+      },
+      "SpellingIn": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "typed": {
+            "type": "string",
+            "title": "Typed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "typed"
+        ],
+        "title": "SpellingIn"
+      },
+      "SpellingItem": {
+        "properties": {
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "typed": {
+            "type": "string",
+            "title": "Typed"
+          },
+          "idem_key": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Idem Key",
+            "description": "客户端生成的幂等键"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At",
+            "description": "客户端时钟，可能不准"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "typed",
+          "idem_key"
+        ],
+        "title": "SpellingItem"
+      },
+      "SpellingResponse": {
+        "properties": {
+          "correct": {
+            "type": "boolean",
+            "title": "Correct"
+          },
+          "expected": {
+            "type": "string",
+            "title": "Expected"
+          }
+        },
+        "type": "object",
+        "required": [
+          "correct",
+          "expected"
+        ],
+        "title": "SpellingResponse",
+        "description": "Recorded, never scheduled on.\n\nSpelling stays out of the scheduler entirely: it is optional reinforcement,\nand letting it move due dates would mix a productive-recall difficulty into\na recognition track. What is stored is what was *typed*, not just whether it\nwas right — that is the whole value of the record."
+      },
+      "SpellingResult": {
+        "properties": {
+          "idem_key": {
+            "type": "string",
+            "title": "Idem Key"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "accepted 收下了 / duplicate 重复 / failed 处理失败"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "failed 才有"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpellingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "accepted 才有"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idem_key",
+          "status"
+        ],
+        "title": "SpellingResult"
+      },
+      "SpellingsIn": {
+        "properties": {
+          "spellings": {
+            "items": {
+              "$ref": "#/components/schemas/SpellingItem"
+            },
+            "type": "array",
+            "maxItems": 500,
+            "title": "Spellings"
+          }
+        },
+        "type": "object",
+        "title": "SpellingsIn"
+      },
+      "SpellingsResponse": {
+        "properties": {
+          "accepted": {
+            "type": "integer",
+            "title": "Accepted"
+          },
+          "duplicates": {
+            "type": "integer",
+            "title": "Duplicates"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/SpellingResult"
+            },
+            "type": "array",
+            "title": "Results"
+          }
+        },
+        "type": "object",
+        "required": [
+          "accepted",
+          "duplicates",
+          "failed",
+          "results"
+        ],
+        "title": "SpellingsResponse",
+        "description": "离线补报的一批拼写。\n\nNo progress block, unlike the answers batch: spelling happens after the\nday's review is already finished, so there is nothing left for it to move."
+      },
+      "TodayResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Day",
+            "description": "复习那一天的日期"
+          },
+          "articles": {
+            "items": {
+              "$ref": "#/components/schemas/ArticleResponse"
+            },
+            "type": "array",
+            "title": "Articles",
+            "description": "今天的正课。**正好 3 篇**，由配置项 today_article_count 决定"
+          },
+          "extra_articles": {
+            "items": {
+              "$ref": "#/components/schemas/ArticleResponse"
+            },
+            "type": "array",
+            "title": "Extra Articles",
+            "description": "**永远是空的。**加餐已于 2026-09-12 取消——往期本身就是加餐，往列表下面翻就有。字段留着不删是因为铁律 5 只增不减；把 today_extra_count 改回非零就能恢复"
+          },
+          "reviews": {
+            "$ref": "#/components/schemas/ReviewDayResponse",
+            "description": "跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/TodaySettings"
+          },
+          "excludes_exam_papers": {
+            "type": "boolean",
+            "title": "Excludes Exam Papers",
+            "description": "**今日包 ≠ 今天能读的全部。**真题走自己的入口 /library?source=cet4|cet6|kaoyan。写在响应里而不只是写在文档里——一个以为这就是全部的客户端会静默地藏起 452 篇真题"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "capabilities",
+          "articles",
+          "extra_articles",
+          "reviews",
+          "settings",
+          "excludes_exam_papers"
+        ],
+        "title": "TodayResponse",
+        "description": "当天的文章与复习，一次拿全。\n\n**全文内联，不是清单**（P4 决定 8）。实测一篇约 300 KB，三篇不到 1 MB——\n清单式的话联不上网就只剩清单，那就不叫今日包了。"
+      },
+      "TodaySettings": {
+        "properties": {
+          "fresh_days": {
+            "type": "integer",
+            "title": "Fresh Days",
+            "description": "「新备的」这个书架算几天之内"
+          },
+          "weight_decay": {
+            "type": "number",
+            "title": "Weight Decay",
+            "description": "复习答错之后权重乘以它"
+          },
+          "spelling_enabled": {
+            "type": "boolean",
+            "title": "Spelling Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fresh_days",
+          "weight_decay",
+          "spelling_enabled"
+        ],
+        "title": "TodaySettings"
+      },
+      "Token": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "surface": {
+            "type": "string",
+            "title": "Surface"
+          },
+          "sentence_seq": {
+            "type": "integer",
+            "title": "Sentence Seq"
+          },
+          "char_start": {
+            "type": "integer",
+            "title": "Char Start",
+            "description": "在 article.body 里的字符下标，闭开区间的开头"
+          },
+          "char_end": {
+            "type": "integer",
+            "title": "Char End"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "description": "word 实词 / punct 标点 / proper 专有名词 等"
+          },
+          "is_target": {
+            "type": "boolean",
+            "title": "Is Target",
+            "description": "这篇为教它而写"
+          },
+          "beyond": {
+            "type": "boolean",
+            "title": "Beyond",
+            "description": "超纲。只在生成文里标出来，看 article.mark_beyond"
+          },
+          "headword": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headword",
+            "description": "词形还原之后的词条。标点没有"
+          },
+          "sense_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sense Id"
+          },
+          "sense_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sense Ordinal"
+          },
+          "in_phrase": {
+            "type": "boolean",
+            "title": "In Phrase",
+            "description": "这个词是某个词组的一部分，**所以它自己的义项标注是在不知情的情况下做的**。在这儿显示这个词的释义就是在给错的意思，不只是没帮上忙——`account` 会读成「账目」，而句子说的是 `account for`"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "专有名词的一句话说明。生成它的任务还没人写，所以位置在这儿、空着，而不是没有这个字段"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "surface",
+          "sentence_seq",
+          "char_start",
+          "char_end",
+          "kind",
+          "is_target",
+          "beyond",
+          "in_phrase"
+        ],
+        "title": "Token"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

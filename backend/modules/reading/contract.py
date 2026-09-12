@@ -10,6 +10,8 @@ deletion.
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from backend.core.contract import Capabilities, ItemState, Learner
@@ -118,9 +120,12 @@ class Sense(BaseModel):
         default=None,
         description="真题考频。整块缺席而不是为零，看 capabilities.exam_frequency",
     )
-    memory: None = Field(
+    memory: dict[str, Any] | None = Field(
         default=None,
-        description="这个义项的记忆状态与到期时间。复习模块的位置，整块为 null 而不是编几个字段出来",
+        description="这个义项的记忆状态与到期时间。复习模块的位置，**整块为 null**——"
+        "跨 Phase 不变量只允许留形状显而易见的位置，而记忆状态的形状不显而易见，"
+        "所以留一个可整体为 null 的对象，而不是猜几个字段出来。"
+        "由 capabilities.memory_state 说明它是「没数据」还是「没实现」",
     )
 
 
