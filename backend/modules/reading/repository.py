@@ -712,8 +712,20 @@ def save_progress(learner_id: int, article_id: int, sentence_seq: int, percent: 
 
 
 def progress_of(learner_id: int, article_id: int) -> dict[str, Any]:
+    """How far through this article the learner is. Three keys, always the same.
+
+    This used to be ``dict(row)``, which meant a reader who had opened the
+    article got ``learner_id``, ``article_id`` and ``updated_at`` as well, and
+    one who had not got three keys — the same field being sometimes present is
+    worse than either shape on its own, because nothing can be written against
+    it. Narrowed on 2026-09-12 while declaring the response types: those three
+    were server bookkeeping that leaked, nothing read them, and ``learner_id``
+    in particular contradicts the invariant that identity is derived from the
+    device token rather than carried around in payloads.
+    """
     row = get_connection("learning").execute(
-        "SELECT * FROM reading_progress WHERE learner_id = ? AND article_id = ?",
+        "SELECT sentence_seq, percent, finished_at FROM reading_progress"
+        " WHERE learner_id = ? AND article_id = ?",
         (learner_id, article_id),
     ).fetchone()
     return dict(row) if row else {"sentence_seq": 0, "percent": 0.0, "finished_at": None}

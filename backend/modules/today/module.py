@@ -18,13 +18,15 @@ from fastapi import APIRouter, Depends
 from backend.core import auth, runtime_config
 from backend.core.registry import Module
 from backend.modules.today import service
+from backend.modules.today.contract import TodayResponse
 
 client_router = APIRouter()
 
 DeviceId = Annotated[int, Depends(auth.require_device)]
 
 
-@client_router.get("/today", summary="今日包：当天的文章与复习，一次拿全")
+@client_router.get("/today", summary="今日包：当天的文章与复习，一次拿全",
+                   response_model=TodayResponse)
 async def today(device_id: DeviceId) -> dict[str, Any]:
     """One response the client can work from all day without a network.
 
@@ -51,11 +53,13 @@ runtime_config.register(
     ),
     runtime_config.ConfigSpec(
         key="today_extra_count",
-        default=1,
+        default=0,
         value_type="int",
         title="今日包装几篇加餐",
-        description="读完主线之后解锁。还想读就再读一篇——原本「装次日到期的复习词」"
-        "那个性质随 E2 一起移出了（归档 §G）。",
+        description="2026-09-12 改为 0：加餐取消了。往期本身就是加餐——备好没读的一直堆着"
+        "（实测净增两篇一天），往列表下面翻就有，再压一篇没有意义。"
+        "字段 extra_articles 留在响应里不删（铁律 5 只增不减），改回非零就能恢复。"
+        "原文与理由见归档 §I。",
         group="today",
         order=11,
     ),

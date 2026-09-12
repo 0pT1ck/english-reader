@@ -227,7 +227,20 @@ E「句子质量抽验」**通过**——105 条生成句盲判、混 15 条阳�
   不设就报 `unable to load standard library`。
 
 **Core 的每个依赖都要单独核实能不能在 Windows 上编**，别默认「Swift 生态的应该都行」。
-已验过：`swift-openapi-runtime` 1.12.1 + `swift-http-types` 1.8.0 干净通过。
+已验过：`swift-openapi-runtime` 1.12.1 + `swift-http-types` 1.8.0、生成器本身（产出能编译能解码）。
+
+**跑任何 Swift 程序前，代理环境变量有两条要守**（2026-09-12 各栽一次，详见 `phase-5.html` §16）：
+
+- **只设大写的 `NO_PROXY`，绝不 `NO_PROXY` 和 `no_proxy` 都设。**
+  Windows 环境变量不区分大小写，Foundation 读环境时建字典会撞重复键——
+  **`Fatal error: Duplicate values for key`，进程直接没了**，不是能捕获的错误，
+  而且崩在任何网络代码之前，报错里看不出跟代理有关。
+- **`NO_PROXY` 必须设上**（本机环境里原本没有，只有 `HTTP_PROXY`）。不设的话发给
+  `127.0.0.1` 的请求会被 v2rayN 接管，**连一个没人监听的端口也返回 503 而不是报错**——
+  对离线优先的客户端这是要命的，它会把「网断了」读成「服务器出错了」。
+
+**Swift 6 的严格并发默认开着**（`swift-tools-version: 6.0`）：跨并发域改全局变量直接编译不过。
+对 Core 是好事，但要一开始就按它的规矩写，不能等写完再补。
 
 ## 部署
 

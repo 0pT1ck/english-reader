@@ -795,32 +795,69 @@
   <section>
     <div class="sec-head">
       <span class="sec-mark">§16</span>
-      <h2>定稿后先验掉的两个未知数</h2>
-      <span class="sec-note">动手写 Core 之前</span>
+      <h2>动手前先验的两个未知数 — 都过了</h2>
+      <span class="sec-note">2026-09-12 实测</span>
     </div>
-    <p class="lede">这两条都是<b>验不通就得改方案</b>的东西，而且各自只要十几分钟。
-    2026-09-12 定下：<b>方案定稿之后、动手写 Core 之前，先把它们跑一遍。</b></p>
+    <p class="lede">这两条都是<b>验不通就得改方案</b>的东西，所以排在写 Core 之前。
+    <b>结论：两个都通，方案不用改。</b>但路上挖出两个真坑，其中一个会让程序直接崩溃。</p>
 
-    <div class="checks">
-      <div class="check"><div class="check-n">1</div><div class="check-what"><b>Swift 在 Windows 上能不能发 HTTP 请求</b><span>
-      <b>这是目前最大的未知数。</b>按决定 4，Core 不实现网络、只定义协议，
-      所以真正发请求的那份代码落在<b>命令行客户端</b>身上——而它跑在 Windows 上，
-      Swift 在 Windows 上的网络支持我<b>一次都没测过</b>。
-      <br><br>
-      验不通的后果很实在：<b>命令行客户端连不上后端，而它是 P5 唯一的验收手段</b>——
-      Core 是个库，没法「用」，只能通过它走一遍。
-      <br><br>
-      <b>怎么验</b>：写个几行的小程序，访问本机后端的 <code>/health</code>，看拿不拿得到回应。
-      <b>退路</b>：让它调用系统的 curl 去发请求，绕开 Swift 自己的网络。
-      那是备胎，但得先知道要不要用——而且备胎只对命令行客户端成立，iOS 那边另有一套成熟的，不受影响。</span></div></div>
+    <div class="figures" style="margin-top:0;margin-bottom:2rem">
+      <div class="fig"><div class="fig-val">3/3</div><div class="fig-key">HTTP 探针全过：GET、POST、离线报错</div></div>
+      <div class="fig"><div class="fig-val">9<span>个文件</span></div><div class="fig-key">生成器产出，编译并解码成功</div></div>
+      <div class="fig"><div class="fig-val">2<span>个坑</span></div><div class="fig-key">代理与环境变量，见下</div></div>
+    </div>
 
-      <div class="check"><div class="check-n">2</div><div class="check-what"><b>类型生成器本身能不能在 Windows 上跑</b><span>
-      §3 验过的是 <code>swift-openapi-runtime</code>——那是<b>生成出来的代码要依赖的库</b>。
-      <b>生成器是另一个程序</b>，把 OpenAPI 描述变成 Swift 文件的那个，它能不能在 Windows 上跑没验过。
-      <br><br>
-      验不通的后果比第一条轻：决定 13 要求<b>生成物提交进仓库</b>，
-      所以只要有一个地方能生成就行——实在不行让 CI 上的 Linux 去生成。
-      但那样<b>每改一次契约都要等 CI</b>，本地回路在这件事上就断了。</span></div></div>
+    <h3>坑一：<code>NO_PROXY</code> 不设，「连不上」会变成「503」</h3>
+    <p>这台机器的环境变量里有 <code>HTTP_PROXY</code>（v2rayN，10808），<b>但没有 <code>NO_PROXY</code></b>——
+    而 CLAUDE.md 的网络访问那节明写着它该设成 <code>localhost,127.0.0.1,::1</code>。
+    Windows 系统代理的 <code>ProxyOverride</code> 是对的（含 <code>127.*</code>、<code>192.168.*</code>），
+    <b>但走环境变量的程序不看它</b>。</p>
+    <p>于是发给本机后端的请求被代理接管，<b>连一个没人监听的端口也会返回 503 而不是报错</b>。
+    对一个离线优先的客户端，这是要命的：<b>它会把「网断了」读成「服务器出错了」</b>，
+    而这两件事的处理完全不同——前者该排进发件箱等重连，后者该告诉用户。</p>
+    <p><b>设上 <code>NO_PROXY</code> 之后，同一个请求正确地抛出 <code>URLError</code>。</b></p>
+
+    <h3>坑二：同时设 <code>NO_PROXY</code> 和 <code>no_proxy</code>，Swift 程序当场崩溃</h3>
+    <div class="callout">
+      <pre style="margin:0;border:none;padding:0;background:none"><b>Fatal error: Duplicate values for key: 'ProcessEnvironmentKey(value: "no_proxy")'</b></pre>
+    </div>
+    <p style="margin-top:1.4rem"><b>Windows 的环境变量不区分大小写</b>，而 Foundation 读环境时要建一个字典，
+    两个只差大小写的变量就撞成重复键——<b>直接 fatal error，不是可以捕获的错误，是进程没了</b>。</p>
+    <p>这个坑毒在两处：<b>触发条件太平常</b>（很多工具习惯两种大小写都设一遍），
+    <b>而且崩在任何网络代码之前</b>——程序还没开始干活就没了，报错信息里也看不出跟代理有关。</p>
+    <p><b>规矩：只设大写的 <code>NO_PROXY</code>，绝不两个都设。</b></p>
+
+    <h3>顺带发现：Swift 6 的严格并发默认是开的</h3>
+    <p><code>swift-tools-version: 6.0</code> 之下，跨并发域改一个全局变量<b>直接编译不过</b>。
+    这对 Core 是好事（发件箱和复习状态机都会被并发碰到），但<b>写的时候要按它的规矩来</b>，
+    不能等写完再补。</p>
+
+    <h3>未知数 1：Swift 在 Windows 上能不能发 HTTP —— <b>能</b></h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>验的是什么</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>GET + JSON 解码</td><td class="ok">通过</td></tr>
+          <tr><td>POST，带 JSON 正文与 <code>Authorization</code> 头——事件上报那条路</td><td class="ok">通过</td></tr>
+          <tr><td><b>连不上时抛出错误而不是挂住</b>——离线是这个客户端的常态，失败路径和成功路径一样要紧</td><td class="ok">通过（设了 <code>NO_PROXY</code> 之后）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.4rem"><b>退路用不上了</b>：原本准备的是「调用系统 curl 绕开 Swift 的网络」，现在不需要。</p>
+
+    <h3>未知数 2：生成器能不能在 Windows 上跑 —— <b>能</b></h3>
+    <p><code>swift run swift-openapi-generator generate</code> 直接跑通，产出 9 个文件。
+    <b>但「生成不报错」不算数</b>，所以又验了两步：</p>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><b>生成的代码编译通过</b>（31 秒，含依赖）</span></div>
+      <div class="not"><i>✓</i><span><b>真的解码了一段今日包形状的 JSON</b>——嵌套数组、可空字段、token 列表全对</span></div>
+    </div>
+    <p style="margin-top:1.4rem">类型也正是期望的样子：<code>day</code> 是必填就不可空，<code>read_at</code> 可空就是 <code>String?</code>，
+    整体带 <code>Codable, Hashable, Sendable</code>。</p>
+    <div class="callout">
+      <b>顺带印证了 §8 那句话</b>：<code>in_phrase</code> 因为没写进 <code>required</code>，
+      生成出来是 <code>Bool?</code>——<b>后端的声明写得糙，Swift 这边就到处要判空</b>。
+      这不是生成器的毛病，是压力被正确地压回了后端。
     </div>
 
     <h3 style="margin-top:2.4rem">其余的风险与未定</h3>

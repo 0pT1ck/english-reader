@@ -23,6 +23,12 @@ from backend.core.db import get_connection
 from backend.core.logging import get_logger
 from backend.modules.reading import repository as reading_repository
 from backend.modules.review import clock, repository, scheduler, sentences, session
+from backend.modules.review.contract import (
+    AnswerResponse,
+    AnswersResponse,
+    ReviewDayResponse,
+    SpellingResponse,
+)
 
 log = get_logger("review.routes")
 
@@ -46,7 +52,8 @@ _payload = session.day_payload
 # Client surface
 # --------------------------------------------------------------------------- #
 
-@client_router.get("/reviews", summary="今天要复习的全部内容")
+@client_router.get("/reviews", summary="今天要复习的全部内容",
+                   response_model=ReviewDayResponse)
 async def reviews(device_id: DeviceId) -> dict[str, Any]:
     return _payload(_learner(device_id))
 
@@ -61,7 +68,8 @@ class AnswerIn(BaseModel):
     easy: bool = False
 
 
-@client_router.post("/reviews/answer", summary="上报一次作答")
+@client_router.post("/reviews/answer", summary="上报一次作答",
+                    response_model=AnswerResponse)
 async def report_answer(device_id: DeviceId, body: AnswerIn) -> dict[str, Any]:
     learner_id = _learner(device_id)
     result = session.answer(
@@ -98,7 +106,8 @@ class AnswerItem(AnswerIn):
 AnswersIn.model_rebuild()
 
 
-@client_router.post("/reviews/answers", summary="批量上报作答（离线补报用）")
+@client_router.post("/reviews/answers", summary="批量上报作答（离线补报用）",
+                    response_model=AnswersResponse)
 async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]:
     """Replay a day's answers in order, skipping anything already recorded.
 
@@ -168,7 +177,8 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
     }
 
 
-@client_router.post("/reviews/spelling", summary="上报一次拼写")
+@client_router.post("/reviews/spelling", summary="上报一次拼写",
+                    response_model=SpellingResponse)
 async def report_spelling(device_id: DeviceId, body: SpellingIn) -> dict[str, Any]:
     """Recorded, never scheduled on.
 

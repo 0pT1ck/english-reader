@@ -34,6 +34,11 @@ from backend.modules.reading import (
     repository,
     service,
 )
+from backend.modules.reading.contract import (
+    ArticleResponse,
+    EventBatchResponse,
+    LibraryResponse,
+)
 
 log = get_logger("reading.routes")
 
@@ -67,7 +72,17 @@ class EventBatch(BaseModel):
     events: list[ClientEvent] = Field(default_factory=list, max_length=500)
 
 
-@client_router.get("/library", summary="文章清单")
+# **Why `response_model=` and not a return annotation.** The service layer
+# returns plain dicts, and it should keep doing so — the models describe the
+# wire, they are not the currency the rest of the backend trades in. Annotating
+# these functions `-> LibraryResponse` while they return a dict would be a lie
+# a future reader has to discover. FastAPI takes the schema from
+# `response_model` either way.
+#
+# The models are what P5 needs: without them `/openapi.json` says every client
+# response is `{"type":"object","additionalProperties":true}`, and a generated
+# Swift client is then `[String: Any]` — the same as generating nothing.
+@client_router.get("/library", summary="文章清单", response_model=LibraryResponse)
 async def library(
     device_id: DeviceId,
     shelf: str = Query("fresh", description="fresh 新备的 / archive 往期 / unread / read / all"),
@@ -93,7 +108,8 @@ async def library(
     )
 
 
-@client_router.get("/articles/{article_id}", summary="一篇文章的全部内容")
+@client_router.get("/articles/{article_id}", summary="一篇文章的全部内容",
+                   response_model=ArticleResponse)
 async def article(device_id: DeviceId, article_id: int) -> dict[str, Any]:
     """Text, sentences, every token's analysis, every gloss, and your marks.
 
@@ -104,7 +120,8 @@ async def article(device_id: DeviceId, article_id: int) -> dict[str, Any]:
     return service.article(auth.learner_for_device(device_id), article_id)
 
 
-@client_router.post("/events", summary="批量上报交互事件")
+@client_router.post("/events", summary="批量上报交互事件",
+                    response_model=EventBatchResponse)
 async def report_events(device_id: DeviceId, batch: EventBatch) -> dict[str, Any]:
     """Accepts duplicates by design — a retry is the protocol working."""
     return service.ingest_events(

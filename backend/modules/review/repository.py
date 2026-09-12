@@ -126,8 +126,17 @@ def finished_article_ids(learner_id: int) -> set[int]:
 # --------------------------------------------------------------------------- #
 
 def session_for(learner_id: int, day: str) -> dict[str, Any] | None:
+    """Today's review session, or None before it is opened.
+
+    Columns named rather than ``SELECT *``: this row is echoed to clients inside
+    ``progress``, and ``learner_id`` has no business travelling in a payload —
+    identity is derived from the device token. Narrowed on 2026-09-12 while
+    declaring the response types, along with the same leak in
+    ``reading.repository.progress_of``.
+    """
     row = get_connection("learning").execute(
-        "SELECT * FROM review_sessions WHERE learner_id = ? AND day = ?",
+        "SELECT id, day, started_at, finished_at, spelling_at FROM review_sessions"
+        " WHERE learner_id = ? AND day = ?",
         (learner_id, day),
     ).fetchone()
     return dict(row) if row else None
