@@ -183,7 +183,13 @@ def section_c() -> None:
 
     def clean() -> None:
         conn.execute("DELETE FROM client_events WHERE idem_key LIKE 'p5probe-%'")
-        for table in ("study_states", "study_marks", "spelling_attempts"):
+        # `review_queue` was missing here, and what it left behind was not a
+        # stale row: marking the probe puts it in the review pool, the next
+        # session builds a queue from that pool, and the queue row outlives the
+        # state row this list did delete. It then turns up as a genuine question
+        # in a genuine day — found by walking one, not by reading this.
+        for table in ("study_states", "study_marks", "spelling_attempts",
+                      "review_queue", "review_history"):
             try:
                 conn.execute(f"DELETE FROM {table} WHERE item_key = ?", (PROBE_WORD,))
             except Exception:  # noqa: BLE001 - a missing column must not strand the lock

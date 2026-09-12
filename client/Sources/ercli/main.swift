@@ -33,6 +33,29 @@ func value(_ name: String) -> String? {
     return arguments[index + 1]
 }
 
+/// The positional arguments — the command and whatever follows it.
+///
+/// **An option's value is not a positional.** `ercli library --state ./.ercli`
+/// read `./.ercli` as the source and asked the server for articles from a
+/// shelf by that name, which came back empty and looked like an empty shelf
+/// rather than a parsing mistake. Caught by running it; nothing about the
+/// output said "bad argument".
+let positionals: [String] = {
+    var out: [String] = []
+    var skipNext = false
+    for argument in arguments {
+        if skipNext { skipNext = false; continue }
+        if argument.hasPrefix("--") {
+            // These take a value; the rest are plain flags.
+            skipNext = ["--server", "--token", "--state", "--answers", "--clear"]
+                .contains(argument)
+            continue
+        }
+        out.append(argument)
+    }
+    return out
+}()
+
 if flag("no-color") { Ink.enabled = false }
 
 let stateDirectory = URL(fileURLWithPath:
@@ -50,6 +73,7 @@ func usage() {
 
     \(Ink.bold("用法"))
       ercli day                拉今日包并列出今天要读、要复习的东西
+      ercli library [来源]     书架：不带参数看生成文，cet4 / cet6 / kaoyan 看真题
       ercli read <编号>        读一篇：正文带标注，可以查词、标记、读完
       ercli look <编号> <序号> 查一个词（序号就是正文里 ⟨n⟩ 那个数字）
       ercli mark <编号> <序号> [--fuzzy]   标记；对词组会整体标记
@@ -68,6 +92,7 @@ func usage() {
       --offline         \(Ink.bold("不连服务器"))，只用缓存——验离线那一半
       --no-color        不上色
       --compare         在线作答时把客户端算的和服务端回的对一遍
+      --answers 1,3,2   脚本喂作答，让 walk 能无人值守地把复习也走完
     """)
 }
 
@@ -216,6 +241,30 @@ func sync() async throws {
     }
 }
 
+/// 书架。**今日包不是今天能读的全部**——真题走这条路（决定 19），
+/// 而往期生成文也在这里：备好没读的会一直堆着，往下翻就是「还想读」时的供给。
+func library(_ source: String?) async throws {
+    requireToken()
+    let shelf = source == nil ? "fresh" : "all"
+    let list = try await engine.library(shelf: shelf, source: source)
+    let label = source.map { ["cet4": "四级真题", "cet6": "六级真题",
+                              "kaoyan": "考研真题"][$0] ?? $0 } ?? "新备的生成文"
+    print(Ink.bold(label) + Ink.dim("  \(list.articles.count) 篇"))
+    for item in list.articles.prefix(30) {
+        let read = item.read_at != nil ? Ink.green("已读") : Ink.dim("未读")
+        let difficulty = item.difficulty.map {
+            Ink.dim("超四级 \(String(format: "%.1f", $0.beyond_cet4_pct))%")
+        } ?? ""
+        print("  \(Ink.bold("#\(item.id)")) \(item.title)"
+            + Ink.dim("  \(item.word_count) 词  ") + difficulty + "  " + read)
+    }
+    if list.articles.count > 30 {
+        print(Ink.dim("  …还有 \(list.articles.count - 30) 篇"))
+    }
+    print(Ink.dim("排序方式：" + list.sortable.additionalProperties.keys.sorted()
+        .joined(separator: " / ")))
+}
+
 func showCache() throws {
     let sizes = articleCache.bodySizes()
     let total = sizes.values.reduce(0, +)
@@ -268,15 +317,17 @@ func review() async throws {
     ) {
         guard let card = cards[queueId], let state = states[queueId] else { break }
         asked += 1
+        let asked = askedSentence(card, state.direction)
         print(Ink.dim(String(repeating: "─", count: 50)))
-        print(Ink.dim("⟨\(queueId)⟩ ") + question(card, state.direction))
+        print(Ink.dim("⟨\(queueId)⟩ ") + question(card, asked, state.direction))
 
-        let answer = promptAnswer()
+        let answer = promptAnswer(card, asked, state.direction)
         let next = state.applying(answer, weightDecay: day.weight_decay)
         states[queueId] = next
 
         try outbox.append(.answered(queueId: queueId, passed: answer.passed,
-                                    revealed: answer.revealed, easy: answer.easy))
+                                    revealed: answer.revealed,
+                                    sentenceId: asked?.id, easy: answer.easy))
 
         // 在线对拍（决定 14）。它抓的是向量抓不到的那一类：状态机算得对，
         // 但上报时接错了线——传错排队号，或者把作答顺序发拧了。
@@ -307,29 +358,81 @@ func review() async throws {
     }
 }
 
+/// Which sentence to ask with.
+///
+/// **Not a free choice.** The sentences you already read are hints; the ones you
+/// have not are questions — so asking with a hint would be showing the answer.
+/// The server has already split them, and this only picks within the right pile.
+func askedSentence(_ card: Components.Schemas.ReviewItem,
+                   _ direction: ReviewDirection) -> Components.Schemas.SentenceCard? {
+    card.questions.first ?? card.hints.first
+}
+
 func question(_ card: Components.Schemas.ReviewItem,
+              _ asked: Components.Schemas.SentenceCard?,
               _ direction: ReviewDirection) -> String {
+    let text = HintLadder.prompt(for: card, asked: asked, direction: direction)
     switch direction {
     case .wordToSense:
-        return Ink.bold(card.item_key) + Ink.dim("  —— 它是什么意思？")
+        return Ink.bold(text) + "\n" + Ink.dim("   —— 这里的 \(card.item_key) 是什么意思？")
     case .senseToWord:
-        let sense = card.sense
-        let meaning = sense?.concept_en
-            ?? ArticleRenderer.gloss(nil)
-        return Ink.bold(meaning.isEmpty ? "（这个义项）" : meaning)
-            + Ink.dim("  —— 是哪个词？")
+        return Ink.bold(text) + "\n" + Ink.dim("   —— 空里填哪个词？")
     }
 }
 
-func promptAnswer() -> ReviewAnswer {
-    print(Ink.dim("  [1] 想起来了   [2] 没想起来   [3] 开提示后想起来了   [4] 太简单了"))
-    print("  > ", terminator: "")
-    let line = readLine()?.trimmingCharacters(in: .whitespaces) ?? "1"
-    switch line {
-    case "2": return ReviewAnswer(passed: false)
-    case "3": return ReviewAnswer(passed: true, revealed: 2)
-    case "4": return ReviewAnswer(passed: true, easy: true)
-    default: return ReviewAnswer(passed: true)
+/// Ask one question, letting the learner open hints one at a time.
+///
+/// **Opening a hint fails the round, whatever happens next** — that is the
+/// whole point of `revealed` being the grade: it measures what it took, not
+/// what you claim afterwards. So the count is tracked here and reported, rather
+/// than being a number the learner picks off a menu (which is what the first
+/// version did, hard-coding 2).
+/// Scripted input, so the unattended walk can drive the review.
+///
+/// `--answers 1,3,2` feeds one keystroke at a time. Not a convenience: a path
+/// that can only be driven by hand is a path that does not get driven, and the
+/// review half of this client sat unexercised for exactly that reason until it
+/// was noticed. With this, `walk` covers the whole day rather than half of it.
+nonisolated(unsafe) var scriptedInput: [String] = (value("answers") ?? "")
+    .split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
+    .filter { !$0.isEmpty }
+
+func readAnswer(_ fallback: String = "1") -> String {
+    if !scriptedInput.isEmpty {
+        let next = scriptedInput.removeFirst()
+        print(next + Ink.dim("  ←脚本"))
+        return next
+    }
+    return readLine()?.trimmingCharacters(in: .whitespaces) ?? fallback
+}
+
+func promptAnswer(_ card: Components.Schemas.ReviewItem,
+                  _ asked: Components.Schemas.SentenceCard?,
+                  _ direction: ReviewDirection) -> ReviewAnswer {
+    let ladder = HintLadder.hints(for: card, asked: asked, direction: direction)
+    var revealed = 0
+
+    while true {
+        var options = ["[1] 想起来了", "[2] 没想起来"]
+        if revealed < ladder.count { options.append("[3] 给点提示") }
+        if revealed == 0 { options.append("[4] 太简单了") }
+        print(Ink.dim("  " + options.joined(separator: "   ")))
+        print("  > ", terminator: "")
+        let line = readAnswer()
+
+        switch line {
+        case "2":
+            return ReviewAnswer(passed: false, revealed: revealed)
+        case "3" where revealed < ladder.count:
+            let hint = ladder[revealed]
+            revealed += 1
+            print(Ink.yellow("  提示 \(hint.level)/\(HintLadder.maxReveal) ")
+                + Ink.dim(hint.label + "：") + hint.body)
+        case "4" where revealed == 0:
+            return ReviewAnswer(passed: true, easy: true)
+        default:
+            return ReviewAnswer(passed: true, revealed: revealed)
+        }
     }
 }
 
@@ -376,7 +479,7 @@ func spell() async throws {
             print(Ink.dim("  提示：") + (sense.concept_en ?? "—"))
         }
         print("  > ", terminator: "")
-        let typed = readLine()?.trimmingCharacters(in: .whitespaces) ?? ""
+        let typed = readAnswer("")
         try outbox.append(.spelled(word, typed: typed))
         print(typed.lowercased() == word.lowercased()
             ? Ink.green("  对了") : Ink.red("  应该是 \(word)"))
@@ -438,41 +541,115 @@ func walk() async throws {
     try outbox.append(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1))
     print("\n\(Ink.bold("⑥ 读完"))——记账只在这一刻发生")
 
-    print("\n\(Ink.bold("⑦ 发件箱"))：\(outbox.count) 条待报")
+    // ⑦⑧ 复习与拼写。**这一半原先不在 walk 里**——它走到读完就停了，于是状态机、
+    // 提示分级、作答上报这条链只有单元测试见过。一天不是读完就结束的。
+    try await walkReview(package.reviews)
+
+    print("\n\(Ink.bold("⑨ 发件箱"))：\(outbox.count) 条待报")
     let report = try await engine.drain()
     if report.offline {
         print(Ink.yellow("   离线，一条没发出去——全都留着，这正是要验的"))
-        print(Ink.green("\n离线也把一天走完了。发件箱 \(outbox.count) 条等着联网。"))
+        print(Ink.green("\n离线也把一天走完了：读完 + 复习 + 拼写，"
+            + "发件箱 \(outbox.count) 条等着联网。"))
         return
     }
     print(Ink.green("   收下 \(report.landed)，重复 \(report.duplicates)，"
         + "失败 \(report.rejected)，剩 \(report.remaining)"))
-    print(Ink.green("\n一天走完了。"))
+    print(Ink.green("\n一天走完了：读完 + 复习 + 拼写，全部上报。"))
+}
+
+/// The review and spelling half of `walk`.
+///
+/// Bounded on purpose: `walk` runs unattended, and an item that keeps being
+/// answered wrong would otherwise loop forever. Stopping early is honest — the
+/// point is to prove the path works, not to finish someone's day for them.
+func walkReview(_ day: Components.Schemas.ReviewDayResponse) async throws {
+    let open = day.items.filter { !$0.done }
+    guard !open.isEmpty else {
+        print("\n\(Ink.bold("⑦ 复习"))：今天没有到期的，跳过")
+        return
+    }
+
+    print("\n\(Ink.bold("⑦ 复习"))：\(open.count) 条待做"
+        + Ink.dim(scriptedInput.isEmpty ? "（手动作答）" : "（脚本作答）"))
+
+    var states: [Int: ReviewItemState] = [:]
+    for item in open {
+        states[item.queue_id] = ReviewItemState(
+            direction: ReviewDirection(rawValue: item.direction) ?? .wordToSense,
+            asks: item.asks, misses: item.misses, weight: item.weight, done: item.done)
+    }
+    let cards = Dictionary(uniqueKeysWithValues: open.map { ($0.queue_id, $0) })
+    let draw = ReviewDraw()
+    var generator = SystemRandomNumberGenerator()
+    var asked = 0
+    let budget = scriptedInput.isEmpty ? 2 : 40
+
+    while asked < budget, let queueId = draw.pick(
+        from: states.keys.sorted(),
+        weight: { states[$0]!.weight },
+        isOpen: { !states[$0]!.done },
+        random: Double.random(in: 0..<1, using: &generator)
+    ) {
+        guard let card = cards[queueId], let state = states[queueId] else { break }
+        asked += 1
+        let sentence = askedSentence(card, state.direction)
+        print(Ink.dim("  ⟨\(queueId)⟩ ") + question(card, sentence, state.direction))
+        let answer = promptAnswer(card, sentence, state.direction)
+        states[queueId] = state.applying(answer, weightDecay: day.weight_decay)
+        try outbox.append(.answered(queueId: queueId, passed: answer.passed,
+                                    revealed: answer.revealed,
+                                    sentenceId: sentence?.id, easy: answer.easy))
+    }
+
+    let done = states.values.filter { $0.done }.count
+    print("   问了 \(asked) 次，过了 \(done) 条，还剩 \(states.count - done) 条")
+
+    // 拼写：当天复习走完之后的强化选项。**拼错不影响调度，只单独记一笔。**
+    guard day.spelling_enabled else { return }
+    var seen = Set<String>()
+    let words = open.map { $0.item_key }.filter { seen.insert($0).inserted }.prefix(2)
+    guard !words.isEmpty else { return }
+
+    print("\n\(Ink.bold("⑧ 拼写"))：\(words.count) 个词")
+    for word in words {
+        // **不读 `--answers`。** 那个开关是喂复习的，而复习要问多少次事先不知道，
+        // 所以剩下多少也不知道——第一次跑就把 `copper` 拼成了「3」。
+        // walk 是无人值守的，这里故意拼错，好让「拼错了会怎样」这条路真的被走过，
+        // 而不是每次都走对的那一支。要手动做拼写就用 `ercli spell`。
+        let typed = String(word.dropLast())
+        try outbox.append(.spelled(word, typed: typed))
+        print("   \(word) ← 打成「\(typed)」"
+            + (typed == word ? Ink.green("  对")
+                             : Ink.red("  错——只记录，不影响复习安排")))
+    }
 }
 
 // MARK: - Dispatch
 
 do {
-    switch arguments.first {
+    switch positionals.first {
     case "day": try await showDay()
     case "read":
-        guard let id = arguments.dropFirst().first.flatMap(Int.init) else { usage(); exit(2) }
+        guard let id = positionals.dropFirst().first.flatMap(Int.init) else { usage(); exit(2) }
         try await read(id)
     case "look":
-        let rest = arguments.dropFirst().compactMap(Int.init)
+        let rest = positionals.dropFirst().compactMap(Int.init)
         guard rest.count >= 2 else { usage(); exit(2) }
         try await look(rest[0], rest[1])
     case "mark":
-        let rest = arguments.dropFirst().compactMap(Int.init)
+        let rest = positionals.dropFirst().compactMap(Int.init)
         guard rest.count >= 2 else { usage(); exit(2) }
         try await mark(rest[0], rest[1], fuzzy: flag("fuzzy"))
     case "unmark":
-        let rest = arguments.dropFirst().compactMap(Int.init)
+        let rest = positionals.dropFirst().compactMap(Int.init)
         guard rest.count >= 2 else { usage(); exit(2) }
         try await unmark(rest[0], rest[1])
     case "finish":
-        guard let id = arguments.dropFirst().first.flatMap(Int.init) else { usage(); exit(2) }
+        guard let id = positionals.dropFirst().first.flatMap(Int.init) else { usage(); exit(2) }
         try await finish(id)
+    case "library":
+        try await library(positionals.dropFirst().first)
     case "review": try await review()
     case "spell": try await spell()
     case "sync": try await sync()

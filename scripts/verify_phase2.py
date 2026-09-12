@@ -499,10 +499,31 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               "动词+小品词的结构预筛挡住了 to be / the world / there is 这类"
               if noise == 0 else f"{noise} 处噪音混进来了")
 
+        # **Waits, rather than reading the count once.** This script ingests an
+        # article of its own, ingestion proposes phrase candidates, and judging
+        # them is an async job — so the first read happens while the script's
+        # own work is still in flight, and the check fails on a number it
+        # created itself moments earlier. Measured 2026-09-12: five pending
+        # during the run, zero a few seconds after it. 坑 §4.6 is the sibling
+        # of this one — a verify script tripping over what it set in motion.
+        #
+        # Bounded, because a wait with no exit is how a check becomes a hang.
+        pending = pstats["pending"]
+        if pending:
+            deadline = time.time() + 120
+            while pending and time.time() < deadline:
+                time.sleep(5)
+                pending = conn.execute(
+                    "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NULL"
+                ).fetchone()[0]
+            pstats = phrases.stats()
+
         check("7.9", "候选已逐处判断过",
               pstats["pending"] == 0 and pstats["confirmed"] > 0,
               f"判为词组 {pstats['confirmed']} 处（{pstats['distinct']} 个不同），"
-              f"判为字面用法 {pstats['rejected']} 处，待判 {pstats['pending']}")
+              f"判为字面用法 {pstats['rejected']} 处，待判 {pstats['pending']}"
+              + ("" if not pending else "——等了两分钟还没判完，"
+                 "要么模型那条路断了，要么这个上限该调"))
 
         # The judgement has to be per occurrence, not per string — `look at` is
         # a phrase in one sentence and two words in the next. If every
