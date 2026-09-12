@@ -1,4 +1,8 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
+//
+// 6.2 而不是 6.0，只为了能写 `.iOS(.v26)`——那是决定 3 在代码里的落点，
+// 而 v26 这个符号是 PackageDescription 6.2 才有的。三个环境（本地 6.3.3、
+// Linux 容器、Xcode 26）都在我们自己手里，所以提版本没有代价。
 import PackageDescription
 
 // **ERCore must stay free of any UI framework.** The rule is in
@@ -12,6 +16,9 @@ import PackageDescription
 // touched it would stop being testable in two seconds on this machine.
 let package = Package(
     name: "ERClient",
+    // 只面向 iPhone 17 / iOS 26（决定 3）——一台设备、一个系统版本、一个使用者，
+    // 不背任何向下兼容。macOS 那条是 CI 上跑测试要的。
+    platforms: [.iOS(.v26), .macOS(.v15)],
     products: [
         .library(name: "ERCore", targets: ["ERCore"]),
         .executable(name: "ercli", targets: ["ercli"]),

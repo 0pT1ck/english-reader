@@ -1,0 +1,137 @@
+name: 客户端内核
+
+# P5 的 CI 只有三层，而且没有一层需要签名或模拟器——这个 Phase 不做界面。
+# 截图、XCUITest、TestFlight 全部属于下一个 Phase。
+on:
+  push:
+    branches: [main, ios]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # 连着推好几次是常态，旧的跑完没有意义，还占着并发额度。
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: L0 · Core（Linux）
+    runs-on: ubuntu-latest
+    # 跟本机的 6.3.3 对齐：Package.swift 写的是 tools-version 6.2，
+    # 更老的工具链连清单都解析不了。
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      # 环境先打出来。环境坏掉和代码写错在日志里长得一模一样（坑 §1.2），
+      # 没有这两行，一次工具链漂移会被当成代码问题改上一小时。
+      - name: 环境
+        run: |
+          swift --version
+          echo "NO_PROXY=$NO_PROXY"
+
+      # Core 不许碰界面框架。这条判据是「换成安卓也一模一样的归 Core」，
+      # 而绝大多数架构规矩会静默腐烂——这一条不会，因为它在这里会变红。
+      - name: Core 里不许有界面框架
+        run: |
+          if grep -rn "import UIKit\|import SwiftUI\|import AppKit" client/Sources/ERCore; then
+            echo "::error::ERCore 里出现了界面框架。界面归 App 层（phase-5.html §5）"
+            exit 1
+          fi
+          echo "干净"
+
+      - uses: actions/cache@v4
+        with:
+          path: client/.build
+          key: spm-linux-${{ hashFiles('client/Package.resolved') }}
+
+      - name: swift test
+        working-directory: client
+        run: swift test
+
+  ios-build:
+    name: L1 · Core 能为 iOS 编译（macOS）
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # **Xcode 版本写死。** 镜像里装着七个，默认值会随镜像更新漂，而
+      # runner-images 反复出现「Xcode 在、配套 runtime 不在」的 issue
+      # （#13853、#13435、#13220）——不锁版本等于把编译能力交给别人的更新节奏。
+      - name: 选定 Xcode
+        run: |
+          ls /Applications | grep Xcode
+          sudo xcode-select -s /Applications/Xcode_26.app || \
+            sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | head -1)"
+          xcodebuild -version
+          swift --version
+
+      - uses: actions/cache@v4
+        with:
+          path: client/.build
+          key: spm-macos-${{ hashFiles('client/Package.resolved') }}
+
+      # **这一层不能省。**本机编的是 Swift 6.3.3 / Windows，Xcode 里是另一个
+      # 版本和另一个平台——Windows 编过不等于 iOS 编过。把这个检查推到下一个
+      # Phase，等于把「Core 用了 iOS 上没有的东西」这个发现推迟一整个 Phase。
+      - name: 为 iOS 目标编译 Core
+        working-directory: client
+        run: |
+          xcodebuild -scheme ERCore \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath .build/xcode \
+            build | xcbeautify || \
+          xcodebuild -scheme ERCore \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath .build/xcode \
+            build
+
+  contract:
+    name: L0 · 契约没有漂
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 只检查「生成物和契约快照对得上」，不跑后端——CI 上没有数据库，
+      # 而契约快照本来就是为了让生成在没有数据库的机器上也能重跑。
+      - name: 生成的类型与契约快照一致
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          spec = json.loads(pathlib.Path("client/openapi.json").read_text(encoding="utf-8"))
+          paths = spec.get("paths", {})
+          schemas = spec.get("components", {}).get("schemas", {})
+          assert paths, "契约快照里没有端点"
+          assert schemas, "契约快照里没有类型"
+
+          generated = pathlib.Path("client/Sources/ERContract")
+          files = sorted(p.name for p in generated.glob("*.swift"))
+          assert len(files) >= 5, f"生成物只有 {files}"
+
+          # 生成器会「警告然后跳过」，跳过等于静默删字段——2026-09-12 有 70 个
+          # 字段这样没的，构建还是绿的。所以抽查当时消失过的那几个。
+          body = (generated / "Types+Components+Schemas.swift").read_text(encoding="utf-8")
+          for schema, field in [("ArticleResponse", "tokens"), ("ArticleResponse", "glossary"),
+                                ("ArticleResponse", "preparing"), ("Learner", "level")]:
+              assert f"public var {field}:" in body, f"{schema}.{field} 不在生成物里"
+
+          print(f"契约 {len(paths)} 个端点、{len(schemas)} 个类型；生成物 {len(files)} 个文件")
+          PY
+
+      - name: 复习向量还在，且覆盖了那几条规则
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          doc = json.loads(pathlib.Path(
+              "client/Tests/ERCoreTests/Fixtures/review-vectors.json").read_text(encoding="utf-8"))
+          cases = doc["cases"]
+          assert len(cases) >= 8, f"只有 {len(cases)} 个场景"
+          names = " ".join(c["name"] for c in cases)
+          assert "第二向答错" in names, "决定 7 那条向量不见了——最容易写漏的一条"
+          # 时间戳会让每次导出都不同，那样这份文件就没人会去 diff 了。
+          assert "generated_at" not in doc, "向量里不该有生成时间"
+          print(f"{len(cases)} 个场景")
+          PY
