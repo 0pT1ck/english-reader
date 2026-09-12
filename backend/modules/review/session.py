@@ -248,7 +248,12 @@ def progress(learner_id: int, now: datetime | None = None) -> dict[str, Any]:
     now = _now(now)
     session = repository.session_for(learner_id, repository.today(now))
     if session is None:
-        return {"session": None, "total": 0, "done": 0, "remaining": 0, "buckets": {}}
+        # `spelling_available` is stated here too, not left out. A field that
+        # appears only on one branch cannot be written against — no session
+        # means nothing is done, which means spelling is not on offer, and
+        # saying so is more useful than saying nothing.
+        return {"session": None, "total": 0, "done": 0, "remaining": 0,
+                "buckets": {}, "spelling_available": False}
     rows = repository.queue_rows(session["id"])
     done = [r for r in rows if r["done_at"]]
     buckets: dict[str, int] = {}

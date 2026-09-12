@@ -30,6 +30,8 @@ as read afterwards.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import sqlite3
 import statistics
 import sys
@@ -69,10 +71,31 @@ def _first_ready(source: str | None = None) -> dict | None:
     return rows[0] if rows else None
 
 
+def _fresh_device(name: str) -> str:
+    """A device token for this run, and **only** for this run.
+
+    Registering one and walking away leaves a live credential behind: a device
+    token can read the learner's study content and report events. Two of these
+    scripts had been doing that since 2026-09-07, and by 2026-09-12 there were
+    142 unrevoked tokens named after verification runs — none of them anybody's
+    device, all of them able to act as the learner.
+
+    So the old ones go first. Revoking rather than deleting keeps the audit
+    trail: the row says a token existed and when it stopped working.
+    """
+    conn = get_connection("learning")
+    conn.execute(
+        "UPDATE devices SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL",
+        (datetime.now(timezone.utc).isoformat(timespec="seconds"), name),
+    )
+    conn.commit()
+    return auth.create_device(name)
+
+
 def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
     with trace():
         client = TestClient(app)
-        token = auth.create_device("verify-phase2")
+        token = _fresh_device("verify-phase2")
         head = {"Authorization": "Bearer " + token}
 
         # The admin surface takes the admin credential, never the device token —

@@ -1,0 +1,7 @@
+# swift-openapi-generator 的配置。生成结果提交进仓库，CI 检查「重新生成无 diff」。
+#
+# 只生成 types 和 client：server 那半是给 Swift 写服务端用的，我们的服务端是 Python。
+generate:
+  - types
+  - client
+accessModifier: public

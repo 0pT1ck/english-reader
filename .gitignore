@@ -29,3 +29,12 @@ Thumbs.db
 # Visual Studio scratch, and Swift build output
 .vs/
 .build/
+
+# 构建工具的本地检出，不进版本控制
+.tooling/
+
+# Swift 构建产物
+client/.build/
+
+# 命令行客户端的本地状态（发件箱、缓存）
+client/.ercli/

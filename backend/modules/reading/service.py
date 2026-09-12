@@ -565,18 +565,21 @@ def ingest_events(device_id: int, learner_id: int,
             continue
 
         payload = item.get("payload") or {}
-        event_id = repository.record_event(
+        record = repository.record_event(
             key, device_id, learner_id, event_type, payload, item.get("occurred_at"),
         )
-        if event_id is None:
+        if record is None:
             duplicates += 1
             results.append({"idem_key": key, "status": "duplicate"})
             continue
 
         try:
+            # A retry is a second attempt at an event whose first attempt never
+            # took effect, so it runs through exactly the same path — see
+            # `record_event` for why applying twice is safe for these types.
             _apply(learner_id, event_type, payload)
         except Exception as exc:  # noqa: BLE001 - one bad event must not sink the batch
-            repository.finish_event(event_id, str(exc))
+            repository.finish_event(record.id, str(exc))
             failed += 1
             results.append({"idem_key": key, "status": "failed", "reason": str(exc)})
             log.warning(
@@ -586,7 +589,7 @@ def ingest_events(device_id: int, learner_id: int,
             )
             continue
 
-        repository.finish_event(event_id)
+        repository.finish_event(record.id)
         accepted += 1
         results.append({"idem_key": key, "status": "accepted"})
 

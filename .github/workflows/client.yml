@@ -1,0 +1,191 @@
+name: 客户端内核
+
+# P5 的 CI 只有三层，而且没有一层需要签名或模拟器——这个 Phase 不做界面。
+# 截图、XCUITest、TestFlight 全部属于下一个 Phase。
+on:
+  push:
+    branches: [main, ios]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # 连着推好几次是常态，旧的跑完没有意义，还占着并发额度。
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: L0 · Core（Linux）
+    runs-on: ubuntu-latest
+    # 跟本机的 6.3.3 对齐：Package.swift 写的是 tools-version 6.2，
+    # 更老的工具链连清单都解析不了。
+    container: swift:6.3
+    steps:
+      - uses: actions/checkout@v4
+
+      # 环境先打出来。环境坏掉和代码写错在日志里长得一模一样（坑 §1.2），
+      # 没有这两行，一次工具链漂移会被当成代码问题改上一小时。
+      - name: 环境
+        run: |
+          swift --version
+          echo "NO_PROXY=$NO_PROXY"
+
+      # Core 不许碰界面框架。这条判据是「换成安卓也一模一样的归 Core」，
+      # 而绝大多数架构规矩会静默腐烂——这一条不会，因为它在这里会变红。
+      - name: Core 里不许有界面框架
+        run: |
+          if grep -rn "import UIKit\|import SwiftUI\|import AppKit" client/Sources/ERCore; then
+            echo "::error::ERCore 里出现了界面框架。界面归 App 层（phase-5.html §5）"
+            exit 1
+          fi
+          echo "干净"
+
+      - uses: actions/cache@v4
+        with:
+          path: client/.build
+          key: spm-linux-${{ hashFiles('client/Package.resolved') }}
+
+      - name: swift test
+        working-directory: client
+        run: swift test
+
+  ios-build:
+    name: L1 · Core 能为 iOS 编译（macOS）
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      # **Xcode 版本写死。** 镜像里装着七个，默认值会随镜像更新漂，而
+      # runner-images 反复出现「Xcode 在、配套 runtime 不在」的 issue
+      # （#13853、#13435、#13220）——不锁版本等于把编译能力交给别人的更新节奏。
+      - name: 选定 Xcode
+        run: |
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          # 锁大版本、不锁补丁号。写死 Xcode_26.app 那次镜像上根本没有这个目录，
+          # 是后面的 `||` 兜住的——而那正是让空跑蒙混过关的同一种遮掩。
+          # 补丁号会动（26.0.1 → 26.1 → …），大版本不该动。
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "用 $APP"
+          sudo xcode-select -s "$APP"
+          xcodebuild -version
+          swift --version
+
+      - uses: actions/cache@v4
+        with:
+          path: client/.build
+          key: spm-macos-${{ hashFiles('client/Package.resolved') }}
+
+      # **这一层不能省。**本机编的是 Swift 6.3.3 / Windows，Xcode 里是另一个
+      # 版本和另一个平台——Windows 编过不等于 iOS 编过。把这个检查推到下一个
+      # Phase，等于把「Core 用了 iOS 上没有的东西」这个发现推迟一整个 Phase。
+      #
+      # 用显式的 target triple 加 SDK，不走 `xcodebuild -scheme`：后者要从包里
+      # 推导 scheme 支持哪些平台，2026-09-12 推导出来是空的，iOS 根本不在可选
+      # 目标里。这条命令说的是「就用这个三元组、这个 SDK 编」，没有推导。
+      #
+      # **`set -o pipefail` 不是讲究。**第一版写成 `xcodebuild | xcbeautify`，
+      # 而管道的退出码是 xcbeautify 的——xcodebuild 报错退出，xcbeautify 把输出
+      # 消化完返回 0，于是这一步「成功」了：37 秒，一行都没编译，CI 全绿。
+      # 坑 §6.5 的形状——任务报成功不等于做了事。
+      - name: 为 iOS 目标编译 Core
+        working-directory: client
+        run: |
+          set -euo pipefail
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "iOS SDK: $SDK"
+          swift build --product ERCore \
+            -Xswiftc -target -Xswiftc arm64-apple-ios26.0 \
+            -Xswiftc -sdk -Xswiftc "$SDK" \
+            --scratch-path .build/ios
+
+      # 编完要能指出产物在哪，并且确认它真是给 iOS 的。
+      # 没有这一步，上面那条哪天又变成空跑，这个 job 还是会绿——
+      # 而绿着的空跑比没有这个 job 更糟，因为它还给人信心。
+      # **这一步问的是「编出来的东西是给 iOS 的吗」，不是「编出东西了吗」。**
+      # 第一版只查 `file` 说不说 arm64——而 macOS 的 arm64 和 iOS 的 arm64 都是
+      # arm64，所以在「iOS 目标被悄悄忽略、实际编成了 macOS」时它照样通过。
+      # 分不出这两者的检查，等于没有检查。
+      #
+      # 平台写在 Mach-O 的 load command 里。读不出来就报红，不默默放过：
+      # 一个说不清自己验了什么的检查，比没有更糟，因为它还给人信心。
+      - name: 确认产物真是给 iOS 的
+        working-directory: client
+        run: |
+          set -euo pipefail
+          MODULE=$(find .build/ios -name 'ERCore.swiftmodule' | head -1)
+          if [ -z "$MODULE" ]; then
+            echo "::error::没找到 ERCore 的模块——上面那一步可能是空跑"
+            find .build/ios -maxdepth 3 -type d | head -20
+            exit 1
+          fi
+          echo "模块：$MODULE"
+
+          OBJ=$(find .build/ios -name 'Review.swift.o' | head -1)
+          if [ -z "$OBJ" ]; then
+            echo "::error::没找到编译产物"
+            exit 1
+          fi
+          echo "产物：$OBJ"
+          file "$OBJ"
+          echo "--- Mach-O 里的平台标记 ---"
+          otool -l "$OBJ" | grep -A5 -E 'LC_BUILD_VERSION|LC_VERSION_MIN' \
+            | head -20 | tee /tmp/platform.txt
+          if grep -qiE 'platform +(2|ios)|LC_VERSION_MIN_IPHONEOS' /tmp/platform.txt; then
+            echo "确认：目标平台是 iOS"
+          else
+            echo "::error::读不到 iOS 平台标记。要么编的是 macOS，要么这个检查该改了"
+            echo "::error::——两种都不该放过。下面是完整的 load command："
+            otool -l "$OBJ" | head -60
+            exit 1
+          fi
+
+  contract:
+    name: L0 · 契约没有漂
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # 只检查「生成物和契约快照对得上」，不跑后端——CI 上没有数据库，
+      # 而契约快照本来就是为了让生成在没有数据库的机器上也能重跑。
+      - name: 生成的类型与契约快照一致
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          spec = json.loads(pathlib.Path("client/openapi.json").read_text(encoding="utf-8"))
+          paths = spec.get("paths", {})
+          schemas = spec.get("components", {}).get("schemas", {})
+          assert paths, "契约快照里没有端点"
+          assert schemas, "契约快照里没有类型"
+
+          generated = pathlib.Path("client/Sources/ERContract")
+          files = sorted(p.name for p in generated.glob("*.swift"))
+          assert len(files) >= 5, f"生成物只有 {files}"
+
+          # 生成器会「警告然后跳过」，跳过等于静默删字段——2026-09-12 有 70 个
+          # 字段这样没的，构建还是绿的。所以抽查当时消失过的那几个。
+          body = (generated / "Types+Components+Schemas.swift").read_text(encoding="utf-8")
+          for schema, field in [("ArticleResponse", "tokens"), ("ArticleResponse", "glossary"),
+                                ("ArticleResponse", "preparing"), ("Learner", "level")]:
+              assert f"public var {field}:" in body, f"{schema}.{field} 不在生成物里"
+
+          print(f"契约 {len(paths)} 个端点、{len(schemas)} 个类型；生成物 {len(files)} 个文件")
+          PY
+
+      - name: 复习向量还在，且覆盖了那几条规则
+        run: |
+          python - <<'PY'
+          import json, pathlib
+          doc = json.loads(pathlib.Path(
+              "client/Tests/ERCoreTests/Fixtures/review-vectors.json").read_text(encoding="utf-8"))
+          cases = doc["cases"]
+          assert len(cases) >= 8, f"只有 {len(cases)} 个场景"
+          names = " ".join(c["name"] for c in cases)
+          assert "第二向答错" in names, "决定 7 那条向量不见了——最容易写漏的一条"
+          # 时间戳会让每次导出都不同，那样这份文件就没人会去 diff 了。
+          assert "generated_at" not in doc, "向量里不该有生成时间"
+          print(f"{len(cases)} 个场景")
+          PY
