@@ -128,7 +128,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 5 · 方案 · 2026-09-12 · 二十四条决定，验收全部由 AI 执行</div>
+    <div class="eyebrow">Phase 5 · 方案与实施结果 · 2026-09-12 · 二十四条决定 · 验收 21 项全过</div>
     <h1>客户端内核</h1>
     <p class="standfirst">手机端的前一半：所有「换成安卓也一模一样」的东西，外加一个能把它真正走一遍的命令行工具。</p>
     <p class="thesis">这个 Phase 起初是「做出可用的 iOS 客户端」。2026-09-12 <b>拆成两半</b>——
@@ -1077,6 +1077,83 @@
       <div class="check"><div class="check-n">4</div><div class="check-what"><b>导出复习状态机的测试向量</b><span>用服务端真实那段代码跑几百个场景，加上手工设计的边角；CI 检查「重新导出无 diff」（决定 14、§9）。</span></div></div>
     </div>
     <p style="margin-top:1.4rem"><b>外加一个配置项</b>：<code>today_extra_count</code> 改成 0（决定 20），不用改代码。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§19</span>
+      <h2>实施结果</h2>
+      <span class="sec-note">2026-09-12</span>
+    </div>
+
+    <div class="figures" style="margin-top:0;margin-bottom:2rem">
+      <div class="fig"><div class="fig-val">21<span>项</span></div><div class="fig-key">P5 验收，全过</div></div>
+      <div class="fig"><div class="fig-val">41<span>项</span></div><div class="fig-key">Core 的 Swift 测试</div></div>
+      <div class="fig"><div class="fig-val">223<span>项</span></div><div class="fig-key">七个 Phase 的自动检查合计</div></div>
+      <div class="fig"><div class="fig-val">3<span>层</span></div><div class="fig-key">CI，全绿</div></div>
+    </div>
+
+    <h3>做出来的东西</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>在哪</th><th>是什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>backend/**/contract.py</code></td><td>8 个客户端端点的响应类型。<code>/openapi.json</code> 里不再是 <code>additionalProperties: true</code></td></tr>
+          <tr><td><code>client/Sources/ERCore</code></td><td>内核：复习状态机、发件箱、缓存、显示语义、同步、事件构造</td></tr>
+          <tr><td><code>client/Sources/ERContract</code></td><td>从契约生成的 Swift 类型，<b>提交进仓库</b></td></tr>
+          <tr><td><code>client/Sources/ercli</code></td><td>命令行客户端：Windows 上的 HTTP 实现 + 终端渲染 + 走完一天</td></tr>
+          <tr><td><code>scripts/export_contract.py</code></td><td>导出契约快照与真实响应样本</td></tr>
+          <tr><td><code>scripts/export_review_vectors.py</code></td><td>从服务端真实代码导出状态机向量</td></tr>
+          <tr><td><code>scripts/generate_swift_types.py</code></td><td>生成 Swift 类型，<b>并把「跳过」当成失败</b></td></tr>
+          <tr><td><code>scripts/verify_phase5.py</code></td><td>一条命令跑完两种语言</td></tr>
+          <tr><td><code>.github/workflows/client.yml</code></td><td>三层 CI</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>命令行客户端真跑的那一遍</h3>
+    <p class="lede" style="margin-bottom:1rem">对着真后端，不是样本。这是 §M 那条教训的了结——
+    <code>/today</code> 从此被真实流程走过了。</p>
+    <div class="steps">
+      <div class="step"><div class="step-n">①</div><div class="step-what"><b>在线走完一天</b><span>拉包（3 篇、12 条复习）→ 打开 #467（523 个 token、27 个目标词、2 处词组）→ 查目标词（三层释义带真题考频）→ <b>查词组，两半都指向整体</b> → 标记词与词组 → 读完 → 上报 5 条，全部收下。<b>服务端核对过</b>：两条都进了复习池，文章已读，遇见次数 1。</span></div></div>
+      <div class="step"><div class="step-n">②</div><div class="step-what"><b>断网再走一遍</b><span>全程用缓存，一条没发出去，5 条在发件箱里等着。<b>这是 P4 欠下的 M1，机器能验的那一半。</b></span></div></div>
+      <div class="step"><div class="step-n">③</div><div class="step-what"><b>重连补报</b><span>5 条全收下；<b>再报一次，遇见次数还是 1</b>，<code>read_at</code> 没变——补报没有重复记账。</span></div></div>
+      <div class="step"><div class="step-n">④</div><div class="step-what"><b>清理缓存</b><span>清掉 731 KB 正文，<b>发件箱一条没动</b>；标题、字数、进度都在；离线点开清理过的文章<b>明确说连不上</b>，不是转圈。</span></div></div>
+      <div class="step"><div class="step-n">⑤</div><div class="step-what"><b>用产品自己的路收尾</b><span><code>unmark</code> 撤销那两条测试标记：<b>退回 <code>new</code>，遇见次数保留</b>——被遇见过和不再学，是两件事。</span></div></div>
+    </div>
+
+    <h3>CI 实测耗时</h3>
+    <p class="lede" style="margin-bottom:1rem">§11 那三个数是估的，现在有实测了——<b>都比估计的快</b>。</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>层</th><th>估计</th><th>实测</th><th>验的是什么</th></tr></thead>
+        <tbody>
+          <tr><td>Windows 本地</td><td class="num">2.5 秒</td><td class="num"><b>0.44 秒</b></td><td>41 项测试，改代码时的主回路</td></tr>
+          <tr><td>L0 Linux</td><td class="num">1–2 分钟</td><td class="num"><b>44 秒</b></td><td>交叉校验，外加「Core 里不许有界面框架」那行 grep</td></tr>
+          <tr><td>L1 macOS</td><td class="num">4–6 分钟</td><td class="num"><b>34 秒</b></td><td><b>Core 能为 iOS 编译</b>——本机编得过证明不了的事</td></tr>
+          <tr><td>L0 契约</td><td class="num">—</td><td class="num"><b>7 秒</b></td><td>生成物没被悄悄删字段、向量还在</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>路上抓到的七个问题</h3>
+    <p class="lede" style="margin-bottom:1rem">没有一个是事先想到的，全是跑出来的。
+    <b>其中三个的共同点是「绿着，但什么都没验」</b>——这个 Phase 最贵的教训。</p>
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>生成器静默丢掉 70 个可空字段</b><span>Pydantic 表示可空用 <code>anyOf: [X, null]</code>，生成器答 <code>Schema "null" is not supported … skipping</code> 然后接着跑。<code>ArticleResponse</code> 只剩三个字段——正文、token、释义全没了，<b>构建照样绿，只有日志里一行警告</b>。改写成它认得的形式，并把「跳过」当成失败。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>改写把「必填但可空」变成了「必填不可空」</b><span><code>tags</code> 对 <code>an</code> 这个词是 <code>null</code>，解码当场失败。<b>是解码真实响应的测试抓到的</b>——手写的样本里不会有这个词。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>抹时间戳的脚本按字段名匹配，而 <code>glossary</code> 按词条做键</b><span>有个词就叫 <code>day</code>，整条被替换成占位符，样本不能解析了。同样是解码测试抓的。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>两处响应形状不一致</b><span><code>progress_of</code> 用 <code>SELECT *</code>，开过的文章多三个字段、没开过的只有三个——<b>同一个字段时有时无，比哪种形状都糟</b>。<code>session_for</code> 同样漏 <code>learner_id</code>，跟「身份由设备令牌推导」拧着。<code>progress</code> 的 <code>spelling_available</code> 只在一个分支里有。</span></div></div>
+      <div class="check"><div class="check-n">5</div><div class="check-what"><b>验收脚本会触发真的定时任务再把它掐死</b><span>跑 <code>verify_phase0</code> 时夜间备稿正好到点，标注任务刚起来脚本就退出了——<code>cannot schedule new futures after interpreter shutdown</code>。<b>然后 P4 把后果报成自己的失败</b>。记进坑列表 §4.6。</span></div></div>
+      <div class="check"><div class="check-n">6</div><div class="check-what"><b>CI 的一步绿了 37 秒，一行没编译</b><span><code>xcodebuild | xcbeautify</code>——<b>管道的退出码是最后一个命令的</b>，xcodebuild 死了，xcbeautify 返回 0。坑列表 §6.6。</span></div></div>
+      <div class="check"><div class="check-n">7</div><div class="check-what"><b>为防第 6 条加的断言，分不出 iOS 和 macOS</b><span>它查 <code>file</code> 说不说 arm64——<b>两个平台都是 arm64</b>，所以在它唯一该抓的情况下照样通过。改成读 Mach-O 的 <code>LC_BUILD_VERSION</code>（<code>platform 2</code> 才是 iOS），读不出来就报红。坑列表 §6.7。</span></div></div>
+    </div>
+
+    <h3>顺带结清的两条</h3>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><b>主文档 §M「没有任何客户端在用 <code>/today</code>」结清了。</b>命令行客户端每次都走它，在线离线都走过。字段够用——<b>唯一不够的是 <code>AnswerResponse</code> 不回显方向</b>，所以在线对拍只能从 <code>done</code> 和 <code>misses</code> 反推。不算缺陷，记一笔。</span></div>
+      <div class="not"><i>✓</i><span><b>P4 的人工 M1「断网走完一天」，机器能验的那一半验完了。</b>剩下的是「在真手机上对着真停掉的服务点一遍」，那要等下一个 Phase。</span></div>
+    </div>
   </section>
 
   <footer>
