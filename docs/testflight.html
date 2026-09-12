@@ -124,7 +124,8 @@
           <span>App Store Connect → 我的 App → 左上角「+」→ 新建 App。</span>
           <ul>
             <li>平台：<b>iOS</b></li>
-            <li>名称：<span class="fill">　　　　　　</span>——<b>在整个 App Store Connect 里是唯一的</b>，撞名了换一个，我准备了备选</li>
+            <li>名称：<span class="fill">　　　　　　</span>——<b>撞名了随便换一个，不用问我</b>。
+              这个名字在提交 App 审核之前一直能改，而我们<b>永远不会提交审核</b>，所以它不是个要慎重的决定</li>
             <li>主要语言：简体中文</li>
             <li>套装 ID：下一步说</li>
             <li>SKU：随便填一个，比如 <code>english-reader-01</code>，只是你自己的编号</li>
@@ -189,6 +190,12 @@
     <code>com.example.englishreader</code>。没有域名的话用什么都行，只要全球唯一——
     很多人用 <code>com.<i>你的名字拼音</i>.englishreader</code>。</p>
     <p><b>建完之后不能改</b>，所以定了就告诉我一声，我这边要写进构建配置里。</p>
+    <div class="callout">
+      <b>这是这四件事里唯一改不了的东西。</b>别的都能改：
+      App Store Connect 里那个名字在提交审核前一直可编辑（我们不提交），
+      手机主屏上显示的名字在我的构建配置里、跟你没关系。
+      <b>所以只有套装 ID 值得想一下。</b>
+    </div>
   </section>
 
   <section>
@@ -233,6 +240,8 @@
           <tr><td>内部测试员上限</td><td>100 人。我们只有一个</td></tr>
           <tr><td>要不要审核</td><td><b>内部测试员不用。</b>外部测试才要过 Beta 审核（约 24 小时），我们不走那条</td></tr>
           <tr><td>会不会花你钱</td><td>不会。你的开发者账号年费是本来就有的，TestFlight 不额外收费</td></tr>
+          <tr><td>名字取错了怎么办</td><td><b>随时能改。</b>App Store Connect 里的名字在提交审核前一直可编辑，而我们不提交；手机上显示的名字在我的构建配置里。<b>只有套装 ID 定了不能改</b></td></tr>
+          <tr><td>建了记录长期不提交会被收回吗</td><td>不会。名字预留过去有 180 天的期限，现在已经取消了</td></tr>
         </tbody>
       </table>
     </div>
