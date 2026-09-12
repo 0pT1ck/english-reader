@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from backend.core import runtime_config
 from backend.core.db import get_connection
@@ -745,12 +745,47 @@ def mark_article_read(article_id: int) -> None:
 # --------------------------------------------------------------------------- #
 
 
+#: How long a half-finished event has to sit before a retry may take it over.
+#: Same reasoning and same number as ``llm.jobs.STALE_MINUTES``: a row with no
+#: verdict is either a process that died mid-apply or a request still running,
+#: and only the clock tells them apart.
+EVENT_STALE_MINUTES = 5
+
+
+class RecordedEvent(NamedTuple):
+    """Where a reported event stands after being written down.
+
+    ``retry`` marks the case this type exists for: the key is already on file,
+    but the earlier attempt never took effect, so the caller should apply it
+    again rather than wave it through as a duplicate.
+    """
+
+    id: int
+    retry: bool
+
+
 def record_event(idem_key: str, device_id: int, learner_id: int, event_type: str,
-                 payload: dict[str, Any], occurred_at: str | None) -> int | None:
-    """Store one reported event. Returns ``None`` when it is a duplicate.
+                 payload: dict[str, Any], occurred_at: str | None) -> RecordedEvent | None:
+    """Store one reported event. ``None`` means it already landed — skip it.
 
     Deduplication is the unique index doing the work, not a lookup — two
     uploads racing each other would both pass a check-then-insert.
+
+    **Why a duplicate is not always finished business.** Handling an event is
+    two steps, storing it and applying it, and they can disagree: an apply that
+    raises leaves the row on file with an error against it. The client, which
+    only ever hears "duplicate", then deletes the event from its outbox
+    believing it landed — and nothing retries it, ever. A marked word would
+    simply never reach the review queue, with no error and no log line. So a
+    duplicate whose earlier attempt failed comes back with ``retry`` set.
+
+    **Applying twice is the risk on the other side**, and the two events that
+    would hurt are already guarded: finishing an article is refused once
+    ``read_at`` is set (that is the bug where `colony` reached 55 encounters in
+    one 430-word article), and marking touches state with a zero encounter
+    delta. A stale half-finished row is treated the same way, but only after
+    ``EVENT_STALE_MINUTES`` — before that it may be a request still in flight,
+    and taking it over would be the double-apply this paragraph is about.
     """
     conn = get_connection("learning")
     try:
@@ -761,7 +796,7 @@ def record_event(idem_key: str, device_id: int, learner_id: int, event_type: str
              json.dumps(payload, ensure_ascii=False), occurred_at, _now()),
         )
         conn.commit()
-        return int(cursor.lastrowid or 0)
+        return RecordedEvent(int(cursor.lastrowid or 0), retry=False)
     except sqlite3.IntegrityError:
         # The duplicate is expected — an offline client retries whatever it is
         # unsure about. What is *not* optional is the rollback: a failed INSERT
@@ -771,7 +806,41 @@ def record_event(idem_key: str, device_id: int, learner_id: int, event_type: str
         # something else, which shows up much later as an unexplained
         # "database is locked" in a completely unrelated request.
         conn.rollback()
+
+    row = conn.execute(
+        "SELECT id, processed_at, error, received_at FROM client_events WHERE idem_key = ?",
+        (idem_key,),
+    ).fetchone()
+    if row is None:
+        # The unique index fired but the row is gone: someone deleted it between
+        # the two statements. Nothing sensible to retry.
         return None
+
+    event_id = int(row["id"])
+    if row["error"] is not None:
+        log.info(
+            "event.retry.after_failure",
+            f"事件 {idem_key} 上次执行失败过，这次重新执行",
+            idem_key=idem_key, event_type=event_type, previous_error=str(row["error"])[:200],
+        )
+        return RecordedEvent(event_id, retry=True)
+
+    if row["processed_at"] is None:
+        cutoff = (
+            datetime.now(timezone.utc) - timedelta(minutes=EVENT_STALE_MINUTES)
+        ).isoformat(timespec="seconds")
+        if (row["received_at"] or "") < cutoff:
+            log.warning(
+                "event.retry.after_interruption",
+                f"事件 {idem_key} 收下了却没有执行结果，超过 {EVENT_STALE_MINUTES} 分钟，重新执行",
+                idem_key=idem_key, event_type=event_type, received_at=row["received_at"],
+            )
+            return RecordedEvent(event_id, retry=True)
+        # Too fresh to judge — another request may be working through it right
+        # now, and taking it over would apply the same event twice.
+        return None
+
+    return None
 
 
 def finish_event(event_id: int, error: str | None = None) -> None:

@@ -133,14 +133,24 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
 
     for item in body.answers:
         payload = item.model_dump()
-        event_id = reading_repository.record_event(
+        record = reading_repository.record_event(
             item.idem_key, device_id, learner_id, "review.answered",
             payload, item.occurred_at,
         )
-        if event_id is None:
+        if record is None:
             duplicates += 1
             results.append({"idem_key": item.idem_key, "status": "duplicate"})
             continue
+        # `record.retry` means the earlier attempt never took effect. Answering
+        # is not idempotent the way the reading events are — `asks` climbs, and
+        # `asks` is the grade — so it is worth saying why a second attempt is
+        # nevertheless the right call. Every way `session.answer` refuses (queue
+        # row missing, item already done today) raises before it writes
+        # anything, so a failed attempt left the item where it was. The residual
+        # risk is a database error partway through, which would count one extra
+        # ask on one item; the alternative is the failure this whole change
+        # exists to remove — an answer that is silently never applied, which no
+        # amount of later review can repair because nothing knows it happened.
         try:
             outcome = session.answer(
                 learner_id, item.queue_id,
@@ -148,7 +158,7 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
                 sentence_id=item.sentence_id, easy=item.easy,
             )
         except Exception as exc:  # noqa: BLE001 - one bad answer must not sink the batch
-            reading_repository.finish_event(event_id, str(exc))
+            reading_repository.finish_event(record.id, str(exc))
             failed += 1
             results.append({"idem_key": item.idem_key, "status": "failed",
                             "reason": str(exc)})
@@ -158,7 +168,7 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
                 idem_key=item.idem_key, queue_id=item.queue_id,
             )
             continue
-        reading_repository.finish_event(event_id)
+        reading_repository.finish_event(record.id)
         accepted += 1
         results.append({"idem_key": item.idem_key, "status": "accepted",
                         "result": outcome})
