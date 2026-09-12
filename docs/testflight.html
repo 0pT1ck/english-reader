@@ -1,0 +1,268 @@
+<title>请你帮的四件事 · TestFlight</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:42rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.8; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4rem 0 0; display:flex; flex-direction:column; gap:1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.2rem,7vw,3rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.1; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.12rem; line-height:1.65;
+                color:var(--ink-mid); margin:0; text-wrap:pretty; }
+  section { margin-top:3.2rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.8rem; padding-bottom:0.6rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.4rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); }
+  h2 { font-family:var(--f-mix); font-size:1.28rem; font-weight:600; margin:0; }
+  h3 { font-family:var(--f-mix); font-size:1rem; font-weight:600; margin:1.8rem 0 0.7rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.4rem; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:1.1rem 1.2rem; display:grid;
+          grid-template-columns:2rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.95rem; color:var(--accent); font-weight:600; }
+  .step-what b { display:block; font-weight:600; font-size:1.02rem;
+                 font-family:var(--f-mix); margin-bottom:0.35rem; }
+  .step-what span { color:var(--ink-mid); }
+  .step-what ul { margin:0.5rem 0 0; padding-left:1.1rem; color:var(--ink-mid); }
+  .step-what li { margin:0.2rem 0; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:1.4rem 0; font-size:0.95rem; }
+  .callout.warn { background:var(--accent-soft); border-left-color:var(--accent); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.1em 0.35em; border-radius:2px; }
+  .fill { display:inline-block; min-width:9rem; border-bottom:1px solid var(--ink-soft);
+          color:var(--ink-soft); font-family:var(--f-mono); font-size:0.85em; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:26rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.08em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.5rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.6rem 0.9rem 0.6rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  .nots { display:flex; flex-direction:column; gap:0.7rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--accent); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  footer { margin-top:4rem; padding-top:1.2rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); font-family:var(--f-mono);
+           display:flex; flex-wrap:wrap; gap:0.5rem 1.5rem; }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step { grid-template-columns:1fr; gap:0.3rem; }
+  }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">给帮忙的朋友 · 一次性 · 2026-09-12</div>
+    <h1>请你帮的四件事</h1>
+    <p class="standfirst">我写了一个自用的英语阅读 App，想装到自己手机上。
+    我没有 Mac，也没有付费的开发者账号——<b>借你的账号走一次 TestFlight 内测</b>。
+    这四件事做完之后<b>你就不用再管了</b>：以后每个版本我自己传，不需要你点任何东西，
+    也不用过 Apple 审核。</p>
+  </header>
+
+  <div class="callout">
+    <b>大概要花你二十分钟</b>，全在 App Store Connect 的网页上，不用开 Xcode。
+    做完把第 2 步的三样东西发给我就行。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">四件事</span>
+      <h2>具体怎么做</h2>
+    </div>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-n">1</div>
+        <div class="step-what">
+          <b>建一个 App 记录</b>
+          <span>App Store Connect → 我的 App → 左上角「+」→ 新建 App。</span>
+          <ul>
+            <li>平台：<b>iOS</b></li>
+            <li>名称：<span class="fill">　　　　　　</span>——<b>在整个 App Store Connect 里是唯一的</b>，撞名了换一个，我准备了备选</li>
+            <li>主要语言：简体中文</li>
+            <li>套装 ID：下一步说</li>
+            <li>SKU：随便填一个，比如 <code>english-reader-01</code>，只是你自己的编号</li>
+          </ul>
+          <span><b>只做内测不需要 App Store 审核</b>，但这条记录必须先有——
+          没有它就没有 TestFlight 那一栏。</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">2</div>
+        <div class="step-what">
+          <b>建一把 API 密钥，角色选 Admin</b>
+          <span>用户和访问 → 集成 → App Store Connect API → 「+」新建密钥。
+          名字随便，比如 <code>english-reader-ci</code>。</span>
+          <ul>
+            <li><b>角色必须选 Admin。</b>低一级的角色不能让自动化去申请签名证书——
+              那样的话<b>证书每年过期一次，每次都得再麻烦你</b>。Admin 之后这件事就自动了</li>
+          </ul>
+          <span>建好之后把这三样发我：</span>
+          <ul>
+            <li><b>Issuer ID</b>——页面上方那一长串 UUID</li>
+            <li><b>Key ID</b>——密钥那一行上就有</li>
+            <li><b>那个 <code>.p8</code> 文件</b>——<b style="color:var(--stop)">只能下载一次</b>，
+              点了下载就立刻存好，页面刷新之后再也拿不到了</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">3</div>
+        <div class="step-what">
+          <b>把我加成团队成员</b>
+          <span>用户和访问 → 用户 →「+」邀请。</span>
+          <ul>
+            <li>我的 Apple ID：<span class="fill">　　　　　　</span></li>
+            <li>角色给 <b>Developer</b> 就够，不用更高</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-n">4</div>
+        <div class="step-what">
+          <b>把我加进 TestFlight 的内部测试</b>
+          <span>那个 App → TestFlight → 内部测试 → 新建一组（名字随便，比如「本人」）→
+          把我加进去。</span>
+          <span><b>这一步做完就结束了。</b>之后我上传的构建<b>几分钟内就能装到手机上，
+          不过 Apple 审核</b>——内部测试员是免审的，这也是我们走内测而不是公测的原因。</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">要你定</span>
+      <h2>套装 ID（Bundle ID）</h2>
+    </div>
+    <p class="lede">这个得用你的标识，我定不了。</p>
+    <p>习惯写法是<b>你的域名倒过来</b>加应用名，比如域名是 <code>example.com</code> 就写
+    <code>com.example.englishreader</code>。没有域名的话用什么都行，只要全球唯一——
+    很多人用 <code>com.<i>你的名字拼音</i>.englishreader</code>。</p>
+    <p><b>建完之后不能改</b>，所以定了就告诉我一声，我这边要写进构建配置里。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">说明</span>
+      <h2>这把密钥有多大权限，以及我怎么保管它</h2>
+    </div>
+
+    <div class="callout warn">
+      <b>说在前面：Admin 级的密钥权限不小。</b>它能在你的账号下申请和吊销签名证书、
+      能上传构建、能改 App 的元数据。<b>这是你的开发者身份，不是我的</b>，
+      所以下面这些我先说清楚，你觉得不合适可以随时喊停。
+    </div>
+
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>它存在 GitHub 的加密 secret 里</b>，不进代码、不进日志。
+      我的仓库是<b>公开</b>的（为了用免费的 macOS 构建机），但 secret 本身不公开。</span></div>
+      <div class="not"><i>2</i><span><b>只有我手动触发的任务能用到它。</b>
+      仓库公开意味着任何人都能提 PR，而同仓库的 PR 是<b>能拿到 secret 的</b>——
+      所以用到密钥的那一步<b>只允许我手动点</b>和打版本标签时触发，
+      任何 PR 都碰不到它。这条是写死在配置里的，不是靠自觉。</span></div>
+      <div class="not"><i>3</i><span><b>你随时可以作废它。</b>
+      在建它的那个页面点一下撤销，立刻失效，不影响你账号里别的东西。</span></div>
+      <div class="not"><i>4</i><span><b>如果你觉得 Admin 太大</b>，还有一条路：
+      角色降成 App Manager，但那样签名证书要你手动导出给我，
+      而且<b>一年过期一次，每次都得再找你</b>。我建议 Admin，但你说了算。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">附带</span>
+      <h2>几件顺带要知道的</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>问题</th><th>答案</th></tr></thead>
+        <tbody>
+          <tr><td>这 App 会不会上架</td><td><b>不会。</b>只做内部测试，不提交审核，App Store 上搜不到</td></tr>
+          <tr><td>App 挂在谁名下</td><td><b>你的账号下。</b>将来我想转到自己账号，走应用转移，或者重建一个</td></tr>
+          <tr><td>每个构建能用多久</td><td>90 天。过期我重新传一个，还是不用你管</td></tr>
+          <tr><td>内部测试员上限</td><td>100 人。我们只有一个</td></tr>
+          <tr><td>要不要审核</td><td><b>内部测试员不用。</b>外部测试才要过 Beta 审核（约 24 小时），我们不走那条</td></tr>
+          <tr><td>会不会花你钱</td><td>不会。你的开发者账号年费是本来就有的，TestFlight 不额外收费</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">我这边</span>
+      <h2>收到之后我做什么</h2>
+    </div>
+    <p class="lede">这一节是给我自己看的，你不用管。</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span>三样东西存成 GitHub secrets：<code>ASC_ISSUER_ID</code>、
+      <code>ASC_KEY_ID</code>、<code>ASC_KEY_P8</code>（base64）</span></div>
+      <div class="not"><i>·</i><span>上传的 job <b>只接 <code>workflow_dispatch</code> 与 tag 触发</b>。
+      <b>不能接 <code>pull_request</code></b>——公开仓库里同仓库的 PR 能拿到 secret</span></div>
+      <div class="not"><i>·</i><span>走 cloud signing：<code>xcodebuild -allowProvisioningUpdates
+      -authenticationKeyPath / -authenticationKeyID / -authenticationKeyIssuerID</code>。
+      分发签名要求 Admin 级密钥，这就是第 2 步那条要求的由来</span></div>
+      <div class="not"><i>·</i><span>Bundle ID 写进构建配置；App 名字与它必须跟 App Store Connect 里的一致</span></div>
+      <div class="not"><i>!</i><span><b>这些属于下一个 Phase</b>（界面与上架那一个），
+      现在不实现。这份文档提前写，是因为对方那边有等待时间——
+      安排外部依赖不等于提前开发</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>TestFlight 协助说明</span>
+    <span>2026-09-12</span>
+  </footer>
+
+</div>
