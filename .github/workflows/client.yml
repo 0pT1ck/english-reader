@@ -74,17 +74,45 @@ jobs:
       # **这一层不能省。**本机编的是 Swift 6.3.3 / Windows，Xcode 里是另一个
       # 版本和另一个平台——Windows 编过不等于 iOS 编过。把这个检查推到下一个
       # Phase，等于把「Core 用了 iOS 上没有的东西」这个发现推迟一整个 Phase。
+      #
+      # 用显式的 target triple 加 SDK，不走 `xcodebuild -scheme`：后者要从包里
+      # 推导 scheme 支持哪些平台，2026-09-12 推导出来是空的，iOS 根本不在可选
+      # 目标里。这条命令说的是「就用这个三元组、这个 SDK 编」，没有推导。
+      #
+      # **`set -o pipefail` 不是讲究。**第一版写成 `xcodebuild | xcbeautify`，
+      # 而管道的退出码是 xcbeautify 的——xcodebuild 报错退出，xcbeautify 把输出
+      # 消化完返回 0，于是这一步「成功」了：37 秒，一行都没编译，CI 全绿。
+      # 坑 §6.5 的形状——任务报成功不等于做了事。
       - name: 为 iOS 目标编译 Core
         working-directory: client
         run: |
-          xcodebuild -scheme ERCore \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath .build/xcode \
-            build | xcbeautify || \
-          xcodebuild -scheme ERCore \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath .build/xcode \
-            build
+          set -euo pipefail
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "iOS SDK: $SDK"
+          swift build --product ERCore \
+            -Xswiftc -target -Xswiftc arm64-apple-ios26.0 \
+            -Xswiftc -sdk -Xswiftc "$SDK" \
+            --scratch-path .build/ios
+
+      # 编完要能指出产物在哪，并且确认它真是给 iOS 的。
+      # 没有这一步，上面那条哪天又变成空跑，这个 job 还是会绿——
+      # 而绿着的空跑比没有这个 job 更糟，因为它还给人信心。
+      - name: 确认真的产出了 iOS 的东西
+        working-directory: client
+        run: |
+          set -euo pipefail
+          MODULE=$(find .build/ios -name 'ERCore.swiftmodule' | head -1)
+          if [ -z "$MODULE" ]; then
+            echo "::error::没找到 ERCore 的 iOS 模块——上面那一步可能是空跑"
+            find .build/ios -maxdepth 3 -type d | head -20
+            exit 1
+          fi
+          echo "模块：$MODULE"
+          OBJ=$(find .build/ios -name 'Review.swift.o' | head -1)
+          [ -n "$OBJ" ] && file "$OBJ"
+          file "$OBJ" | grep -qi "arm64" || {
+            echo "::error::产物不是 arm64——编的可能不是 iOS"; exit 1; }
+          echo "确认是 arm64 的 iOS 产物"
 
   contract:
     name: L0 · 契约没有漂
