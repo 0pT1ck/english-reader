@@ -25,3 +25,7 @@ logs/
 # OS
 Thumbs.db
 .DS_Store
+
+# Visual Studio scratch, and Swift build output
+.vs/
+.build/

@@ -1391,10 +1391,47 @@
     </div>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§I</span>
+      <h2>加餐</h2>
+      <span class="sec-note">1 处</span>
+    </div>
+    <p class="lede"><b>2026-09-12 定：往期本身就是加餐，不需要另一个机制。</b>
+    这一条不是被证伪的，是被一个更简单的事实取代的——<b>备好没读的会一直堆着</b>，
+    往列表下面翻就有，再额外压一篇没有意义。</p>
+
+    <div class="arch-item">
+      <div class="arch-where">主文档 §H · 每日流程</div>
+      <h3>「还想读 · 加餐」</h3>
+      <div class="orig">
+        <div class="flow">
+          <div class="step">
+            <span class="step-when">还想读</span>
+            <span class="step-what"><b>加餐</b><span>预备的 1–2 篇，读完主线后解锁。还想读就再读一篇，装的是新目标词。（原本装的是次日到期的复习词，随 E2 移出，见 §G。）</span></span>
+          </div>
+        </div>
+      </div>
+      <p class="why"><b>为什么移出：</b>实际读速大约<b>一天一篇</b>，而每天 04:00 无条件生成 3 篇，
+      所以未读的稿子<b>净增两篇一天</b>（2026-09-12 实测：生成 9 篇、读了 4 篇、未读 5 篇）。
+      在一堆读不完的往期之上再压一篇「加餐」，解决的是一个不存在的问题。</p>
+      <p class="why"><b>连带作废的东西：</b>「读完主线后解锁」这条规则<b>一起没了</b>——
+      没有加餐，也就没有解锁。主文档 §M 原来挂着一条待定「加餐怎么解锁、顺序是不是承诺」，
+      前半句同日消失。P4 决定 16「加餐改成朴素版：还想读就再多给一篇」同样被取代
+      （<code>phase-4.html</code> 不动，它记的是 P4 当时做了什么）。</p>
+      <p class="why"><b>实现上几乎不花力气</b>：配置项 <code>today_extra_count</code> 改成 0，
+      今日包就正好 3 篇。<b>但 <code>extra_articles</code> 这个字段要留在响应里</b>——
+      铁律 5 是只增不减，字段留着、永远是空数组。将来想恢复，把配置改回去就行。</p>
+      <p class="why"><b>离线这边反而更好了：</b>之前是「3 篇 + 压着的 1 篇」，
+      现在是「今天 3 篇 + 以前缓存过的全部」——P5 定的客户端缓存策略是<b>读完没读完都留着</b>，
+      所以昨天没读完的还在本地。只要下发过的，往下翻都能离线看。</p>
+    </div>
+  </section>
+
   <footer>
     <span>English Reader</span>
     <span>归档 · 主文档移出内容</span>
-    <span>2026-09-10 建立 · 2026-09-11 增 §F §G §H</span>
+    <span>2026-09-10 建立 · 2026-09-11 增 §F §G §H · 2026-09-12 增 §I</span>
   </footer>
 
   <p style="text-align:center;margin-top:2rem">

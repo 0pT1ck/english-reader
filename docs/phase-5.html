@@ -1,0 +1,1051 @@
+<title>Phase 5 客户端内核</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 5 · 方案 · 2026-09-12 · 二十四条决定，验收全部由 AI 执行</div>
+    <h1>客户端内核</h1>
+    <p class="standfirst">手机端的前一半：所有「换成安卓也一模一样」的东西，外加一个能把它真正走一遍的命令行工具。</p>
+    <p class="thesis">这个 Phase 起初是「做出可用的 iOS 客户端」。2026-09-12 <b>拆成两半</b>——
+    P5 只做 Core 与验收工具，界面留给下一个 Phase。
+    拆的理由是 Core <b>完全不依赖 Mac、签名、TestFlight 或别人的账号</b>，
+    而它恰恰装着这件事里最容易写错的部分；同一天还实测出
+    <b>Swift 在这台 Windows 机器上能编能测，改一行重跑 2.5 秒</b>，
+    于是 P5 变成一个可以立刻开工、且全程有秒级回路的 Phase。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-4.html">Phase 4</a></p>
+  </header>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">2.5<span>秒</span></div><div class="fig-key">改一行源码后本地重跑测试</div></div>
+    <div class="fig"><div class="fig-val">0<span>台</span></div><div class="fig-key">P5 需要的 Mac</div></div>
+    <div class="fig"><div class="fig-val">3<span>类</span></div><div class="fig-key">本地数据，只有一类不能丢</div></div>
+    <div class="fig"><div class="fig-val">1.2<span>MB</span></div><div class="fig-key">一天的今日包，对比整库 171 MB</div></div>
+  </div>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>这份文档只记已经讨论过的东西。</b>界面那一半不在本文档内，也<b>不在这里预先规划</b>
+    （铁律：只规划当前 Phase，发现的未来需求记进主文档 §M）。
+    <br><br>
+    <b>动手前先看 §18</b>：前十七节是「为什么」，§18 是「什么」——
+    Core 装哪些、界面装哪些、Core 明确不装什么、P5 里跑不掉的四处后端改动。
+    <b>照着那一节写，不用翻前面。</b>
+    <br><br>
+    <b>编号说明</b>：本 Phase 沿 P4 顺位叫 P5。<code>archived.html</code> 里那条已作废的旧路线中
+    也有一个「P5」，<b>与本文档无关</b>。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>为什么拆成两半</h2>
+    </div>
+    <p class="lede">原本的 P5 是「iOS 客户端」一整件事。拆开之后，前一半的性质完全变了。</p>
+
+    <p>做手机端要面对三件从没遇到过的事：<b>我没有 Mac（编译要借道 CI）、我看不见界面（要靠截图传回来）、
+    装真机要等别人的开发者账号</b>。前四个 Phase 里，改完就能跑、打开就能看、你就在旁边——这三样一样都没有了。</p>
+
+    <p>但把 Core 单独拎出来之后，<b>这三件事一件都不涉及</b>：</p>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><b>不需要 Mac。</b>Core 是纯 Swift，实测在这台 Windows 机器上能编能测（§3）</span></div>
+      <div class="not"><i>✓</i><span><b>不需要看界面。</b>P5 根本没有界面，验收靠命令行工具真跑一遍（§10）</span></div>
+      <div class="not"><i>✓</i><span><b>不需要签名、TestFlight、你朋友。</b>一样都用不到</span></div>
+    </div>
+
+    <p style="margin-top:1.4rem">而且顺序上也对：<b>Core 装着这件事里最容易写错的部分</b>——复习状态机、离线队列、幂等键。
+    这符合项目一贯的<b>风险前置</b>（主文档 §K：「最不确定的东西最早验证，而不是最容易的先做」）。</p>
+
+    <p><b>「没有界面怎么验收」这个问题有先例</b>：P1 就是一个命令行生成器，没有界面，照样验收了——
+    它的完成定义是「用词在范围内、句法是正常书面语」，靠跑脚本打数出来。
+    所以在这个项目里，<b>「可验收」从来不等于「有界面」</b>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>定下来的二十四条</h2>
+      <span class="sec-note">2026-09-12</span>
+    </div>
+    <p class="lede">照 P3、P4 的规矩，结论先列全，后面各节只是展开。
+    <b>状态分三种，别混</b>——「已定」是讨论中拍过板的，「待确认」是我提出但还没过这一关的。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">1</td><td class="ok">已定</td><td><b>仓库转为公开。</b>2026-09-12 执行完毕，转前扫过全部 23 个提交的历史（§4）。理由是<b>公开仓库的标准 runner 不计费</b>，macOS 也在内。</td></tr>
+          <tr><td class="topic">2</td><td class="ok">已定</td><td><b>P5 只做 Core 与命令行验收工具，界面留给下一个 Phase。</b>理由见 §1。</td></tr>
+          <tr><td class="topic">3</td><td class="ok">已定</td><td><b>目标设备只有一个：iPhone 17 / iOS 26。</b>最低部署目标直接写 iOS 26，<b>不背任何向下兼容</b>。一台设备、一个系统版本、一个测试者。</td></tr>
+          <tr><td class="topic">4</td><td class="ok">已定</td><td><b>代码分两层：Core（纯 Swift，独立包）与 App（界面）。</b>边界判据见 §5。P5 只写 Core。</td></tr>
+          <tr><td class="topic">5</td><td class="ok">已定</td><td><b>Windows 本地是主回路，CI 是权威。</b>实测：冷编译 12.4 秒、改一行重跑 <b>2.5 秒</b>（§3）。但 <b>Windows 编过不等于 iOS 编过</b>，所以 CI 上必须有一个「Core 能为 iOS 目标编译」的检查（§11）。</td></tr>
+          <tr><td class="topic">6</td><td class="ok">已定</td><td><b>开一条 <code>ios</code> 分支</b>，P5 期间的提交全推那儿，<code>main</code> 保持干净。这条动了铁律「Phase 进行中保持工作区未提交」，单独定过（§12）。</td></tr>
+          <tr><td class="topic">7</td><td class="ok">已定</td><td><b>现阶段连家里的后端，不做任何部署。</b>正式版将来放阿里云 VPS。客户端只认一个 base URL，所以这是配置不是设计——<b>「部署推迟到项目末期」那条决定不动</b>。</td></tr>
+          <tr><td class="topic">8</td><td class="ok">已定</td><td><b>本地数据分三类：发件箱、元信息、正文缓存。</b>只有发件箱不能丢，另外两类丢了都能重新拿（§6）。</td></tr>
+          <tr><td class="topic">9</td><td class="ok">已定</td><td><b>发件箱：一条事件一个文件</b>，先写临时名再原子改名，上报成功就删。<b>选它不是因为丢得少，是因为它可能出错的地方更少</b>——它没有「重写一批数据」这种操作（§7）。</td></tr>
+          <tr><td class="topic">10</td><td class="ok">已定</td><td><b>清理缓存功能：读完未读完都留着，由用户指定清理哪些。</b>只删手机本地、<b>不删服务端</b>；清理后标题、字数、进度仍在，点开重新拉取。<b>不变量：清理绝不能碰发件箱和元信息</b>（§6）。</td></tr>
+          <tr><td class="topic">11</td><td class="ok">已定</td><td><b>删发件箱文件前要跟服务端逐条比对</b>，只删明确回了成功的那几条，<b>不许「HTTP 200 就整批删」</b>（§7）。</td></tr>
+          <tr><td class="topic">12</td><td class="ok">已定</td><td><b>后端补一个洞：重复上报时，若那条之前执行失败过，就重新执行一次。</b>现在 <code>duplicate</code> 这个回答不可信——存档成功、执行失败的事件，重发会被当成重复直接放过，客户端以为成了就删掉，<b>那条事件永远不会生效，全程无声</b>（§7）。</td></tr>
+          <tr><td class="topic">13</td><td class="ok">已定</td><td><b>契约类型直接用生成的，不另建一套模型。</b>便利方法靠类型别名和 extension。只生成客户端那几个端点；<b>生成物提交进仓库，CI 检查「重新生成后无 diff」</b>。<b>硬顺序：后端先声明响应类型</b>（§8）。</td></tr>
+          <tr><td class="topic">14</td><td class="ok">已定</td><td><b>复习状态机用两道保险：服务端导出的测试向量 + 命令行客户端在线对拍。</b>向量进仓库并由 CI 检查「重新导出无 diff」；对拍是客户端在线答题时自己先算一遍再跟服务端回的比（§9）。</td></tr>
+          <tr><td class="topic">15</td><td class="ok">已定</td><td><b>命令行客户端做带标注版</b>：终端里标出目标词、超纲词、词组、已标记的词，按编号查释义。能重复跑、能模拟断网、能重置。<b>脚本回放先不做</b>（§10）。</td></tr>
+
+          <tr><td class="topic">16</td><td class="ok">已定</td><td><b>CI 锁死 Xcode 版本与 SDK，并把环境打进日志。</b>镜像里装着七个 Xcode，默认值会随更新漂；runner-images 仓库里反复出现同一类 issue——<b>镜像更新后 Xcode 在、配套 runtime 不在</b>，编译当场全挂。锁了之后镜像更新不受影响，出问题时日志里的环境输出能<b>一眼分清是环境还是代码</b>（§4、§11）。代价是偶尔要手动升版本号。</td></tr>
+
+          <tr><td class="topic">17</td><td class="ok">已定</td><td><b>「一个词该怎么显示」：Core 出语义，界面定画法。</b>Core 说「这个词是超纲词、标记状态是不认识、它自己的标记不要画」；界面决定实线还是虚线、什么颜色。<b>这条不只是好不好看——它底下有一条优先级链和一条词组抑制规则，画错了不报错，只是安静地给错信息</b>（§15）。</td></tr>
+          <tr><td class="topic">18</td><td class="ok">已定</td><td><b>拼写强化进 P5，连同后端补一个批量端点。</b>P4 决定 12 给复习作答加了批量上报，<b>拼写漏掉了</b>——现在仍是一次一条的在线 POST，断网就失败，破着架构前提 2。理由与代价见 §16。</td></tr>
+          <tr><td class="topic">19</td><td class="ok">已定</td><td><b>真题直读进 P5。</b>今日包不装真题（P4 决定 9），452 篇走自己的入口 <code>/library</code>。Core 要能同时供上两个列表——生成文与真题。取文章、<code>mark_beyond</code>、释义查询本来就在清单里，真题直读只多一个列表查询（§16）。</td></tr>
+          <tr><td class="topic">20</td><td class="ok">已定</td><td><b>取消加餐，今日包正好 3 篇。</b>2026-09-12 定：<b>往期本身就是加餐</b>——备好没读的一直堆着（实测净增两篇一天），往列表下面翻就有，再压一篇没意义。做法是配置项 <code>today_extra_count</code> 改成 0；<b><code>extra_articles</code> 字段必须留在响应里</b>（铁律 5 只增不减），永远是空数组。<b>连带作废「读完主线才解锁」那条规则</b>。原文与理由进了归档 §I，主文档 §H 同步改了（§16）。</td></tr>
+          <tr><td class="topic">21</td><td class="ok">已定</td><td><b>缓存是「读哪篇存哪篇」，不预先全下。</b>实测一篇整包约 <b>170–196 KB</b>，452 篇真题全缓存约 <b>81 MB</b>，其中约 35 MB 是重复的释义副本（一篇里 43% 是释义表，而 <code>the</code>、<code>however</code> 这些会被存几百遍）。<b>「全部下载」按钮留给 P6</b>——它就是循环调「取一篇」，Core 一行都不用多写，所以是界面决定不是内核决定（§16）。</td></tr>
+          <tr><td class="topic">22</td><td class="ok">已定</td><td><b>验收后合进 <code>main</code> 压成一个提交。</b><code>main</code> 上现在 23 个提交全是有意义的里程碑，而 <code>ios</code> 分支上那几十个是「编译按钮」，没有保留价值。<b><code>ios</code> 分支留着不删</b>，真要细看还在（§12）。</td></tr>
+          <tr><td class="topic">23</td><td class="ok">已定</td><td><b>P5 的验收全部由 AI 执行，没有人工项。</b>这条<b>动了铁律</b>「每个 Phase 结束由用户实际跑一遍验收清单」，所以理由和代价都写明：P5 <b>没有界面</b>，人没法「用」一个 Swift 库，所谓人工验收也是跑命令看输出；而用户真正要判断的是 P6——<b>有了客户端之后才定的东西</b>。<b>代价必须一起记住：我写的东西我自己验，共有盲区看不出来</b>（§17）。</td></tr>
+          <tr><td class="topic">24</td><td class="ok">已定</td><td><b>验收是一条命令：<code>verify_phase5.py</code>，里面调 <code>swift test</code>。</b>跟前四个 Phase 一样只记一个命令，报告汇总成一份。<b>但脚本要先检查 <code>swift</code> 能不能跑，「环境不可用」和「测试失败」分开报</b>——坑 §4 那个形状：环境坏掉和代码写错在日志里长得一模一样（§17）。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>Windows 本地回路：实测</h2>
+      <span class="sec-note">决定 5 · 2026-09-12 实测</span>
+    </div>
+    <p class="lede">这条不是查文档查出来的，是装完真跑出来的。跑通之前它不在方案里。</p>
+
+    <h3>装了什么</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>项</th><th>值</th></tr></thead>
+        <tbody>
+          <tr><td>Swift</td><td><b>6.3.3</b>，target <code>x86_64-unknown-windows-msvc</code>，装在 <code>D:\Software\Swift</code></td></tr>
+          <tr><td>编译器与链接器</td><td>Visual Studio Community <b>2026</b>（Dev18），MSVC <b>14.51.36231</b></td></tr>
+          <tr><td>Windows SDK</td><td><b>10.0.26100.0</b>，在 <code>D:\Windows Kits\10\</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem"><b>官方文档写的前提是 VS 2022 与 SDK 22621</b>，这台机器是更新的一套。
+    能不能用只能跑出来——<b>实测能编能链能跑测试</b>。</p>
+
+    <h3>实测耗时</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>动作</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td>冷编译</td><td class="num">12.4 秒</td></tr>
+          <tr><td>测试（含链接可执行文件）</td><td class="num">17 秒，3 项全过</td></tr>
+          <tr><td><b>改一行源码后重跑</b></td><td class="num"><b>2.5 秒</b></td></tr>
+          <tr><td>改测试后重跑</td><td class="num">3.8 秒</td></tr>
+          <tr><td>什么都不改</td><td class="num">0.7 秒</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">测试里放的是 Core 真会用到的东西——JSON 解码、<code>ISO8601DateFormatter</code>、<code>UUID</code>——
+    因为 <b>Foundation 的跨平台差异才是风险所在</b>，不是编译器本身。三项全过。</p>
+    <p><b>边界要认</b>：这个探针只有 3 个文件。真实的 Core 会慢一些，
+    <b>2.5 秒这个数不能直接搬</b>，但量级是确定的：秒，不是分钟。</p>
+
+    <h3>路上踩到的两个坑</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>两个目录都要进 PATH</b>：<code>Toolchains\…\usr\bin</code> 和 <code>Runtimes\6.3.3\usr\bin</code>。
+      只加第一个的话，<code>swift --version</code> <b>什么都不输出，退出码也看不出问题</b>——又一个不报错的失败。</span></div>
+      <div class="not"><i>2</i><span><b><code>SDKROOT</code> 必须设</b>，否则报 <code>unable to load standard library</code>。
+      安装器已经把它写进了用户环境变量，所以<b>新开的终端没问题</b>；只有安装之前就启动的终端会撞上。</span></div>
+    </div>
+
+    <h3>顺带确认的两件事</h3>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><b><code>swift-openapi-runtime</code> 1.12.1 在 Windows 上编译干净</b>（连同依赖 <code>swift-http-types</code> 1.8.0，88 个文件全过）。<b>决定 13 因此可行</b>，本地回路不会被它断掉。</span></div>
+      <div class="not"><i>✓</i><span><b>真正跟平台绑的是传输层</b>（<code>swift-openapi-urlsession</code> 那个包）。按决定 4，<b>Core 不实现网络、只定义协议</b>，所以那个包只在界面层出现，Windows 用不到它。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>仓库转公开，与核实过的外部事实</h2>
+      <span class="sec-note">2026-09-12</span>
+    </div>
+
+    <h3>转公开前扫了什么</h3>
+    <p>扫的是<b>全部 23 个提交的完整历史</b>，不是当前工作区：</p>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><code>data/</code>、<code>.env</code>、<code>data/secrets.json</code> <b>从未进过任何一个提交</b>——不是「现在被忽略」，是历史里也没有</span></div>
+      <div class="not"><i>✓</i><span>没有密钥、邮箱、外部 IP、推送地址。唯一命中「bark」关键字的是日志事件名</span></div>
+      <div class="not"><i>✓</i><span><code>admin_secret</code> 是首次启动随机生成写进 <code>.env</code> 的，<b>代码里没有默认密码</b></span></div>
+    </div>
+
+    <h3>两件要认下的事</h3>
+    <div class="nots">
+      <div class="not"><i>!</i><span><b>452 篇真题在 <code>data/</code> 里，没进仓库</b>，所以主文档「合规：卡在真题」那条<b>不受这次转公开影响</b>。但 <code>docs/</code> 里的全部设计文档现在公开可读。</span></div>
+      <div class="not"><i>?</i><span><b>仓库没有 LICENSE 文件</b>，公开后默认仍是「保留所有权利」——别人能看不能用。要不要给许可证是独立的一件事。</span></div>
+    </div>
+
+    <h3>核实过的外部事实</h3>
+    <p class="lede" style="margin-bottom:1rem"><b>都带日期，因为这些是别人家的东西，随时会变。</b></p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>问题</th><th>结论（2026-09-12）</th></tr></thead>
+        <tbody>
+          <tr><td><b>公开仓库的 runner 收费吗</b></td><td><b>不收，macOS 也不收、不计分钟。</b>官方原话是 "The use of standard GitHub-hosted runners is free: In public repositories"。<b>只有 larger runner 永远收费</b>。</td></tr>
+          <tr><td><b>macOS 镜像里有什么</b></td><td><code>macos-26</code>(arm64) 预装 <b>Xcode 26.0.1 至 26.6 共七个版本</b>，默认 26.6；iPhone 17 的模拟器在，iOS 26.x runtime 预装。</td></tr>
+          <tr><td><b>TestFlight 要不要过审</b></td><td><b>内部测试员不过审</b>，上传后几分钟可装，上限 100 人，但必须是对方 App Store Connect 团队的成员；<b>外部测试员</b>每个版本的首个构建要过 Beta App Review，约 24 小时。<b>P5 用不到这条</b>，记在这里是因为它决定下一个 Phase 的节奏。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>已知的坑：镜像更新会让模拟器测试整片变红</h3>
+    <p>runner-images 仓库里反复出现同一类 issue（#13853、#13435、#13220）：<b>镜像更新后 Xcode 在、配套的 iOS runtime 不在</b>。
+    这不是罕见事故，是周期性发生的。对策是<b>锁版本 + 每次把环境打进日志</b>（决定 16）。</p>
+    <p>这个坑的形状和坑列表 §1.2 一样：<b>环境坏掉和代码写错，在日志里长得一模一样</b>；
+    没有那两行环境输出，我会拿着一个「编译失败」去改根本没错的代码。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>Core 与界面：一条机器能查的边界</h2>
+      <span class="sec-note">决定 4</span>
+    </div>
+
+    <div class="callout">
+      <b>换成安卓客户端也要一模一样的 → Core。换成安卓会长得不一样的 → 界面。</b>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Core</th><th>界面</th></tr></thead>
+        <tbody>
+          <tr><td>抽下一道题</td><td>什么时候弹释义面板</td></tr>
+          <tr><td>幂等键怎么生成</td><td>高亮用什么颜色</td></tr>
+          <tr><td>字符区间映射到第几个 token</td><td>把 token 画成三种下划线</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>为什么值得</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>这条边界是机器能查的。</b>CI 里一行 grep 就能守住「Core 里不许出现界面框架」。这是项目一贯的做法——<b>守卫才是保护，散文只是解释</b>。绝大多数架构规矩会静默腐烂，这一条不会。</span></div>
+      <div class="not"><i>2</i><span><b>它把架构前提 1 从承诺变成事实。</b>「客户端零业务逻辑」这条<b>已经被离线要求咬掉了一块</b>——复习状态机必须在客户端有一份。Core 的意义就是把这块圈出来、标清楚、能测试，而不是让它散在视图里。</span></div>
+      <div class="not"><i>3</i><span><b>对「谁来维护」最关键。</b>这个项目的维护者不是读代码的人，是<b>下一次会话的 AI</b>。「好维护」的实际含义是：<b>下一个会话能不能不靠记忆就判断出一段逻辑该放哪</b>。</span></div>
+    </div>
+
+    <h3>代价</h3>
+    <div class="nots">
+      <div class="not"><i>!</i><span><b>边界会漂，方向可预测。</b>危险的不是界面代码跑进 Core（grep 当场抓住），是<b>反过来</b>：某个判断因为写在视图里更顺手就留在了界面层，同一件事两边各一半。<b>这个 grep 查不出来</b>，只能靠上面那条判据加 Core 的测试覆盖。</span></div>
+      <div class="not"><i>!</i><span><b>Core 必须持续保持跨平台干净</b>（不碰平台专有 API，网络只定义协议）。这是<b>要一直守的约束</b>，不是一次性的。守不住时的退路是把 Core 的测试挪回 macOS，分层原样不动。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>本地存三类东西</h2>
+      <span class="sec-note">决定 8、10</span>
+    </div>
+    <p class="lede">起初问的是「本地用什么存」，问错了——三样东西性质完全不同，只有一样需要崩溃安全。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>内容</th><th>大小</th><th>丢了会怎样</th></tr></thead>
+        <tbody>
+          <tr><td><b>一、发件箱</b></td><td>还没上报成功的事件（标记、读完、作答）</td><td>很小</td><td><b>真丢了。</b>这是客户端唯一独有的数据</td></tr>
+          <tr><td><b>二、元信息</b></td><td>标题、字数、句数、难度、读没读完、读到第几句、有没有缓存正文</td><td>每篇几百字节</td><td>能重拉，但留着很便宜</td></tr>
+          <tr><td><b>三、正文缓存</b></td><td>全文、token 分析、释义表、词组、复习句子</td><td><b>约 300 KB / 篇</b></td><td>无所谓，重新拉一次</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1.4rem">推出来的结论很直接：<b>客户端需要的不是一个数据库，是一个可靠的发件箱，外加两份可以随时扔掉的缓存。</b>
+    这是架构前提 3 的直接后果——服务端是唯一事实来源，客户端存的一切都只是缓存。</p>
+
+    <h3>不缓存数据库，只缓存「今天这一份」</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>东西</th><th>大小</th></tr></thead>
+        <tbody>
+          <tr><td><code>dictionary.db</code>（404,011 词条）</td><td class="num">111 MB</td></tr>
+          <tr><td><code>learning.db</code>（461 篇文章、215,910 个 token）</td><td class="num">40 MB</td></tr>
+          <tr><td><code>content.db</code>（13,741 条义项）</td><td class="num">20 MB</td></tr>
+          <tr><td><b>整库合计</b></td><td class="num"><b>171 MB，且一直在涨</b></td></tr>
+          <tr><td><b>一天的今日包</b>（3 篇正课 + 1 篇加餐）</td><td class="num"><b>约 1.2 MB</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.2rem">差两个数量级，因为 <code>/today</code> 下发的不是「数据」而是<b>当天用得上的那个切片</b>：
+    文章全文、<b>文中每个词的释义</b>、当天的复习卡片与句子。
+    <b>404,011 条词典、13,741 条义项，一条都不下发</b>——点词查词能离线用，是因为释义随文章一起打包了，
+    不是因为手机上有本词典。</p>
+    <p><b>不缓存整库还有一个不是因为大的理由</b>：手机上一旦有了全库，就会忍不住自己算——
+    选文、难度、调度，而那正是铁律 1 要防的事。<b>把客户端限制在「只有今天这一份」，等于让那条铁律在物理上更难被破坏。</b></p>
+
+    <h3>清理缓存</h3>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>读完的、没读完的，都留着</b><span>不按「读完就清」自动处理，由用户决定。</span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>用户指定清理哪些</b><span>清理只删手机本地，<b>不删服务端</b>——服务端那份是事实，本地这份只是副本。</span></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-what"><b>清理后标题、字数、进度仍在</b><span>因为元信息属于第二类，不在清理范围。点开某篇触发重新拉取（走 <code>/v1/client/articles/{id}</code>，P2 就有，<b>后端一行不用改</b>）。</span></div></div>
+    </div>
+
+    <div class="callout" style="margin-top:1.6rem">
+      <b>不变量：清理缓存绝不能碰发件箱和元信息——只删能重新拿回来的东西。</b><br>
+      破了它是<b>静默的</b>：用户点一下「清理缓存」，把还没上报的标记一起删了，屏幕上什么都不会发生，
+      那些词就永远不进复习队列了。跟「入库绝不写 <code>study_states</code>」是同一个形状——
+      没有报错、没有日志、只有后果。<br>
+      <b>验收要有专门一项</b>：造几条未上报事件 → 清理全部缓存 → 断言事件还在。
+    </div>
+
+    <p style="margin-top:1.4rem"><b>要认的代价</b>：清理过的文章，在离线状态下点开会打不开。
+    这是用户自己选的清理，代价合理，但 Core 要能把这个状态表达出来
+    （已缓存／只有元信息／正在拉取／离线拿不到），否则界面只能显示一个转圈。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>发件箱，以及一个服务端的洞</h2>
+      <span class="sec-note">决定 9、11、12</span>
+    </div>
+    <p class="lede">发件箱是客户端唯一不能丢的东西：标记了一个词、读完一篇、答了一题，在送达服务端之前只存在于手机上。</p>
+
+    <h3>一条事件一个文件</h3>
+    <p>写的时候先写一个临时名，再<b>原子改名</b>；上报成功就删掉那个文件。顺序靠文件名里的序号——
+    <b>复习作答必须按顺序上报</b>（答对才解锁反向，服务端明写「顺序是客户端的」）。</p>
+
+    <p><b>选它不是因为它丢得少，是因为它可能出错的地方更少。</b>另一个候选是「一个追加式日志文件 + 已发到第几行」，
+    两者在崩溃时丢的其实是同一条——<b>正在写的那一条，而那一条用户还没看到成功</b>。
+    真正的差别在别处：<b>日志文件只会变长，隔一阵要压缩一次，而压缩是在重写整个文件</b>——
+    崩在中间可能<b>一次丢掉很多条还没发出去的事件</b>。一条一个文件没有这个动作，也就没有这个丢法。</p>
+
+    <div class="callout">
+      <b>不管哪种存法都成立的一条：先落盘，再在界面上确认。</b>
+      顺序反了的话，用户看见「已标记」但其实没写进去，崩溃之后就成了静默丢失。
+    </div>
+
+    <h3>删之前要跟服务端逐条比对</h3>
+    <p>批量上报<b>逐条回状态</b>（<code>accepted</code> / <code>duplicate</code> / <code>failed</code> / <code>rejected</code>），所以规则写死成：</p>
+    <div class="callout">
+      <b>只删服务端在 <code>results</code> 里明确回了成功的那几条，按幂等键一条一条对。
+      没出现在回应里的、回了失败的，一律不删。绝不能「HTTP 200 就整批删」</b>——
+      一批里可以部分失败，服务端代码注释明写着「一条坏的不拖垮整批」。
+    </div>
+    <p style="margin-top:1.4rem">至于「发出去了但没收到回应」（断线、超时），协议本来就设计好了：<b>重发就行，服务端靠幂等键认出来，回 <code>duplicate</code></b>。</p>
+
+    <h3>但 <code>duplicate</code> 这个回答现在不可信 ← 决定 12</h3>
+    <p>服务端处理一条事件是<b>两步</b>：先存档，再执行。</p>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>存档成功、执行失败</b><span>回 <code>failed</code>，客户端保留文件、稍后重发。到这为止都对。</span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>重发时撞上唯一索引，直接回 <code>duplicate</code></b><span><b>根本走不到执行那一步。</b></span></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-what"><b>客户端以为成功了，删掉文件</b><span>那条事件<b>从来没执行过，而且再也没人会重试它</b>。</span></div></div>
+    </div>
+    <p style="margin-top:1.4rem"><b>具体后果</b>：假如那条是 <code>word.marked</code>——
+    <b>你标记了一个词，屏幕上也显示标记上了，但它永远不会进复习队列。</b>没有报错，没有日志。
+    这正是「跨 Phase 静默错误清单」里的形状。</p>
+    <p>查证过：<b>没有任何地方会重试 <code>error</code> 不为空的事件</b>。
+    目前库里 420 条事件、失败 0 条，所以还没发生过——但路径是通的（执行那步会因为未知条目类型、数据库锁、缺字段抛异常）。</p>
+    <p><b>补法</b>：重复上报时先看那条之前执行成功没有，没成功就<b>再执行一次</b>。
+    选它而不是「在回应里加个字段说明上次成没成」，是因为<b>只有它能自愈</b>——
+    加字段只是让问题别被误判，那条事件仍然没人执行。而且它不改契约、不改客户端，
+    做完之后 <code>duplicate</code> 才名副其实，客户端「回了 duplicate 就删」的规则才真正站得住。</p>
+
+    <div class="callout">
+      <b>验收要按阴性 + 阳性对照验</b>（坑列表 §4.3）：<br>
+      ① 造一条<b>注定执行失败</b>的事件 → 上报 → 断言客户端<b>没删</b><br>
+      ② 修好失败原因 → 重发 → 断言服务端<b>这次真的执行了</b>，且客户端这才删<br>
+      ③ 正常事件 → 上报 → 断言正常删掉（确认规则没把好的也卡住）
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>契约类型从哪来</h2>
+      <span class="sec-note">决定 13</span>
+    </div>
+    <p class="lede">「类型」就是一份写在代码里的说明：这坨数据有哪些字段、每个装什么、哪些可能是空的。
+    它决定了错误在什么时候被发现。</p>
+
+    <p>现状是主文档 §M 记着的那条：客户端接口返回 <code>dict[str, Any]</code>，
+    所以 <code>/openapi.json</code> 里响应体是 <code>{"type":"object","additionalProperties":true}</code>——
+    <b>知道有 <code>/today</code>，不知道它返回什么</b>。75 个端点，每一个都这样。</p>
+
+    <p>所以顺序是：</p>
+    <pre><b>后端声明响应类型 → OpenAPI 有了真 schema → 生成 Swift 类型</b></pre>
+    <p>§M 当时已经否掉了另一条路：<b>正确的补法不是另写一份契约文档</b>（两份必然漂移，
+    而漂移时你不知道哪份是错的），<b>而是给响应声明类型，让代码自己说清楚</b>。</p>
+
+    <h3>为什么直接用生成的，不另建一套</h3>
+    <p>真正的分歧只有一个：<b>后端改了契约，谁来告诉你？</b>拿最常发生的「后端加了一个字段」走一遍——
+    这个接口的铁律是只增不减，所以加字段就是日常：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>直接用生成的</th><th>生成 + 自己再写一份</th><th>全手写</th></tr></thead>
+        <tbody>
+          <tr><td>要动几个地方</td><td><b>1 个</b>：重新生成</td><td><b>3 个</b>：重新生成、自己的模型、转换层</td><td>1 个，前提是你知道要加</td></tr>
+          <tr><td>忘了会怎样</td><td>忘不了，就一条命令</td><td><b>这个字段静默消失</b>，不报错</td><td><b>根本不知道后端加过</b></td></tr>
+          <tr><td>后端<b>改</b>了字段类型</td><td><b>编译器当场指出所有用到的地方</b></td><td>转换层编译报错，能发现</td><td><b>运行时才炸</b>，可能在手机上</td></tr>
+          <tr><td>代码读起来</td><td>类型名冗长，要用别名缓解</td><td>最干净</td><td>最干净</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout" style="margin-top:1.6rem">
+      <b>一句话区别：直接用生成的，把契约变化变成编译错误；另建一套，把一部分变化变成静默遗漏；全手写，把所有变化变成运行时错误。</b>
+    </div>
+    <p style="margin-top:1.4rem">冗长的解法是<b>类型别名和 extension</b>（给同一份模型加便利方法），
+    <b>而不是</b>再建一套模型——extension 加了不会漂，第二份模型必然漂。</p>
+
+    <h3>还有一条反而是好事</h3>
+    <p><b>后端的响应声明写得糙，生成出来的 Swift 就难用</b>（字段全标成「可能为空」，Swift 这边到处要判空）。
+    这把压力压回了后端——<b>想让手机端好写，后端的契约就得认真写</b>。而后端是这个项目要长期留着的东西。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>复习状态机怎么保证不走样</h2>
+      <span class="sec-note">决定 14</span>
+    </div>
+    <p class="lede">讨论里一度以为重复的是「Swift 和现有的 JS」。查过代码之后发现<b>找错了对象</b>。</p>
+
+    <h3>真正重复的是 Swift 和服务端的 Python</h3>
+    <p>复习页的作答处理有两个分支，注释写得很清楚：</p>
+    <pre>if (res) {
+  <b>// 在线：服务端说了算。</b>      ← 直接用服务端回的 asks/misses/done
+} else {
+  <b>// 离线：先按规则往前走，好让这一天能做完。服务端补报之后会覆盖，</b>
+  <b>// 所以这里只镜像那几条明写在契约里的规则，不自己发明任何东西。</b>
+}</pre>
+    <p>所以设计意图早就定了：<b>服务端的 <code>session.answer()</code> 是权威，客户端只在离线时镜像那几条规则</b>。
+    Swift 要写的就是这个镜像。两边逐条对过——<b>今天是一致的</b>
+    （答对第一向解锁第二向、答对第二向算完成、答错回到第一向并把权重减半）。
+    <b>问题不是现在错了，是将来会不会悄悄分叉。</b></p>
+
+    <h3>两道保险，抓的不是同一类错</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>服务端导出向量</th><th>命令行客户端在线对拍</th></tr></thead>
+        <tbody>
+          <tr><td>怎么做</td><td>写个脚本，<b>用服务端真实的那段代码</b>跑几百个场景，把「这样作答 → 应该变成什么状态」导成 JSON 进仓库；Swift 测试读它跑一遍</td><td>在线答题时，客户端<b>先按离线规则自己算一遍</b>，再拿服务端的回应比，不一致就记一笔</td></tr>
+          <tr><td>抓什么</td><td><b>纯逻辑写错了</b></td><td><b>接线错了</b>——状态机算得对，但上报时传错条目编号、或把作答顺序发拧了</td></tr>
+          <tr><td>抓不到什么</td><td>它把状态机单独拎出来，<b>不联网、不走 HTTP</b>，所以结构上看不见接线错误</td><td>要联网、不好重现</td></tr>
+          <tr><td>能进 CI 吗</td><td><b>能</b>，每次推送都跑</td><td>不能，要有真服务端</td></tr>
+          <tr><td>最大毛病</td><td><b>向量是快照，服务端逻辑改了它不会自己更新</b>——Swift 对着过期答案照样通过</td><td>慢</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p style="margin-top:1.4rem"><b>向量那个毛病有现成解法</b>，跟生成代码同一个做法：
+    <b>CI 检查「重新导出后没有 diff」</b>，服务端逻辑一改这条检查当场变红。
+    项目里有先例——<code>verify_phase2.py</code> 7.5 那条验收项就到期过。</p>
+
+    <p><b>对拍是便宜的保险，不是必需品。</b>命令行客户端本来就要连真服务端答题，加的只是一次比较。
+    省掉它的代价具体是：<b>离线那天你以为做完了，第二天一拉今日包发现还有几个词没做完</b>——
+    因为客户端每次重新拉包都会拿到服务端的版本，这种不一致<b>会自动被纠正</b>，不丢数据，
+    但你不知道发生过什么。<b>没坏，但也说不清</b>，正是这个项目最烦的那种。</p>
+
+    <p><b>手工设计的边角场景掺进向量里</b>：连错五次、当天全做完、最后一题答错——随机撞不到的地方靠人指定。
+    但<b>不单独用手写向量</b>，因为那样没有权威来源，两边都「通过」可能只是两边都错。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>命令行客户端</h2>
+      <span class="sec-note">决定 15</span>
+    </div>
+    <p class="lede">它是 P5 的验收产物，不是产品。跑在 Windows 上，用 Core 连<b>真实的后端</b>。</p>
+
+    <h3>它要干三件活</h3>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>你验收 P5 用它</b><span>走完一天：拉今日包、读文章、标记生词、读完、走一遍当天的复习。</span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>验 P4 欠下的 M1「断网走完一天」的协议那一半</b><span>所以必须能假装断网。真机那一半留给下一个 Phase。</span></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-what"><b>装着决定 14 的在线对拍</b><span>所以必须能在线答题并比较。</span></div></div>
+    </div>
+    <p style="margin-top:1.4rem">这三件把下限逼出来了：<b>能重复跑、能模拟断网、能重置</b>。
+    （「能重复跑」还对着坑列表 §4.1：<b>只在某些日子能过的验收等于没有</b>。）</p>
+
+    <h3>阅读部分做带标注版</h3>
+    <p>终端里把<b>目标词、超纲词、词组、已标记的词</b>用颜色和符号标出来；点词查词是输入词的编号看释义，
+    <b>包括「这个词在词组里时要给词组的意思」那条规则</b>。</p>
+    <p>为什么不做纯文本版：<b>命令行客户端存在的全部意义，是让 Core 被一个真实流程走一遍。</b>
+    这正是 §M 那条教训——<code>/today</code> 验过能拿到正确的包，<b>但没被真实流程走过</b>，
+    所以字段够不够没人知道。而纯文本版<b>走不到 Core 的一半</b>：
+    token 定位、词组整体、<code>account</code> 为什么不能读成「账目」，这些恰恰是 Core 里分量最重也最容易错的部分。
+    用纯文本版的话，它们只有单元测试见过，跟没被真实流程走过是一回事。</p>
+
+    <p><b>脚本回放先不做。</b>它只对我有用（快速重放一个序列，相当于坑列表 §3.3 那个「假 DOM 重放点击」），
+    而且随时能加——等真的开始反复调某个序列、觉得手动太慢了，那时候加最合适。现在定它属于提前规划。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>CI：P5 只要三层</h2>
+      <span class="sec-note">决定 5、16</span>
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>层</th><th>跑在哪</th><th>内容</th><th>耗时</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">内层</td><td><b>Windows 本地</b></td><td><code>swift test</code>，我改代码时的主回路</td><td class="num"><b>2.5 秒</b>（实测）</td></tr>
+          <tr><td class="topic">L0</td><td>Linux CI</td><td>Core 编译 + 单元测试。<b>交叉校验 + 留痕</b>——证明我真跑过，且第二个平台能抓出平台相关的意外</td><td class="num">1–2 分钟（估）</td></tr>
+          <tr><td class="topic">L1</td><td>macOS CI</td><td><b>只编不测：验证 Core 能为 iOS 目标编译通过</b></td><td class="num">4–6 分钟（估）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout" style="margin-top:1.6rem">
+      <b>L1 不能省。</b>Windows 上是 Swift 6.3.3，Xcode 里是另一个版本——<b>Windows 编过不等于 iOS 编过</b>。
+      这个检查推到下一个 Phase，等于把「Core 用了 iOS 上不存在的东西」这个发现推迟一整个 Phase。一个编译 job，很便宜。
+    </div>
+
+    <p style="margin-top:1.4rem"><b>模拟器测试、截图、签名、TestFlight 那一整套 P5 全都不要</b>——P5 没有界面。
+    <b>也不需要 Xcode 工程</b>：Core 和命令行客户端都是纯 SwiftPM 包。</p>
+
+    <h3>要守的做法</h3>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>本地是预筛，CI 是权威</b><span>在自己机器上算出来的结论会漂，不能拿它当结论——跟「服务端是唯一事实来源」同一条道理。</span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>Xcode 版本与 SDK 写死，并把环境打进日志</b><span>镜像里有七个 Xcode，默认值会随更新漂（§4）。每次跑一遍 <code>xcodebuild -version</code>，坏的时候一眼能分清是环境还是代码。</span></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-what"><b>Core 的每个依赖都要单独核对 Windows 支持</b><span>不能因为「Swift 生态的东西应该都行」就默认。<code>swift-openapi-runtime</code> 已实测通过（§3），以后每加一个都要重来一次。形状同坑列表 §2.3。</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>分支与提交：一处和铁律的正面冲突</h2>
+      <span class="sec-note">决定 6</span>
+    </div>
+
+    <p>铁律写着：<b>「Phase 进行中保持工作区未提交，便于用户随时看到改了什么。」</b>
+    但 <b>CI 只跑推送过的代码</b>。虽然 P5 有了 Windows 本地回路，大部分迭代不必推送，
+    但 CI 那两层仍然只认推送。</p>
+
+    <p><b>定下来的是：开一条 <code>ios</code> 分支</b>，P5 期间的提交往那儿推，<code>main</code> 保持干净；
+    后端那部分的改动仍按老规矩留在工作区。验收通过后合进 <code>main</code>。</p>
+
+    <div class="nots">
+      <div class="not"><i>·</i><span>这些提交是<b>「编译按钮」不是里程碑</b>，提交信息可以粗</span></div>
+      <div class="not"><i>·</i><span><b>仍然不带任何 AI 署名</b>——那条铁律不因为是草稿提交就松</span></div>
+      <div class="not"><i>·</i><span><b>验收后合进 <code>main</code> 压成一个提交</b>（决定 22）。<code>main</code> 上现在的提交全是有意义的里程碑，那几十个「编译按钮」没有保留价值。<b><code>ios</code> 分支留着不删</b>，需要二分定位时还在。压缩属于合并策略，不是改写历史。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>P5 不做什么</h2>
+      <span class="sec-note">照 phase-0 §4 的规矩</span>
+    </div>
+    <p class="lede">写下来是为了「顺手做了」的时候能被拦住。</p>
+
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>不写任何界面代码。</b>一行 SwiftUI / UIKit 都不写——CI 里有 grep 守着（§5）。</span></div>
+      <div class="not"><i>×</i><span><b>不建 Xcode 工程。</b>Core 和命令行客户端都是纯 SwiftPM 包，用不上（§11）。</span></div>
+      <div class="not"><i>×</i><span><b>不碰签名、TestFlight、模拟器测试、截图。</b>全部属于下一个 Phase。</span></div>
+      <div class="not"><i>×</i><span><b>不做任何界面决定</b>——颜色、字号、手势、布局。P5 只回答「这个词<b>是</b>什么」，不回答「它该<b>长</b>什么样」。</span></div>
+      <div class="not"><i>×</i><span><b>不做部署。</b>现阶段连家里的后端，正式版的阿里云 VPS 不在本 Phase（决定 7）。</span></div>
+      <div class="not"><i>×</i><span><b>不在 Core 里实现网络传输。</b>Core 只定义协议；命令行客户端提供一份实现（§5、§16）。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§14</span>
+      <h2>一个词该怎么显示</h2>
+      <span class="sec-note">决定 17</span>
+    </div>
+    <p class="lede">讨论这条之前先看了现有阅读页在做什么，发现<b>它不只是「好不好看」</b>。</p>
+
+    <h3>底下有两条规则，而且都是踩过坑才有的</h3>
+    <p>现在的 <code>classesFor()</code> 里有一条<b>优先级链</b>——一个词可能同时是好几种，得按顺序挑一个：</p>
+    <pre><b>专有名词 &gt; 超纲词（且这篇要标超纲）&gt; 目标词 &gt; 派生词</b></pre>
+    <p>还有一条更绕的，注释里写明了它的来历：</p>
+    <div class="callout">
+      <b>词在词组里时，不画它自己的标记底色</b>——因为点词组里任何位置都是打开词组，
+      画了就是指向一个你从这里够不着的记录。<br>
+      第一版没这条，<b>实测丢了信息：28 个超纲词和 34 个派生词的标记被词组底色盖掉了。</b>
+    </div>
+    <p style="margin-top:1.4rem"><b>画错了不报错，只是安静地给错信息</b>——正是这个项目最怕的那种。
+    而且<b>这个项目马上就有两个客户端</b>（P5 的命令行、P6 的 iOS），
+    这条链放在界面里<b>现在就要写两遍</b>。</p>
+
+    <h3>定下来的分法</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th></th><th>Core 出语义（选这个）</th><th>Core 只转发原始字段</th><th>Core 直接出样式名</th></tr></thead>
+        <tbody>
+          <tr><td>Core 给出什么</td><td>「这个词是<b>超纲词</b>，标记状态是<b>不认识</b>，它自己的标记<b>不要画</b>」</td><td>原样转发服务端的十几个字段</td><td>「用<b>虚线下划线 + 红底</b>」</td></tr>
+          <tr><td>优先级链写在哪</td><td><b>Core，一份</b></td><td><b>每个客户端各写一遍</b></td><td>Core</td></tr>
+          <tr><td>界面还能决定什么</td><td>下划线实虚、颜色、换别的记号</td><td>全部</td><td><b>几乎不能</b>——换个设计就得改 Core</td></tr>
+          <tr><td>命令行客户端能用吗</td><td><b>能</b>，它把「超纲词」印成别的符号</td><td>能，但要再写一遍链</td><td><b>不能</b>，终端里没有「虚线下划线」</td></tr>
+          <tr><td>写错了会怎样</td><td>Core 的测试能抓</td><td><b>静默显示错信息</b></td><td>能抓，但 Core 绑死了一种设计</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.4rem"><b>一句话区别：Core 出语义，是把「是什么」和「长什么样」切开；
+    只转发，是让每个客户端自己判断「是什么」；出样式名，是让 Core 连「长什么样」一起管了。</b></p>
+    <p>选的理由就是 §5 那条判据——<b>换成安卓也一模一样的归 Core</b>：
+    「这个词是超纲词」在任何客户端上都一样，「超纲词画成灰色虚线」则是这个界面的选择。</p>
+    <p><b>代价</b>：Core 得有一套自己的词汇（超纲词、派生词、标记为不认识……），界面照着这套词汇挑画法。
+    多一层名字，但这层名字正好是两个客户端的共同语言。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§15</span>
+      <h2>范围上定的四条</h2>
+      <span class="sec-note">决定 18–21</span>
+    </div>
+    <p class="lede">四条都带着同一个判断：<b>Core 的活在 P5 做完，P6 才是纯界面。</b>
+    刚拆完就往 P6 塞内核工作，拆分的好处会一点点漏掉。</p>
+
+    <h3>拼写进 P5，连同后端补一个批量端点（决定 18）</h3>
+    <p>P4 决定 12 给复习作答加了批量上报，理由写得很直白：「地铁里每答一题都失败，破着架构前提 2」。
+    <b>但拼写没跟上</b>——<code>/reviews/spelling</code> 现在仍是一次一条、没有幂等键、没有本地队列。
+    当时拼写不在范围内，所以漏了。</p>
+    <p>拼写在客户端很小：按词去重（一个词多个义项只拼一次）→ 显示释义让你打字 → 比对 → 上报。
+    <b>顺带的好处是发件箱多走一种事件</b>，多一条被真实流程验过的路。</p>
+    <p><b>不选它的合理理由是控制 P5 大小</b>——拼写是最不吃劲的功能（主文档明写「拼错不影响复习时间的安排，只单独记一笔」）。
+    但那样 P6 就要带一点 Core 和后端的活，与拆分的初衷相反。</p>
+
+    <h3>真题直读进 P5（决定 19）</h3>
+    <p>今日包不装真题（P4 决定 9），452 篇走自己的入口。
+    <b>剩下要做的只有列表浏览和挑选</b>——按编号取文章已经因为「清理缓存后点开重新拉取」而必需，
+    <code>mark_beyond</code>（真题不标超纲词）也是按篇走的，本来就要有。</p>
+    <p>另一条路是「永远不做在客户端」，但<b>那是在改主文档的设计</b>（B7 真题直读），
+    不该在一个实施方案里顺手决定。</p>
+
+    <h3>取消加餐，今日包正好 3 篇（决定 20）</h3>
+    <p>原来的加餐是「预备 1–2 篇，读完主线后解锁」。取消的理由不是它被证伪，
+    是<b>它被一个更简单的事实取代了</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>实测（2026-09-12）</th><th>值</th></tr></thead>
+        <tbody>
+          <tr><td>每天 04:00 生成</td><td class="num">3 篇，<b>无条件</b>，不看现有库存</td></tr>
+          <tr><td>实际读速</td><td class="num">约 1 篇 / 天</td></tr>
+          <tr><td><b>净增</b></td><td class="num"><b>2 篇 / 天</b></td></tr>
+          <tr><td>当时库存</td><td class="num">生成 9 篇、读了 4 篇、<b>未读 5 篇</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.4rem"><b>在一堆读不完的往期之上再压一篇「加餐」，解决的是一个不存在的问题。</b>
+    往列表下面翻就是加餐。</p>
+    <div class="callout">
+      <b>做法：配置项 <code>today_extra_count</code> 改成 0，不用改后端代码。<br>
+      但 <code>extra_articles</code> 这个字段必须留在响应里</b>——铁律 5 是只增不减，
+      字段留着、永远是空数组。将来想恢复，把配置改回去就行。
+    </div>
+    <p style="margin-top:1.4rem"><b>连带作废「读完主线才解锁」那条规则</b>——没有加餐，也就没有解锁。
+    这同时消掉了主文档 §M 里挂着的半条待定（「加餐怎么解锁」）。
+    原文与理由照录进了<b>归档 §I</b>，主文档 §H 同步改成「往期」。
+    P4 决定 16 被取代，但 <code>phase-4.html</code> 不动——它记的是 P4 当时做了什么。</p>
+    <p><b>离线这边反而更好了</b>：之前是「3 篇 + 压着的 1 篇」，
+    现在是「今天 3 篇 + 以前缓存过的全部」——按决定 10 读完没读完都留着，
+    昨天没读完的还在本地。</p>
+
+    <h3>缓存是「读哪篇存哪篇」，不预先全下（决定 21）</h3>
+    <p>量过真实数据，不是估的：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>来源</th><th>词数</th><th>整包大小</th></tr></thead>
+        <tbody>
+          <tr><td>四级真题</td><td class="num">344</td><td class="num">~170 KB</td></tr>
+          <tr><td>六级真题</td><td class="num">444</td><td class="num">~196 KB</td></tr>
+          <tr><td>考研真题</td><td class="num">357</td><td class="num">~175 KB</td></tr>
+          <tr><td>生成文</td><td class="num">430</td><td class="num">~190 KB</td></tr>
+          <tr><td><b>452 篇真题全缓存</b></td><td class="num">—</td><td class="num"><b>约 81 MB</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.4rem">81 MB 对 iPhone 不算事，<b>所以不是「装不下」的问题</b>。
+    真正的理由有两条：</p>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>真题不在每天的主线上。</b>每日流程是复习 → 今日包 → 往期，真题是「想额外练时」才去翻的书架。<b>预先下 452 篇你可能一篇都不会碰的东西</b>，跟「清理缓存」那个功能是反着的——那个功能的存在本身就说明不想让缓存无节制地涨。</span></div>
+      <div class="not"><i>2</i><span><b>其中约 35 MB 是重复的释义副本。</b>一篇里 43% 是释义表（六级那篇 196 KB 中释义占 84 KB），而 <code>the</code>、<code>however</code>、<code>according</code> 这些会被存几百遍。真要「全都在本地」，该先把释义改成共享一份——<b>那是个真正的结构改动，值得单独议，不该顺手做</b>。</span></div>
+    </div>
+    <p style="margin-top:1.4rem"><b>「全部下载」按钮留给 P6</b>：它就是循环调用「取一篇」，
+    <b>Core 一行都不用多写</b>，所以这是界面决定，不是内核决定。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§16</span>
+      <h2>定稿后先验掉的两个未知数</h2>
+      <span class="sec-note">动手写 Core 之前</span>
+    </div>
+    <p class="lede">这两条都是<b>验不通就得改方案</b>的东西，而且各自只要十几分钟。
+    2026-09-12 定下：<b>方案定稿之后、动手写 Core 之前，先把它们跑一遍。</b></p>
+
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>Swift 在 Windows 上能不能发 HTTP 请求</b><span>
+      <b>这是目前最大的未知数。</b>按决定 4，Core 不实现网络、只定义协议，
+      所以真正发请求的那份代码落在<b>命令行客户端</b>身上——而它跑在 Windows 上，
+      Swift 在 Windows 上的网络支持我<b>一次都没测过</b>。
+      <br><br>
+      验不通的后果很实在：<b>命令行客户端连不上后端，而它是 P5 唯一的验收手段</b>——
+      Core 是个库，没法「用」，只能通过它走一遍。
+      <br><br>
+      <b>怎么验</b>：写个几行的小程序，访问本机后端的 <code>/health</code>，看拿不拿得到回应。
+      <b>退路</b>：让它调用系统的 curl 去发请求，绕开 Swift 自己的网络。
+      那是备胎，但得先知道要不要用——而且备胎只对命令行客户端成立，iOS 那边另有一套成熟的，不受影响。</span></div></div>
+
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>类型生成器本身能不能在 Windows 上跑</b><span>
+      §3 验过的是 <code>swift-openapi-runtime</code>——那是<b>生成出来的代码要依赖的库</b>。
+      <b>生成器是另一个程序</b>，把 OpenAPI 描述变成 Swift 文件的那个，它能不能在 Windows 上跑没验过。
+      <br><br>
+      验不通的后果比第一条轻：决定 13 要求<b>生成物提交进仓库</b>，
+      所以只要有一个地方能生成就行——实在不行让 CI 上的 Linux 去生成。
+      但那样<b>每改一次契约都要等 CI</b>，本地回路在这件事上就断了。</span></div></div>
+    </div>
+
+    <h3 style="margin-top:2.4rem">其余的风险与未定</h3>
+    <div class="nots">
+      
+      <div class="not"><i>?</i><span><b>CI 耗时全是估计值</b>（§11 的 1–2 / 4–6 分钟）。第一条流水线跑起来就知道了。</span></div>
+      <div class="not"><i>?</i><span><b>2.5 秒那个数来自一个 3 个文件的探针。</b>真实的 Core 会慢一些，量级仍是秒（§3）。</span></div>
+      <div class="not"><i>!</i><span><b>Core 必须持续保持跨平台干净</b>，这是要一直守的约束，不是一次性的（§5）。</span></div>
+      <div class="not"><i>!</i><span><b>P5 没有第二双眼睛</b>（决定 23）。写代码和验收都是同一个 AI，共有盲区看不出来。缓解的是三道「判断标准不来自我」的防线，但它们不覆盖全部——完整的说明与边界见 §17。</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
+      <h2>验收</h2>
+      <span class="sec-note">决定 23、24</span>
+    </div>
+    <p class="lede"><b>P5 的验收全部由 AI 执行，没有人工项。</b>这动了铁律，所以理由、代价、边界都写在这里。</p>
+
+    <h3>为什么这一次不由人跑</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>P5 没有界面，人没法「用」一个 Swift 库。</b>所谓人工验收也是跑命令看输出——那本来就是 AI 的活，换个人做同一件事，不会多出任何独立判断。</span></div>
+      <div class="not"><i>2</i><span><b>用户真正要判断的是 P6。</b>P5 是地基，<b>有了客户端之后才定的东西</b>才需要人来看：读起来顺不顺、标记方不方便、一天走下来累不累。把精力留在那一关。</span></div>
+    </div>
+
+    <h3 style="margin-top:2.2rem">代价：没有第二双眼睛</h3>
+    <div class="callout">
+      <b>我写的东西我自己验，共有盲区看不出来。</b><br>
+      这个项目最贵的几次教训全是这个形状——<code>tags</code> 那个字段栽了四次，
+      每次都是<b>检查和代码共享了同一个错误假设</b>，于是一片绿，
+      而 <code>labor</code> 被判成超纲整整一个阶段。P3 的人工验收 E 特意找三方独立判断，也是为这个。
+    </div>
+
+    <h3>三道「判断标准不来自我」的防线</h3>
+    <p>缓解不了全部，但这三条都是之前定的，正好都在防这件事——<b>它们的共同点是：对不对不由我说了算</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>防线</th><th>权威来自哪</th></tr></thead>
+        <tbody>
+          <tr><td><b>测试向量</b>（决定 14）</td><td>服务端<b>真实那段代码</b>跑出来的期望值，不是我写的</td></tr>
+          <tr><td><b>fixture</b>（决定 10）</td><td>从<b>真实响应</b>导出的，不是我手写的</td></tr>
+          <tr><td><b>在线对拍</b>（决定 14）</td><td>每答一题跟<b>服务端回的</b>比</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1.4rem"><b>但要认清它们不覆盖什么</b>：这三条守的是「Core 和服务端是否一致」。
+    如果<b>我对契约本身的理解就错了</b>，而那个理解同时进了 Core、CLI 和测试，三道防线一条都不会响。
+    这类错误要等 P6 或更晚才会暴露。</p>
+
+    <h3>怎么跑</h3>
+    <p><b>一条命令：<code>verify_phase5.py</code></b>，跟前四个 Phase 一样。它内部调 <code>swift test</code>，把两种语言的结果汇总成一份报告。</p>
+    <div class="callout">
+      <b>脚本必须先检查 <code>swift</code> 能不能跑，「环境不可用」和「测试失败」分开报。</b><br>
+      坑 §4 那个形状：<b>环境坏掉和代码写错在日志里长得一模一样</b>。
+      不分开的话，一次 <code>SDKROOT</code> 没设就会伪装成「验收不过」，
+      而我会拿着它去改根本没错的代码。
+    </div>
+
+    <h3>要覆盖的九类</h3>
+    <p class="lede" style="margin-bottom:1rem">具体项数等脚本写出来才有——照 P0 到 P4 的惯例，条目是写的时候长出来的，不是先编好的。这里只钉住<b>哪几类不能漏</b>。</p>
+    <div class="checks">
+      <div class="check"><div class="check-n">A</div><div class="check-what"><b>环境与构建</b><span><code>swift</code> 可用；Core 能为 iOS 目标编译（<b>这条是 L1 存在的全部理由</b>——Windows 编过不等于 iOS 编过）；每个依赖都在 Windows 上编得过。</span></div></div>
+      <div class="check"><div class="check-n">B</div><div class="check-what"><b>契约类型</b><span>重新生成后<b>无 diff</b>（决定 13）；fixture 能被生成的类型解码——<b>后端改了响应形状这里当场变红</b>。</span></div></div>
+      <div class="check"><div class="check-n">C</div><div class="check-what"><b>本地存储</b><span>发件箱崩溃安全（半个文件不会变成半条记录）；<b>清理缓存绝不碰发件箱和元信息</b>——造几条未上报事件、清理全部缓存、断言事件还在（§6 那条不变量）；清理后标题字数进度仍在。</span></div></div>
+      <div class="check"><div class="check-n">D</div><div class="check-what"><b>发件箱与上报</b><span>只删服务端逐条回了成功的；<b><code>duplicate</code> 重试补法要按阴性+阳性对照验</b>（§7）：造一条注定失败的事件→断言没删；修好原因→重发→断言<b>这次真的执行了</b>；正常事件→断言正常删掉。</span></div></div>
+      <div class="check"><div class="check-n">E</div><div class="check-what"><b>复习状态机</b><span>测试向量全过；<b>重新导出后无 diff</b>——服务端逻辑一改这条当场变红，防的是向量变成过期快照（§9）。</span></div></div>
+      <div class="check"><div class="check-n">F</div><div class="check-what"><b>今日包与阅读</b><span>今日包<b>正好 3 篇</b>且 <code>extra_articles</code> <b>是空数组而不是字段消失</b>（决定 20，铁律 5）；token 定位；<b>词组整体命中</b>（点任一半都是整体）；<code>in_phrase</code> 时给词组的释义而不是词的；<b>显示语义的优先级链</b>与词组抑制规则（§14）。</span></div></div>
+      <div class="check"><div class="check-n">G</div><div class="check-what"><b>拼写</b><span>批量端点收得下补报；离线队列；按词去重（一个词多个义项只拼一次）。</span></div></div>
+      <div class="check"><div class="check-n">H</div><div class="check-what"><b>真题直读</b><span>两个列表都供得上；按篇取回；<b>真题不标超纲词</b>（<code>mark_beyond</code>）。</span></div></div>
+      <div class="check"><div class="check-n">I</div><div class="check-what"><b>端到端</b><span>命令行客户端在真后端上<b>走完一天</b>；<b>断网走同样一遍</b>，重连补报后服务端状态与在线那遍<b>一致</b>；在线对拍全程无分歧。</span></div></div>
+    </div>
+
+    <h3>两条脚本本身要守的规矩</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>不许依赖「今天碰巧有数据」</b>（坑 §4.1）。自己种探针、用完删掉，<b>前后各清一次</b>——中断的上一轮也不会污染下一轮。<b>只在某些日子能过的验收等于没有。</b></span></div>
+      <div class="not"><i>·</i><span><b>整段包进 <code>notifications.muted()</code></b>（坑 §4.4）。D 类要故意制造失败的事件，而告警处理器挂在 logging 上——不静音就是往真实告警通道里灌假警报，<b>等于亲手训练用户忽略它</b>，而它是夜间任务失败的唯一出口。</span></div>
+    </div>
+
+    <h3>完成的定义</h3>
+    <div class="callout">
+      <b>用命令行客户端在真实后端上走完一天，事件一条不丢；<br>
+      断网走同样一遍，重连补报后服务端状态与在线那遍一致。</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§18</span>
+      <h2>Core 装什么</h2>
+      <span class="sec-note">照着这份写，不用翻前面</span>
+    </div>
+    <p class="lede">前面十七节是<b>为什么</b>，这一节是<b>什么</b>。二十四条决定散落在各节里，
+    收成一份可对照的清单——动手时看这一份就够。</p>
+
+    <div class="callout">
+      <b>分栏的判据只有一条</b>（§5）：换成安卓客户端也要一模一样的 → <b>Core</b>；
+      会长得不一样的 → <b>界面</b>（P6）；由命令行客户端提供一份实现的 → <b>宿主</b>。
+    </div>
+
+    <h3>一、连接与身份</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>base URL 与设备令牌</td><td>Core</td><td>令牌由管理控制台签发、一次性显示。现阶段连家里的后端（决定 7）</td></tr>
+          <tr><td><b>发 HTTP 请求</b></td><td><b>宿主</b></td><td>Core 只定义协议，不实现（决定 4）。<b>命令行客户端那份还没验过能不能在 Windows 上跑</b>——§16 第 1 条</td></tr>
+          <tr><td>身份回显</td><td>Core</td><td>响应顶层的 <code>learner</code>，由设备令牌推导，路径里不出现人的编号</td></tr>
+          <tr><td><code>capabilities</code></td><td>Core</td><td>区分「没数据」与「没实现」。<b>现在全是 false</b>，但字段必须读得出来——水平估计、专有名词说明这些将来会填</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>二、今日包与文章</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>拉今日包并缓存</td><td>Core</td><td><b>正好 3 篇</b>；<code>extra_articles</code> 读得出来但永远是空数组（决定 20）</td></tr>
+          <tr><td>两个列表：生成文与真题</td><td>Core</td><td>真题走 <code>/library?source=…</code>（决定 19）。往期也是这条路——<b>「还想读」就是往下翻</b></td></tr>
+          <tr><td>按编号取一篇</td><td>Core</td><td>清理过缓存的文章点开时要用（决定 10）</td></tr>
+          <tr><td><b>文章还没准备好</b></td><td>Core</td><td>服务端会回 <code>preparing</code> 而不是报错，带着「标注了几个 / 共几个」。<b>这不是错误，是要显示进度</b></td></tr>
+          <tr><td>四种缓存状态</td><td>Core</td><td>已缓存 / 只有元信息 / 正在拉取 / <b>离线拿不到</b>。不分开的话界面只能转圈（§6）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>三、正文与点词</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>字符位置 → 第几个 token</td><td>Core</td><td>服务端给了 <code>char_start</code> / <code>char_end</code>，映射是纯索引运算</td></tr>
+          <tr><td><b>词组整体命中</b></td><td>Core</td><td><b>点任一半都返回整个词组</b>，连中间的空格。这是跨 Phase 不变量，对所有客户端都成立</td></tr>
+          <tr><td>释义查询</td><td>Core</td><td>含 <code>in_phrase</code> 那条：<b>词在词组里时给词组的意思</b>，否则 <code>account</code> 会读成「账目」</td></tr>
+          <tr><td><b>显示语义</b></td><td>Core</td><td>优先级链（专有名词 &gt; 超纲 &gt; 目标 &gt; 派生）+ 词组抑制规则（决定 17、§14）</td></tr>
+          <tr><td>超纲标记只在生成文</td><td>Core</td><td><code>mark_beyond</code> 按篇走——真题里遇到生词正是要练的事</td></tr>
+          <tr><td>画成什么样</td><td><b>界面</b></td><td>下划线实虚、颜色、记号，全是 P6 的事</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>四、标记与记账</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>标记 / 取消标记</td><td>Core</td><td>词与词组两种条目；两档状态（不认识、模糊）</td></tr>
+          <tr><td>六种事件</td><td>Core</td><td><code>article.opened</code>、<code>article.progress</code>、<code>article.finished</code>、<code>word.tapped</code>、<code>word.marked</code>、<code>word.unmarked</code></td></tr>
+          <tr><td>阅读进度</td><td>Core</td><td>读到第几句、百分之几</td></tr>
+          <tr><td><b>记账在服务端</b></td><td>—</td><td><b>Core 不算任何学习状态</b>。「读完那一刻记账」「进复习队列只有标记一条路」都是服务端的事——客户端只报事件</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>五、发件箱</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>一条事件一个文件</td><td>Core</td><td>先写临时名再原子改名（决定 9）</td></tr>
+          <tr><td>幂等键</td><td>Core</td><td>客户端生成，服务端靠它去重</td></tr>
+          <tr><td>顺序</td><td>Core</td><td><b>复习作答必须按顺序上报</b>——答对才解锁反向，服务端明写「顺序是客户端的」</td></tr>
+          <tr><td>批量上报</td><td>Core</td><td>三条路：阅读事件、复习作答、<b>拼写</b>（决定 18，后端要补）</td></tr>
+          <tr><td><b>删之前逐条比对</b></td><td>Core</td><td>只删明确回了成功的；<b>绝不「HTTP 200 就整批删」</b>（决定 11）</td></tr>
+          <tr><td><b>先落盘再确认</b></td><td>Core</td><td>顺序反了，用户看见「已标记」而其实没写进去</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>六、复习</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>加权抽题</td><td>Core</td><td>权重和衰减率<b>来自服务端</b>，客户端只是从袋子里摸</td></tr>
+          <tr><td>双向与解锁</td><td>Core</td><td>看词想义 → 看义想词；答对解锁，答错<b>重新上锁并退回第一向</b></td></tr>
+          <tr><td>提示分级</td><td>Core</td><td>开了几级<b>就是成绩</b>——行为，不是自评难度</td></tr>
+          <tr><td>权重衰减</td><td>Core</td><td>答错减半，让卡住的词自己让路，但<b>永不排除</b></td></tr>
+          <tr><td>当天完成判定</td><td>Core</td><td>池子空了才算完</td></tr>
+          <tr><td><b>在线时服务端说了算</b></td><td>Core</td><td>离线镜像那几条规则往前走，<b>不自己发明任何东西</b>；服务端补报后覆盖（§9）</td></tr>
+          <tr><td>在线对拍</td><td>宿主</td><td>命令行客户端每答一题自己先算再比（决定 14）</td></tr>
+          <tr><td>拼写</td><td>Core</td><td>当天复习走完之后；<b>按词去重</b>（一个词多个义项只拼一次）；<b>拼错不影响调度</b>，只记一笔</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>七、缓存管理</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>能力</th><th>在哪</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>三类分开存</td><td>Core</td><td>发件箱 / 元信息 / 正文缓存（决定 8）</td></tr>
+          <tr><td>读完没读完都留着</td><td>Core</td><td>不自动清理（决定 10）</td></tr>
+          <tr><td>按篇清理 + 算占用</td><td>Core</td><td>清理只删本地，<b>不删服务端</b></td></tr>
+          <tr><td><b>清理不碰发件箱和元信息</b></td><td>Core</td><td><b>只删能重新拿回来的东西。</b>破了它是静默的——把没上报的标记一起删了，屏幕上什么都不会发生</td></tr>
+          <tr><td>「全部下载」</td><td><b>界面</b></td><td>就是循环调「取一篇」，Core 一行不用多写（决定 21）</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>八、Core 明确不装的</h3>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>任何学习状态的计算</b>——水平估计、选文、复习调度、难度。全在服务端（架构前提 1）</span></div>
+      <div class="not"><i>×</i><span><b>网络传输的实现</b>——只定义协议（决定 4）</span></div>
+      <div class="not"><i>×</i><span><b>词典</b>——404,011 条一条都不下发。释义随文章打包（§6）</span></div>
+      <div class="not"><i>×</i><span><b>任何界面决定</b>——颜色、字号、手势、布局、按钮放哪儿</span></div>
+      <div class="not"><i>×</i><span><b>管理功能</b>——客户端令牌碰不到管理接口（架构前提 4）</span></div>
+    </div>
+
+    <h3>九、P5 里的后端工作</h3>
+    <p class="lede" style="margin-bottom:1rem">P5 主要是客户端，但有四处后端改动跑不掉。</p>
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>给客户端响应声明类型</b><span>75 个端点现在返回 <code>dict[str, Any]</code>。<b>这一步必须排在写 Core 之前</b>，否则生成出来的全是 <code>[String: Any]</code>（决定 13、§8）。只做客户端那几个端点。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>补上 <code>duplicate</code> 的重试</b><span>存档成功、执行失败的事件，重发会被当成重复直接放过——<b>那条事件永远不会生效，全程无声</b>（决定 12、§7）。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>拼写的批量端点</b><span>照复习作答那个的样子，带幂等键（决定 18）。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>导出复习状态机的测试向量</b><span>用服务端真实那段代码跑几百个场景，加上手工设计的边角；CI 检查「重新导出无 diff」（决定 14、§9）。</span></div></div>
+    </div>
+    <p style="margin-top:1.4rem"><b>外加一个配置项</b>：<code>today_extra_count</code> 改成 0（决定 20），不用改代码。</p>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 5 · 方案</span>
+    <span>2026-09-12 · 界面留给下一个 Phase</span>
+  </footer>
+
+</div>
