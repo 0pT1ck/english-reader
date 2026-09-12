@@ -128,7 +128,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 5 · 方案与实施结果 · 2026-09-12 · 二十四条决定 · 验收 21 项全过</div>
+    <div class="eyebrow">Phase 5 · 2026-09-12 验收通过 · 二十四条决定 · 自动 21 项全过，无人工项</div>
     <h1>客户端内核</h1>
     <p class="standfirst">手机端的前一半：所有「换成安卓也一模一样」的东西，外加一个能把它真正走一遍的命令行工具。</p>
     <p class="thesis">这个 Phase 起初是「做出可用的 iOS 客户端」。2026-09-12 <b>拆成两半</b>——
@@ -1187,6 +1187,15 @@
       改成等待式，带两分钟上限。<b>跟坑 §4.6 是一家：脚本自己动了手，又假装只是在观察。</b></span></div>
     </div>
 
+    <h3>结束时唯一没走过的一条</h3>
+    <div class="nots">
+      <div class="not"><i>?</i><span><b><code>article.progress</code>（读到第几句）没有客户端发过。</b>
+      Core 里有构造器、服务端收得下，但终端里<b>没有滚动位置这回事</b>，
+      命令行客户端拿不出一个真实的值来发。
+      <b>没有为了让它变绿而造一个假的进度</b>——那种调用比缺口更糟，
+      它会让下一个人以为这条路验过了。真正需要它的是界面那个 Phase，记在主文档 §M。</span></div>
+    </div>
+
     <h3>顺带结清的两条</h3>
     <div class="nots">
       <div class="not"><i>✓</i><span><b>主文档 §M「没有任何客户端在用 <code>/today</code>」结清了。</b>命令行客户端每次都走它，在线离线都走过。字段够用——<b>唯一不够的是 <code>AnswerResponse</code> 不回显方向</b>，所以在线对拍只能从 <code>done</code> 和 <code>misses</code> 反推。不算缺陷，记一笔。</span></div>
@@ -1196,7 +1205,7 @@
 
   <footer>
     <span>English Reader</span>
-    <span>Phase 5 · 方案</span>
+    <span>Phase 5 · 方案与实施结果</span>
     <span>2026-09-12 · 界面留给下一个 Phase</span>
   </footer>
 
