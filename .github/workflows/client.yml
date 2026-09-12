@@ -60,9 +60,14 @@ jobs:
       # （#13853、#13435、#13220）——不锁版本等于把编译能力交给别人的更新节奏。
       - name: 选定 Xcode
         run: |
-          ls /Applications | grep Xcode
-          sudo xcode-select -s /Applications/Xcode_26.app || \
-            sudo xcode-select -s "$(ls -d /Applications/Xcode_26*.app | head -1)"
+          set -euo pipefail
+          ls -d /Applications/Xcode*.app
+          # 锁大版本、不锁补丁号。写死 Xcode_26.app 那次镜像上根本没有这个目录，
+          # 是后面的 `||` 兜住的——而那正是让空跑蒙混过关的同一种遮掩。
+          # 补丁号会动（26.0.1 → 26.1 → …），大版本不该动。
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "用 $APP"
+          sudo xcode-select -s "$APP"
           xcodebuild -version
           swift --version
 
@@ -97,22 +102,43 @@ jobs:
       # 编完要能指出产物在哪，并且确认它真是给 iOS 的。
       # 没有这一步，上面那条哪天又变成空跑，这个 job 还是会绿——
       # 而绿着的空跑比没有这个 job 更糟，因为它还给人信心。
-      - name: 确认真的产出了 iOS 的东西
+      # **这一步问的是「编出来的东西是给 iOS 的吗」，不是「编出东西了吗」。**
+      # 第一版只查 `file` 说不说 arm64——而 macOS 的 arm64 和 iOS 的 arm64 都是
+      # arm64，所以在「iOS 目标被悄悄忽略、实际编成了 macOS」时它照样通过。
+      # 分不出这两者的检查，等于没有检查。
+      #
+      # 平台写在 Mach-O 的 load command 里。读不出来就报红，不默默放过：
+      # 一个说不清自己验了什么的检查，比没有更糟，因为它还给人信心。
+      - name: 确认产物真是给 iOS 的
         working-directory: client
         run: |
           set -euo pipefail
           MODULE=$(find .build/ios -name 'ERCore.swiftmodule' | head -1)
           if [ -z "$MODULE" ]; then
-            echo "::error::没找到 ERCore 的 iOS 模块——上面那一步可能是空跑"
+            echo "::error::没找到 ERCore 的模块——上面那一步可能是空跑"
             find .build/ios -maxdepth 3 -type d | head -20
             exit 1
           fi
           echo "模块：$MODULE"
+
           OBJ=$(find .build/ios -name 'Review.swift.o' | head -1)
-          [ -n "$OBJ" ] && file "$OBJ"
-          file "$OBJ" | grep -qi "arm64" || {
-            echo "::error::产物不是 arm64——编的可能不是 iOS"; exit 1; }
-          echo "确认是 arm64 的 iOS 产物"
+          if [ -z "$OBJ" ]; then
+            echo "::error::没找到编译产物"
+            exit 1
+          fi
+          echo "产物：$OBJ"
+          file "$OBJ"
+          echo "--- Mach-O 里的平台标记 ---"
+          otool -l "$OBJ" | grep -A5 -E 'LC_BUILD_VERSION|LC_VERSION_MIN' \
+            | head -20 | tee /tmp/platform.txt
+          if grep -qiE 'platform +(2|ios)|LC_VERSION_MIN_IPHONEOS' /tmp/platform.txt; then
+            echo "确认：目标平台是 iOS"
+          else
+            echo "::error::读不到 iOS 平台标记。要么编的是 macOS，要么这个检查该改了"
+            echo "::error::——两种都不该放过。下面是完整的 load command："
+            otool -l "$OBJ" | head -60
+            exit 1
+          fi
 
   contract:
     name: L0 · 契约没有漂
