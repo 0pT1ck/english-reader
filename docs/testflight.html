@@ -105,7 +105,8 @@
 
   <div class="callout">
     <b>大概要花你二十分钟</b>，全在 App Store Connect 的网页上，不用开 Xcode。
-    做完把第 2 步的三样东西发给我就行。
+    <b>所有要填的东西我都写好了，照抄就行，没有需要你拿主意的地方。</b>
+    做完把第 2 步的三样东西发给我。
   </div>
 
   <section>
@@ -119,15 +120,20 @@
         <div class="step-n">1</div>
         <div class="step-what">
           <b>建一个 App 记录</b>
-          <span>App Store Connect → 我的 App → 左上角「+」→ 新建 App。</span>
-          <ul>
-            <li>平台：<b>iOS</b></li>
-            <li>名称：<span class="fill">　　　　　　</span>——<b>撞名了随便换一个，不用问我</b>。
-              这个名字在提交 App 审核之前一直能改，而我们<b>永远不会提交审核</b>，所以它不是个要慎重的决定</li>
-            <li>主要语言：简体中文</li>
-            <li>套装 ID：下一步说</li>
-            <li>SKU：随便填一个，比如 <code>english-reader-01</code>，只是你自己的编号</li>
-          </ul>
+          <span>App Store Connect → 我的 App → 左上角「+」→ 新建 App。
+          下面这几项<b>照抄就行</b>：</span>
+          <div class="table-scroll" style="margin:0.7rem 0 0.5rem">
+            <table>
+              <tbody>
+                <tr><td>平台</td><td><b>iOS</b></td></tr>
+                <tr><td>名称</td><td><b>词里行间</b>　<span style="color:var(--ink-soft)">被占用了就依次试：<b>词里行间 English Reader</b> → <b>词里行间阅读</b></span></td></tr>
+                <tr><td>主要语言</td><td><b>简体中文</b></td></tr>
+                <tr><td>套装 ID</td><td><b><code>com.scmenghua.englishreader</code></b>　<span style="color:var(--ink-soft)">下拉里没有的话先去第 1.5 步建</span></td></tr>
+                <tr><td>SKU</td><td><b><code>english-reader-01</code></b></td></tr>
+                <tr><td>用户访问权限</td><td><b>完全访问</b>（默认）</td></tr>
+              </tbody>
+            </table>
+          </div>
           <span><b>只做内测不需要 App Store 审核</b>，但这条记录必须先有——
           没有它就没有 TestFlight 那一栏。</span>
         </div>
@@ -137,12 +143,17 @@
         <div class="step-n">2</div>
         <div class="step-what">
           <b>建一把 API 密钥，角色选 Admin</b>
-          <span>用户和访问 → 集成 → App Store Connect API → 「+」新建密钥。
-          名字随便，比如 <code>english-reader-ci</code>。</span>
-          <ul>
-            <li><b>角色必须选 Admin。</b>低一级的角色不能让自动化去申请签名证书——
-              那样的话<b>证书每年过期一次，每次都得再麻烦你</b>。Admin 之后这件事就自动了</li>
-          </ul>
+          <span>用户和访问 → 集成 → App Store Connect API → 「+」新建密钥。</span>
+          <div class="table-scroll" style="margin:0.7rem 0 0.5rem">
+            <table>
+              <tbody>
+                <tr><td>名称</td><td><b><code>english-reader-ci</code></b></td></tr>
+                <tr><td>访问权限</td><td><b>Admin</b></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <span><b>角色必须是 Admin</b>：低一级的不能让自动化去申请签名证书，
+          那样<b>证书每年过期一次，每次都得再麻烦你</b>。Admin 之后这件事就自动了。</span>
           <span>建好之后把这三样发我：</span>
           <ul>
             <li><b>Issuer ID</b>——页面上方那一长串 UUID</li>
@@ -169,8 +180,8 @@
         <div class="step-n">4</div>
         <div class="step-what">
           <b>把我加进 TestFlight 的内部测试</b>
-          <span>那个 App → TestFlight → 内部测试 → 新建一组（名字随便，比如「本人」）→
-          把我加进去。</span>
+          <span>那个 App → TestFlight → 内部测试 → 「+」新建一组，名字填 <b><code>内部</code></b>
+          → 把我加进去（搜我的 Apple ID）。</span>
           <span><b>这一步做完就结束了。</b>之后我上传的构建<b>几分钟内就能装到手机上，
           不过 Apple 审核</b>——内部测试员是免审的，这也是我们走内测而不是公测的原因。</span>
         </div>
@@ -180,19 +191,24 @@
 
   <section>
     <div class="sec-head">
-      <span class="sec-mark">要你定</span>
-      <h2>套装 ID（Bundle ID）</h2>
+      <span class="sec-mark">1.5</span>
+      <h2>如果建 App 时套装 ID 的下拉里是空的</h2>
     </div>
-    <p class="lede">这个得用你的标识，我定不了。</p>
-    <p>习惯写法是<b>你的域名倒过来</b>加应用名，比如域名是 <code>example.com</code> 就写
-    <code>com.example.englishreader</code>。没有域名的话用什么都行，只要全球唯一——
-    很多人用 <code>com.<i>你的名字拼音</i>.englishreader</code>。</p>
-    <p><b>建完之后不能改</b>，所以定了就告诉我一声，我这边要写进构建配置里。</p>
+    <p class="lede">说明这个标识还没注册过。花一分钟建一下，然后回第 1 步。</p>
+    <p>证书、标识符和描述文件 → 标识符 → 「+」→ 选 <b>App IDs</b> → <b>App</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <tbody>
+          <tr><td>Description</td><td><b>English Reader</b></td></tr>
+          <tr><td>Bundle ID</td><td>选 <b>Explicit</b>，填 <b><code>com.scmenghua.englishreader</code></b></td></tr>
+          <tr><td>Capabilities</td><td><b>一个都不用勾</b>——这个 App 不用推送、不用登录、不用内购</td></tr>
+        </tbody>
+      </table>
+    </div>
     <div class="callout">
-      <b>这是这四件事里唯一改不了的东西。</b>别的都能改：
-      App Store Connect 里那个名字在提交审核前一直可编辑（我们不提交），
+      <b>这是这四件事里唯一改不了的东西</b>，所以我把它定死了，不用你挑。
+      别的都能改：App Store Connect 里那个名字在提交审核前一直可编辑（而我们不提交），
       手机主屏上显示的名字在我的构建配置里、跟你没关系。
-      <b>所以只有套装 ID 值得想一下。</b>
     </div>
   </section>
 
