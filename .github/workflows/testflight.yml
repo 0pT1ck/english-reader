@@ -21,6 +21,15 @@ on:
         required: false
         default: false
 
+  # **只为让 GitHub 认得这条 workflow。**一个只有 workflow_dispatch 的文件，
+  # 如果从没在默认分支出现过、也从没跑过，就不在 Actions 的列表里——
+  # 于是「手动触发」这件事本身触发不了（API 回 404）。
+  # 推一次这个文件会跑一个空 job 把它登记上，之后手动触发就通了。
+  # 下面那个 `if` 保证 push 触发时**什么都不做**。
+  push:
+    branches: [ios]
+    paths: ['.github/workflows/testflight.yml']
+
 concurrency:
   group: testflight
   cancel-in-progress: false
@@ -28,6 +37,8 @@ concurrency:
 jobs:
   upload:
     name: 归档、签名、传上去
+    # push 只是来登记的，不干活——真正的上传只认手动触发。
+    if: github.event_name == 'workflow_dispatch'
     runs-on: macos-26
     timeout-minutes: 45
     steps:
