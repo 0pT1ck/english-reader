@@ -105,6 +105,19 @@ jobs:
           authkey: ${{ secrets.TS_AUTHKEY }}
           statedir: /tmp/tailscale-state/
 
+      # runner 上没人动鼠标，显示器会睡过去——**VNC 连上就是一片黑**。
+      # 这一步跟「开不开得了屏幕共享」无关，是在它之前就要解决的事。
+      - name: 别让屏幕睡过去
+        run: |
+          set -euo pipefail
+          # -d 别让显示器睡、-i 别让系统闲置睡、-m 别让磁盘睡、-u 装作有人在用
+          nohup caffeinate -dimsu > /dev/null 2>&1 &
+          # 屏保和自动锁屏一起关掉。锁屏之后 VNC 看到的是锁屏界面，
+          # 而在没有图形登录会话的机器上，那个界面本身就是黑的。
+          defaults -currentHost write com.apple.screensaver idleTime 0 || true
+          sudo pmset -a displaysleep 0 sleep 0 disksleep 0 || true
+          echo "叫醒了"
+
       - name: 打开屏幕共享
         env:
           VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
@@ -140,6 +153,35 @@ jobs:
             echo ""
             echo "用完在 Actions 页面取消这次运行就行，不用等它自己到点。"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # **黑屏有两种原因，它们在屏幕上长得一模一样**：
+      #   ① runner 这边根本没有可画的桌面（没有图形会话 / 显示器睡了）
+      #   ② 桌面是好的，是 VNC 客户端跟 Apple 那套协议谈不拢
+      # 所以在宿主机上自己截一张。这张要是也黑的就是 ①，是正常桌面就是 ②。
+      # 一个分不出两种情况的检查等于没有检查（坑 §6.7）。
+      - name: 黑屏诊断——在宿主机上自己截一张
+        run: |
+          set -euo pipefail
+          echo "--- 谁登录着 ---"
+          who || true
+          echo "--- 有没有图形登录会话 ---"
+          ps aux | grep -i '[l]oginwindow' || echo "（没有 loginwindow —— 那就没有图形会话）"
+          echo "--- 有没有显示器 ---"
+          system_profiler SPDisplaysDataType 2>/dev/null | head -30 || true
+          echo "--- 屏幕共享在不在跑 ---"
+          ps aux | grep -i '[s]creensharing\|[A]RDAgent' | head -5 || true
+          echo "--- 宿主机截图 ---"
+          screencapture -x /tmp/10-host-desktop.png || echo "screencapture 失败"
+          ls -la /tmp/*.png || true
+
+      # **在等待之前就把它传上去。**放在 job 末尾的话，要等你连完、
+      # 会话结束才看得到——而这张图正是用来决定要不要连的。
+      - name: 先把诊断图传上来
+        uses: actions/upload-artifact@v4
+        with:
+          name: black-screen-diagnosis
+          path: /tmp/*.png
+          if-no-files-found: warn
 
       - name: 挂着等你
         run: |
