@@ -78,9 +78,17 @@ jobs:
             CODE_SIGNING_ALLOWED=NO
           APP_PATH=$(find DerivedData -name 'EnglishReader.app' -type d | head -1)
           [ -n "$APP_PATH" ] || { echo "::error::没编出 .app"; exit 1; }
-          DEVICE=$(xcrun simctl list devices available -j \
-            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; \
-print(next(x['udid'] for v in d.values() for x in v if x['name']=='iPhone 17'))")
+          # 用 grep 而不是塞一段 python 进来：跨行的内联脚本在 YAML 块标量里
+          # **会把缩进破掉**，而那样整份 workflow 连解析都过不去。
+          # 「iPhone 17 (」后面紧跟左括号，所以不会误中 iPhone 17 Pro。
+          DEVICE=$(xcrun simctl list devices available \
+            | grep -m1 'iPhone 17 (' \
+            | grep -oE '[0-9A-Fa-f-]{36}')
+          if [ -z "$DEVICE" ]; then
+            echo "::error::镜像里没有 iPhone 17 的模拟器"
+            xcrun simctl list devices available | head -40
+            exit 1
+          fi
           xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install "$DEVICE" "$APP_PATH"
