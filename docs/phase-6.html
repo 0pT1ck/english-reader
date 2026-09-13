@@ -133,7 +133,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 6 · 讨论中 · 2026-09-13 起 · 尚未定稿 · 只做阅读这一条链</div>
+    <div class="eyebrow">Phase 6 · 2026-09-13 结束 · 只做阅读这一条链 · <b>验收欠到 TestFlight 那一次</b></div>
     <h1>界面</h1>
     <p class="standfirst">Core 已经装好，这个 Phase 只做人看得见的那一半——原生 iOS，液态玻璃。
     <b>而且只做一条链：列表 → 阅读 → 点词。</b></p>
@@ -153,10 +153,12 @@
   </header>
 
   <div class="callout" style="margin-top:2.5rem">
-    <b>这份文档还在讨论中，不是定稿。</b>每讨论完一屏就往里加一段，
-    所以现在读到的是「到目前为止定了什么」，不是一份完整方案。
+    <b>2026-09-13 结束。</b>三十四条决定、四屏、四处后端改动，代码全部写完。
     <br><br>
-    <b>按铁律，方案定稿时会问一次要不要推</b>；在那之前工作区保持未提交。
+    <b>但它没有被任何人用过</b>——编得过、装得上、起得来，仅此而已。
+    验收不在这个 Phase 结束时发生，<b>欠到设置那个 Phase 做完、一起推 TestFlight 时补</b>
+    （§13）。读这份文档时要带着这一条：下面写的每个「做到的」，
+    意思都是「代码写了」，不是「跑通了」。
     <br><br>
     <b>讨论期间不写任何实现代码</b>，包括脚手架和示例。本文档里出现的字段名与模块名
     都是<b>已经存在的东西</b>，不是将要写的。
@@ -546,9 +548,92 @@
     </div>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>怎么结束的，以及欠下了什么</h2>
+    </div>
+    <p class="lede">2026-09-13。<b>这个 Phase 结束时没有跑过验收清单</b>——那动了铁律，所以理由和代价都写明。</p>
+
+    <h3>验过的，只有这两件</h3>
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>能为 iPhone 17 模拟器编译</b><span>CI 上过了，并且断言了产物的 Mach-O 平台标记是 iOS 模拟器（不是「有没有编出东西」，是「编出来的是给谁的」）。</span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>装得上、起得来、没闪退</b><span>启动后进程还在，截图拿到了：三格标签栏、系统大标题、没连后端时的那一屏。<b>底部那条悬浮胶囊是系统给的液态玻璃</b>，不是自己画的。</span></div></div>
+    </div>
+
+    <h3>没验过的，是别的全部</h3>
+    <div class="nots">
+      <div class="not">列表拉不拉得到数据、卡片长得对不对</div>
+      <div class="not">正文渲染、<b>点词准不准</b>（按字符命中那套完全没试过）</div>
+      <div class="not">点词面板的高度自适应、滑块钉底、背景穿透</div>
+      <div class="not">标记之后正文是否真的出现虚线</div>
+      <div class="not">「读完了」是否真的记了账、是否退回列表</div>
+      <div class="not">跳回上次位置、回到顶部、朗读</div>
+      <div class="not">离线那一行、设置屏填完是否连得上</div>
+      <div class="not"><b>那串照文档写、没跑过的 API</b>——<code>.buttonStyle(.glass)</code>、<code>onGeometryChange</code>、<code>scrollPosition(id:)</code>、<code>presentationBackgroundInteraction</code>、TextKit 2 下的 <code>closestPosition</code></div>
+    </div>
+
+    <h3>为什么没验成：远程操控那条路走死了</h3>
+    <p>§11 的第 3 条（Tailscale + 屏幕共享，人连进 runner 亲手点）<b>试过，失败了</b>。
+    经过照实记，因为它是「以后还想再试」时唯一有用的东西：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>试了什么</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td>Tailscale 加入 tailnet、<code>kickstart</code> 开屏幕共享</td><td><b>成了</b>。5900 端口通，握手回 <code>RFB 003.889</code></td></tr>
+          <tr><td>TightVNC 连</td><td>连上，<b>一片黑</b></td></tr>
+          <tr><td><code>caffeinate</code> + <code>pmset</code> 禁睡眠、关屏保后重连</td><td>还是黑</td></tr>
+          <tr><td>RealVNC、TigerVNC</td><td>都黑</td></tr>
+          <tr><td><b>让 runner 自己 <code>screencapture</code> 一张</b></td><td><b>桌面是好的</b>——Simulator 开着、App 在跑、Dock 和菜单栏都在</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <b>最后那一行才是这段唯一的收获。</b>黑屏有两种原因、在屏幕上长得一模一样：
+      runner 那头没有可画的桌面，或者桌面好好的而客户端画不出来。
+      前四行分不开这两者，第五行一次就分开了——<b>问题在服务端那头，不在客户端</b>。
+      三个互相独立的客户端全黑，也指着同一个方向。
+      <br><br>
+      这跟坑 §6.7 是同一条：<b>不是「有没有报错」，是「它区分得开吗」</b>。
+      要是一开始就先截这一张，前面三轮客户端全都不用试。
+    </div>
+    <p><b>没再往下追</b>：再猜就是一轮十几分钟地烧，而它要解决的问题（看一眼布局对不对）
+    有更便宜的答案。<b>UU 远程、ToDesk 那类装不上</b>，死结在 macOS 的录屏权限要在图形界面上点「允许」——
+    而我们正是因为看不见界面才要装它。苹果自带的屏幕共享不吃这道权限，所以只有它开得起来。</p>
+    <p>还剩一条没试的：<b>在 runner 上跑 noVNC</b>（浏览器里的 VNC 客户端，编码集跟桌面客户端不同）。
+    留着，不是现在的事。</p>
+
+    <h3>欠下的账，一笔写清</h3>
+    <div class="callout">
+      <b>验收推迟到设置那个 Phase 做完、一起推 TestFlight 时进行。</b>2026-09-13 定。
+      <br><br>
+      <b>代价是三个 Phase 的量一起欠着。</b>P5 没有人工验收（有它自己的理由，见
+      <a href="./phase-5.html">Phase 5 文档</a> §17），P6 到 P8 的界面又全部压到最后一次——
+      到 TestFlight 上真跑时如果阅读这条链有结构性问题（点词命中不准、面板高度不对、
+      正文排版读着累），<b>要改的不只是 P6</b>，而那时复习和设置已经架在它上面了。
+      <br><br>
+      <b>为什么还是这么定</b>：模拟器上用鼠标点，和真机上用拇指读，判断不出同一批东西；
+      而真机要等 TestFlight，TestFlight 要等朋友那边的账号。
+      与其为了「验一次」把人拖进一条已经证明走不通的远程路，不如把三屏做齐了一次上真机。
+      <br><br>
+      <b>这条不是把铁律改掉，是一次记名的例外</b>——跟 P5 那次一样，写明、认账、不延伸。
+    </div>
+
+    <h3>还有两件小的欠着</h3>
+    <div class="nots">
+      <div class="not"><b>Swift 契约没有重新生成</b>，所以话题、概括、待学、词性四个字段服务端在发、App 读不到。
+      接上的地方只有 <code>ArticleCard.init(library:)</code> 一处。
+      <b>后端那半边验过是通的</b>：真调了一次 <code>/v1/client/library</code>，
+      <code>pending_count</code> 算出来是 25（一篇 25 个目标词，一个都还没标过）</div>
+      <div class="not"><b><code>article.progress</code> 仍然没有被任何客户端发过。</b>
+      P5 结束时它是唯一的缺口，P6 写了发它的代码，但没跑过——<b>所以缺口还在</b>，
+      只是从「没有代码」变成了「有代码没跑过」</div>
+    </div>
+  </section>
+
   <footer>
     <div>English Reader</div>
-    <div>Phase 6 · 界面 · 讨论中</div>
+    <div>Phase 6 · 界面 · 已结束，验收欠着</div>
     <div>2026-09-13</div>
   </footer>
 
