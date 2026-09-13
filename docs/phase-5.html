@@ -128,7 +128,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 5 · 方案与实施结果 · 2026-09-12 · 二十四条决定 · 验收 21 项全过</div>
+    <div class="eyebrow">Phase 5 · 2026-09-12 验收通过 · 二十四条决定 · 自动 21 项全过，无人工项</div>
     <h1>客户端内核</h1>
     <p class="standfirst">手机端的前一半：所有「换成安卓也一模一样」的东西，外加一个能把它真正走一遍的命令行工具。</p>
     <p class="thesis">这个 Phase 起初是「做出可用的 iOS 客户端」。2026-09-12 <b>拆成两半</b>——
@@ -1088,8 +1088,8 @@
 
     <div class="figures" style="margin-top:0;margin-bottom:2rem">
       <div class="fig"><div class="fig-val">21<span>项</span></div><div class="fig-key">P5 验收，全过</div></div>
-      <div class="fig"><div class="fig-val">41<span>项</span></div><div class="fig-key">Core 的 Swift 测试</div></div>
-      <div class="fig"><div class="fig-val">223<span>项</span></div><div class="fig-key">七个 Phase 的自动检查合计</div></div>
+      <div class="fig"><div class="fig-val">47<span>项</span></div><div class="fig-key">Core 的 Swift 测试</div></div>
+      <div class="fig"><div class="fig-val">229<span>项</span></div><div class="fig-key">七个 Phase 的自动检查合计</div></div>
       <div class="fig"><div class="fig-val">3<span>层</span></div><div class="fig-key">CI，全绿</div></div>
     </div>
 
@@ -1149,6 +1149,53 @@
       <div class="check"><div class="check-n">7</div><div class="check-what"><b>为防第 6 条加的断言，分不出 iOS 和 macOS</b><span>它查 <code>file</code> 说不说 arm64——<b>两个平台都是 arm64</b>，所以在它唯一该抓的情况下照样通过。改成读 Mach-O 的 <code>LC_BUILD_VERSION</code>（<code>platform 2</code> 才是 iOS），读不出来就报红。坑列表 §6.7。</span></div></div>
     </div>
 
+    <h3>补齐的四样</h3>
+    <p class="lede" style="margin-bottom:1rem">§18 列的东西里，有三样<b>建了却从没被走过</b>，
+    一样根本没建。发现的过程本身值得记：<code>swift test</code> 全过、验收全过、
+    <code>walk</code> 跑通——<b>但那三样覆盖的都是「阅读」那半条链</b>，
+    复习那半只有单元测试和服务端端点见过，中间「CLI 用 Core 走一遍」是空的。</p>
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>提示分级</b><span>
+      原来 <code>revealed</code> 是硬编码的 2——学习者从菜单里挑「开过提示」，而不是真的开。
+      <b>而 <code>revealed</code> 就是成绩</b>：它量的是「花了多少才想起来」，不是事后自称。
+      现在三级提示在 <code>ERCore/Hints.swift</code> 里（属于 Core，因为换成安卓也要同样三级），
+      逐级展开、开一级记一级。<b>两个方向的最深一级必须是不同的东西</b>——
+      看词想义问的是意思，最深给中文或跳回原文；看义想词问的是哪个词，最深才给那个词。
+      开发页的注释记着第一版两个方向都给英文单词，「这种错只有真跑一遍才能发现」。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>复习与拼写接进 <code>walk</code></b><span>
+      原来 <code>walk</code> 走到「读完 + 上报」就停了，所以那两个命令<b>一次都没跑过</b>。
+      现在它走完九步。<b>还加了 <code>--answers</code> 脚本喂作答</b>——不是图方便：
+      <b>只能手动驱动的路，就是不会被驱动的路</b>，这四样漏掉正是因为如此。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>真题直读的命令</b><span>
+      <code>SyncEngine.library()</code> 早就在 Core 里，但 CLI 没有命令用它，
+      所以决定 19 从来没被真正走过。<code>ercli library cet6</code> 现在能列出 134 篇六级真题。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>位置参数解析</b><span>
+      加 <code>library</code> 时当场撞上：<code>ercli library --state ./.ercli</code> 把
+      <code>./.ercli</code> 当成了来源，向服务端要一个叫这个名字的书架，
+      <b>回来是空的，看着像「这个书架没东西」而不像参数解析错了</b>。</span></div></div>
+    </div>
+
+    <h3>验收脚本自己的两个毛病</h3>
+    <div class="nots">
+      <div class="not"><i>!</i><span><b><code>verify_phase5</code> 的清理漏了 <code>review_queue</code>。</b>
+      漏掉的后果不是一条陈旧的行：标记探针词会把它放进复习池，下一次会话从池子里建队列，
+      <b>而队列行比清理删掉的那张状态表活得久</b>——于是它作为一道真的题出现在真的一天里。
+      <b>是走了一天才发现的，不是读代码发现的。</b></span></div>
+      <div class="not"><i>!</i><span><b><code>verify_phase2</code> 7.9 绊在自己刚制造的东西上。</b>
+      这个脚本自己会入库一篇文章，入库提出新的词组候选，而判词组是异步任务——
+      它在自己制造的候选还没判完时就去数，报「待判 5」，跑完再查是 0。
+      改成等待式，带两分钟上限。<b>跟坑 §4.6 是一家：脚本自己动了手，又假装只是在观察。</b></span></div>
+    </div>
+
+    <h3>结束时唯一没走过的一条</h3>
+    <div class="nots">
+      <div class="not"><i>?</i><span><b><code>article.progress</code>（读到第几句）没有客户端发过。</b>
+      Core 里有构造器、服务端收得下，但终端里<b>没有滚动位置这回事</b>，
+      命令行客户端拿不出一个真实的值来发。
+      <b>没有为了让它变绿而造一个假的进度</b>——那种调用比缺口更糟，
+      它会让下一个人以为这条路验过了。真正需要它的是界面那个 Phase，记在主文档 §M。</span></div>
+    </div>
+
     <h3>顺带结清的两条</h3>
     <div class="nots">
       <div class="not"><i>✓</i><span><b>主文档 §M「没有任何客户端在用 <code>/today</code>」结清了。</b>命令行客户端每次都走它，在线离线都走过。字段够用——<b>唯一不够的是 <code>AnswerResponse</code> 不回显方向</b>，所以在线对拍只能从 <code>done</code> 和 <code>misses</code> 反推。不算缺陷，记一笔。</span></div>
@@ -1158,7 +1205,7 @@
 
   <footer>
     <span>English Reader</span>
-    <span>Phase 5 · 方案</span>
+    <span>Phase 5 · 方案与实施结果</span>
     <span>2026-09-12 · 界面留给下一个 Phase</span>
   </footer>
 

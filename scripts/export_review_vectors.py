@@ -212,8 +212,13 @@ def main() -> int:
     }
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
+    # `newline="\n"`: Python's text mode writes CRLF on Windows while
+    # `.gitattributes` asks for LF, so every export would otherwise leave a file
+    # that differs only in line endings — and this file exists precisely so that
+    # re-exporting it produces no diff.
     OUT.write_text(
-        json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(document, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8", newline="\n",
     )
     print(f"导出 {len(vectors)} 个场景 -> {OUT.relative_to(ROOT)}")
     for v in vectors:

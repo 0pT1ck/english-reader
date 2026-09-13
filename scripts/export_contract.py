@@ -138,8 +138,14 @@ def main(argv: list[str]) -> int:
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)
 
     spec = _client_spec(app)
+    # `newline="\n"` is not fussiness. Python's text mode turns \n into \r\n on
+    # Windows while `.gitattributes` asks for LF, so without it every export
+    # leaves a file that differs from the committed one in line endings alone —
+    # and the whole point of this file is that re-exporting it produces no diff.
+    # Two sources of truth disagreeing is how a real change goes unnoticed.
     SPEC_OUT.write_text(
-        json.dumps(spec, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        json.dumps(spec, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8", newline="\n",
     )
     print(f"契约 -> {SPEC_OUT.relative_to(ROOT)}"
           f"（{len(spec['paths'])} 个端点，{len(spec['components']['schemas'])} 个类型）")
@@ -176,7 +182,7 @@ def main(argv: list[str]) -> int:
             # of JSON doubles it for a diff nobody is going to read anyway.
             out.write_text(
                 json.dumps(body, ensure_ascii=False, separators=(",", ":")) + "\n",
-                encoding="utf-8",
+                encoding="utf-8", newline="\n",
             )
             print(f"样本 -> {out.relative_to(ROOT)}（{out.stat().st_size / 1024:.0f} KB）")
     finally:
