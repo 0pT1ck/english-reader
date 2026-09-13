@@ -429,6 +429,102 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// 打卡日历与连续天数
+    ///
+    /// The last ``days`` days and the streak.
+    ///
+    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
+    /// allows obvious shapes to be reserved in place; a list of days is not one, so
+    /// it arrives as its own endpoint the way the invariant says complex additions
+    /// should.
+    ///
+    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
+    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
+    public func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.reviews_calendar_v1_client_reviews_calendar_get.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/client/reviews/calendar",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "days",
+                    value: input.query.days
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.CalendarResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.UnprocessableContent.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HTTPValidationError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
     /// 上报一次作答
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answer`.

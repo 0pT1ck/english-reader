@@ -284,6 +284,68 @@
         }
       }
     },
+    "/v1/client/reviews/calendar": {
+      "get": {
+        "tags": [
+          "client:review"
+        ],
+        "summary": "打卡日历与连续天数",
+        "description": "The last ``days`` days and the streak.\n\n**A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only\nallows obvious shapes to be reserved in place; a list of days is not one, so\nit arrives as its own endpoint the way the invariant says complex additions\nshould.",
+        "operationId": "reviews_calendar_v1_client_reviews_calendar_get",
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 60,
+              "minimum": 1,
+              "default": 7,
+              "title": "Days"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/client/reviews/answer": {
       "post": {
         "tags": [
@@ -868,6 +930,28 @@
             "type": "string",
             "title": "Title"
           },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "summary_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Zh"
+          },
           "body": {
             "anyOf": [
               {
@@ -1129,6 +1213,56 @@
         ],
         "title": "ArticleResponse",
         "description": "One response, then no further requests while reading.\n\n**Two shapes in one model.** An article still being prepared comes back with\n`preparing` filled and the reading fields null; a ready one has `preparing`\nnull and the rest filled. A client checks `preparing` first. Declaring it as\na union would generate a neater Swift enum, but it would also make the two\nshapes independently extensible — and the day someone adds a field to only\none of them, the contract has two answers to the same question."
+      },
+      "CalendarDay": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "title": "Day"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败"
+          },
+          "is_today": {
+            "type": "boolean",
+            "title": "Is Today"
+          }
+        },
+        "type": "object",
+        "required": [
+          "day",
+          "status",
+          "is_today"
+        ],
+        "title": "CalendarDay"
+      },
+      "CalendarResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/CalendarDay"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "streak": {
+            "type": "integer",
+            "title": "Streak",
+            "description": "连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "days",
+          "streak"
+        ],
+        "title": "CalendarResponse"
       },
       "Capabilities": {
         "properties": {
@@ -1591,6 +1725,30 @@
             "type": "string",
             "title": "Title"
           },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic",
+            "description": "话题。**真题恒为 null**——它们那一格显示的是来源。库里已经攒下的生成文也是 null：2026-09-13 定不补"
+          },
+          "summary_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Zh",
+            "description": "一句中文概括。**真题恒为 null**，那一行就空着"
+          },
           "source": {
             "type": "string",
             "title": "Source",
@@ -1640,6 +1798,12 @@
             "type": "integer",
             "title": "Target Count",
             "description": "这篇为教几个词而写。真题恒为 0——它们不为教任何词而写，读完只记下你亲手标记的东西"
+          },
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count",
+            "description": "「待学」：这篇的目标词里**还没进入学习流程**的个数。判据是标记，不是有没有词池行——读完一篇会给遇见过的每个词都留一行，按行数就会读完之后莫名归零。**标记了就不再计入**，不用等学会，所以这个数在阅读过程中会往下掉。真题恒为 0",
+            "default": 0
           },
           "difficulty": {
             "anyOf": [
@@ -1963,6 +2127,17 @@
             "type": "boolean",
             "title": "Done"
           },
+          "word": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WordCard"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用"
+          },
           "sense": {
             "anyOf": [
               {
@@ -2039,6 +2214,14 @@
             "title": "Buckets",
             "description": "各桶各有几条"
           },
+          "buckets_done": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Buckets Done",
+            "description": "各桶各做完了几条。**新开一个字段而不是改 `buckets` 的含义**——铁律 5 不许改字段含义。两张卡片上的「已复习/共」要的就是这两个数"
+          },
           "spelling_available": {
             "type": "boolean",
             "title": "Spelling Available",
@@ -2109,6 +2292,18 @@
           "ordinal": {
             "type": "integer",
             "title": "Ordinal"
+          },
+          "pos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos",
+            "description": "词性（n. / vt. / vi.）。**只是说明，从不决定义项怎么分**——名词的 address（地址）和动词的 address（写地址）是同一个概念。这一列 P1b 起就在库里，2026-09-13 才带进契约：手机端的点词面板要显示它"
           },
           "concept_en": {
             "anyOf": [
@@ -2358,7 +2553,54 @@
               }
             ],
             "title": "Article Id",
-            "description": "最深一级提示可以跳回原文。生成的句子没有，客户端退回英文释义"
+            "description": "提示可以说出处，也留着将来跳回原文。生成的句子没有——而生成的句子本来就不会当提示"
+          },
+          "article_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Article Title",
+            "description": "提示上那句「——文章a」。join 出来的，不另存一份"
+          },
+          "text_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text Zh",
+            "description": "整句中文翻译，**看中文想英文那个方向的题面**。还没翻到的是 null。这跟「句子里不许出现中文」那条禁令不冲突：禁的是英文题面里混中文"
+          },
+          "zh_start": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zh Start",
+            "description": "目标词在中文里的位置，给高亮用。**null 是正当答案**——有些词在中文里没有能单独拎出来的片段，那时不高亮、整句照显。高亮错位置比不高亮糟：它会把「估计」从中间劈开，而没有东西会报错"
+          },
+          "zh_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zh End"
           }
         },
         "type": "object",
@@ -2801,6 +3043,126 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WordCard": {
+        "properties": {
+          "headword": {
+            "type": "string",
+            "title": "Headword"
+          },
+          "phonetic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phonetic"
+          },
+          "translation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Translation",
+            "description": "词典那一堆逗号隔开的释义。义项集缺席时的退路"
+          },
+          "senses": {
+            "items": {
+              "$ref": "#/components/schemas/WordSense"
+            },
+            "type": "array",
+            "title": "Senses"
+          }
+        },
+        "type": "object",
+        "required": [
+          "headword"
+        ],
+        "title": "WordCard",
+        "description": "The whole word, as the reveal screen shows it.\n\nDuplicates what the article glossary carries, and that is the point:\n**the review payload has to stand on its own.** Article bodies are cleared\none at a time (P5 决定 10) and the word may have been met months ago, so a\nclient reaching into a cached article for this would lose half its card\nwhenever the cache was tidied — silently."
+      },
+      "WordSense": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "ordinal": {
+            "type": "integer",
+            "title": "Ordinal"
+          },
+          "pos": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos",
+            "description": "词性。说明用，从不决定义项怎么分"
+          },
+          "concept_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concept En"
+          },
+          "gloss_zh": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gloss Zh"
+          },
+          "exam_frequency": {
+            "type": "integer",
+            "title": "Exam Frequency",
+            "default": 0
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share",
+            "description": "占这个词全部真题出现的百分之几。总数为零时是 null。**客户端按它降序排，绝不按 ordinal**——那个序号是模型猜的"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ordinal"
+        ],
+        "title": "WordSense",
+        "description": "One sense of the word being tested, for the reveal screen's 常见释义 list."
       }
     }
   }

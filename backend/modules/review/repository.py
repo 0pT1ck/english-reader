@@ -106,6 +106,38 @@ def marked_on(learner_id: int, day: str) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def seen_sentence_ids(learner_id: int) -> set[int]:
+    """Sentences the learner has certainly read, one by one.
+
+    **Complements ``finished_article_ids``, and exists because that one is a
+    proxy.** "Did you finish the article" stands in for "have you seen this
+    sentence", and the two come apart in the most ordinary case there is: you
+    mark a word *while reading*, so the sentence it was marked in has been seen
+    — but the article may not be finished for hours, or ever.
+
+    Left unhandled, that sentence counts as unseen and can be drawn as a
+    question: you get asked with the very sentence you read five minutes ago.
+    It looks like an easy question and lands as an inflated grade, and nothing
+    anywhere reports it.
+
+    Two sources, because either alone has a gap: ``study_marks`` records where
+    each mark happened, and ``study_states.introduced_sentence_id`` remembers
+    the first encounter even after a mark is withdrawn.
+    """
+    conn = get_connection("learning")
+    ids = {
+        int(r[0]) for r in conn.execute(
+            "SELECT DISTINCT sentence_id FROM study_marks"
+            " WHERE learner_id = ? AND sentence_id IS NOT NULL", (learner_id,))
+    }
+    ids |= {
+        int(r[0]) for r in conn.execute(
+            "SELECT DISTINCT introduced_sentence_id FROM study_states"
+            " WHERE learner_id = ? AND introduced_sentence_id IS NOT NULL", (learner_id,))
+    }
+    return ids
+
+
 def finished_article_ids(learner_id: int) -> set[int]:
     """Articles the learner has read to the end.
 
@@ -159,8 +191,10 @@ def enqueue(session_id: int, items: list[dict[str, Any]]) -> int:
     for item in items:
         cursor = conn.execute(
             "INSERT OR IGNORE INTO review_queue"
-            " (session_id, item_type, item_key, sense_id, bucket) VALUES (?,?,?,?,?)",
-            (session_id, item["item_type"], item["item_key"], item["sense_id"], item["bucket"]),
+            " (session_id, item_type, item_key, sense_id, bucket, capped)"
+            " VALUES (?,?,?,?,?,?)",
+            (session_id, item["item_type"], item["item_key"], item["sense_id"],
+             item["bucket"], int(item.get("capped") or 0)),
         )
         added += cursor.rowcount
     conn.commit()

@@ -47,6 +47,18 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/client/reviews`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
     func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output
+    /// 打卡日历与连续天数
+    ///
+    /// The last ``days`` days and the streak.
+    ///
+    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
+    /// allows obvious shapes to be reserved in place; a list of days is not one, so
+    /// it arrives as its own endpoint the way the invariant says complex additions
+    /// should.
+    ///
+    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
+    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
+    func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output
     /// 上报一次作答
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answer`.
@@ -191,6 +203,26 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
     public func reviews_v1_client_reviews_get(headers: Operations.reviews_v1_client_reviews_get.Input.Headers = .init()) async throws -> Operations.reviews_v1_client_reviews_get.Output {
         try await reviews_v1_client_reviews_get(Operations.reviews_v1_client_reviews_get.Input(headers: headers))
+    }
+    /// 打卡日历与连续天数
+    ///
+    /// The last ``days`` days and the streak.
+    ///
+    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
+    /// allows obvious shapes to be reserved in place; a list of days is not one, so
+    /// it arrives as its own endpoint the way the invariant says complex additions
+    /// should.
+    ///
+    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
+    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
+    public func reviews_calendar_v1_client_reviews_calendar_get(
+        query: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Query = .init(),
+        headers: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Headers = .init()
+    ) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
+        try await reviews_calendar_v1_client_reviews_calendar_get(Operations.reviews_calendar_v1_client_reviews_calendar_get.Input(
+            query: query,
+            headers: headers
+        ))
     }
     /// 上报一次作答
     ///

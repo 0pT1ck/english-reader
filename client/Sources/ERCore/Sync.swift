@@ -137,6 +137,25 @@ public actor SyncEngine {
         return decoded
     }
 
+    /// The check-in calendar and the streak.
+    ///
+    /// Its own endpoint rather than fields on the day package, because
+    /// 跨 Phase 不变量 only allows obvious shapes to be reserved in place and a
+    /// list of days is not one. No offline fallback: a calendar that silently
+    /// shows stale days is worse than one that says it could not load.
+    public func calendar(days: Int = 7)
+        async throws -> Components.Schemas.CalendarResponse {
+        let response = try await transport.send(
+            HTTPRequest(method: .get, path: "/v1/client/reviews/calendar?days=\(days)"))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return try JSONDecoder().decode(
+            Components.Schemas.CalendarResponse.self, from: response.body)
+    }
+
     public func library(shelf: String = "fresh", source: String? = nil)
         async throws -> Components.Schemas.LibraryResponse {
         var path = "/v1/client/library?shelf=\(shelf)"

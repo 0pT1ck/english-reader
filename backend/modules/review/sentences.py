@@ -322,32 +322,64 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
         "surface": row["surface"],
         "first_letter": (row["surface"] or "?")[:1],
         "source": row["source"],
-        # Lets the deepest 看词想义 hint jump back to the article, which is what
-        # the plan asks for at level 3. Null for generated sentences, and the
-        # client falls back to the English definition.
+        # Lets a hint say where it came from ("——文章a"), and lets a future
+        # version jump back into the article. Null for generated sentences,
+        # which are never hints anyway.
         "article_id": row["article_id"],
+        "article_title": row.get("article_title"),
+        # 看中文想英文 asks with this (P7 决定 15). Null until the translation
+        # batch has been through — the client shows the English side only.
+        "text_zh": row.get("text_zh"),
+        # Where the target lands in the Chinese, for the highlight. **Null is a
+        # normal answer**: some words have no clean Chinese span, and a wrong
+        # span would split 估计 down the middle with nothing reporting it.
+        "zh_start": row.get("zh_start"),
+        "zh_end": row.get("zh_end"),
     }
 
 
 def _rows(item_key: str, sense_id: int) -> list[dict[str, Any]]:
+    # The title rides along so a hint can say where it came from. It is a join
+    # rather than a column: the article may be renamed, and a copy would drift.
     rows = get_connection("learning").execute(
-        "SELECT * FROM review_sentences WHERE item_key = ? AND sense_id = ? ORDER BY id",
+        "SELECT r.*, a.title AS article_title FROM review_sentences r"
+        "  LEFT JOIN reading_articles a ON a.id = r.article_id"
+        " WHERE r.item_key = ? AND r.sense_id = ? ORDER BY r.id",
         (item_key, sense_id),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
-def split_pools(item_key: str, sense_id: int, finished: set[int]) -> tuple[list, list]:
-    """``(questions, hints)`` — derived, see the module docstring."""
+def split_pools(item_key: str, sense_id: int, finished: set[int],
+                seen_sentence_ids: set[int] | None = None) -> tuple[list, list]:
+    """``(questions, hints)`` — derived, see the module docstring.
+
+    **The criterion is "have you seen this sentence", not "did you finish the
+    article".** Those came apart in P7: you mark a word *while reading*, so the
+    sentence you marked it in has certainly been seen — but the article may not
+    be finished for hours. Under the old test that sentence counted as unseen
+    and could be drawn as a question, which asks you with the very sentence you
+    read it in five minutes ago. It reads as an easy question and lands as an
+    inflated grade, and nothing reports it.
+
+    ``finished`` still carries most of the work: every sentence in an article
+    you read is seen. ``seen_sentence_ids`` adds the ones the ledger knows about
+    individually — where the mark happened.
+    """
+    seen = seen_sentence_ids or set()
     questions, hints = [], []
     for row in _rows(item_key, sense_id):
-        is_hint = row["source"] == "corpus" and (row["article_id"] in finished)
+        if row["source"] != "corpus":
+            questions.append(row)          # generated sentences are never hints
+            continue
+        is_hint = row["article_id"] in finished or row["sentence_id"] in seen
         (hints if is_hint else questions).append(row)
     return questions, hints
 
 
 def pick_question(item_key: str, sense_id: int, *, finished: set[int],
                   exclude: set[int] | None = None,
+                  seen_sentence_ids: set[int] | None = None,
                   rng: random.Random | None = None) -> dict[str, Any] | None:
     """A sentence to ask with, preferring one not yet used today.
 
@@ -356,7 +388,7 @@ def pick_question(item_key: str, sense_id: int, *, finished: set[int],
     there is no option to let the item go.
     """
     rng = rng or random
-    questions, hints = split_pools(item_key, sense_id, finished)
+    questions, hints = split_pools(item_key, sense_id, finished, seen_sentence_ids)
     pool = questions or hints
     if not pool:
         return None
@@ -365,10 +397,11 @@ def pick_question(item_key: str, sense_id: int, *, finished: set[int],
 
 
 def pick_hint(item_key: str, sense_id: int, *, finished: set[int],
+              seen_sentence_ids: set[int] | None = None,
               rng: random.Random | None = None) -> dict[str, Any] | None:
     """The sentence the learner originally met this sense in, if there is one."""
     rng = rng or random
-    _questions, hints = split_pools(item_key, sense_id, finished)
+    _questions, hints = split_pools(item_key, sense_id, finished, seen_sentence_ids)
     return rng.choice(hints) if hints else None
 
 

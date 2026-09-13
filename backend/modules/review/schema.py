@@ -173,4 +173,48 @@ MIGRATIONS = [
         ALTER TABLE review_queue ADD COLUMN easy INTEGER NOT NULL DEFAULT 0;
         """,
     ),
+    Migration(
+        version=3,
+        name="Chinese for every review sentence, plus where the word lands in it",
+        database="learning",
+        apply="""
+        -- 看中文想英文那个方向，题面就是这一列（P7 决定 15）。
+        --
+        -- **这跟「句子里不许出现中文」那条禁令不冲突。**生成提示词写着
+        -- 「也不要出现中文」，`sentences.validate()` 里 `含中文 → 不合格`，
+        -- 禁的是**题面英文句里混中文**——那等于把答案印在题目上。
+        -- 翻译存在自己的列里，不经过那道校验，禁令原样留着。
+        ALTER TABLE review_sentences ADD COLUMN text_zh TEXT;
+
+        -- 目标词在中文里对应哪一段，给高亮用（「我【估计】这个项目…」）。
+        --
+        -- **对不齐就两列都是 NULL，只留 text_zh。**有些词在中文里没有干净的
+        -- 对应片段，那时不高亮、整句照显——**高亮错位置比不高亮糟**，
+        -- 它会把「估」和「计」中间劈开，而没有任何东西会报错。
+        ALTER TABLE review_sentences ADD COLUMN zh_start INTEGER;
+        ALTER TABLE review_sentences ADD COLUMN zh_end   INTEGER;
+
+        -- 哪些还没翻译，是要反复查的（补翻批次每次都要问一遍）。
+        CREATE INDEX IF NOT EXISTS idx_rsent_untranslated
+            ON review_sentences (id) WHERE text_zh IS NULL;
+        """,
+    ),
+    Migration(
+        version=4,
+        name="two ceilings on the grade: hints taken, and fuzzy-marked today",
+        database="learning",
+        apply="""
+        -- 今天在这一条上开过几级提示。**以前只记进历史表，不进调度**——
+        -- 于是提示是免费的：把语境和首字母都看了、再点「认识」，
+        -- 调度器看到 misses=0 就给 Good，间隔照常拉长。
+        -- FSRS 的 Hard 本来就是「想起来了，但费劲」，那正是开了提示的意思。
+        ALTER TABLE review_queue ADD COLUMN revealed INTEGER NOT NULL DEFAULT 0;
+
+        -- 这一条是今天标成「模糊」才进来的（P7 推翻 P3 决定 18）。
+        -- 决定 18 原来的理由仍然成立：**你几分钟前刚读过它，答对是必然的**，
+        -- 当天那一次没有信息量。所以它照常复习、照常结算，但**评级封顶到 Hard**，
+        -- 不让首个间隔被一次必然的「答对」吹起来。而「模糊」是最常标的那一档。
+        ALTER TABLE review_queue ADD COLUMN capped INTEGER NOT NULL DEFAULT 0;
+        """,
+    ),
 ]

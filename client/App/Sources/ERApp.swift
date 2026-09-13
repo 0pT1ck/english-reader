@@ -16,7 +16,7 @@ struct EnglishReaderApp: App {
                     LibraryScreen()
                 }
                 Tab("复习", systemImage: "arrow.triangle.2.circlepath") {
-                    ReviewPlaceholder()
+                    ReviewScreen()
                 }
                 Tab("设置", systemImage: "gearshape") {
                     SettingsScreen()
@@ -29,24 +29,6 @@ struct EnglishReaderApp: App {
                 // 不该等用户想起来去点什么。
                 if phase == .active { Task { await app.drain() } }
             }
-        }
-    }
-}
-
-/// 复习那一格。
-///
-/// 说清楚三件事：没做、在哪个 Phase 做、**以及标记照常在记账**——
-/// 不做复习界面不等于不记账，那些词是真的进了复习队列的。
-struct ReviewPlaceholder: View {
-    var body: some View {
-        NavigationStack {
-            ContentUnavailableView {
-                Label("正在开发中", systemImage: "hammer")
-            } description: {
-                Text("复习还没做到手机上。\n你标记过的词照常进了复习队列，" +
-                     "这一头做出来之前，复习走电脑上的管理页。")
-            }
-            .navigationTitle("复习")
         }
     }
 }

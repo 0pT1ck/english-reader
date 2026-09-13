@@ -59,8 +59,58 @@ class SentenceCard(BaseModel):
     source: str | None = Field(default=None, description="generated 生成的 / corpus 语料里的")
     article_id: int | None = Field(
         default=None,
-        description="最深一级提示可以跳回原文。生成的句子没有，客户端退回英文释义",
+        description="提示可以说出处，也留着将来跳回原文。生成的句子没有——"
+        "而生成的句子本来就不会当提示",
     )
+    article_title: str | None = Field(
+        default=None, description="提示上那句「——文章a」。join 出来的，不另存一份"
+    )
+    text_zh: str | None = Field(
+        default=None,
+        description="整句中文翻译，**看中文想英文那个方向的题面**。还没翻到的是 null。"
+        "这跟「句子里不许出现中文」那条禁令不冲突：禁的是英文题面里混中文",
+    )
+    zh_start: int | None = Field(
+        default=None,
+        description="目标词在中文里的位置，给高亮用。**null 是正当答案**——"
+        "有些词在中文里没有能单独拎出来的片段，那时不高亮、整句照显。"
+        "高亮错位置比不高亮糟：它会把「估计」从中间劈开，而没有东西会报错",
+    )
+    zh_end: int | None = None
+
+
+class WordSense(BaseModel):
+    """One sense of the word being tested, for the reveal screen's 常见释义 list."""
+
+    id: int
+    ordinal: int
+    pos: str | None = Field(default=None, description="词性。说明用，从不决定义项怎么分")
+    concept_en: str | None = None
+    gloss_zh: list[str] | str | None = None
+    exam_frequency: int = 0
+    share: float | None = Field(
+        default=None,
+        description="占这个词全部真题出现的百分之几。总数为零时是 null。"
+        "**客户端按它降序排，绝不按 ordinal**——那个序号是模型猜的",
+    )
+
+
+class WordCard(BaseModel):
+    """The whole word, as the reveal screen shows it.
+
+    Duplicates what the article glossary carries, and that is the point:
+    **the review payload has to stand on its own.** Article bodies are cleared
+    one at a time (P5 决定 10) and the word may have been met months ago, so a
+    client reaching into a cached article for this would lose half its card
+    whenever the cache was tidied — silently.
+    """
+
+    headword: str
+    phonetic: str | None = None
+    translation: str | None = Field(
+        default=None, description="词典那一堆逗号隔开的释义。义项集缺席时的退路"
+    )
+    senses: list[WordSense] = Field(default_factory=list)
 
 
 class ReviewItem(BaseModel):
@@ -74,6 +124,14 @@ class ReviewItem(BaseModel):
     misses: int
     weight: float = Field(description="抽题权重。答错减半，让卡住的词自己让路，但永不排除")
     done: bool
+    word: WordCard | None = Field(
+        default=None,
+        description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
+    )
+    word: WordCard | None = Field(
+        default=None,
+        description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
+    )
     sense: SenseCard | None = None
     questions: list[SentenceCard] = Field(description="用来出题的句子，你没读到过的")
     hints: list[SentenceCard] = Field(description="提示用的句子，当初读到它的那一句")
@@ -93,6 +151,11 @@ class ReviewProgress(BaseModel):
     done: int
     remaining: int
     buckets: dict[str, int] = Field(description="各桶各有几条")
+    buckets_done: dict[str, int] = Field(
+        default_factory=dict,
+        description="各桶各做完了几条。**新开一个字段而不是改 `buckets` 的含义**——"
+        "铁律 5 不许改字段含义。两张卡片上的「已复习/共」要的就是这两个数",
+    )
     spelling_available: bool = Field(
         description="拼写这一轮开没开。当天复习全部走完之后才为真——"
         "它是强化选项，不进调度，拼错只记一笔"
@@ -127,6 +190,25 @@ class ReviewDayResponse(BaseModel):
     progress: ReviewProgress
     clock: ClockStatus
     items: list[ReviewItem]
+
+
+class CalendarDay(BaseModel):
+    day: str
+    status: str = Field(
+        description="complete 两项都做完 / partial 只做完一项、或那天压根没活 / "
+        "missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。"
+        "**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败"
+    )
+    is_today: bool
+
+
+class CalendarResponse(BaseModel):
+    learner: Learner
+    days: list[CalendarDay]
+    streak: int = Field(
+        description="连续多少天两项都做完。**今天还没做完不算断**——"
+        "你可能正要去做，午夜就清零的计数器量的是时钟不是人"
+    )
 
 
 class Settlement(BaseModel):

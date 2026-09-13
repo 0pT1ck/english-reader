@@ -23,7 +23,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.review import routes, sentences
+from backend.modules.review import routes, sentences, translate
 from backend.modules.review.schema import MIGRATIONS
 
 log = get_logger("review")
@@ -173,6 +173,32 @@ runtime_config.register(
         group="review",
         order=80,
     ),
+    runtime_config.ConfigSpec(
+        key="review_translate_batch",
+        default=10,
+        value_type="int",
+        title="翻译句子时一批几条",
+        description=(
+            "看中文想英文那个方向的题面，是句子的中文译文。翻译一条一条互不相干，"
+            "但输出长度会累积——P1c 实测过快模型在长结构化列表的后半段会漂。"
+            "所以批次切小，宁可多跑几批。"
+        ),
+        group="review",
+        order=90,
+    ),
+    runtime_config.ConfigSpec(
+        key="review_translate_provider",
+        default="",
+        value_type="str",
+        title="翻译句子用哪个提供商",
+        description=(
+            "留空就走默认提供商。翻译是整理不是写作，要的是快模型。"
+            "2026-09-13 实测：中转站上 deepseek-flash 与 deepseek-v4-flash-0731 都可用，"
+            "而且是两个不同的模型、不是别名。"
+        ),
+        group="review",
+        order=91,
+    ),
 )
 
 
@@ -180,6 +206,7 @@ def _register_workers() -> None:
     """Batch work this module contributes. Registered at startup so the module
     can be removed as a directory without leaving a dangling job kind."""
     jobs.register_worker(sentences.WORKER)
+    jobs.register_worker(translate.WORKER)
 
 
 def on_article_finished(event: Event) -> None:
