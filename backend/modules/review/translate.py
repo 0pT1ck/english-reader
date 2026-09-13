@@ -71,7 +71,8 @@ INSTRUCTION = """\
 （比如它被并进了别的结构），**就不要加括号**，照常给译文——
 这是正当答案，不是失败。
 
-只输出 JSON，键是 # 后面的编号（字符串），值是译文字符串。
+只输出 JSON。**键就是那个编号本身，带不带 # 都行**（"1" 或 "#1"），
+值是译文字符串。
 """
 
 
@@ -173,9 +174,18 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
     )
     answer = json_object(completion.text)
 
+    # **The model writes "#1", not "1".** It was told the key is "the number
+    # after the #" and it kept the # — a reasonable reading. 236 of 366
+    # sentences went untranslated over it, and every batch reported success,
+    # because a key that matches nothing is not an error anywhere.
+    # Normalised here rather than insisted on in the prompt: the prompt has been
+    # made permissive too, but a parser that only accepts one spelling is a
+    # parser that will meet the other one again.
+    normalised = {str(k).lstrip("#").strip(): v for k, v in answer.items()}
+
     stored = aligned = 0
     for seq, row in enumerate(rows, start=1):
-        reply = answer.get(str(seq))
+        reply = normalised.get(str(seq))
         if not isinstance(reply, str) or not reply.strip():
             continue
         text_zh, start, end = _split_marks(reply)

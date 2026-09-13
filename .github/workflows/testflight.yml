@@ -15,6 +15,11 @@ on:
         description: 这一版给测试员看的说明（留空就用提交标题）
         required: false
         default: ""
+      dry_run:
+        description: 只归档验签名、不上传（第一次接线时用）
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: testflight
@@ -159,6 +164,7 @@ jobs:
 
       # `destination: upload` 让这一步导出完直接传，省掉一个单独的上传工具。
       - name: 导出并上传
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         working-directory: client/App
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -175,6 +181,7 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
       - name: 说一声传上去了
+        if: ${{ github.event.inputs.dry_run != 'true' }}
         run: |
           {
             echo "## 传上去了"
