@@ -38,6 +38,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+      - path: Assets.xcassets
     dependencies:
       - package: ERClient
         product: ERCore
@@ -64,5 +65,10 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.optick.englishreader
+        # **没有它上传会被拒**，而报错说的是「缺 CFBundleIconName」和
+        # 「缺 120x120 图标」——听起来像少了文件，其实是没告诉 Xcode
+        # 用哪个图标集。设了它，`CFBundleIconName` 由编译器自己写进 plist，
+        # 各尺寸也从那张 1024 自动切。
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         TARGETED_DEVICE_FAMILY: "1"
