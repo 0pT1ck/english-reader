@@ -21,9 +21,10 @@ settings:
     IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     SWIFT_STRICT_CONCURRENCY: complete
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # 开发期不签名：CI 上只编译与跑模拟器，真机安装是 TestFlight 那一步的事。
-    CODE_SIGNING_ALLOWED: NO
-    CODE_SIGN_IDENTITY: ""
+    # **这里不关签名。**关在这儿的话归档也跟着不签，
+    # 而不签的包装不进真机——模拟器那条构建在命令行上自己传
+    # CODE_SIGNING_ALLOWED=NO 就够了，别让它顺手把上架那条路也堵死。
+    CODE_SIGN_STYLE: Automatic
 
 packages:
   ERClient:
@@ -56,6 +57,10 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NSLocalNetworkUsageDescription: 用来连接你自己电脑上的 English Reader 后端。
+        # 不声明的话，**每次上传 TestFlight 都会被问一遍「用没用非豁免加密」**，
+        # 而且要在网页上手动答，答完才发得出去。这个 App 只用系统 HTTPS，
+        # 属于豁免范围，所以在这里一次性答掉。
+        ITSAppUsesNonExemptEncryption: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.optick.englishreader
