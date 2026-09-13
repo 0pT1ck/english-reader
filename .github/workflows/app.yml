@@ -92,6 +92,8 @@ jobs:
 
       # **能编过不等于能起来。**Swift 的编译期抓不到「@main 里少了个
       # environment」这类事，那些要到跑起来才炸。
+      # **能编过不等于能起来。**Swift 的编译期抓不到「@main 里少了个
+      # environment」这类事，那些要到跑起来才炸。
       - name: 装进模拟器并启动
         working-directory: client/App
         run: |
@@ -99,32 +101,47 @@ jobs:
           # 用 grep 而不是塞一段 python 进来：跨行的内联脚本在 YAML 块标量里
           # **会把缩进破掉**，而那样整份 workflow 连解析都过不去。
           # 「iPhone 17 (」后面紧跟左括号，所以不会误中 iPhone 17 Pro。
-          DEVICE=$(xcrun simctl list devices available \
-            | grep -m1 'iPhone 17 (' \
-            | grep -oE '[0-9A-Fa-f-]{36}')
+          DEVICE=$(xcrun simctl list devices available             | grep -m1 'iPhone 17 ('             | grep -oE '[0-9A-Fa-f-]{36}')
           if [ -z "$DEVICE" ]; then
             echo "::error::镜像里没有 iPhone 17 的模拟器"
             xcrun simctl list devices available | head -40
             exit 1
           fi
           echo "设备：$DEVICE"
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
           xcrun simctl boot "$DEVICE" || true
           xcrun simctl bootstatus "$DEVICE" -b
           xcrun simctl install "$DEVICE" "$APP_PATH"
-          xcrun simctl launch --console-pty "$DEVICE" com.optick.englishreader &
-          LAUNCH_PID=$!
+
+          # simctl launch 打印的是**宿主机的 PID**——模拟器里的 App 就是 Mac 上的
+          # 一个进程。所以存活用 ps 查就行。
+          #
+          # 第一版查的是模拟器里的 `launchctl list`，那里根本不列 App
+          # （App 归 RunningBoard 管，不是 launchd 服务），于是 App 明明
+          # running-active-Visible，检查却报「起来就崩了」。
+          # 坑 §6.7 的形状，只不过反过来：把好的报成了坏的。
+          OUT=$(xcrun simctl launch "$DEVICE" com.optick.englishreader)
+          echo "$OUT"
+          PID=${OUT##*: }
           sleep 12
-          # 起来之后进程还得在。闪退的 App 也会「启动成功」。
-          if ! xcrun simctl spawn "$DEVICE" launchctl list \
-               | grep -q com.optick.englishreader; then
-            echo "::error::App 启动后没有留在进程列表里——多半是起来就崩了"
-            xcrun simctl spawn "$DEVICE" log show --last 2m --style compact \
-              | grep -i englishreader | tail -40 || true
+
+          # **截图放在断言前面。**放后面的话，真崩了就一张图都拿不到——
+          # 而那正是最需要看一眼的时候。
+          xcrun simctl io "$DEVICE" screenshot /tmp/01-launch.png
+
+          if ! ps -p "$PID" > /dev/null 2>&1; then
+            echo "::error::App 起来之后就没了（pid $PID）——多半是启动时崩的"
+            xcrun simctl spawn "$DEVICE" log show --last 3m --style compact               | grep -iE 'englishreader|crash' | tail -60 || true
             exit 1
           fi
-          echo "在跑"
-          xcrun simctl io "$DEVICE" screenshot /tmp/launch.png
-          kill $LAUNCH_PID 2>/dev/null || true
+          echo "在跑，pid $PID"
+
+      # 跑起来之后的运行时抱怨——约束冲突、缺资源、API 用错。
+      # 这些不会让 App 崩，只会让界面悄悄地不对。
+      - name: 运行时日志
+        if: always()
+        run: |
+          xcrun simctl spawn "$DEVICE" log show --last 3m --style compact 2>/dev/null             | grep -iE 'englishreader' | tail -80 || echo "（没有相关日志）"
 
       - name: 截图
         if: always()

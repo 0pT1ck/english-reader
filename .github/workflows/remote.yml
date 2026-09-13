@@ -30,14 +30,12 @@ jobs:
 
       - name: 先检查要用的东西齐不齐
         env:
-          TS_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          TS_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
           VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
         run: |
           set -euo pipefail
           missing=""
-          [ -n "$TS_ID" ]        || missing="$missing TS_OAUTH_CLIENT_ID"
-          [ -n "$TS_SECRET" ]    || missing="$missing TS_OAUTH_SECRET"
+          [ -n "$TS_AUTHKEY" ]   || missing="$missing TS_AUTHKEY"
           [ -n "$VNC_PASSWORD" ] || missing="$missing VNC_PASSWORD"
           if [ -n "$missing" ]; then
             echo "::error::缺这几个仓库 secret：$missing"
@@ -100,9 +98,12 @@ jobs:
       - name: 加入 tailnet
         uses: tailscale/github-action@v4
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          # 用普通的 auth key，不用 OAuth。
+          # OAuth 客户端不属于任何人，所以它建出来的机器**必须挂在一个 tag 上**，
+          # 而那意味着先去改 ACL——为了连一次模拟器，多出一整套要配的东西。
+          # auth key 是你自己的，节点就归你，不用碰 ACL。
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          statedir: /tmp/tailscale-state/
 
       - name: 打开屏幕共享
         env:
