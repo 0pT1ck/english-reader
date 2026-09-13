@@ -112,6 +112,10 @@ def library(learner_id: int, *, shelf: str = "fresh", source: str | None = None,
             {
                 "id": row["id"],
                 "title": row["title"],
+                # 卡片上标题的上一行与下一行。真题两样都是 null——
+                # 它们那一格显示的是 source_label（2026-09-13 定，真题不补）。
+                "topic": row.get("topic"),
+                "summary_zh": row.get("summary_zh"),
                 "source": row["source"],
                 "source_label": row["source_label"],
                 "word_count": row["word_count"],
@@ -123,6 +127,9 @@ def library(learner_id: int, *, shelf: str = "fresh", source: str | None = None,
                 # papers — they were not written to teach anything, so finishing
                 # one records only what the reader marked by hand.
                 "target_count": row.get("target_count") or 0,
+                # 「待学」：目标词里还没被标记过、也还没学出师的个数。
+                # **标记了就不再计入**，所以读着读着这个数会往下掉。
+                "pending_count": row.get("pending_count") or 0,
                 "difficulty": row["difficulty"],
                 "difficulty_score": row["difficulty_score"],
                 # P3 fills this in; the column exists so the client's list can
@@ -166,6 +173,9 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                 {
                     "id": s["id"],
                     "ordinal": s["ordinal"],
+                    # 说明用，从不决定义项怎么分：名词的 address（地址）
+                    # 和动词的 address（写地址）是同一个概念。
+                    "pos": s["pos"],
                     # Layer ① proper: the English concept definition, written
                     # with words already known, so looking a word up is itself
                     # reading input rather than a switch into Chinese.
@@ -292,6 +302,8 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
         "article": {
             "id": row["id"],
             "title": row["title"],
+            "topic": row["topic"],
+            "summary_zh": row["summary_zh"],
             # The original text, sent alongside the tokens rather than instead
             # of them: token offsets index into it, so a client can render the
             # exact spacing and paragraphing without re-tokenising anything.

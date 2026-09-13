@@ -435,4 +435,20 @@ MIGRATIONS = [
             ON study_states (learner_id, due_at) WHERE due_at IS NOT NULL;
         """,
     ),
+    Migration(
+        version=6,
+        name="topic and one-line summary on articles, for the phone's list",
+        database="learning",
+        apply="""
+        -- 手机端的列表卡片上，标题上面一行是话题、下面一行是一句中文概括。
+        -- 两样以前都没有：话题只在生成时算过一次，连一列自己的地方都没有
+        -- （它被塞进了 ``generation_drafts.word_set``，那个列名说的是别的事）；
+        -- 概括根本不存在。
+        --
+        -- **真题不补。**452 篇真题这两列留空，卡片上那一格显示来源
+        -- （``source_label``，本来就有）。将来要补是一次性的批量生成。
+        ALTER TABLE reading_articles ADD COLUMN topic      TEXT;
+        ALTER TABLE reading_articles ADD COLUMN summary_zh TEXT;
+        """,
+    ),
 ]

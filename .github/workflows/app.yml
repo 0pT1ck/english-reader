@@ -1,0 +1,127 @@
+name: 界面
+
+# 界面这个 Phase 唯一的回路。
+#
+# **本机什么都验不了**：App 层要 SwiftUI、UIKit 和模拟器，Windows 上一样没有。
+# 所以这里的每一次运行都是「第一次编译」——不是补一道保险，是唯一那道。
+on:
+  push:
+    branches: [ios]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: App 能编、能装、能起来
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # 环境先打出来。环境坏掉和代码写错在日志里长得一模一样（坑 §1.2）。
+      # Xcode 锁大版本不锁补丁号，理由同 client.yml。
+      - name: 选定 Xcode 并打印环境
+        run: |
+          set -euo pipefail
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          echo "用 $APP"
+          sudo xcode-select -s "$APP"
+          xcodebuild -version
+          swift --version
+          echo "--- 装着的模拟器 ---"
+          xcrun simctl list devices available | grep -i iphone || true
+
+      - name: 装 XcodeGen
+        run: brew install xcodegen
+
+      # 工程文件不进版本控制，每次从 project.yml 生成。
+      - name: 生成工程
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          xcodegen generate
+          ls -d EnglishReader.xcodeproj
+
+      - uses: actions/cache@v4
+        with:
+          path: client/.build
+          key: spm-app-${{ hashFiles('client/Package.resolved') }}
+
+      # **不接管道、不写 `|| 兜底`。**坑 §6.6：`xcodebuild | xcbeautify` 那次，
+      # xcodebuild 死了、xcbeautify 返回 0，于是 job 绿了 37 秒、一行没编译。
+      - name: 编译（iPhone 17 模拟器）
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project EnglishReader.xcodeproj \
+            -scheme EnglishReader \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+
+      # 编完要断言产物真的在，而且真是给 iOS 模拟器的。
+      # 坑 §6.7：一个分不出两种情况的断言等于没有断言——所以这里读的是
+      # Mach-O 的 load command（platform 7 才是 iOS 模拟器），不是 `file` 说不说 arm64。
+      - name: 确认产物在，且是模拟器的
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          APP_PATH=$(find DerivedData -name 'EnglishReader.app' -type d | head -1)
+          if [ -z "$APP_PATH" ]; then
+            echo "::error::没找到 EnglishReader.app——上面那一步可能是空跑"
+            find DerivedData -maxdepth 4 -type d | head -30
+            exit 1
+          fi
+          echo "产物：$APP_PATH"
+          BIN="$APP_PATH/EnglishReader"
+          file "$BIN"
+          otool -l "$BIN" | grep -A5 LC_BUILD_VERSION | head -20 | tee /tmp/platform.txt
+          if grep -qiE 'platform +(7|iossimulator)' /tmp/platform.txt; then
+            echo "确认：目标平台是 iOS 模拟器"
+          else
+            echo "::error::读不到 iOS 模拟器的平台标记。要么编的是别的平台，"
+            echo "::error::要么这个检查该改了——两种都不该放过。"
+            otool -l "$BIN" | head -60
+            exit 1
+          fi
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      # **能编过不等于能起来。**Swift 的编译期抓不到「@main 里少了个
+      # environment」这类事，那些要到跑起来才炸。
+      - name: 装进模拟器并启动
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          DEVICE=$(xcrun simctl list devices available -j \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; \
+print(next(x['udid'] for v in d.values() for x in v if x['name']=='iPhone 17'))")
+          echo "设备：$DEVICE"
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP_PATH"
+          xcrun simctl launch --console-pty "$DEVICE" com.optick.englishreader &
+          LAUNCH_PID=$!
+          sleep 12
+          # 起来之后进程还得在。闪退的 App 也会「启动成功」。
+          if ! xcrun simctl spawn "$DEVICE" launchctl list \
+               | grep -q com.optick.englishreader; then
+            echo "::error::App 启动后没有留在进程列表里——多半是起来就崩了"
+            xcrun simctl spawn "$DEVICE" log show --last 2m --style compact \
+              | grep -i englishreader | tail -40 || true
+            exit 1
+          fi
+          echo "在跑"
+          xcrun simctl io "$DEVICE" screenshot /tmp/launch.png
+          kill $LAUNCH_PID 2>/dev/null || true
+
+      - name: 截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: /tmp/*.png
+          if-no-files-found: warn

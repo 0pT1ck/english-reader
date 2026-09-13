@@ -1,0 +1,555 @@
+<title>Phase 6 界面</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 6 · 讨论中 · 2026-09-13 起 · 尚未定稿 · 只做阅读这一条链</div>
+    <h1>界面</h1>
+    <p class="standfirst">Core 已经装好，这个 Phase 只做人看得见的那一半——原生 iOS，液态玻璃。
+    <b>而且只做一条链：列表 → 阅读 → 点词。</b></p>
+    <p class="thesis">P5 把「换成安卓也一模一样」的东西全部收进了 Core，
+    所以这个 Phase 里<b>不再有任何学习逻辑</b>：复习调度、选文、难度、显示语义都算好了，
+    界面只负责渲染、收交互、回传事件。<b>真正要定的是结构</b>——哪几屏、怎么导航、
+    点一个词之后发生什么。视觉反而不太需要定：液态玻璃是系统渲染时生成的材质，
+    不是能自己画出来的风格，用对了系统组件它就是对的。</p>
+    <p class="thesis"><b>范围只有一条链：打开 App → 看见文章列表 → 点开一篇 → 读 → 点词查词与标记 → 读完。</b>
+    2026-09-13 定。<b>复习界面这个 Phase 不做</b>——它自己是完整的一套交互
+    （三级提示、双向作答、当天完成判定、拼写），
+    塞进同一个 Phase 就等于两个 Phase 一起验收，哪一处不对都说不清是哪一处。
+    <b>设置屏做，但只有一件事</b>：填 base URL 与设备令牌（§6）。
+    阅读这条链自己就是闭环：读完即记账、标记进复习队列，
+    <b>这两件事在服务端照常发生</b>，只是这个客户端暂时看不到复习那一头。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-5.html">Phase 5</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>这份文档还在讨论中，不是定稿。</b>每讨论完一屏就往里加一段，
+    所以现在读到的是「到目前为止定了什么」，不是一份完整方案。
+    <br><br>
+    <b>按铁律，方案定稿时会问一次要不要推</b>；在那之前工作区保持未提交。
+    <br><br>
+    <b>讨论期间不写任何实现代码</b>，包括脚手架和示例。本文档里出现的字段名与模块名
+    都是<b>已经存在的东西</b>，不是将要写的。
+    <br><br>
+    <b>草图是用户拖出来的，原样收在这里</b>（§3 §4 §5 各一张）。
+    图上的红色编号是用户标的，不是界面的一部分。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>草图是怎么交接的</h2>
+    </div>
+    <p class="lede">这件事本身值得记一笔，因为它是前五个 Phase 里没有过的工作方式。</p>
+
+    <p>用户不写代码也不读代码，而界面是唯一一件「说不清楚就做不对」的东西。
+    用的办法是：<b>用户在浏览器里拖出草图、截图发来</b>，工具是
+    <a href="https://github.com/lnkiai/m3e-canvas">m3e-canvas</a>——一个拖 Material 3 组件的网页。</p>
+
+    <p>它画的是安卓的设计语言，但<b>这不重要</b>：草图传递的是位置、分区、层级、什么挨着什么，
+    这些信息跟材质无关。约定因此只有一条——<b>位置和层级照收，控件形态全部重译</b>。
+    用户摆一个「主按钮」，iOS 上该是什么形态由这边决定。</p>
+
+    <div class="callout">
+      <b>M3 有几样东西在 iOS 上没有对应物</b>，摆了会把讨论带偏：
+      FAB（右下角悬浮圆钮）、侧边抽屉、Snackbar、App bar 右上角的三点菜单、顶部可滑动 Tab、Chips。
+      碰到这些就在截图旁写一句「这里是一个做 X 的动作」，形态与位置留给这边定。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>液态玻璃：一条决定了所有画法的事实</h2>
+    </div>
+    <p class="lede">它不是一种可以画出来的视觉风格，是系统在渲染时生成的材质。</p>
+
+    <p>折射、镜面高光、滚动时的边缘渐隐、控件靠近时的融合与形变，都由系统按实时内容算出来，
+    还要跟着「减弱透明度」「增强对比度」这些无障碍开关整体变形。
+    <b>所以原生的做法几乎全是「别自己画」</b>——用系统的导航栈、标签栏、工具栏、面板，
+    玻璃是白送的；只有真正自定义的浮动控件才用 <code>glassEffect</code>，
+    而且要装进 <code>GlassEffectContainer</code>（<b>玻璃不能采样玻璃</b>，叠起来会糊）。</p>
+
+    <div class="callout">
+      <b>推论：玻璃只出现在浮在内容之上的那一层</b>——标签栏、导航按钮、点词面板、回到顶部那个钮。
+      <b>正文与列表底下保持不透明。</b>这不是为了省力，是材质本身的约束。
+    </div>
+
+    <p class="sec-note">外部事实，2026-09-13 核实：Apple 官方设计资源页现在挂的是 <b>iOS 27</b> 的 UI Kit（Figma / Sketch）。
+    液态玻璃仍是同一套设计语言。<b>P5 决定 3「只面向 iPhone 17 / iOS 26」要不要跟着动，是独立的一件事，还没定。</b></p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>第一屏：阅读列表</h2>
+    </div>
+    <p class="lede">App 打开后落地的那一屏。</p>
+
+    <figure class="shot">
+      <img src="./phase-6/01-list.png" alt="阅读列表屏的草图">
+      <figcaption>用户草图，2026-09-13。① 话题 ② 标题 ③ 一句中文概括 ④ 总词数·待学数 ⑤⑥ 学习状态。<br>
+      底部三格标签栏保留三格，<b>复习那格点进去显示「正在开发中」</b>（决定 30）。</figcaption>
+    </figure>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">1</td><td class="ok">已定</td><td><b>「文章 / 真题」用一条分段控件分开。</b>正好对上 Core 已有的两个列表（P5 决定 19：真题走 <code>/library?source=…</code>），<b>内核一行不用改</b>。</td></tr>
+          <tr><td class="topic">2</td><td class="ok">已定</td><td><b>卡片第一行是话题</b>，不是文体。生成文章时一起落库。<b>真题这一格显示来源</b>（<code>source_label</code>，现成有）。</td></tr>
+          <tr><td class="topic">3</td><td class="ok">已定</td><td><b>卡片第二行是一句中文概括。真题暂不补</b>，那一行留空。将来要了再批量生成。</td></tr>
+          <tr><td class="topic">4</td><td class="ok">已定</td><td><b>第三行是「504 词 · 23 待学」。</b>「待学」= 这篇的目标词里还没进入学习流程的个数——<b>只要标记了、进了复习队列就不再计入</b>，不用等学会。所以它在阅读过程中会实时往下掉。<b>真题这一格恒为 0</b>（真题不为教任何词而写，<code>target_count</code> 恒为 0），留空。</td></tr>
+          <tr><td class="topic">5</td><td class="ok">已定</td><td><b>不叫「生词」叫「待学」。</b>「生词」读起来是「你不认识的词」，而标记一个词（明确说了不认识）这个数反而减一，讲不通。<b>「待学」也不完全贴切</b>（不一定这些词全不认识，也不一定没有更多），但比「生词」合适，暂定。</td></tr>
+          <tr><td class="topic">6</td><td class="ok">已定</td><td><b>暂不分「今天 / 往期」</b>，一个列表按序号排。初版可用优先，分类留到后面。</td></tr>
+          <tr><td class="topic">7</td><td class="ok">已定</td><td><b>状态只两档</b>：待学习 / 已学习。（实际还有「还没准备好」「读了一半」「离线拿不到」，初版不表达。）</td></tr>
+          <tr><td class="topic">8</td><td class="ok">已定</td><td><b>真题的四级 / 六级 / 考研再排一行分段控件</b>，样式同第一条。<b>排序不做</b>，按序号——服务端已经下发了可选排序（<code>sortable</code>），将来接上就行。</td></tr>
+          <tr><td class="topic">9</td><td class="ok">已定</td><td><b>标签栏不加角标</b>（复习的到期数不显示），<b>默认落在第一格「阅读」</b>。理由：加了臃肿。</td></tr>
+          <tr><td class="topic">10</td><td class="ok">已定</td><td><b>三张卡等高</b>，格式完全一样，各自填各自的内容。</td></tr>
+          <tr><td class="topic">29</td><td class="ok">已定</td><td><b>标签栏保留三格</b>：阅读 / 复习 / 设置。2026-09-13 定。（讨论过的另外两种——只留一格、不要标签栏而把设置放进导航栏齿轮——都没采用。）</td></tr>
+          <tr><td class="topic">30</td><td class="ok">已定</td><td><b>复习那格点进去显示「正在开发中」</b>，不是空屏也不是点了没反应。<b>一个点了没动静的格子看着像坏了</b>，说明白反而清楚。</td></tr>
+          <tr><td class="topic">32</td><td class="ok">已定</td><td><b>没准备好的文章不出现在列表里</b>，全部就绪之后才出现。服务端照常会回 <code>preparing</code>（带「标注了几个 / 共几个」），<b>界面直接过滤掉，不做进度显示</b>。<br><b>代价实测过，很小</b>：库里 474 篇<b>全部是 <code>ready</code></b>（真题 452 篇一篇不少），所以只有 04:00 刚生成的那几篇会短暂缺席——那天的今日包可能先显示 2 篇，一会儿变 3 篇。</td></tr>
+          <tr><td class="topic">33</td><td class="ok">已定</td><td><b>离线拿不到正文时：转圈，同时标注原因。</b>不能只转圈——对一个离线优先的 App，无声的转圈是最糟的答案（你分不出它在努力还是已经放弃）。<b>具体做法：转圈继续转，旁边写「离线，连不上服务器」</b>——意思是还在重试，网一回来自己就好，不用你点。<b>列表上暂不显示「这篇能离线读」</b>，以后再做。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p class="sec-note">iOS 翻译：大标题用导航栏自带的（滚动后自动缩成小标题）；
+    分段控件放大标题正下方（Apple 自己就这么放）；<b>灰底圆角卡片改成分组列表</b>——
+    内容区不用玻璃也不用色块，见 §2。标签栏在向下滚时会自动收成一小条，抬手又展开。</p>
+
+    <p class="sec-note"><b>与主文档 §H 的一处口径</b>：每日流程写的是「打开时先复习」，
+    而决定 9 让 App 默认落在阅读。两者不冲突（§H 描述的是建议的学习顺序，不是 App 落哪屏），
+    但收尾时要把那句话对齐，免得文档和实物说两样。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>第二屏：阅读器</h2>
+    </div>
+    <p class="lede">点列表里任一篇进入。这一屏最重要的决定是<b>什么都不标</b>。</p>
+
+    <figure class="shot">
+      <img src="./phase-6/02-reader.png" alt="阅读器屏的草图">
+      <figcaption>用户草图，2026-09-13。① 返回 ② 来源 ③ 选项 ④ 标题 ⑤ 一句话概括 ⑥ 话题 ⑦ 总词数·待学数 ⑧ 正文。<br>
+      正文里那个孤零零的 <code>estimate</code> 是用户放进去的，为了演示下一屏的查词面板。</figcaption>
+    </figure>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">11</td><td class="ok">已定</td><td><b>正文不画系统预标的记号</b>——目标词、超纲词、派生词、专有名词<b>全不画</b>。理由：满屏记号之后文章就不是文章了，妨碍阅读。<b>不违反不变量</b>：那条写的就是「静止要不要标出来是各客户端自己的呈现决定」。</td></tr>
+          <tr><td class="topic">12</td><td class="ok">已定</td><td><b>只画你自己标记过的词</b>，暂用虚线。理由不是好看：<b>你按下去了，屏幕上得有反应</b>，否则同一个词会重复点开——「标记后正文毫无反应」在 P2 是被当成 bug 记进坑列表的。<b>两档（不认识 / 模糊）暂时都用虚线不分</b>，想好画法再分。</td></tr>
+          <tr><td class="topic">13</td><td class="ok">已定</td><td><b>「读完了」按钮</b>放在正文末尾。按下<b>退回列表</b>，那篇当场变已学习。这条是跨 Phase 不变量的落点——<b>记账只在读完那一刻发生</b>。<b>不用「滚到底自动算读完」</b>：读完是要记账的动作，不该由滚动手势代劳。</td></tr>
+          <tr><td class="topic">14</td><td class="ok">已定</td><td><b>收尾界面不做</b>（按下「读完了」中间什么都不显示）。已记进主文档 §M，连同它的起因与风险。</td></tr>
+          <tr><td class="topic">15</td><td class="ok">已定</td><td><b>自动跳回上次位置</b>，并提供<b>右下角浮动「回到顶部」</b>（上箭头）。这是 <code>article.progress</code> 的落点——P5 结束时唯一没被真实流程走过的一条事件。</td></tr>
+          <tr><td class="topic">16</td><td class="ok">已定</td><td><b>导航栏中间不显示来源</b>（返回按钮本身会带上一屏的名字）；右上角改成 <code>···</code> 玻璃圆钮，<b>不用实心强调色</b>——那留给主要动作。</td></tr>
+          <tr><td class="topic">17</td><td class="ok">已定</td><td><b>菜单内容待定</b>，先把按钮做出来。候选：字号、深浅色、这篇里我标记过的词一览、清除这篇缓存。</td></tr>
+          <tr><td class="topic">18</td><td class="ok">已定</td><td><b>头部信息块（标题 / 概括 / 话题 / 词数）跟正文一起滚走。</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>决定 11 的连带后果</b>：Core 里那条显示语义的优先级链
+      （专有名词 &gt; 超纲 &gt; 目标 &gt; 派生，加词组抑制规则）<b>在界面上不产生任何可见效果</b>。
+      字段和逻辑都留着不删（铁律 5），只是这个 Phase 不用它——换个客户端、或者以后改主意，它现成在那儿。
+      <br><br>
+      另一个后果记在主文档 §M：<b>「这篇为教哪些词而写」对读者完全不可见</b>，读完一篇不知道它教了什么。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>第三屏：点词面板</h2>
+    </div>
+    <p class="lede">全天点得最多的东西。从底部升起的面板，正文里那个词同时高亮。</p>
+
+    <figure class="shot">
+      <img src="./phase-6/03-lookup.png" alt="点词面板的草图">
+      <figcaption>用户草图，2026-09-13。① 单词 ② 朗读 ③ 音标 ④ 本句中的意思 ⑤⑥ 常见释义与考频 ⑦ 三档滑块。</figcaption>
+    </figure>
+
+    <p>面板从上到下：单词、朗读按钮、音标、<b>本句中</b>的义项（中文 + 英文概念定义）、
+    <b>常见释义 · 考频</b>（左边一行一个义项，右边对应的考频百分比）、
+    最底下一条<b>三档滑块</b>：认识 / 模糊 / 不认识。</p>
+
+    <div class="callout">
+      <b>三档滑块正好对上系统底层，不用新增任何概念</b>：「认识」就是<b>没有标记</b>这个默认状态，
+      滑到模糊 / 不认识是标记，滑回认识是撤销标记（撤销后条目退回 <code>new</code>、<b>遇见记录保留</b>，
+      这是现成的不变量）。
+      <br><br>
+      和多数软件不同的地方是<b>它可以随时在三档之间来回切</b>，而不是「点了不认识就得再点撤销」。
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">19</td><td class="ok">已定</td><td><b>标记是按义项记的，滑块标的是「本句中」那一条义项。</b>词池里存的是「<code>estimate</code> 的第 2 个义项」，不是「<code>estimate</code>」。</td></tr>
+          <tr><td class="topic">20</td><td class="ok">已定</td><td><b>不显示「你标过这个词的别的义项」。</b>契约里 <code>glossary.marks</code> 特意把全部义项的标记都发下来就是为了这个，<b>初版不做，代价记进了 §M</b>。</td></tr>
+          <tr><td class="topic">21</td><td class="ok">已定</td><td><b>义项列表按真题考频降序排</b>，考频缺失时用词典原始顺序。<b>绝不按义项序号排</b>——那个序号是模型猜的（<code>is_exam_key</code> 恒为 0 就是因为这个）。排序在服务端按数据算，<b>义项将来改了排序自动跟着改</b>。</td></tr>
+          <tr><td class="topic">22</td><td class="ok">已定</td><td><b>词性（<code>n. / vt. / vi.</code>）加个字段带出来。</b><code>senses.pos</code> 库里就有，只是契约没带，<b>不用重新生成</b>。</td></tr>
+          <tr><td class="topic">23</td><td class="ok">已定</td><td><b>「本句中」那块保留</b>，跟底下列表重复没关系——上面给完整的中英文定义，列表给短释义，用途不同。</td></tr>
+          <tr><td class="topic">24</td><td class="ok">已定</td><td><b>面板开着时正文不能滚</b>，一滑就收起面板。</td></tr>
+          <tr><td class="topic">25</td><td class="ok">已定</td><td><b>点下一个词时原地换内容</b>，不关掉重开。动画以后再考虑。</td></tr>
+          <tr><td class="topic">26</td><td class="ok">已定</td><td><b>面板按内容自适应高度，最多半屏</b>；装不下的在面板内滚动，而<b>三档滑块钉在底部，不跟着滚</b>。</td></tr>
+          <tr><td class="topic">27</td><td class="ok">已定</td><td><b>朗读用 iOS 自带的离线语音合成</b>，这个 Phase 就接上（不联网、不花钱）。</td></tr>
+          <tr><td class="topic">28</td><td class="ok">已定</td><td><b>超纲词不在正文做记号，改在面板里单词右边一行小字提示。</b>正文不画记号之后，面板是唯一能说这件事的地方。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>第四屏：设置，只有连接这一件事</h2>
+    </div>
+    <p class="lede">没有草图——它只有两个输入框，而且填一次之后大概一年不会再打开。</p>
+
+    <p>原本这个 Phase 不打算做设置屏，但有一样东西绕不过去：
+    <b>设备令牌是管理控制台签发、一次性显示的</b>，客户端总得有地方接住它，
+    否则连不上任何东西。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">31</td><td class="ok">已定</td><td><b>设置屏只做一件事：填 base URL 与设备令牌。</b>缓存管理、占用统计、「全部下载」全部不做——那些等复习界面那个 Phase 一起。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>两条跟仓库公开有关的规矩，动手时别忘：</b>
+      <br>① <b>令牌是凭证，不入日志</b>，填完之后界面上也别再原样显示（显示后几位足够认出是哪一个）。
+      这跟「API 密钥一律不入日志」是同一条。
+      <br>② <b>别把家里后端的地址写进仓库</b>——base URL 的默认值留空或走本地配置，
+      不要硬编码进源码。仓库 2026-09-12 起是公开的。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>动了不变量的一处：界面初版不认词组</h2>
+    </div>
+    <p class="lede">跨 Phase 不变量写着「词组是一个整体，就按一个整体渲染——这条对所有客户端都成立」。这个 Phase 不照做。</p>
+
+    <p><b>理由</b>：词组识别本身的判定质量还不可信——P2 实测
+    <b>198 个序列在不同句子里得到不同判定</b>，召回缺口记在
+    <a href="./phase-2.html">Phase 2 文档</a> §18。在判得准之前，把它端到界面上
+    只是把不可信的东西显示得更确信。</p>
+
+    <div class="callout">
+      <b>代价三笔，照单认下：</b>
+      <br>① 点 <code>account for</code> 里的 <code>account</code> 会按普通单词处理，释义可能不贴合——
+      <code>in_phrase</code> 那条 Core 返回了但界面不读；
+      <br>② <b>词组无法标记，这一支在客户端上等于关闭</b>，永远不进复习队列；
+      <br>③ 正文里词组不会整体高亮。
+      <br><br>
+      <b>有一处减轻，但没量过</b>：「本句中」那一层是逐词的语境标注、与词组无关，
+      所以 <code>account</code> 在 <code>account for</code> 里<b>可能</b>已经被标成了「解释、说明」那个义项。
+      能减轻多少要抽查才知道。
+    </div>
+
+    <p><b>后端一行不用改</b>：<code>Phrase</code> 契约、整体命中、<code>in_phrase</code> 释义全部留着，
+    Core 里也照常实现（P5 的命令行客户端真跑过）。关掉的只是界面这一层。
+    真要打开，界面这边的工作量是「高亮能跨两个词」加一个字段的读取。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>跑不掉的后端改动</h2>
+    </div>
+    <p class="lede">这个 Phase 主要是界面，但下面几处后端改动躲不过。全部是加字段，不碰老字段，不违反铁律 5。</p>
+
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>文章加「话题」</b><span>生成流程里定话题并落库，契约加字段。<b>库里已攒下的生成文不补</b>（2026-09-13 定，那些可能整体删掉重来）。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>文章加「一句中文概括」</b><span>同上，生成时产出并落库。<b>452 篇真题不补</b>，那一行留空。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>新算「待学」数</b><span>这篇的目标词里还没进入学习流程的个数，进 <code>LibraryArticle</code> 与 <code>ArticleBody</code>。服务端算（架构铁律 1）。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>义项带出词性</b><span><code>senses.pos</code> 已有数据，加进 <code>Sense</code> 契约。</span></div></div>
+    </div>
+
+    <div class="callout" style="margin-top:1.6rem">
+      <b>2026-09-13：四处都写了，但还没生效。</b>
+      迁移、查询、契约、生成流程都改完了（<code>reading</code> 迁移 6、<code>generation</code> 迁移 4），
+      <b>但 Swift 契约类型还没重新生成</b>——那要跑 <code>export_contract.py</code>（它会把服务起来）
+      和 <code>generate_swift_types.py</code>（它要 Swift 工具链）。
+      <br><br>
+      所以现在的状态是：<b>服务端会下发这三个字段，App 还读不到它们</b>，卡片上话题、
+      概括、待学那三格是空的。接上的地方只有一处——<code>ArticleCard.init(library:)</code>，
+      那里三行注释写着改成什么。<b>界面一行都不用动。</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>这个 Phase 明确不做</h2>
+    </div>
+    <p class="lede">范围就是那一条链。下面这些不是「以后有空再说」，是<b>这个 Phase 的边界</b>。</p>
+
+    <div class="nots">
+      <div class="not"><b>复习那几屏</b>——出题、三级提示、双向作答、当天完成判定。Core 全都实现了，界面不做；<b>标签栏那一格保留，点进去显示「正在开发中」</b>（决定 30）</div>
+      <div class="not"><b>拼写那一轮</b></div>
+      <div class="not"><b>设置屏的其余部分</b>——缓存管理、占用统计、「全部下载」。设置屏本身要做，但只有连接那两个字段（§6）</div>
+      <div class="not"><b>词组</b>，理由与代价见 §7</div>
+      <div class="not"><b>读完之后的收尾界面</b>，见 §4 决定 14 与主文档 §M</div>
+    </div>
+
+    <div class="callout">
+      <b>这条链自己是闭环的</b>：读完即记账、标记进复习队列，
+      <b>这两件事在服务端照常发生</b>——不做复习界面不等于不记账。
+      代价是这个客户端看不到复习那一头，那段时间仍然只能用命令行客户端或管理页做复习。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>这条链上还没定的</h2>
+    </div>
+    <p class="lede">下面每一条都属于这个 Phase，得在动手前定下来。</p>
+
+    <div class="nots">
+      <div class="not"><b>深色模式、字号与无障碍</b>——2026-09-13 定为「先按常规来，以后细改」。
+      要认下的是：正文那一块是自己画的，<b>系统不替它适配</b></div>
+      <div class="not">最低部署目标：iOS 26，还是跟进 iOS 27（见 §2 末尾）</div>
+      <div class="not"><b>验收清单本身</b>——按铁律回到用户手里跑，
+      P5 那条「验收全部由 AI 执行」的例外<b>不延伸到这里</b></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>验收怎么跑：没有 Mac，也没有真机</h2>
+    </div>
+    <p class="lede">2026-09-13 定：<b>TestFlight 推迟到全部功能做完</b>，所以这个 Phase 的验收只能在模拟器上。</p>
+
+    <p>能用的现成条件：<b>macos-26 runner 预装 iPhone 17 模拟器与 iOS 26 运行时</b>（P5 §4 已核实），
+    公开仓库不计费。三条路，从便宜到贵：</p>
+
+    <div class="steps">
+      <div class="step"><div class="step-n">1</div><div class="step-what"><b>截图</b><span><code>xcrun simctl io booted screenshot</code>，打包成 artifact 下载。便宜、可重复、有记录。<b>日常看效果用这个。</b></span></div></div>
+      <div class="step"><div class="step-n">2</div><div class="step-what"><b>录屏</b><span><code>simctl io booted recordVideo</code>，把一段操作录下来。比截图多一样东西：<b>看得出动效和节奏</b>。</span></div></div>
+      <div class="step"><div class="step-n">3</div><div class="step-what"><b>远程操控（VNC）</b><span>workflow 里打开 macOS 远程管理，再开一条隧道（ngrok / Tailscale，token 进仓库 secrets），从 Windows 用 VNC 客户端连进去<b>亲手点模拟器</b>。<b>这条还没验过能不能成</b>。</span></div></div>
+    </div>
+
+    <div class="callout">
+      <b>第 3 条成了，验收就按它走</b>——用户亲自点，铁律「每个 Phase 结束由用户实际跑一遍验收清单」才站得住。
+      <br><br>
+      <b>它的代价要一起认下：</b>每次都要重新排队、重新装隧道（几分钟起步）；
+      job 有时长上限，<b>关掉就什么都没了</b>，环境留不住；走公网 VNC 会顿。
+    </div>
+
+    <div class="callout">
+      <b>更大的一笔代价，与第 3 条能不能成无关：</b>
+      <b>P6 验收通过 ≠ 在真手机上好用。</b>
+      模拟器上用鼠标点，和真机上用拇指读，判断不出同一批东西——
+      字号够不够大、单手能不能够到点词面板、连着读二十分钟累不累。
+      <b>真机那一遍推到推 TestFlight 那次一起补</b>，在那之前不要把「模拟器上跑通了」说成「好用」。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>写出来的东西</h2>
+    </div>
+    <p class="lede">2026-09-13 写完，<b>一行都没编译过</b>——这台机器上没有 Xcode，
+    App 层在 Windows 上编不了。下一步是远程那件事。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>在哪</th><th>是什么</th></tr></thead>
+        <tbody>
+          <tr><td><code>client/App/project.yml</code></td><td>XcodeGen 的工程描述。<b>工程文件不提交</b>——它是机器产物，这台机器也读不懂；要看结构看这份 YAML</td></tr>
+          <tr><td><code>App/Sources/ERApp.swift</code></td><td>入口与三格标签栏，复习那格是「正在开发中」</td></tr>
+          <tr><td><code>App/Sources/AppModel.swift</code></td><td>三类本地存储、发件箱、同步引擎；外加列表的离线退路</td></tr>
+          <tr><td><code>App/Sources/Connection.swift</code></td><td>base URL 进 <code>UserDefaults</code>，<b>令牌进钥匙串</b>，界面上只显示后四位</td></tr>
+          <tr><td><code>App/Sources/IOSTransport.swift</code></td><td>手机这一份传输实现（Core 只定义协议）</td></tr>
+          <tr><td><code>App/Sources/LibraryScreen.swift</code></td><td>第一屏：两条分段、卡片、下拉刷新、离线那一行</td></tr>
+          <tr><td><code>App/Sources/ArticleCard.swift</code></td><td><b>三个新字段唯一的落点</b></td></tr>
+          <tr><td><code>App/Sources/ReaderScreen.swift</code></td><td>第二屏：正文、读完了、回到顶部、<code>···</code></td></tr>
+          <tr><td><code>App/Sources/ReaderModel.swift</code></td><td>标记、事件、进度、跳回上次位置</td></tr>
+          <tr><td><code>App/Sources/ArticleText.swift</code></td><td>正文按段落渲染 + 按字符命中的点词</td></tr>
+          <tr><td><code>App/Sources/LookupSheet.swift</code></td><td>第三屏：点词面板与三档滑块</td></tr>
+          <tr><td><code>App/Sources/Speech.swift</code></td><td>朗读，系统离线语音合成</td></tr>
+          <tr><td><code>App/Sources/SettingsScreen.swift</code></td><td>第四屏：只有连接</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>正文为什么用 <code>UITextView</code> 而不是 SwiftUI 的 <code>Text</code>。</b>
+      要的是两样 <code>Text</code> 给不了的东西：<b>按字符命中</b>（点哪个词选哪个词）
+      和真正的排版断行。按<b>段落</b>切块而不是按句子——一句一块的话每句都另起一行，
+      那不是文章是句子列表；段落同时也是能锚定的东西，所以「跳回上次位置」
+      和「读到第几句」都有地方挂。
+    </div>
+
+    <div class="callout">
+      <b>三件没照抄草图的事，都记在这儿：</b>
+      <br>① <b>文章标题交给导航栏的大标题</b>，不画在内容区——这样滚过去之后系统
+      自己把它缩进栏里，是决定 16 想要的那个行为，而自己画做不到。
+      <br>② <b>设置页多了一行「还有 N 条标记等着上报」。</b>决定 31 说设置只做连接，
+      这一行严格说超出了；留着是因为<b>「我标的东西传上去了没有」在这个 Phase 里
+      没有别的出口</b>。要砍掉就是删一个 <code>Section</code> 的事。
+      <br>③ <b>正文里被点开的那个词是方角底色，不是草图上的胶囊。</b>
+      <code>NSAttributedString</code> 的背景属性画不出圆角，要圆角就得自己画一层。
+    </div>
+
+    <div class="callout">
+      <b>没验过的东西要认下。</b>一行没编译过，所以下面这些全是「照文档写的」
+      而不是「跑过的」：<code>.buttonStyle(.glass)</code> 与 <code>.glassProminent</code>、
+      <code>onGeometryChange</code>、<code>scrollPosition(id:)</code> 配
+      <code>scrollTargetLayout</code>、面板的 <code>presentationBackgroundInteraction</code>
+      是否真能让点击穿到正文上、以及 <code>closestPosition</code> 在 TextKit 2 下的命中精度。
+      <b>这一串正是第一次编译和第一次上手要查的清单。</b>
+    </div>
+  </section>
+
+  <footer>
+    <div>English Reader</div>
+    <div>Phase 6 · 界面 · 讨论中</div>
+    <div>2026-09-13</div>
+  </footer>
+
+</div>

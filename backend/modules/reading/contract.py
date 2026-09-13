@@ -48,6 +48,15 @@ class DifficultyProfile(BaseModel):
 class LibraryArticle(BaseModel):
     id: int
     title: str
+    topic: str | None = Field(
+        default=None,
+        description="话题。**真题恒为 null**——它们那一格显示的是来源。"
+        "库里已经攒下的生成文也是 null：2026-09-13 定不补",
+    )
+    summary_zh: str | None = Field(
+        default=None,
+        description="一句中文概括。**真题恒为 null**，那一行就空着"
+    )
     source: str = Field(description="generated 生成文 / cet4 / cet6 / kaoyan")
     source_label: str
     word_count: int
@@ -58,6 +67,13 @@ class LibraryArticle(BaseModel):
     target_count: int = Field(
         description="这篇为教几个词而写。真题恒为 0——它们不为教任何词而写，"
         "读完只记下你亲手标记的东西"
+    )
+    pending_count: int = Field(
+        default=0,
+        description="「待学」：这篇的目标词里**还没进入学习流程**的个数。"
+        "判据是标记，不是有没有词池行——读完一篇会给遇见过的每个词都留一行，"
+        "按行数就会读完之后莫名归零。**标记了就不再计入**，不用等学会，"
+        "所以这个数在阅读过程中会往下掉。真题恒为 0",
     )
     difficulty: DifficultyProfile | None = None
     difficulty_score: float | None = Field(
@@ -111,6 +127,11 @@ class SenseExam(BaseModel):
 class Sense(BaseModel):
     id: int
     ordinal: int
+    pos: str | None = Field(
+        default=None,
+        description="词性（n. / vt. / vi.）。**只是说明，从不决定义项怎么分**——名词的 address（地址）和动词的 address（写地址）是同一个概念。"
+        "这一列 P1b 起就在库里，2026-09-13 才带进契约：手机端的点词面板要显示它",
+    )
     concept_en: str | None = Field(
         default=None,
         description="用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文",
@@ -217,6 +238,8 @@ class Token(BaseModel):
 class ArticleBody(BaseModel):
     id: int
     title: str
+    topic: str | None = None
+    summary_zh: str | None = None
     body: str | None = Field(
         default=None,
         description="原文。跟 tokens 一起下发而不是二选一：token 的下标指进这里，"
