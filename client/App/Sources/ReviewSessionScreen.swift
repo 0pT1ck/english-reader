@@ -84,7 +84,7 @@ struct ReviewSessionScreen: View {
                     }
                 }
 
-                if let word = card.word, !word.senses.isEmpty {
+                if let word = card.word, let senses = word.senses, !senses.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text("常见释义 · 考频").font(.caption).foregroundStyle(.secondary)
@@ -93,7 +93,7 @@ struct ReviewSessionScreen: View {
                             }
                         }
                         // **按考频降序，绝不按义项序号**——那个序号是模型猜的。
-                        ForEach(word.senses.sorted { ($0.share ?? -1) > ($1.share ?? -1) },
+                        ForEach(senses.sorted { ($0.share ?? -1) > ($1.share ?? -1) },
                                 id: \.id) { sense in
                             HStack(alignment: .firstTextBaseline) {
                                 Text(line(sense))

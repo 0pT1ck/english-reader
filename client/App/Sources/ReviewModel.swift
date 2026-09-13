@@ -96,7 +96,9 @@ final class ReviewModel {
                 weight: item.weight, done: item.done)
         }
         let total = day.progress.buckets.additionalProperties
-        let done = day.progress.buckets_done.additionalProperties
+        // `buckets_done` has a default on the server, so it is optional on the
+        // wire — a client built before it existed has to keep decoding (铁律 5).
+        let done = day.progress.buckets_done?.additionalProperties ?? [:]
         todayTotal = total["today"] ?? 0
         todayDone = done["today"] ?? 0
         dueTotal = total["due"] ?? 0
