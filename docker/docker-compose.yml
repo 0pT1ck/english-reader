@@ -92,8 +92,13 @@ services:
       # Issued certificates and the ACME account key. Losing this directory
       # means re-issuing on every restart, which hits Let's Encrypt rate limits
       # fast — five failures an hour and the domain is locked out.
-      - caddy_data:/data
-      - caddy_config:/config
+      #
+      # Bind-mounted rather than a named volume so that everything this
+      # deployment owns sits in one directory next to the databases: a named
+      # volume would put the certificates under /var/lib/docker, where nothing
+      # about the service suggests they exist.
+      - ${ER_CADDY_DIR:-../caddy}/data:/data
+      - ${ER_CADDY_DIR:-../caddy}/config:/config
 
     environment:
       ER_DOMAIN: ${ER_DOMAIN:?docker/.env 里必须设 ER_DOMAIN，iOS 不接受 IP 地址的证书}
@@ -108,7 +113,3 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-volumes:
-  caddy_data:
-  caddy_config:
