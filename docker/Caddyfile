@@ -1,0 +1,55 @@
+# TLS terminator. The only thing on this server bound to a public port.
+#
+# Why this file exists at all: iOS App Transport Security refuses plain HTTP to
+# a public host, and client/App/project.yml opens an exception for local
+# networking only — on purpose, so that moving to a public address could not
+# silently keep sending device tokens in clear text. So HTTPS here is what makes
+# the phone able to connect, not a hardening extra.
+
+{
+	email {$ER_ACME_EMAIL}
+	# Caddy's own admin API. Nothing needs it here and it has no authentication
+	# of its own, so it is off rather than merely unpublished.
+	admin off
+}
+
+{$ER_DOMAIN} {
+	# DNS-01. Ports 80 and 443 are unreachable on an unfiled domain, so the
+	# usual challenges cannot complete — see docker/Dockerfile.caddy.
+	# The directive name after `dns` is the plugin compiled into that image.
+	# alidns takes a block, not two positional arguments. Other providers differ
+	# again — check the plugin's README, then `caddy validate` before deploying.
+	tls {
+		dns alidns {
+			access_key_id {$ALIYUN_ACCESS_KEY_ID}
+			access_key_secret {$ALIYUN_ACCESS_KEY_SECRET}
+		}
+	}
+
+	encode zstd gzip
+
+	header {
+		# The admin console is served over the public internet on this
+		# deployment, so say plainly that it is HTTPS-only from now on.
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# The admin console downloads the learning database; nothing here
+		# should ever be loaded inside someone else's page.
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# The whole application, admin surface included. That is a decision, not an
+	# oversight: /admin and /v1/admin/… are reachable from the internet and the
+	# only thing in front of them is ER_ADMIN_SECRET. Anything that changes that
+	# — an IP allowlist, an auth gate — goes here.
+	reverse_proxy app:8000 {
+		# Uploading a paper or a dictionary through the admin console can take
+		# a while; the default 5 minutes is not always enough.
+		transport http {
+			read_timeout 30m
+			write_timeout 30m
+		}
+	}
+}

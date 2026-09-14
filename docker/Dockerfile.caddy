@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+#
+# Caddy with a DNS plugin compiled in. The official image cannot do DNS-01, and
+# DNS-01 is the only challenge available here: an unfiled (未备案) domain
+# pointing at a mainland IP is blocked on port 80 and 443, which is exactly the
+# two ports HTTP-01 and TLS-ALPN-01 need. DNS-01 proves control of the domain
+# through a TXT record instead and never needs an inbound connection at all.
+#
+# Once 备案 clears, this image still works — nothing about it is temporary. The
+# only change is moving the published port back to 443 in docker/.env.
+
+ARG CADDY_VERSION=2.10
+
+FROM caddy:${CADDY_VERSION}-builder AS builder
+
+# Which provider hosts the domain's DNS, not where the server is. Change this
+# one argument if the domain is not on Aliyun DNS:
+#   Cloudflare   github.com/caddy-dns/cloudflare
+#   DNSPod       github.com/caddy-dns/dnspod
+#   Tencent      github.com/caddy-dns/tencentcloud
+# The Caddyfile's `dns` directive name must match — see docker/Caddyfile.
+ARG CADDY_DNS_MODULE=github.com/caddy-dns/alidns
+
+RUN xcaddy build --with ${CADDY_DNS_MODULE}
+
+FROM caddy:${CADDY_VERSION}-alpine
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

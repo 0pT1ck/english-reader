@@ -1,25 +1,114 @@
-# Deployment on the NanoPi (or any Linux host).
+# Deployment on a cloud server.
 #
-#   docker compose -f docker/docker-compose.yml up -d --build
+#   cp docker/env.example docker/.env   # then fill it in
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
 #
-# The data directory is bind-mounted from the host so `docker compose down`,
-# image rebuilds and version upgrades never touch learning.db.
+# Two services. The application never listens on a public port itself: Caddy
+# terminates TLS and is the only thing bound to the host's network. That is not
+# defence in depth for its own sake — iOS App Transport Security refuses plain
+# HTTP to a public host, so a TLS terminator is a functional requirement, not a
+# hardening step.
+
+name: english-reader
+
 services:
-  english-reader:
+  app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: english-reader:latest
     container_name: english-reader
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+
+    # No `ports:` on purpose. Reachable only from Caddy over the internal
+    # network — publishing 8000 as well would quietly leave the whole API,
+    # admin surface included, available over plain HTTP on the public IP,
+    # bypassing everything below.
+    expose:
+      - "8000"
+
     volumes:
-      - ../data:/app/data
+      # Bind mount, not a named volume: the databases must be visible on the
+      # host for scp, for the backup button's output, and for the rule that
+      # exactly one copy is ever being written.
+      - ${ER_DATA_DIR:-../data}:/app/data
+
+    # The kernel checks uid numbers against the host directory, not names.
+    # Set these to the owner of the data directory on the host (`id -u`,
+    # `id -g`), or chown that directory to 10001 and leave them alone.
+    user: "${ER_UID:-10001}:${ER_GID:-10001}"
+
     environment:
-      # Generated on first start and written to .env if unset. Set it explicitly
-      # here (or in a .env file next to this one) for a deployed instance.
-      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:-}
-      # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server,
-      # set to the LAN proxy when running behind one.
+      # Required, and deliberately fatal when missing. Left unset, the app
+      # generates a password and appends it to /app/.env — which does not exist
+      # in the image and sits in a root-owned directory, so the container dies
+      # with a PermissionError traceback that says nothing about passwords.
+      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:?docker/.env 里必须设 ER_ADMIN_SECRET，见 docker/env.example}
+      # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server.
       ER_PROXY_URL: ${ER_PROXY_URL:-}
       ER_LOG_LEVEL: ${ER_LOG_LEVEL:-INFO}
+      ER_DEV_MODE: "false"
+      # "04:00" and the review day boundary are local time, not UTC.
+      TZ: ${TZ:-Asia/Shanghai}
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    # Built, not pulled: the official image has no DNS plugin, and DNS-01 is the
+    # only certificate challenge that works on an unfiled domain.
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    image: english-reader-caddy:latest
+    container_name: english-reader-caddy
+    restart: unless-stopped
+    depends_on:
+      - app
+
+    ports:
+      # ER_HTTPS_PORT exists because of 备案: on a mainland Chinese host an
+      # unfiled domain is blocked on 443, while a high port is not. iOS accepts
+      # any port as long as the certificate is valid, so 8443 is a working
+      # stand-in until the filing clears — then set it back to 443.
+      - "${ER_HTTPS_PORT:-8443}:443"
+      # Port 80 is only useful for the HTTP-01 challenge and for redirecting.
+      # It is off by default for the same reason: unfiled domains are blocked
+      # there, so a certificate cannot be issued that way — see env.example.
+      - "${ER_HTTP_PORT:-127.0.0.1:8080}:80"
+
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Issued certificates and the ACME account key. Losing this directory
+      # means re-issuing on every restart, which hits Let's Encrypt rate limits
+      # fast — five failures an hour and the domain is locked out.
+      - caddy_data:/data
+      - caddy_config:/config
+
+    environment:
+      ER_DOMAIN: ${ER_DOMAIN:?docker/.env 里必须设 ER_DOMAIN，iOS 不接受 IP 地址的证书}
+      ER_ACME_EMAIL: ${ER_ACME_EMAIL:-}
+      # DNS provider credentials for the DNS-01 challenge. Needed whenever port
+      # 80 is unreachable, which on an unfiled mainland domain it is.
+      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
+      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

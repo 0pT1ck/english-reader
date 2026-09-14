@@ -1,0 +1,44 @@
+# The build context is sent to the daemon in full before the first instruction
+# runs. Without this file that is 521 MB, of which the image needs about 3 MB —
+# and `data/` alone (215 MB of databases, plus secrets.json) would be shipped
+# into an image that is meant to read those from a mounted volume instead.
+
+# Data and secrets. Never in an image: the databases are mounted from the host,
+# and secrets.json holds live API keys.
+data/
+.env
+.env.*
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Virtualenv built for the host's architecture and Python. `uv sync` inside the
+# image builds its own; copying this one in would shadow it with binaries that
+# cannot even load.
+.venv/
+__pycache__/
+*.py[cod]
+
+# Not part of the server.
+client/
+docs/
+.github/
+.git/
+.vs/
+.build/
+.tooling/
+
+# Host-only launchers.
+*.bat
+run.py
+
+# Docker's own files: changing the Dockerfile should not invalidate the
+# application layer's cache.
+docker/
+.dockerignore
+
+logs/
+*.log
+Thumbs.db
+.DS_Store
