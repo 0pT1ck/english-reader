@@ -15,15 +15,25 @@ ARG PYTHON_VERSION=3.12-slim
 # --------------------------------------------------------------------------- #
 FROM python:${PYTHON_VERSION} AS builder
 
-# Pinned rather than :latest. `latest` makes the build unreproducible and, worse,
-# silently invalidates every layer below it whenever upstream publishes.
-COPY --from=ghcr.io/astral-sh/uv:0.12.13 /uv /usr/local/bin/uv
+# Where Python packages come from. Defaults to PyPI; override it where PyPI is
+# far away. On the Chinese host this build targets, the difference measured
+# 56 KB/s against 21 MB/s, which is the difference between a build and an
+# afternoon. `uv sync --frozen` still honours the lockfile — the lock pins
+# versions and hashes, and a mirror serves the same artefacts.
+ARG PYPI_INDEX=https://pypi.org/simple
+
+# uv from PyPI rather than `COPY --from=ghcr.io/astral-sh/uv`, so the build
+# needs exactly one package host instead of two. Pinned: `latest` would make
+# the build unreproducible and invalidate every layer below it whenever
+# upstream publishes.
+RUN pip install --no-cache-dir --index-url ${PYPI_INDEX} uv==0.12.13
 
 WORKDIR /app
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/app/.venv
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_DEFAULT_INDEX=${PYPI_INDEX}
 
 # Dependency layer, kept separate from application code so editing a .py file
 # does not re-download PyTorch-sized wheels.

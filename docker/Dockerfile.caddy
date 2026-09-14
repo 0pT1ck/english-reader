@@ -21,6 +21,11 @@ FROM caddy:${CADDY_VERSION}-builder AS builder
 # The Caddyfile's `dns` directive name must match — see docker/Caddyfile.
 ARG CADDY_DNS_MODULE=github.com/caddy-dns/alidns
 
+# Where Go modules come from. Same reasoning as the application image's
+# PYPI_INDEX: the default is upstream, and a host far from it passes a mirror.
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
+
 RUN xcaddy build --with ${CADDY_DNS_MODULE}
 
 FROM caddy:${CADDY_VERSION}-alpine
