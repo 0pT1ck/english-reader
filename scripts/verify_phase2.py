@@ -516,7 +516,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                 pending = conn.execute(
                     "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NULL"
                 ).fetchone()[0]
-            pstats = phrases.stats()
+            pstats = phrase_module.stats()
 
         check("7.9", "候选已逐处判断过",
               pstats["pending"] == 0 and pstats["confirmed"] > 0,

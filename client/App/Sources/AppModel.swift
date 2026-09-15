@@ -104,7 +104,7 @@ final class AppModel {
             return
         }
         engine = SyncEngine(
-            transport: IOSTransport(baseURL: url, token: connection.token),
+            transport: IOSTransport(baseURL: url, token: connection.token, log: log),
             outbox: outbox, articles: cache, day: dayCache
         )
     }
