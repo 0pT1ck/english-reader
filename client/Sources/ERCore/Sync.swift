@@ -37,6 +37,11 @@ public struct DayPackage: Sendable {
     /// 而这几个值本来就随今日包发下来了，接进界面是零成本的。
     public var settings: Components.Schemas.TodaySettings { decoded.settings }
 
+    /// 这份包是哪一天的。缓存要不要用，全看它——**昨天的包不是「旧一点」，
+    /// 是错的**：题目做完了、日期变了，照着它渲染会让人对着一份不存在的
+    /// 队列答题。
+    public var day: String? { decoded.day ?? decoded.reviews.day }
+
     /// 顶层回显的学习者。客户端据此认出「这是别人的缓存」，
     /// 而设置页拿它显示名字——**它是服务端给的值，不是自己编的**。
     public var learner: Components.Schemas.Learner { decoded.learner }
@@ -123,6 +128,23 @@ public actor SyncEngine {
             guard case .offline = error, let cached = day.load() else { throw error }
             return try DayPackage(raw: cached)
         }
+    }
+
+    /// The cached package, without touching the network.
+    ///
+    /// **`fetchDay` asks the server first and only falls back to this when the
+    /// radio is off — which is not what 架构前提 2 describes.** The package is
+    /// meant to be what the day runs on; re-fetching it before showing anything
+    /// means every entry to the review tab waits for a megabyte to come back
+    /// through the tunnel, measured at 0.85–1.4s because it goes via Los
+    /// Angeles. The screen has the answer on disk the whole time.
+    ///
+    /// So callers show this first and refresh behind it. `day` is checked by
+    /// the caller against its own idea of today: a package from yesterday is a
+    /// wrong answer, not a stale one.
+    public func cachedDay() -> DayPackage? {
+        guard let data = day.load() else { return nil }
+        return try? DayPackage(raw: data)
     }
 
     /// One article, from the cache when it is there and from the server when it

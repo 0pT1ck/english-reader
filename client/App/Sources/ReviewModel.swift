@@ -93,6 +93,17 @@ final class ReviewModel {
             phase = .failed("连接还没建好，先到设置里填地址和令牌")
             return
         }
+
+        // **先用本地那一份把屏幕点亮**（2026-09-15 真机之后加）。
+        // 今日包就在盘上，而原先每次进这一格都要等它重新下来——1 MB 过隧道
+        // 0.85–1.4 秒，这一秒里屏幕上什么都没有，而答案其实一直在本地。
+        //
+        // **只认今天的**：昨天的包不是「旧一点」，是错的。日期对不上就老实等。
+        if let cached = await engine.cachedDay(), cached.day == Self.localToday {
+            apply(cached.reviews)
+            phase = .ready
+        }
+
         do {
             let package = try await engine.fetchDay()
             apply(package.reviews)
@@ -125,6 +136,16 @@ final class ReviewModel {
 
     /// 载入中吗。取消之后 `.task` 不会自己重来，所以要有人看着它。
     var needsLoad: Bool { phase == .loading }
+
+    /// 客户端眼里的今天。**服务端的模拟时钟可能跳着走**，所以这个判断只用来
+    /// 决定「敢不敢先拿缓存顶一下」——跳过天之后本地日期对不上，
+    /// 那就老实等服务端那一份，这正是我们要的保守方向。
+    static var localToday: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: Date())
+    }
 
     private func apply(_ day: Components.Schemas.ReviewDayResponse) {
         weightDecay = day.weight_decay

@@ -54,6 +54,15 @@ struct LibraryScreen: View {
                         .listRowSeparator(.hidden)
                 }
 
+                // 第一次进这个书架、盘上什么都没有时才转圈。
+                if model.loading && model.cards.isEmpty {
+                    Section {
+                        HStack { Spacer(); ProgressView(); Spacer() }
+                            .padding(.vertical, 24)
+                    }
+                    .listRowSeparator(.hidden)
+                }
+
                 ForEach(model.cards) { card in
                     NavigationLink(value: card) {
                         ArticleCardRow(card: card)
@@ -173,6 +182,25 @@ final class LibraryModel {
             return
         }
         let key = cacheKey
+
+        // **先摆缓存，再问服务端**（2026-09-15 真机之后改）。
+        //
+        // 原先是在线优先、只有断网才回退缓存——于是点一下「真题」，屏幕上
+        // 还是上一个书架的内容，一秒多之后突然换掉。**看着像没反应**，
+        // 而那一秒里答案其实就在盘上。
+        //
+        // 换书架时那份缓存是**这个书架自己的**（`cacheKey` 按 source 分），
+        // 所以不会出现「先闪一下别人的列表」。没有缓存就清空并说一声，
+        // 也比停在上一个书架上诚实。
+        if let cached = app.library?.load(key: key) {
+            apply(cached)
+            notice = nil
+        } else {
+            cards = []
+            loading = true
+        }
+        defer { loading = false }
+
         do {
             let response = try await engine.library(shelf: "all", source: source)
             apply(response)
@@ -194,6 +222,10 @@ final class LibraryModel {
             notice = "拉列表失败：\(error.localizedDescription)"
         }
     }
+
+    /// 正在等第一份数据。**只有在没有缓存可摆的时候才为真**——
+    /// 有缓存时屏幕上已经有东西了，再转一个圈只是噪音。
+    private(set) var loading = false
 
     private func apply(_ response: Components.Schemas.LibraryResponse) {
         let built = response.articles.map(ArticleCard.init(library:))
