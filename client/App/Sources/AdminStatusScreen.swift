@@ -35,10 +35,15 @@ struct AdminStatusScreen: View {
                     ForEach(databaseNames(status), id: \.self) { name in
                         if let database = status.databases[name] {
                             LabeledContent {
+                                // 三元两边要同一个类型：`.secondary` 是
+                                // `HierarchicalShapeStyle`，`.red` 是 `Color`，
+                                // 混着写的话整个闭包推断失败，而报错会指向
+                                // `ForEach` 的另一个重载，看上去跟这里无关。
                                 Text(database.exists
                                      ? SettingsModel.readable(database.size_bytes)
                                      : "不存在")
-                                    .foregroundStyle(database.exists ? .secondary : .red)
+                                    .foregroundStyle(database.exists
+                                                     ? Color.secondary : Color.red)
                                     .monospacedDigit()
                             } label: {
                                 Text(name)
