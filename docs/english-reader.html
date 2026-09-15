@@ -1366,6 +1366,19 @@
       <div><i>?</i><span>句法约束的个性化：等 C9 积累出足够的「读不懂」记录后，如何把它反馈到生成约束里——是加权真题统计频率，还是单独针对薄弱结构加练</span></div>
       <div><i>?</i><span>初始测试的具体题量与词频分段划分</span></div>
       <div><i>?</i><span>主题偏好清单，以及个人兴趣与真题主题分布的配比</span></div>
+      <div><i>?</i><span><b>多用户：几个朋友各自登录、各拿各的数据。</b>2026-09-15 用户提出，作为将来找人试用的前提。
+      <b>数据层基本已经就绪</b>——所有属于人的表都带 <code>learner_id</code>（<code>study_marks</code>、
+      <code>study_states</code>、<code>reading_progress</code>、<code>review_sessions</code>、
+      <code>review_history</code>、<code>spelling_attempts</code>、<code>client_events</code>），
+      <code>review_queue</code> 靠 <code>session_id</code> 挂在会话上也分得开，
+      身份由 <code>learner_for_device()</code> 一个函数推导。
+      <b>缺的是三样</b>：① 没有 <code>learners</code> 表，<code>learner_profile()</code>
+      硬编码返回 <code>name: "本人"</code>；② 没有登录，凭证只有设备令牌；
+      ③ <b>每天备稿是按一个人算的</b>。
+      <b>第三样才是真问题，而且不是界面问题</b>：要定的是「朋友们读的是同一批文章还是各读各的」——
+      前者便宜，但目标词是按你的词池选的，对别人不一定合适；后者对每个人都对，
+      <b>但每天的生成开销乘以人数</b>。
+      P8 只做账号的界面外壳（照将来真会用的样子画，见 <code>phase-8.html</code> §3），不碰这三样</span></div>
       <div><i>?</i><span>文章体裁比例——说明文 / 议论文 / 记叙文</span></div>
       <div><i>?</i><span>旧文重读的触发条件：固定每周，还是按「当初生词数」自动挑选</span></div>
       <div><i>?</i><span>「毕业」的判定条件——2026-09 已定<b>需要</b>这个机制（C6 三格词池的第三格），但达到什么条件才算毕业没定。要看真实阅读数据</span></div>

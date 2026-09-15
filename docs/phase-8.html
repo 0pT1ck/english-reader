@@ -1,0 +1,724 @@
+<title>Phase 8 设置与验收</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+  .wire { font-family:var(--f-mono); font-size:0.76rem; line-height:1.9; white-space:pre;
+         background:var(--surface); border:1px solid var(--rule); padding:1.1rem 1.2rem;
+         overflow-x:auto; color:var(--ink-mid); margin:0 0 1.6rem; }
+  .wire b { color:var(--ink); font-weight:500; }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 8 · 方案讨论稿 · 2026-09-15 · 39 条决定、30 项验收</div>
+    <h1>设置与验收</h1>
+    <p class="standfirst">设置屏把前两个 Phase 欠下的出口一次给齐；然后三个 Phase 的验收一起还，
+    在 TestFlight 的真机上。</p>
+    <p class="thesis">这个 Phase 的重心不在设置本身——设置是一屏 <code>Form</code>，画法上没有一件新东西。
+    重心是<b>还债</b>：P6 与 P7 一次验收都没跑过，两条验收断言已经到期，Swift 契约没重新生成，
+    两处菜单里写着「选项还没做」，还有一套 P3 做好、P5 实现、至今没人用过的拼写。
+    <b>设置屏的作用是把这些欠账的出口安在同一个地方</b>，然后一起上真机。
+    <b>外加一条动了架构铁律 4 的决定</b>：开发者选项里直接控制后台（§8）。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-7.html">Phase 7</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>这是讨论稿。</b>标「已定」的是用户 2026-09-15 当场拍板的，
+    标<b>「拟定」</b>的是我提的、等确认，标「不做」的是明确划出去的边界。
+    <br><br>
+    <b>用户已拍板的：</b>
+    <br>① 这个 Phase 是<b>设置 + 验收</b>，把三个 Phase 欠的债一起验收掉；
+    <br>② 设置里建一个<b>「开发者选项」二级菜单</b>，放日志、跳天、管理台的东西，
+    <b>直接控制后台、不纠结分层</b>（§8）；
+    <br>③ <b>账号先做 UI 不做功能</b>，将来是<b>几个朋友各自登录、各拿各的数据</b>；
+    <b>登录用账号 + 密码</b>，这个 Phase 只画不接（§3）；
+    <br>④ <b>日志加等级、本地存 3 天自动清、可复制／分享／导出</b>（§9）；
+    <br>⑤ <b>三样不做</b>：扫码配置、XCUITest 截图、<code>verify_phase8.py</code>；
+    <br>⑥ 其余照清单做，<b>等成品出来再决定删改</b>。
+    <br><br>
+    <b>讨论期间不写任何实现代码</b>，包括脚手架和示例。本文档里出现的字段名、
+    函数名、端点都是<b>已经存在的东西</b>——要新写的只有 §11 那一处半。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>这个 Phase 装两件事</h2>
+    </div>
+    <p class="lede">一件是画一屏，一件是把欠了两个 Phase 的账结掉。后者才是难的那件。</p>
+
+    <p><b>原本的顺序不是这样。</b>主文档 §M 和 <a href="./phase-6.html">P6</a> §13 都写着
+    「设置那个 Phase 排在这次验收之后」——先验 P6 与 P7，通过了再做设置。
+    2026-09-15 改成<b>三个一起验</b>。</p>
+
+    <div class="callout">
+      <b>改动的代价要先认下来，因为它是同一笔账的第三次记名。</b>
+      P5 没有人工验收（理由见 <a href="./phase-5.html">P5</a> §17），P6 与 P7 压到同一次真机验收，
+      现在 P8 也压进来。<b>真机上第一次跑起来时，如果阅读那条链有结构性问题</b>
+      （点词命中不准、面板高度不对、正文排版读着累）<b>，要改的就是三个 Phase</b>，
+      而设置与复习已经架在阅读上面了。
+      <br><br>
+      <b>为什么还是这么定</b>：验收要动用别人的开发者账号，约人一次不容易；
+      设置屏又正好是「验收时你会想要的那些东西」的容器——
+      看日志、跳天、清缓存、看待发条数，<b>没有它，真机上出了问题只能干瞪眼</b>。
+      先做设置再验收，比先验收再做设置更省一次约人。
+      <br><br>
+      <b>缓解仍然只有那一条，必须守住</b>：CI 上的四样——编得过、装得上、起得来、不闪退。
+    </div>
+
+    <p><b>这个 Phase 一条学习逻辑都不新增。</b>和 P7 一样，画的是已有的东西的样子；
+    不一样的是 P7 画的是 Core 里的规则，这一份画的大多是<b>运维状态</b>——
+    缓存占了多少、有几条事件没发出去、上一次同步是什么结果。
+    这些东西在别的客户端上叫「设置」，在这个项目里其实是<b>诊断通道</b>：
+    管理控制台开在公网上、带着管理密码，不该为了查一条发不出去的标记去开它。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>设置屏长什么样</h2>
+    </div>
+    <p class="lede">七个区，从上到下。iOS 的 <code>Form</code> + <code>Section</code>，
+    二级页用 <code>NavigationLink</code>——这一屏没有任何需要自己画的控件。</p>
+
+    <div class="wire"><b>设置</b>
+┌─────────────────────────────────┐
+│  ◯   <b>本人</b>                         │  ← §3 账号，点不进去
+│      词汇量估计 · 功能待开发       │     （没有箭头，是有意的）
+├─────────────────────────────────┤
+│  连接                            │
+│  登录                        还没做│  ← §3 决定 5，将来的正路
+│  用设备令牌连接                 ›│  ← §3 决定 6，现在唯一能用的
+│  状态       已连接 · 刚刚同步      │
+├─────────────────────────────────┤
+│  阅读                            │
+│  朗读口音       美音 ›            │  ← §6
+│  朗读语速       ——◯——            │
+│  点词自动朗读   ( o)             │
+├─────────────────────────────────┤
+│  今天的安排                       │
+│  每天几篇       3                 │  ← §7 只读
+│  新备的算几天    7                 │
+│  拼写强化       开                 │
+├─────────────────────────────────┤
+│  存储                            │
+│  已缓存 12 篇 · 3.6 MB           ›│  ← §5
+│  待上报 0 条 · 上次同步落 14 条    │
+├─────────────────────────────────┤
+│  日志                           ›│  ← §9，可复制／分享／导出
+├─────────────────────────────────┤
+│  开发者选项                     ›│  ← §8（默认藏着）
+├─────────────────────────────────┤
+│  关于                            │
+│  版本 0.1 (37)                   │  ← 连点七下开出开发者选项
+└─────────────────────────────────┘</div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">1</td><td class="wait">拟定</td><td><b>八个区的顺序照上图</b>：账号、连接、阅读、今天的安排、存储、日志、开发者选项、关于。<br>排序的依据是<b>用的频率倒过来</b>——连接是装完第一次要填、之后再也不碰的东西，但它出问题时最要紧，所以靠上；朗读和字号是天天可能动的，反而不该占第一屏的位置（<b>它们的主入口在阅读屏，见 §6</b>）。<br><b>账号与连接挨着，是因为它们将来会合成一个</b>（§3 决定 6）。</td></tr>
+          <tr><td class="topic">2</td><td class="wait">拟定</td><td><b>能进二级页的进二级页</b>：缓存管理、日志、开发者选项各自一页。<b>账号不进</b>——它里面装不满一页（§3）。设置屏本身<b>一屏放得下、不用滚</b>——一屏滚三次的设置页，找东西全靠记位置。</td></tr>
+          <tr><td class="topic">3</td><td class="wait">拟定</td><td><b>不做搜索、不做分组折叠、不做「恢复默认」。</b>七个区，十几行，没有一样需要找。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>账号：只做壳，但要照将来真会用的样子画</h2>
+    </div>
+    <p class="lede">2026-09-15 用户说了它将来是什么：<b>「未来先给我的几个朋友拉过来测试，
+    他们登陆自己的账号拿自己的数据」</b>。所以这不是装饰，是一个<b>确定要做的功能的第一版外壳</b>。</p>
+
+    <h3>先看清楚：多用户离得有多远</h3>
+    <p>比想象的近。<b>数据层基本已经就绪</b>，这不是巧合——
+    <code>devices.learner_id</code> 那一列是 P2 写契约那天专门加的，
+    迁移的注释原话是：<b>「Adding real users later means giving this column real values
+    and nothing else — no sideloaded client needs updating」</b>。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>那一块</th><th>现在</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">属于人的表</td><td><b>全都带 <code>learner_id</code> 了</b>：<code>study_marks</code>、<code>study_states</code>、<code>reading_progress</code>、<code>review_sessions</code>、<code>review_history</code>、<code>spelling_attempts</code>、<code>client_events</code>。<code>review_queue</code> 靠 <code>session_id</code> 挂在 <code>review_sessions</code> 上，<b>也是分得开的</b>。</td></tr>
+          <tr><td class="topic">内容表</td><td>文章、句子、义项、词族<b>不带人</b>——本来就该共享，一篇文章不属于谁。</td></tr>
+          <tr><td class="topic">身份</td><td>由设备令牌推导，<code>learner_for_device()</code> 一个函数管着，<b>路径里不出现人的编号</b>。契约顶层回显 <code>learner</code>，客户端据此认出「这是别人的缓存」。</td></tr>
+          <tr><td class="topic">缺什么</td><td><b>三样</b>：① 没有 <code>learners</code> 表——<code>learner_profile()</code> 现在硬编码返回 <code>name: "本人"</code>；② 没有登录这回事（凭证只有设备令牌）；③ <b>每天备稿是按一个人算的</b>，几个人各要各的今日包，<b>生成成本按人数乘</b>，或者改成共享文章池、各自记各自的进度。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>第三样才是真问题，而且它不是界面问题。</b>前两样是两天的活，
+      第三样要定的是<b>「朋友们读的是同一批文章还是各读各的」</b>——
+      前者便宜、但目标词是按你的词池选的，对别人不一定合适；
+      后者对每个人都对，但每天的生成开销乘以人数。
+      <br><br>
+      <b>这个 Phase 不碰它</b>（铁律：当前 Phase 中发现的未来需求记进待办，不动手）。
+      <b>但要记进主文档 §M</b>，而且要记成上面这句话的样子——
+      记成「以后做多用户」等于没记。
+    </div>
+
+    <h3>那么这个 Phase 画什么</h3>
+    <p>比原先想的少。<b>2026-09-15 改过一次</b>：原本要做一张个人页，
+    上面放连续打卡天数——<b>而那个数 P7 已经显示在复习主界面上了</b>
+    （决定 6，<code>ReviewScreen.swift</code> 那句「你已经连续打卡了 N 天！」）。
+    再放一遍就是同一个数显示两处。</p>
+    <p><b>剩下的东西撑不起一张页</b>：一个名字、一行「功能待开发」、一个点了说「还没做」的按钮——
+    那是一张空页，而它还要占一次点击。<b>所以账号不做二级页。</b></p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">4</td><td class="ok">已定</td><td><b>账号就是设置顶上那一行，点不进去</b>：头像占位、名字、下面一行小字「词汇量估计 · 功能待开发」。<b>右边不带箭头</b>——带箭头而点不动，比没有箭头更让人以为坏了。</td></tr>
+          <tr><td class="topic">5</td><td class="ok">已定</td><td><b>登录用账号 + 密码，这个 Phase 只画不接</b>（2026-09-15 用户定）。<b>位置在「连接」区</b>，和「用设备令牌连接」并排——<b>它们本来就是一件事的两种做法</b>。<br>不画成邀请码：邀请码<b>本质上还是手工发凭证</b>，是现在这套令牌换个名字，将来要再改一次界面。账号密码是这件事最后的样子，一次画到位。点它说<b>「还没做」</b>（P6 决定 30 的办法）。</td></tr>
+          <tr><td class="topic">6</td><td class="wait">拟定</td><td><b>「用设备令牌连接」照旧留着，就在登录下面。</b><b>这是目前唯一真能用的路</b>——不留它，App 装上就是废的。<br><b>将来登录接上之后，这一条退进开发者选项</b>（它那时才真正变成一个开发用的东西）。</td></tr>
+          <tr><td class="topic">7</td><td class="wait">拟定</td><td><b>「词汇量估计」显示「功能待开发」，而不是空着或者 0。</b>这是 <code>capabilities</code> 头一次真的被客户端读——<code>learner.level</code> 恒为 <code>null</code>、<code>capabilities.level_estimate</code> 为 <code>false</code>，契约当初留这个标志位要区分的正是<b>「没数据」和「没实现」</b>，<b>而至今没有任何客户端读过它</b>。</td></tr>
+          <tr><td class="topic">8</td><td class="ok">已定</td><td><b>账号这一行不放任何统计数。</b>连续天数在复习主界面上（P7 决定 6）；已读篇数与已标词数<b>客户端自己数得出来，但会和服务端漂移</b>（架构铁律 3：客户端存的一切都只是缓存）。<br><b>宁可这一行只有名字</b>——一个会漂的数比没有数更坏，因为你会信它。</td></tr>
+          <tr><td class="topic">9</td><td class="not">不做</td><td><b>注册、改密码、换头像、改昵称——不画。</b>登录画一个就够撑起这个壳了；剩下那些每画一个，将来都是一个要对齐的空承诺。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>名字这一行要说实话。</b>服务端现在对谁都回 <code>name: "本人"</code>（写死在
+      <code>learner_profile()</code> 里）。所以它显示的<b>确实是服务端给的值</b>，
+      <b>但它不是「你的名字」</b>——它是「这台设备连着的那份学习记录」的名字。
+      等 <code>learners</code> 表建起来，这一行自己就对了，界面不用改。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>连接：补完那三件</h2>
+    </div>
+    <p class="lede">现在这一区只有两个输入框和一个保存。填完对不对，要去别的屏撞一次才知道。
+    <b>这一区将来会被 §3 的登录取代</b>，所以这里补的是<b>在那之前必须能用</b>的那三件。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">10</td><td class="wait">拟定</td><td><b>「测试连接」按钮。</b>点了打一次 <code>/v1/client/today</code>（或更轻的 <code>/reviews/calendar</code>），当场回三种结果之一：<b>通了并显示 <code>learner.name</code></b>、<b>连不上</b>、<b>令牌不对（401）</b>。<br><b>这三种必须分得开</b>——现在的唯一校验是「URL 拼不拼得出来」，而令牌错和网络断在屏幕上长得一模一样，这正是坑 §6.7 那个形状。</td></tr>
+          <tr><td class="topic">11</td><td class="wait">拟定</td><td><b>「清除令牌」。</b><code>Connection.clearToken()</code> 早就写好了，没有出口。放在令牌那一行的二级页里，<b>带一次确认</b>——清掉之后要重新去管理台签发，那是个不便宜的动作。<br><b>清令牌不清缓存也不清发件箱</b>：发件箱是客户端唯一独有的数据（P5 决定 8），换令牌不该把没发出去的标记一起扔了。</td></tr>
+          <tr><td class="topic">12</td><td class="not">不做</td><td><b>扫码配置暂时不做</b>（2026-09-15 用户定）。原本是：管理台签发时出一张二维码（地址 + 令牌），App 扫一下自动填好。<br><b>省下的是</b>：后端一个二维码依赖，App 一个相机权限——<b>这个 App 至今一个权限都不要</b>，加第一个是有分量的事。<br><b>代价</b>：令牌是只显示一次的随机长串，<b>每次配置都得把它从电脑挪到手机上</b>（自己发给自己，再粘贴）。验收当天反复清装会烦几次。<br><b>等真正的登录做出来，这件事自己就没了</b>——那时要输的是账号密码，本来就是手打的东西。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>存储、缓存与发件箱</h2>
+    </div>
+    <p class="lede">Core 里全写好了、测过了，<b>界面一个出口都没有</b>。这一节是给它们装出口。</p>
+
+    <p>三类本地数据（P5 决定 8）：<b>发件箱</b>是客户端唯一独有的，
+    <b>元信息</b>几百字节，<b>正文缓存</b>约 300 KB 一篇。
+    <code>Cache.swift</code> 的模块注释写着「缓存永不自动清理，读过没读过都留着，
+    <b>直到学习者说否</b>」——<b>而「说否」这件事现在没有地方说</b>。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">13</td><td class="wait">拟定</td><td><b>缓存二级页：按篇列出来，显示每篇占多少，可以单篇清、也可以全清。</b><code>bodySizes()</code> / <code>clearBodies()</code> / <code>clearAllBodies()</code> 三个都是现成的。<br><b>清掉的是正文，元信息留着</b>——所以清过的文章仍然显示标题和读到哪，点开重新拉。这是 Core 已经定好的语义，界面照搬，不要自己发明「删除文章」。</td></tr>
+          <tr><td class="topic">14</td><td class="wait">拟定</td><td><b>发件箱那一行升级成三样</b>：待发条数、<b>上一次同步的结果</b>（<code>SyncReport</code> 的 landed／duplicates／rejected／offline，Core 早就返回了，<b>至今没人显示过</b>）、<b>「立刻上报」</b>按钮。<br>幂等键重复上报算正常而不是错误（契约里手写的那几条语义之一），所以<b>「立刻上报」可以随便点</b>，点十次和点一次一个结果——这一点要在界面上说出来，否则没人敢点第二次。</td></tr>
+          <tr><td class="topic">15</td><td class="wait">拟定</td><td><b>损坏的事件文件要有出口。</b><code>Outbox.pending()</code> 会把读不出来的文件名单独返回，<code>discardDamaged()</code> 负责扔掉它们——<b>现在没有任何界面调它</b>。<br>不给出口的后果是<b>安静的</b>：一条写坏的事件永远发不出去，待发数永远减不到零，而你不知道为什么。<b>界面上要说清楚「扔掉它意味着那次标记没了」</b>，然后让人自己决定。</td></tr>
+          <tr><td class="topic">16</td><td class="not">不做</td><td><b>「全部下载」不做。</b>P6 决定 31 当初把它列进了这个 Phase，现在看它是个误会：<b>今日包本来就把当天三篇全文内联下来了</b>（P4 决定 8，约 1 MB），离线形状已经成立。真正没下载的是往期文章和 452 篇真题的正文——<b>那是几百 MB 的循环拉取，为一个「万一」</b>。<br>代替它的是一行状态：<b>「今天的内容已在本地」</b>。这句话才是「全部下载」真正想回答的问题。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>阅读与朗读</h2>
+    </div>
+    <p class="lede">这一区只有三个开关，而且其中最重要的那个<b>不放在设置里</b>。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">17</td><td class="wait">拟定</td><td><b>正文字号的入口在阅读屏的 <code>···</code> 菜单里，不在设置页。</b>调字号要<b>看着正文调</b>——在设置页上拖一个滑块，然后退出去看效果、不对再进来，这是把一个两秒的动作做成一分钟。<br><b>顺带把 P6 决定 17 那个空菜单填上了</b>（见 §10）。值本身存在一处，设置页不重复放。</td></tr>
+          <tr><td class="topic">18</td><td class="wait">拟定</td><td><b>朗读口音可选：美音／英音。</b><code>Speech.swift</code> 现在写死 <code>en-US</code>。四六级听力两种口音都考，而改这一行的成本是零。</td></tr>
+          <tr><td class="topic">19</td><td class="wait">拟定</td><td><b>朗读语速可调。</b>现在写死 <code>DefaultSpeechRate × 0.9</code>，注释说的理由是「单词单独念时默认语速偏快、听不清词尾」——<b>那是针对单个词定的，整句朗读时它就偏慢了</b>。给一个滑块，比在代码里猜一个数强。</td></tr>
+          <tr><td class="topic">20</td><td class="wait">拟定</td><td><b>「点词自动朗读」开关，默认关。</b>点词面板弹出时直接念出来。默认关是因为<b>在安静的地方它会把人吓一跳</b>，而这个 App 大概率在图书馆和地铁上用。</td></tr>
+          <tr><td class="topic">21</td><td class="not">不做</td><td><b>深色模式手动切换、字体选择、行距、页边距，全不做。</b>深色跟随系统；后三样是阅读器的军备竞赛，而这个 App 的正文样式在 P6 定过一次、真机上还没验过——<b>先让一种样子被真的读过，再谈可调</b>。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>今天的安排：只读</h2>
+    </div>
+    <p class="lede">每天几篇、新备的算几天、拼写开不开——<b>显示，但不给改</b>。</p>
+
+    <p>这三个值今日包里已经在发了（<code>TodaySettings</code> 的 <code>fresh_days</code>、
+    <code>weight_decay</code>、<code>spelling_enabled</code>，加上 <code>today_article_count</code>
+    决定的篇数）。<b>接进界面是零成本的</b>——数据已经在手机上。</p>
+
+    <div class="callout">
+      <b>为什么不给改，理由有两层。</b>
+      <br>第一层是铁律 4：改配置是管理接口的事，<b>客户端令牌碰不到它</b>。
+      要在 App 里改，就得新开一个 <code>/v1/client/settings</code> 的 PATCH，
+      带一份白名单——<b>那是后端的真改动，不是接一根线</b>。
+      <br>第二层是值不值：<b>「每天几篇」是你半年改一次的东西</b>。
+      为它写一个客户端写接口，再为那个接口写一份验收，不如在管理台点一下。
+      <br><br>
+      <b>而「想在手机上改」这个需求，§8 已经从另一条路满足了</b>：
+      开发者选项里的「配置热改」能改<b>任何一项</b>运行参数，包括每天几篇。
+      <br>于是这两节合起来的口径是：<b>正常路径上只读，要改就进开发者选项</b>——
+      这正好也是这些参数该有的分量，它们不是偏好，是运行配置。
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">22</td><td class="wait">拟定</td><td><b>四个值只读显示，旁边一句「在管理控制台改」。</b>不给改，但<b>要让人看得见现在是多少</b>——「今天怎么只有三篇」这个问题，不该靠翻文档回答。</td></tr>
+          <tr><td class="topic">23</td><td class="not">不做</td><td><b>不新增 <code>/v1/client/settings</code>。</b>写在这里是为了让下一次想做它的会话知道：<b>不是没想到，是想过之后没做</b>——而且 §8 之后更没必要了，见下。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>开发者选项：直接控制后台</h2>
+    </div>
+    <p class="lede">2026-09-15 用户定：<b>「无视铁律 4。直接做，可以控制后台。因为我们这是开发者选项」</b>。
+    不再讨论分层，这一节只写<b>放什么、怎么放最整洁</b>。</p>
+
+    <div class="callout">
+      <b>后端一行都不用改。</b><code>core/auth.py</code> 的 <code>require_admin</code>
+      <b>本来就接受 <code>X-Admin-Secret</code> 请求头</b>，注释写的是
+      「命令行，以及 AI 直接查诊断时用」。
+      <br>所以「非浏览器的客户端拿着 secret 直接调管理接口」这条路一直存在、一直被支持，
+      <b>以前那个客户端是命令行，现在多一个手机</b>。
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">24</td><td class="ok">已定</td><td><b>开发者选项是设置里的一个二级菜单</b>，里面有日志、跳天、以及管理台的东西。</td></tr>
+          <tr><td class="topic">25</td><td class="ok">已定</td><td><b>原生控件，直接调管理接口</b>，凭证是 <code>X-Admin-Secret</code>。不做内嵌网页——管理台的页面是给鼠标设计的（表格宽、按钮小），手机上点不动。</td></tr>
+          <tr><td class="topic">26</td><td class="wait">拟定</td><td><b>原生做五样，其余留一个「打开管理台」的网页入口兜底。</b><br>五样是<b>验收和开发期天天要用的</b>：① <b>跳天 +1／归零</b>，并显示现在停在第几天；② <b>定时任务</b>：状态与「立刻跑一次」；③ <b>配置热改</b>：读全部、改单项；④ <b>服务端日志</b>：按级别与 <code>trace_id</code> 查；⑤ <b>服务状态概览</b>。<br>全是现成的 JSON 端点（<code>/v1/admin/review/clock</code>、<code>/tasks</code>、<code>/config</code>、<code>/logs</code>、<code>/status</code>），<b>客户端只是画它们</b>。<br><b>判据写死在这里</b>，免得以后无限膨胀：<b>只放验收与开发期天天要用的</b>，别的一律去管理台。</td></tr>
+          <tr><td class="topic">27</td><td class="wait">拟定</td><td><b>管理密码进钥匙串，和设备令牌分开存、分开显示、分开清除。</b>照 <code>Connection</code> 现在的规矩：<b>永不回显</b>，只给够认出「是哪一个」的那几位。<br>两把凭证在一个 App 里，<b>界面上必须分得开</b>——搞混的后果是把管理密码填进令牌那一栏，然后到处 401 而看不出原因。</td></tr>
+          <tr><td class="topic">28</td><td class="wait">拟定</td><td><b>开发者选项默认藏着，连点「版本」那一行七下出现。</b>理由不是保密（护不住任何东西，密码才是），而是<b>这个 App 要装到别人手机上去</b>——朋友打开设置看见「开发者选项」，第一反应是这软件没做完。<br>解锁状态记在 <code>UserDefaults</code>，<b>删了 App 就没了</b>。</td></tr>
+          <tr><td class="topic">29</td><td class="wait">拟定</td><td><b>管理地址默认跟着服务器地址走</b>（同一台机器的 <code>/v1/admin</code>），<b>但允许单独填</b>——开发期实例在阿里云、主副本在 r5s，这两者确实可能不是一个地址。</td></tr>
+          <tr><td class="topic">30</td><td class="not">不做</td><td><b>备份下载与恢复不做原生。</b>在手机上下一个几十 MB 的数据库没有用，<b>而「恢复」能把学习记录整份换掉</b>——它该待在需要坐下来才能用的地方。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>一件实事，记下来免得那天现想</b>：管理密码进了手机，<b>手机丢了它就跟着丢</b>，
+      而它和设备令牌的补救方式不一样——设备令牌能在管理台单独吊销
+      （<code>devices</code> 表就是为这件事建的），
+      <b>管理密码只有一条路：改 <code>ER_ADMIN_SECRET</code> 然后重启</b>，改完所有会话一起失效。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>日志：客户端这边从零开始</h2>
+      <span class="sec-note">本 Phase 新建</span>
+    </div>
+    <p class="lede">2026-09-15 用户定：<b>日志要加等级；本地保存 3 天，到期自动清理；
+    可以复制、分享、导出到本地。</b></p>
+
+    <div class="callout">
+      <b>先说清楚这是两套日志，别混。</b>
+      <br>· <b>服务端日志</b>——已经有了，在 <code>logs.db</code>，30 天轮转，
+      查它走 §8 的开发者选项。记的是「<b>服务器那边发生了什么</b>」。
+      <br>· <b>客户端日志</b>——<b>现在一条都没有</b>，这个 Phase 新建。
+      记的是「<b>手机这边发生了什么</b>」：请求发出去没有、发件箱落盘没有、
+      缓存清了几篇、这次同步落了几条。
+      <br><br>
+      <b>两套之间靠 <code>trace_id</code> 接起来</b>：客户端把响应里的 <code>trace_id</code>
+      记进自己的日志，于是一条线索能<b>从手机一路追到服务器</b>——
+      这正是日志规范里「trace_id 贯穿」那句话第一次在客户端这边落地。
+    </div>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">31</td><td class="ok">已定</td><td><b>四个等级：DEBUG／INFO／WARN／ERROR</b>，和服务端同一套。<b>事件名是英文标识符不是自由文本</b>（<code>sync.drain.failed</code>，不是「同步失败了」），说明文字中文，原始报错原样保留——照日志规范，两边才对得上。<br>界面上<b>按等级过滤</b>，默认只看 WARN 以上；DEBUG 要手动打开。</td></tr>
+          <tr><td class="topic">32</td><td class="ok">已定</td><td><b>本地存 3 天，过期自动清。</b>按天一个文件（<code>2026-09-15.log</code>），<b>启动时把三天前的删掉</b>——按天分文件是最省事的轮转，不需要数据库，也不会出现「删一半」的中间状态。<br>服务端是 30 天，手机上 3 天：<b>手机上的日志是用来查刚刚那件事的</b>，隔周的没人看，而它占的是用户的存储。</td></tr>
+          <tr><td class="topic">33</td><td class="ok">已定</td><td><b>复制、分享、导出到本地——一个系统分享面板全办了。</b>iOS 的 <code>ShareLink</code> 出来那一张面板里，<b>拷贝、发给自己、存到「文件」App 都在里面</b>，不用自己做三个按钮。<br>导出的是<b>一个纯文本文件</b>（可以选一天，也可以选全部三天），不是截图——截图搜不了、也贴不进对话里。</td></tr>
+          <tr><td class="topic">34</td><td class="wait">拟定</td><td><b>全部落盘，不做「DEBUG 只在内存滚动」。</b>服务端那条规矩是为了控制 <code>logs.db</code> 的体积，<b>而手机上一天几百条、一个文件几十 KB</b>，为它多一套内存缓冲不值得。<br>代价是 DEBUG 全开时文件会大些——3 天上限已经兜住了。</td></tr>
+          <tr><td class="topic">35</td><td class="ok">已定</td><td><b>令牌和管理密码一律不入日志。</b>和「API 密钥一律不入日志」同一条规矩，而这里更要紧：<b>日志是要往外发的</b>——分享出去、贴进对话里。<br>请求日志只记<b>方法、路径、状态码、耗时、trace_id</b>，<b>请求头一概不记</b>。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>顺带把诊断和「关于」并进来</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">36</td><td class="wait">拟定</td><td><b>版本号与构建号</b>（<code>0.1 (37)</code>）。构建号由 <code>testflight.yml</code> 用 <code>github.run_number</code> 写进去，<b>能对回具体哪一次 CI、哪一个提交</b>。没有它，别人反馈「不好使」对不上代码。<br><b>连点它七下打开开发者选项</b>（§8 决定 28），所以这一行还得是可点的。</td></tr>
+          <tr><td class="topic">37</td><td class="wait">拟定</td><td><b>最近一次同步的结果显示在存储那一区</b>：landed／duplicates／rejected／offline。<code>SyncReport</code> 早就返回这四个数，<b>至今没人显示过</b>。</td></tr>
+          <tr><td class="topic">38</td><td class="wait">拟定</td><td><b>本地存储失败那一行留着</b>（<code>storageFailure</code>）——它是唯一一种「App 根本没法用」的失败。<b>它同时要写进日志</b>（ERROR），否则分享出去的日志里正好缺了最要紧的那条。</td></tr>
+          <tr><td class="topic">39</td><td class="not">不做</td><td><b>不做崩溃上报、不做埋点、不做「摇一摇反馈」。</b>日志能导出，人就在旁边。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>顺手收掉的两个 Phase 的欠账</h2>
+    </div>
+    <p class="lede">四笔。都不大，但都是<b>「做好了没人用」</b>或者<b>「写了没跑过」</b>——
+    带着它们上真机，验收会验出一堆本来就知道的问题。</p>
+
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>拼写那一轮（P7 决定 21 欠下的）</b><span>P3 决定 13 定的「当天复习全部走完之后的可选强化」，<b>服务端做完了、Core 实现了、<code>Events.spelled()</code> 在那儿、<code>spelling_enabled</code> 是真</b>，至今一个界面都没有。<br>P7 砍它的理由是「砍掉不破坏主线」——现在主线做完了，<b>它是纯赚的那一块</b>。一屏：给中文和音标，输入拼写，对错即时判，<b>拼错不影响调度，只记录</b>（P3 决定 13）。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>复习里那个 <code>···</code> 菜单：「这个词我已经会了」</b><span>P7 决定 22 欠下的。<b>Core 里 <code>Events.unmarked()</code> 是现成的</b>，后端 <code>word.unmarked</code> 事件也在，跨 Phase 不变量写着「撤销标记后条目退回 <code>new</code>，但遇见记录保留」——<b>整条路都通着，缺的只是一个菜单项</b>。<br>不做的代价 P7 已经写明：词一旦标了只能等 FSRS 慢慢放过它。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>Swift 契约重新生成（P6 §13 欠下的）</b><span>服务端在发话题、概括、待学、词性四个字段，<b>App 读不到</b>——契约类型是 P5 生成的，之后没再生成过。这一条不重新生成，P7 §10 那九处后端改动（<code>progress.buckets</code> 的已完成数、日历端点、整词资料、翻译）<b>客户端一样读不到</b>。<br><b>所以它不是「顺手」，是前提</b>：P7 的界面要能拿到数据，契约就必须先重生成一次。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b><code>article.progress</code> 至今没被任何客户端真的发过</b><span>P5 结束时它是唯一的缺口，P6 写了发它的代码<b>但没跑过</b>——缺口从「没有代码」变成了「有代码没跑过」。<b>验收时要在服务端确认它真的落了库</b>，这是 §13 清单里的一项，不是代码改动。</span></div></div>
+    </div>
+
+    <div class="callout">
+      <b>阅读屏那个 <code>···</code> 菜单（P6 决定 17）填字号</b>，见 §6 决定 17。
+      两处「选项还没做」到此都有了内容——<b>上真机的时候，App 里不该再有一句
+      「还没做」</b>，除了账号那一页（那是故意的，见 §3）。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>跑不掉的后端改动</h2>
+    </div>
+    <p class="lede">设置屏本身几乎不需要后端——它显示的东西今日包里都在发，管理那半边的端点也全是现成的。
+    <b>扫码不做之后（§4 决定 12），这个 Phase 的后端改动只剩一处半。</b></p>
+
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>P7 那九处（<a href="./phase-7.html">phase-7.html</a> §10）</b><span>不是这个 Phase 新加的，但<b>它们做完了没有，决定 P7 的界面能不能真的跑起来</b>。验收之前要先确认这九处的状态——尤其第 6 条（句子的中文翻译与词对齐）是要花钱跑批次的那一块。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>半处：契约重新生成</b><span>严格说不是后端改动，是<b>把服务端已经在发的东西接到客户端类型上</b>（§10 第 3 条）。做法是重跑生成器，<b>不手写</b>——手写的契约和代码必然漂移，而漂移时你不知道哪份是错的（主文档 §M 原话）。</span></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>明确不做</h2>
+    </div>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>「全部下载」</b>——今日包已经是离线形状，往期加真题是几百 MB（§5 决定 16）</span></div>
+      <div class="not"><i>×</i><span><b>客户端改学习参数</b>——要新开写接口，而那是半年改一次的东西（§7 决定 23）</span></div>
+      <div class="not"><i>×</i><span><b>备份下载与恢复不做原生</b>——恢复能把学习记录整份换掉，该待在需要坐下来才能用的地方（§8 决定 30）</span></div>
+      <div class="not"><i>×</i><span><b>开发者选项之外不出现管理能力</b>——阅读、复习、设置的正常路径上一个管理调用都不该有，这是判据不是洁癖（§8 决定 26）</span></div>
+      <div class="not"><i>×</i><span><b>真的账号系统</b>——登录注册按钮画出来一个都不接（§3 决定 9）</span></div>
+      <div class="not"><i>×</i><span><b>字体、行距、页边距、手动深色</b>——先让一种样子被真的读过（§6 决定 21）</span></div>
+      <div class="not"><i>×</i><span><b>扫码配置</b>——省一个依赖和这个 App 的第一个权限，代价是每次配置都要手挪一次令牌（§4 决定 12）</span></div>
+      <div class="not"><i>×</i><span><b>XCUITest 截图</b>——UI 测试本身要维护，而它只验得了「画出来了」，验不了「好不好用」</span></div>
+      <div class="not"><i>×</i><span><b><code>verify_phase8.py</code></b>——这个 Phase 大半在手机上，Python 验不了；后端只剩一处半，加进现有脚本就够</span></div>
+      <div class="not"><i>×</i><span><b>崩溃上报与埋点</b>——单用户，人就在旁边（§9 决定 39）</span></div>
+      <div class="not"><i>×</i><span><b>主题偏好、体裁比例、初始水平测试</b>——主文档 §M 待定里的东西，定义都还没定</span></div>
+      <div class="not"><i>×</i><span><b>打卡分享、排行榜</b>——主文档 §J。个人连续天数不属于这一类，P7 §2 已经辨过一次</span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>验收：三个 Phase 一起</h2>
+      <span class="sec-note">这一节才是重点</span>
+    </div>
+    <p class="lede">机器验得了的先在 CI 和 r5s 上跑完，<b>剩下的全部在真机上由人走一遍</b>。
+    顺序不能反——真机那一次要动用别人的账号，不该用来发现「编译过不了」这种事。</p>
+
+    <h3>A 机器先跑（r5s + CI）</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">A1</div><div class="check-what"><b>Python 六套回归全过</b><span><code>verify_phase0</code> 32 ／ <code>1b</code> 28 ／ <code>1c</code> 15 ／ <code>2</code> 47 ／ <code>3</code> 42 ／ <code>4</code> 38。<b>跑之前先把 §15 那两条到期的断言改掉</b>，否则它们会红，而红的原因跟这个 Phase 无关。<br><b>跑之前看一眼离 04:00 还有多久</b>（坑 §4.6），跑完检查 <code>llm_jobs</code> 有没有留下 <code>running</code>。</span></div></div>
+      <div class="check"><div class="check-n">A2</div><div class="check-what"><b><code>client.yml</code> 全过</b><span><code>swift test</code> 47 项、Core 能为 iOS 编译（读 Mach-O 的 <code>platform 2</code>，不是「有没有产物」）、契约没有漂。<b>契约重新生成之后这一项的意义变了</b>：它从「没漂」变成「新生成的这份和服务端一致」。</span></div></div>
+      <div class="check"><div class="check-n">A3</div><div class="check-what"><b><code>app.yml</code> 四样全过</b><span>编得过、装得上、起得来、不闪退，外加截图。<b>这是两个界面 Phase 唯一被机器验过的东西</b>，也是「改一处塌一片」最先暴露的地方。</span></div></div>
+      <div class="check"><div class="check-n">A4</div><div class="check-what"><b>后端侧的三件</b><span>① P7 §10 那九处都在；② 二维码端点能出图（如果做）；③ <b><code>article.progress</code> 真的落了库</b>——这一条要在服务端查，不是在 App 里看（§10 第 4 条）。</span></div></div>
+    </div>
+
+    <h3>B 真机上人走一遍：P6 欠的八条</h3>
+    <p>照抄 <a href="./phase-6.html">phase-6.html</a> §13 那份「没验过的，是别的全部」。</p>
+    <div class="checks">
+      <div class="check"><div class="check-n">B1</div><div class="check-what"><b>列表拉得到数据、卡片长得对</b></div></div>
+      <div class="check"><div class="check-n">B2</div><div class="check-what"><b>正文渲染，点词准不准</b><span>按字符命中那套<b>完全没试过</b>——TextKit 2 下的 <code>closestPosition</code> 是照文档写的。<b>这一条最可能塌</b>。</span></div></div>
+      <div class="check"><div class="check-n">B3</div><div class="check-what"><b>点词面板：高度自适应、滑块钉底、背景穿透</b><span><code>presentationBackgroundInteraction</code> 是否真能让点击穿到正文上。</span></div></div>
+      <div class="check"><div class="check-n">B4</div><div class="check-what"><b>标记之后正文真的出现虚线</b></div></div>
+      <div class="check"><div class="check-n">B5</div><div class="check-what"><b>「读完了」真的记了账、真的退回列表</b><span>并且<b>服务端那边能查到</b>——跨 Phase 不变量：记账只在读完那一刻发生。</span></div></div>
+      <div class="check"><div class="check-n">B6</div><div class="check-what"><b>跳回上次位置、回到顶部、朗读</b></div></div>
+      <div class="check"><div class="check-n">B7</div><div class="check-what"><b>离线那一行：断网时说得清楚，网回来自动重试</b></div></div>
+      <div class="check"><div class="check-n">B8</div><div class="check-what"><b>那串照文档写、没跑过的 API</b><span><code>.buttonStyle(.glass)</code>、<code>onGeometryChange</code>、<code>scrollPosition(id:)</code>、<code>presentationBackgroundInteraction</code>、TextKit 2 的 <code>closestPosition</code>。<b>这一条不是单独走一遍，是上面七条跑的时候盯着看</b>。</span></div></div>
+    </div>
+
+    <h3>C 真机上人走一遍：P7 复习</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">C1</div><div class="check-what"><b>主界面：日历、两张卡、连续天数</b><span>日历按<b>模拟时钟</b>走（P7 决定 5）——所以跳天之后日历要跟着跳，不跟着跳就是错的。</span></div></div>
+      <div class="check"><div class="check-n">C2</div><div class="check-what"><b>两个入口各自能进、各自算进度</b><span>卡片上的数形如 <code>7/30</code>，中途退出进度留着。</span></div></div>
+      <div class="check"><div class="check-n">C3</div><div class="check-what"><b>出题、提示、双向作答、解锁</b><span>看词想义过了才解锁看中文想英文；<b>方向 2 的原句任何时候都要挖空</b>（P7 §7 那处提前泄题）。</span></div></div>
+      <div class="check"><div class="check-n">C4</div><div class="check-what"><b>当天标「模糊」的词，当天也进，且这一次封顶 Hard</b><span>P7 §3 推翻 P3 决定 18 的那条。<b>界面上看不出封顶</b>，所以这一条要在服务端查 <code>settlements</code>。</span></div></div>
+      <div class="check"><div class="check-n">C5</div><div class="check-what"><b>两张卡都做完 → 完成屏；只做完一张 → 直接回主界面</b><span>P7 决定 20。文案是分开的理由。</span></div></div>
+      <div class="check"><div class="check-n">C6</div><div class="check-what"><b>拼写那一轮</b><span>本 Phase 新做（§10 第 1 条）。<b>拼错不影响调度，只记录</b>——要在服务端确认它没动调度。</span></div></div>
+      <div class="check"><div class="check-n">C7</div><div class="check-what"><b>「这个词我已经会了」</b><span>本 Phase 新做。撤销之后<b>条目退回 <code>new</code>、遇见记录保留</b>（跨 Phase 不变量，守卫 <code>verify_phase2.py</code> 7.13）。</span></div></div>
+    </div>
+
+    <h3>D 真机上人走一遍：P8 设置</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">D1</div><div class="check-what"><b>手输地址与令牌能连上</b><span>扫码不做（§4 决定 12），所以这是唯一的配置路径——<b>它必须好使</b>。粘贴之后<b>令牌框不回显</b>，只显示末四位。</span></div></div>
+      <div class="check"><div class="check-n">D2</div><div class="check-what"><b>「测试连接」三种结果分得开</b><span>通了／连不上／令牌不对。<b>故意填错一个字符试一次</b>——这是阳性对照（坑 §4.3），不试就不知道它是不是永远报「通了」。</span></div></div>
+      <div class="check"><div class="check-n">D3</div><div class="check-what"><b>缓存页：占用数对得上，单篇清与全清都生效</b><span>清完之后<b>那篇仍然在列表里、仍然显示读到哪</b>，点开重新拉得到。</span></div></div>
+      <div class="check"><div class="check-n">D4</div><div class="check-what"><b>发件箱：断网标几个词，待发数涨；联网后自己归零</b><span><b>并且服务端那边一条不多一条不少</b>——幂等键的意义就在这里。</span></div></div>
+      <div class="check"><div class="check-n">D5</div><div class="check-what"><b>开发者选项：藏得住、打得开、五样都好使</b><span>连点版本七下出现；<b>跳天 +1 之后复习界面和日历真的跟着变了</b>；「立刻跑一次」真的触发了任务（<b>去服务端确认，别看按钮变色</b>——坑 §6.4 那条：任务报成功不等于做了事）；改一项配置之后服务端真的改了；<b>拿 D2 那次故意填错产生的 <code>trace_id</code>，在日志里查得到那一条</b>。</span></div></div>
+      <div class="check"><div class="check-n">D6</div><div class="check-what"><b>朗读口音与语速、点词自动朗读、正文字号</b><span>字号在阅读屏的 <code>···</code> 里调，<b>调完退出再进来还是那个字号</b>。</span></div></div>
+      <div class="check"><div class="check-n">D7</div><div class="check-what"><b>账号那一行：名字是服务端给的，「词汇量估计」写着功能待开发</b><span>不是空白、不是 0（§3 决定 7）。<b>点它没反应，而且看得出本来就点不动</b>——没有箭头。点「登录」说「还没做」。</span></div></div>
+      <div class="check"><div class="check-n">D8</div><div class="check-what"><b>日志：记得下来、过滤得了、导得出去</b><span>做几件事（读一篇、标一个词、断一次网）之后打开日志，<b>这几件事都在里面</b>；按等级过滤有效；<b>分享面板能把它存进「文件」App</b>。<br><b>然后搜一遍导出的文件</b>：<b>令牌和管理密码一个字符都不许出现</b>（§9 决定 35）——这一条要真的搜，不是看一眼。</span></div></div>
+      <div class="check"><div class="check-n">D9</div><div class="check-what"><b>日志的 3 天清理</b><span>没法等三天，<b>所以用开发者选项跳天，或者手动改掉文件的日期</b>，看它启动时把过期的删掉、<b>且只删过期的</b>。<br><b>阴性加阳性</b>（坑 §4.3）：三天内的必须还在，三天前的必须没了——只验一半分不清「清理生效」和「一条都没写进去」。</span></div></div>
+    </div>
+
+    <h3>E 跨越一天的那一条</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">E1</div><div class="check-what"><b>断网走完一天</b><span>P4 欠下的 M1 的人的那一半（机器的那一半 P5 的命令行客户端已经结清）。<b>飞行模式打开，读一篇、标几个词、做完复习、拼写</b>，然后联网，看服务端收到的和屏幕上发生过的对不对得上。<br><b>这一条是架构前提 2 的唯一一次真实检验</b>——在线和离线走同一条代码路径，不是两套。</span></div></div>
+      <div class="check"><div class="check-n">E2</div><div class="check-what"><b>跳一天再来</b><span>用开发者选项跳天，第二天的复习里<b>昨天标的词该来的来了</b>，日历上昨天是绿的。</span></div></div>
+    </div>
+
+    <div class="callout">
+      <b>验收通过的定义</b>：A 全过、B/C/D/E 全过，或者不过的那几条<b>写下来、判明是「这个 Phase 的问题」还是「记进 §M 待定」</b>。
+      <br><b>不允许的是「大概能用」</b>——P6 结束时验过的两件事写得那么细，
+      正是因为当时没验的那些至今还是未知。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§14</span>
+      <h2>TestFlight 那条路，以及验收连哪台机器</h2>
+    </div>
+    <p class="lede">两件事都得在动手之前定下来：包怎么上去，以及手机连的是哪份数据。</p>
+
+    <h3>包怎么上去</h3>
+    <p><code>.github/workflows/testflight.yml</code> <b>已经写好了</b>：归档、云签名、
+    确认产物是 iOS 设备包（读 Mach-O 的 <code>LC_BUILD_VERSION</code>）、导出并上传、擦掉密钥。
+    <b>只接手动触发</b>——仓库是公开的，而同一个仓库里提的 PR 拿得到 secret，
+    那把密钥是朋友的开发者身份。</p>
+
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>四个仓库 secret 要齐</b><span><code>ASC_ISSUER_ID</code>、<code>ASC_KEY_ID</code>、<code>ASC_KEY_P8</code>（<b>.p8 的 base64，不是文件本身</b>）、<code>ASC_TEAM_ID</code>。workflow 第一步就是查它们齐不齐，缺了当场说清楚缺哪个。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>朋友那边的四件一次性的事</b><span>写在 <a href="./testflight.html">testflight.html</a>，那份是<b>给他看的</b>。<b>里面的空格不要填</b>——仓库公开，邮箱和 Bundle ID 直接发给他。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>第一次先跑 <code>dry_run</code></b><span>只归档验签名、不上传。<b>签名这条路一次都没跑过</b>，而失败的样子往往跟签名毫无关系（「缺 120x120 图标」其实是没告诉 Xcode 用哪个图标集）。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>构建号用 <code>github.run_number</code></b><span>已经写在 workflow 里。每次上传必须是新的构建号，否则 App Store Connect 直接拒收，<b>而那个报错长得像「包有问题」</b>。</span></div></div>
+    </div>
+
+    <h3>手机连哪台机器</h3>
+    <p><b>2026-09-15 用户定：连阿里云那台开发期实例，数据的事不用纠结</b>——
+    「我们现在的两个备份的数据到正式上线都要清除的」。
+    所以验收期间在它上面产生的标记、读完、复习记录<b>作废也无所谓</b>，
+    部署文档那条「开发期实例上的记录全部作废」照旧成立，只是它不再是个需要绕开的麻烦。</p>
+
+    <div class="callout">
+      <b>有一条仍然要守</b>：<b>任何时候只有一份在被写</b>。
+      验收期间被写的是<b>阿里云那份</b>，r5s 那份主副本这段时间<b>不要同时也在用</b>——
+      两边各跑一次就会分叉，而分叉之后你分不出哪份是对的（09-14 实测过一次）。
+      <br><br>
+      <b>还有两件动手前要确认的</b>：① 开发期实例上<b>夜间备稿是关掉的</b>
+      （<code>task_generation_daily_enabled=false</code>），所以验收时<b>今天的三篇要手动触发一次</b>——
+      §8 的「立刻跑一次」正好干这个；② 那台机器上<b>没有 <code>secrets.json</code></b>，
+      所以<b>任何要花钱调模型的动作在那边都跑不通</b>（生成、翻译、判词组）。
+      验收要用的内容<b>得是已经在快照里的</b>，或者从 r5s 那边补一份过去。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§15</span>
+      <h2>两条到期的验收断言</h2>
+    </div>
+    <p class="lede">2026-09-14 迁移到 r5s 时撞上的。<b>都不是回归</b>——别当回归去查。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>断言</th><th>怎么回事</th><th>怎么改</th></tr></thead>
+        <tbody>
+          <tr>
+            <td class="topic">phase3 · 3.2</td>
+            <td>守的是 P3 决定 18「标模糊的当天不来」，<b>而 P7 §3 已经把它推翻了</b>，<code>session.py</code> 也照新决定实现了（<code>capped</code> 对 fuzzy 置 1）。</td>
+            <td><b>改成守始终成立的那一半</b>：模糊的词当天进，<b>但当天这一次的评级封顶为 Hard</b>。这比原来那条<b>更值得守</b>——封顶是静默的，界面上看不出来。</td>
+          </tr>
+          <tr>
+            <td class="topic">phase4 · A4.1</td>
+            <td>第 191 行硬编码 <code>len(kinds) == 9</code>，而 09-13 为 P7 的翻译加了 <code>dsflash2</code>，现在是 10 个 worker。<b>它一边报失败一边说「缺开关的：无」</b>——不满足的只是那个数字。</td>
+            <td>断言改成<b>「每个 worker 都有自己的提供商与思考开关」</b>，不数个数。个数会随每个 Phase 变，而那条规则不会。</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>两条都按坑 §8 最后那条办</b>：改成守始终成立的那一半，
+      <b>别删守卫，也别让它天天报假警</b>。删掉会丢守卫，留着会天天报假警——
+      这两种失败方式都比「改一次」贵。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§16</span>
+      <h2>还没定的</h2>
+    </div>
+    <div class="nots">
+      <div class="not"><i>?</i><span><b>开发者选项里原生做的那五样够不够</b>（§8 决定 26）——跳天、任务、配置、日志、状态。判据是「验收与开发期天天要用」，而<b>天天要用什么，要真验过一次才知道</b>：这一条<b>本来就该留到验收之后再答</b></span></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>English Reader</div>
+    <div>Phase 8 · 设置与验收 · 方案讨论稿</div>
+    <div>2026-09-15</div>
+  </footer>
+
+</div>
