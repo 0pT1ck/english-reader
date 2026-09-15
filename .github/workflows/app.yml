@@ -52,16 +52,33 @@ jobs:
 
       # **不接管道、不写 `|| 兜底`。**坑 §6.6：`xcodebuild | xcbeautify` 那次，
       # xcodebuild 死了、xcbeautify 返回 0，于是 job 绿了 37 秒、一行没编译。
+      # 编译错误要变成 annotation，2026-09-15 加。
+      #
+      # 本机不装 Swift（开发场地那条决定），所以**第一个拼写错误也要等 CI 才知道**。
+      # 而 xcodebuild 的错误只在日志正文里，日志正文要认证才拉得到——
+      # 于是「编不过」这件事能看见，「哪一行编不过」看不见，只能猜着改。
+      # `::error::` 写出来的行会变成 annotation，那个不需要认证就读得到。
+      #
+      # `tee` 而不是管道给 grep：管道会吃掉退出码（坑 §6.6），
+      # 而 `set -o pipefail` 只在这一步有效，别的会话未必记得。
       - name: 编译（iPhone 17 模拟器）
         working-directory: client/App
         run: |
           set -euo pipefail
+          status=0
           xcodebuild build \
             -project EnglishReader.xcodeproj \
             -scheme EnglishReader \
             -destination 'platform=iOS Simulator,name=iPhone 17' \
             -derivedDataPath DerivedData \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/build.log" || status=$?
+          if [ "$status" -ne 0 ]; then
+            # 去重之后最多报 40 条：同一个错误会在每个 target 里重复出现，
+            # 而 40 条之后人已经不看了。
+            grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | head -40 \
+              | while IFS= read -r line; do echo "::error::$line"; done
+            exit "$status"
+          fi
 
       # 编完要断言产物真的在，而且真是给 iOS 模拟器的。
       # 坑 §6.7：一个分不出两种情况的断言等于没有断言——所以这里读的是

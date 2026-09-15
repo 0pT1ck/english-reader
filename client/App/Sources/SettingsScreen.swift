@@ -22,7 +22,7 @@ struct SettingsScreen: View {
             Form {
                 accountSection
                 connectionSection
-                readingSection(prefs)
+                readingSection($prefs)
                 serverSection
                 storageSection
                 logSection
