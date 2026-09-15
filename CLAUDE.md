@@ -364,14 +364,32 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
     启动即 `PermissionError`。用 `ER_UID`/`ER_GID` 或把目录 chown 成 10001。
   - **不设 `ER_ADMIN_SECRET` 容器会崩**，而且报错跟密码毫无关系（它想往 root 拥有的
     `/app/.env` 追加生成的密码）。compose 里用 `${VAR:?}` 提前拦成一句人话。
+- **开发实例上的数据是 r5s 的快照，已做三处改动**（2026-09-15 拷入）：
+  夜间备稿 `task_generation_daily_enabled=false`、`bark_enabled=false`、
+  两个 Web 页令牌换了新的（不与主副本共用）。**`secrets.json` 没拷**，所以那边没有 API 密钥。
+  快照用 `VACUUM INTO` 做的，不是 `cp`（有 WAL，直接拷可能不一致），三个库 `integrity_check` 全 ok。
 - **阿里云那台的现状**（2026-09-15）：`47.116.104.62`，Ubuntu 24.04 / x86_64 /
   **实际可用内存 1.6G，无 swap** / 磁盘 40G。`ssh aliyun` 可直连（r5s 上配好了，
   密钥 `~/.ssh/id_ed25519_aliyun`，与 GitHub 那把分开）。域名 **`reader.cntick.top`**。
   app 容器实测 healthy、时区 CST、四个库迁移完成。
-- **备案没过是技术约束，不是手续问题**：未备案域名指向境内 IP 时 80 与 443 都被挡，
-  而那正是 HTTP-01 与 TLS-ALPN-01 要的两个端口。所以证书**只能走 DNS-01**，
-  而 DNS-01 要 Caddy 带 DNS 插件，官方镜像不带——`Dockerfile.caddy` 就是为这个存在的。
-  HTTPS 暂时开在 **8443**（高端口不被挡，iOS 不介意端口，只介意证书），备案过了改回 443。
+- **备案拦截比我原先判断的更狠：高端口也挡，而且是按 SNI 掐 TLS**（2026-09-15 实测推翻前判）。
+  原以为「未备案只挡 80/443，高端口可用」，实际是：`reader.cntick.top` 在 8443 上
+  **先能用了四十分钟，随后被扫到并封掉**。
+  **分清它的办法**（这是决定性的，别用别的）：对同一个 IP、同一个端口做两次 TLS 握手——
+  **不带 SNI**，Caddy 会回一个 `internal_error` 告警（**有字节回来**）；
+  **带那个域名的 SNI**，一个字节都没有。同时明文 HTTP 打同一端口拿得到 Caddy 的 400。
+  端口是通的、Caddy 是好的、MTU 正常（1472 DF 通）——**只有带那个 SNI 的 TLS 被中途丢弃**。
+  注意 `SNI=example.com` 这个对照**不成立**：Caddy 只配了一个站点，对陌生 SNI 本来就中断握手。
+- **所以现在有两条路，都留着**（2026-09-15 定，用户选了 A+B 并行）：
+  - **A. Cloudflare Tunnel，当前在用**：`https://reader.cfoptick.com`，
+    `/opt/appdata/cloudflared/`。**服务器一个入站端口都不开**，没有 SNI 可供识别，拦不到。
+    实测端到端 200，今日包 1 MB / 3 篇文章 / 21 条复习，**延迟 0.85–1.4 秒**——
+    隧道连的是 Cloudflare 洛杉矶节点，流量绕太平洋一趟。
+  - **B. Caddy 直连，建好了但被挡着**：`https://reader.cntick.top:8443`，`/opt/appdata/caddy/`。
+    证书已签发（DNS-01，有效期到 2026-12-14），容器在跑，**等 ICP 过审就能用**。
+    通过之后把 `HTTPS_PORT` 改回 443、App 里换地址即可，这套东西一点不浪费。
+- 证书**只能走 DNS-01**（未备案时 80/443 都不可达，HTTP-01 与 TLS-ALPN-01 都要那两个端口），
+  而 DNS-01 要 Caddy 带 DNS 插件，官方镜像不带——`/opt/appdata/caddy/Dockerfile.caddy` 为此存在。
 - **在阿里云那台上构建，三条取包的路都要换成国内的**（2026-09-15 实测，命令存在服务器
   `/root/build-er.sh`，重建照着跑）：PyPI 用 `PYPI_INDEX=https://mirrors.aliyun.com/pypi/simple/`、
   Go 模块用 `GOPROXY=https://goproxy.cn,direct`、spaCy 模型用 `SPACY_MODEL_URL` 指到
