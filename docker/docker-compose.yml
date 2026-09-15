@@ -1,13 +1,19 @@
-# Deployment on a cloud server.
+# The application. One service, no public port.
 #
-#   cp docker/env.example docker/.env   # then fill it in
-#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d --build
+#   cp env.example .env   # then fill it in
+#   docker compose --env-file .env up -d --build
 #
-# Two services. The application never listens on a public port itself: Caddy
-# terminates TLS and is the only thing bound to the host's network. That is not
-# defence in depth for its own sake — iOS App Transport Security refuses plain
-# HTTP to a public host, so a TLS terminator is a functional requirement, not a
-# hardening step.
+# TLS and the public port belong to the host's shared Caddy, which lives in its
+# own directory and serves every site on the machine. The two stacks meet on an
+# external Docker network, so this one publishes nothing and is reachable only
+# by name from the proxy:
+#
+#   docker network create proxy      # once per host
+#
+# That is also what makes the arrangement safe. iOS App Transport Security
+# refuses plain HTTP to a public host, so TLS is a functional requirement rather
+# than hardening — but the certificate and the port are the proxy's business,
+# not this project's.
 
 name: english-reader
 
@@ -20,12 +26,14 @@ services:
     container_name: english-reader
     restart: unless-stopped
 
-    # No `ports:` on purpose. Reachable only from Caddy over the internal
-    # network — publishing 8000 as well would quietly leave the whole API,
-    # admin surface included, available over plain HTTP on the public IP,
-    # bypassing everything below.
+    # No `ports:` on purpose. Publishing 8000 as well would quietly leave the
+    # whole API, admin surface included, available over plain HTTP on the
+    # public IP, bypassing the proxy entirely.
     expose:
       - "8000"
+
+    networks:
+      - proxy
 
     volumes:
       # Bind mount, not a named volume: the databases must be visible on the
@@ -43,7 +51,7 @@ services:
       # generates a password and appends it to /app/.env — which does not exist
       # in the image and sits in a root-owned directory, so the container dies
       # with a PermissionError traceback that says nothing about passwords.
-      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:?docker/.env 里必须设 ER_ADMIN_SECRET，见 docker/env.example}
+      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:?.env 里必须设 ER_ADMIN_SECRET，见 env.example}
       # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server.
       ER_PROXY_URL: ${ER_PROXY_URL:-}
       ER_LOG_LEVEL: ${ER_LOG_LEVEL:-INFO}
@@ -64,52 +72,8 @@ services:
         max-size: "10m"
         max-file: "3"
 
-  caddy:
-    # Built, not pulled: the official image has no DNS plugin, and DNS-01 is the
-    # only certificate challenge that works on an unfiled domain.
-    build:
-      context: .
-      dockerfile: Dockerfile.caddy
-    image: english-reader-caddy:latest
-    container_name: english-reader-caddy
-    restart: unless-stopped
-    depends_on:
-      - app
-
-    ports:
-      # ER_HTTPS_PORT exists because of 备案: on a mainland Chinese host an
-      # unfiled domain is blocked on 443, while a high port is not. iOS accepts
-      # any port as long as the certificate is valid, so 8443 is a working
-      # stand-in until the filing clears — then set it back to 443.
-      - "${ER_HTTPS_PORT:-8443}:443"
-      # Port 80 is only useful for the HTTP-01 challenge and for redirecting.
-      # It is off by default for the same reason: unfiled domains are blocked
-      # there, so a certificate cannot be issued that way — see env.example.
-      - "${ER_HTTP_PORT:-127.0.0.1:8080}:80"
-
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Issued certificates and the ACME account key. Losing this directory
-      # means re-issuing on every restart, which hits Let's Encrypt rate limits
-      # fast — five failures an hour and the domain is locked out.
-      #
-      # Bind-mounted rather than a named volume so that everything this
-      # deployment owns sits in one directory next to the databases: a named
-      # volume would put the certificates under /var/lib/docker, where nothing
-      # about the service suggests they exist.
-      - ${ER_CADDY_DIR:-../caddy}/data:/data
-      - ${ER_CADDY_DIR:-../caddy}/config:/config
-
-    environment:
-      ER_DOMAIN: ${ER_DOMAIN:?docker/.env 里必须设 ER_DOMAIN，iOS 不接受 IP 地址的证书}
-      ER_ACME_EMAIL: ${ER_ACME_EMAIL:-}
-      # DNS provider credentials for the DNS-01 challenge. Needed whenever port
-      # 80 is unreachable, which on an unfiled mainland domain it is.
-      ALIYUN_ACCESS_KEY_ID: ${ALIYUN_ACCESS_KEY_ID:-}
-      ALIYUN_ACCESS_KEY_SECRET: ${ALIYUN_ACCESS_KEY_SECRET:-}
-
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+networks:
+  proxy:
+    # Created once per host and shared with the proxy's own stack, so neither
+    # has to start before the other.
+    external: true
