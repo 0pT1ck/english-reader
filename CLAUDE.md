@@ -347,9 +347,14 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
   ② **把夜间备稿关掉**，否则两台机器各自在 04:00 生成，既烧钱又让两边的 `content.db` 分叉，
   而分叉之后你分不出哪份是对的。
 - 内存不是问题：**r5s 上实测后端常驻 152 MB**（spaCy 占 134 MB），容器里实测 **117 MB**，2G 绰绰有余。
-- 形态：Docker。`docker/` 下四个文件，**都在 r5s 上真的构建并跑起来验过**（arm64；amd64 在目标机上验）：
-  `Dockerfile`（两段式，运行期不带编译链，非 root）、`Dockerfile.caddy`（自编 Caddy，带 DNS 插件）、
-  `docker-compose.yml`、`Caddyfile`。配置抄 `docker/env.example` 到 `docker/.env`（已确认被 gitignore）。
+- **形态：两个独立的 compose stack，靠一个共享网络 `proxy` 连起来**（2026-09-15 按用户惯例拆开）。
+  `docker network create proxy` 每台机器建一次，两边都声明 `external: true`，谁先起都无所谓。
+  - **本项目只剩 app 一个服务**，在仓库 `docker/` 下：`Dockerfile` + `docker-compose.yml` +
+    `env.example`。**它一个端口都不发布**（`expose` 不是 `ports`），只能由反代按容器名访问。
+  - **反代是宿主机的公共设施，不属于本项目**，在 `/opt/appdata/caddy/`（自己的 compose、
+    `Dockerfile.caddy`、`Caddyfile`、证书目录）。**它不进版本控制**——将来别的服务也挂它，
+    塞进这个仓库就等于让本项目拥有整台机器的入口。代价是重装服务器要重写那三十来行。
+  - 域名、证书、公网端口全归反代管，**本项目的 `.env` 里不该再出现它们**。
 - **数据库文件挂载到宿主机**，容器重建不丢数据。
 - **三件动手前必须知道的事**（每一件都是实测撞出来的，不是预想的风险）：
   - **容器默认 UTC，而本项目读的是本地时钟**（`core/tasks.py:204`，`04:00` 是本地 4 点，
@@ -359,6 +364,10 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
     启动即 `PermissionError`。用 `ER_UID`/`ER_GID` 或把目录 chown 成 10001。
   - **不设 `ER_ADMIN_SECRET` 容器会崩**，而且报错跟密码毫无关系（它想往 root 拥有的
     `/app/.env` 追加生成的密码）。compose 里用 `${VAR:?}` 提前拦成一句人话。
+- **阿里云那台的现状**（2026-09-15）：`47.116.104.62`，Ubuntu 24.04 / x86_64 /
+  **实际可用内存 1.6G，无 swap** / 磁盘 40G。`ssh aliyun` 可直连（r5s 上配好了，
+  密钥 `~/.ssh/id_ed25519_aliyun`，与 GitHub 那把分开）。域名 **`reader.cntick.top`**。
+  app 容器实测 healthy、时区 CST、四个库迁移完成。
 - **备案没过是技术约束，不是手续问题**：未备案域名指向境内 IP 时 80 与 443 都被挡，
   而那正是 HTTP-01 与 TLS-ALPN-01 要的两个端口。所以证书**只能走 DNS-01**，
   而 DNS-01 要 Caddy 带 DNS 插件，官方镜像不带——`Dockerfile.caddy` 就是为这个存在的。
