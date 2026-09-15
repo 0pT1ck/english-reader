@@ -113,6 +113,12 @@ struct ParagraphTextView: UIViewRepresentable {
     let marks: [Int: MarkKind]
     /// 正在被点开的那个词，整词底色。
     let selected: Int?
+    /// 字号倍数（P8 决定 17）。**入口在阅读屏的 `···` 里**——调字号要看着正文
+    /// 调，在设置页拖一个滑块再退出去看效果，是把两秒的动作做成一分钟。
+    ///
+    /// 乘在 `UIFontMetrics` 之上，不是取代它：系统的动态字体照旧生效，
+    /// 这个倍数只是在它之上再缩放一次。
+    var scale: Double = 1.0
     let onTap: (Int) -> Void
 
     func makeUIView(context: Context) -> UITextView {
@@ -169,7 +175,7 @@ struct ParagraphTextView: UIViewRepresentable {
 
     private func attributed() -> NSAttributedString {
         let font = UIFontMetrics(forTextStyle: .body)
-            .scaledFont(for: .systemFont(ofSize: 19, weight: .regular))
+            .scaledFont(for: .systemFont(ofSize: 19 * CGFloat(scale), weight: .regular))
         let style = NSMutableParagraphStyle()
         style.lineHeightMultiple = 1.32
         style.paragraphSpacing = 0

@@ -13,15 +13,19 @@ import Observation
 final class Speaker {
     private let synthesizer = AVSpeechSynthesizer()
 
-    func say(_ text: String) {
+    /// 口音与语速从偏好来（P8 决定 18、19）。
+    ///
+    /// 原先两样都写死：`en-US`，以及 `× 0.9`——那个 0.9 的理由是「单词单独念
+    /// 的时候默认语速偏快，听不清词尾」。**那是为单个词定的**，整句朗读时它偏慢，
+    /// 而四六级听力英音美音都考，所以两样都该由人自己定。
+    func say(_ text: String, voice: String = "en-US", rate: Double = 0.9) {
         guard !text.isEmpty else { return }
         if synthesizer.isSpeaking {
             synthesizer.stopSpeaking(at: .immediate)
         }
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        // 单词单独念的时候，默认语速偏快，听不清词尾。
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.9
+        utterance.voice = AVSpeechSynthesisVoice(language: voice)
+        utterance.rate = AVSpeechUtteranceDefaultSpeechRate * Float(rate)
         synthesizer.speak(utterance)
     }
 }

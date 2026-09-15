@@ -48,6 +48,20 @@ struct ReviewScreen: View {
                     PoolCard(title: "温故知新", done: model.dueDone, total: model.dueTotal) {
                         model.begin(bucket: "due")
                     }
+                    // 拼写是**可选强化**（P3 决定 13），所以它不是第三张卡片：
+                    // 卡片是「今天要做的事」，而这一行只在两个池子都走完之后
+                    // 才出现，出现了也可以不理。
+                    if model.spellingEnabled && model.spellingAvailable
+                        && !model.spellingWords.isEmpty {
+                        NavigationLink {
+                            SpellingScreen(words: model.spellingWords)
+                        } label: {
+                            Label("拼写强化 · \(model.spellingWords.count) 个词",
+                                  systemImage: "keyboard")
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 6)
+                        }
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.bottom, 40)

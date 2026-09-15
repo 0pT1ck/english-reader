@@ -44,6 +44,35 @@ final class ReviewModel {
     private var states: [Int: ReviewItemState] = [:]
     private var cards: [Int: Components.Schemas.ReviewItem] = [:]
 
+    /// 拼写这一轮开没开（P3 决定 13）。两个标志位是两件事：
+    /// `spellingEnabled` 是「这个功能开着」，`spellingAvailable` 是
+    /// 「今天该复习的都走完了」——**后者只有在当天复习全部做完之后才为真**。
+    /// P7 决定 21 当时不做拼写，代价写的就是「服务端这个字段会变 true 而没人读它」。
+    private(set) var spellingEnabled = false
+    private(set) var spellingAvailable = false
+
+    /// 今天要拼的词。**一个词多个义项只拼一次**——照命令行客户端那套，
+    /// 拼的是词形，跟义项无关。
+    var spellingWords: [SpellingWord] {
+        var seen = Set<String>()
+        return cards.values
+            .sorted { $0.queue_id < $1.queue_id }
+            .filter { seen.insert($0.item_key).inserted }
+            .map { SpellingWord(key: $0.item_key,
+                                phonetic: $0.word?.phonetic,
+                                gloss: Self.gloss(of: $0)) }
+    }
+
+    /// 提示给中文，不给英文概念——**拼写考的是「听到／想到这个意思，写得出这个词」**，
+    /// 而英文概念里常常就含着这个词的同根词。
+    private static func gloss(of item: Components.Schemas.ReviewItem) -> String {
+        if let list = item.sense?.gloss_zh?.value1, !list.isEmpty {
+            return list.joined(separator: "，")
+        }
+        if let single = item.sense?.gloss_zh?.value2 { return single }
+        return item.word?.translation ?? ""
+    }
+
     /// 正在做哪一个池子。nil＝在主界面。
     private(set) var bucket: String?
     private(set) var current: Int?
@@ -95,6 +124,8 @@ final class ReviewModel {
                 asks: item.asks, misses: item.misses,
                 weight: item.weight, done: item.done)
         }
+        spellingEnabled = day.spelling_enabled
+        spellingAvailable = day.progress.spelling_available
         let total = day.progress.buckets.additionalProperties
         // `buckets_done` has a default on the server, so it is optional on the
         // wire — a client built before it existed has to keep decoding (铁律 5).
@@ -207,6 +238,27 @@ final class ReviewModel {
         return false
     }
 
+    /// 「这个词我已经会了，别再考」（P8 §10 第 2 条）。
+    ///
+    /// P7 决定 22 把 `···` 菜单留成了空壳，代价写得很清楚：**词一旦标了，
+    /// 只能等 FSRS 慢慢放过它**。而整条路本来就是通的——`Events.unmarked`
+    /// 在 Core 里、`word.unmarked` 在服务端、跨 Phase 不变量说明了它的语义：
+    /// **条目退回 `new`，但遇见记录保留**（它确实被遇见过）。缺的只是一个菜单项。
+    ///
+    /// **当场从今天的池子里拿掉，不等服务端回话**：离线也要对，而这条事件
+    /// 带着幂等键，重复上报算正常。
+    func dismissCurrent(_ app: AppModel) {
+        guard let id = current, let card = cards[id] else { return }
+        app.record(.unmarked(card.item_key, senseId: card.sense_id,
+                             itemType: card.item_type))
+        app.log?.write(.info, "review.dismissed", "把一个词移出了复习",
+                       fields: ["item": card.item_key])
+        // 不计进「已复习」那个数：它没被复习，是被拿走了。
+        states[id]?.done = true
+        cards.removeValue(forKey: id)
+        next()
+    }
+
     /// 「下一个」。**作答在这一刻才落盘**——揭晓屏能改主意，点按钮那一下就发的话
     /// 改回来也追不回已经发出去的事。
     func advance(_ app: AppModel) {
@@ -225,4 +277,12 @@ final class ReviewModel {
         }
         next()
     }
+}
+
+/// 拼写那一轮要的三样：词、音标、中文。
+struct SpellingWord: Identifiable, Equatable {
+    let key: String
+    let phonetic: String?
+    let gloss: String
+    var id: String { key }
 }

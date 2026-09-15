@@ -32,6 +32,21 @@ public struct DayPackage: Sendable {
     /// would silently hide 452 exam papers and look complete while doing it.
     public var excludesExamPapers: Bool { decoded.excludes_exam_papers }
 
+    /// 服务端定的那几个数：每天几篇、「新备的」算几天、答错之后权重乘多少、
+    /// 拼写开不开。**客户端只读它们**——改它们是管理接口的事（P8 §7），
+    /// 而这几个值本来就随今日包发下来了，接进界面是零成本的。
+    public var settings: Components.Schemas.TodaySettings { decoded.settings }
+
+    /// 顶层回显的学习者。客户端据此认出「这是别人的缓存」，
+    /// 而设置页拿它显示名字——**它是服务端给的值，不是自己编的**。
+    public var learner: Components.Schemas.Learner { decoded.learner }
+
+    /// 哪些留好的位置真的有值了。`level_estimate` 至今为假，
+    /// 所以账号那一行写的是「功能待开发」而不是空白或者 0。
+    public var capabilities: Components.Schemas.Capabilities { decoded.capabilities }
+
+    public var articleCount: Int { decoded.articles.count }
+
     public var metadata: [ArticleMeta] {
         decoded.articles.map { article in
             ArticleMeta(

@@ -13,12 +13,21 @@ import ERContract
 @Observable
 final class AppModel {
     let connection: Connection
+    let preferences: Preferences
 
     private(set) var outbox: Outbox?
     private(set) var library: LibraryStore?
     private(set) var cache: ArticleCache?
     private(set) var dayCache: DayCache?
     private(set) var engine: SyncEngine?
+
+    /// 客户端自己的日志（P8 §9）。**和发件箱、缓存并列建在同一个根下**，
+    /// 但它是第四类：丢了不影响任何学习记录，三天之后本来也要自己删掉。
+    private(set) var log: FileLog?
+
+    /// 上一次同步的结果。`SyncReport` 早就返回这四个数，**至今没人显示过**——
+    /// 设置页的存储那一区是它第一个读者。
+    private(set) var lastSync: SyncReport?
 
     /// 起不来的原因。存储建不起来是唯一一种「App 没法用」的失败，
     /// 所以它要说得出话，而不是让每一屏各自转圈。
@@ -28,10 +37,22 @@ final class AppModel {
     /// 的唯一出口，而这个 Phase 没有别的地方能回答这个问题。
     private(set) var pendingEvents: Int = 0
 
-    init(connection: Connection = Connection()) {
+    init(connection: Connection = Connection(), preferences: Preferences = Preferences()) {
         self.connection = connection
+        self.preferences = preferences
         buildStorage()
         rebuildEngine()
+        log?.write(.info, "app.launched", "起来了",
+                   fields: ["configured": connection.isConfigured ? "yes" : "no",
+                            "pending": String(pendingEvents)])
+    }
+
+    /// 开发者选项那一页用的。**没填管理密码就是 nil**——一个「点了没反应」的
+    /// 按钮比一个说得出「还没填密码」的界面难查得多，所以这里返回可选值，
+    /// 由界面去解释它为什么没有。
+    var admin: AdminClient? {
+        guard let url = connection.adminURL, !connection.adminSecret.isEmpty else { return nil }
+        return AdminClient(baseURL: url, secret: connection.adminSecret)
     }
 
     // MARK: 存储
@@ -47,11 +68,25 @@ final class AppModel {
             cache = try ArticleCache(directory: root.appendingPathComponent("articles"))
             dayCache = try DayCache(directory: root.appendingPathComponent("day"))
             library = LibraryStore(directory: root.appendingPathComponent("library"))
+            // 三天轮转在 init 里就发生（`FileLog` 自己 prune），所以这一行
+            // 同时是「启动时清过期日志」那条决定的落点。
+            let file = try FileLog(directory: root.appendingPathComponent("logs"),
+                                   retentionDays: 3)
+            file.minimumLevel = preferences.verboseLog ? .debug : .info
+            log = file
             storageFailure = nil
             refreshPendingCount()
         } catch {
             storageFailure = "本地存储建不起来：\(error.localizedDescription)"
+            // 日志本身可能就是没建起来的那个，所以这条要两头都说：
+            // 写进日志（如果还能写），也留在 `storageFailure` 上给界面看。
+            log?.write(.error, "storage.unavailable", storageFailure ?? "")
         }
+    }
+
+    /// DEBUG 落不落盘，跟着偏好走。设置页改了开关之后调它。
+    func applyLogLevel() {
+        log?.minimumLevel = preferences.verboseLog ? .debug : .info
     }
 
     // MARK: 连接
@@ -80,8 +115,15 @@ final class AppModel {
         do {
             try outbox.append(entry)
             refreshPendingCount()
+            log?.write(.debug, "outbox.recorded", "记下一条事件",
+                       fields: ["kind": entry.kind.rawValue, "pending": String(pendingEvents)])
             return true
         } catch {
+            // **这一条必须记。**写不进发件箱意味着那次标记消失了，而屏幕上
+            // 什么都不会说——正是「静默失败」那一类里最贵的一种。
+            log?.write(.error, "outbox.record.failed", "事件没能落盘",
+                       fields: ["kind": entry.kind.rawValue,
+                                "error": error.localizedDescription])
             return false
         }
     }
@@ -90,11 +132,32 @@ final class AppModel {
         pendingEvents = outbox?.count ?? 0
     }
 
-    /// 把攒着的事件发出去。失败不作声——发件箱的全部意义就是失败了可以再来。
-    func drain() async {
-        guard let engine else { return }
-        _ = try? await engine.drain()
-        refreshPendingCount()
+    /// 把攒着的事件发出去。**界面上失败不作声**——发件箱的全部意义就是失败了
+    /// 可以再来；但日志里要说，那是「我标的东西传上去了没有」唯一查得到的地方。
+    @discardableResult
+    func drain() async -> SyncReport? {
+        guard let engine else { return nil }
+        let before = pendingEvents
+        do {
+            let report = try await engine.drain()
+            lastSync = report
+            refreshPendingCount()
+            if before > 0 || report.landed > 0 {
+                log?.write(report.rejected > 0 ? .warn : .info, "sync.drained", "上报了一批",
+                           fields: ["landed": String(report.landed),
+                                    "duplicates": String(report.duplicates),
+                                    "rejected": String(report.rejected),
+                                    "remaining": String(report.remaining),
+                                    "offline": report.offline ? "yes" : "no"])
+            }
+            return report
+        } catch {
+            log?.write(.warn, "sync.drain.failed", "这一批没送出去",
+                       fields: ["pending": String(before),
+                                "error": error.localizedDescription])
+            refreshPendingCount()
+            return nil
+        }
     }
 }
 

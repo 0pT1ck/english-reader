@@ -168,11 +168,28 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         conn.commit()
         fired_by_loop = len(fired)
         waited = 0.0
-        with TestClient(app):                      # 进 lifespan，循环真的起来
-            limit = tasks.TICK_SECONDS * 2 + 10    # 有出口的等待（坑 §7.2）
-            while waited < limit and len(fired) == fired_by_loop:
-                time.sleep(1.0)
-                waited += 1.0
+
+        # **别的任务必须先让开**，2026-09-15 加。循环是串行的
+        # （`for name in due_tasks(): await to_thread(run_now, name)`），
+        # 而夜间备稿只要到期就排在探针前面——一篇文章几十秒，加上重试，
+        # 70 秒的窗口根本轮不到探针。于是这一条会在「循环其实好好的」时候报红，
+        # 指着一个没坏的东西（坑 §1.2 那个形状）。
+        # 探针自己留着，别的一律先关掉，`finally` 保证原样还回去——
+        # 关掉了没还回去的话，夜间备稿就从此不再跑，而且是静默的。
+        others = [name for name in tasks.registered() if name != PROBE]
+        was_enabled = {name: bool(runtime_config.get(tasks.enabled_key(name)))
+                       for name in others}
+        for name in others:
+            runtime_config.set(tasks.enabled_key(name), False)
+        try:
+            with TestClient(app):                  # 进 lifespan，循环真的起来
+                limit = tasks.TICK_SECONDS * 2 + 10  # 有出口的等待（坑 §7.2）
+                while waited < limit and len(fired) == fired_by_loop:
+                    time.sleep(1.0)
+                    waited += 1.0
+        finally:
+            for name, enabled in was_enabled.items():
+                runtime_config.set(tasks.enabled_key(name), enabled)
         check("A2.4", "调度循环自己把到点的任务跑起来了",
               len(fired) > fired_by_loop,
               f"服务起来 {waited:.0f} 秒后自动触发——验的是循环接没接进 lifespan，"

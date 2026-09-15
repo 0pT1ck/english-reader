@@ -65,6 +65,7 @@ struct LookupSheet: View {
     let maxHeight: CGFloat
     let onMark: (MarkKind?) -> Void
 
+    @Environment(AppModel.self) private var app
     @State private var speaker = Speaker()
     @State private var contentHeight: CGFloat = 0
 
@@ -95,6 +96,19 @@ struct LookupSheet: View {
         // 背景可点：点下一个词要能穿过面板打到正文上（决定 25）。
         // 正文的滚动由阅读器那边关掉，一滑就收面板（决定 24）。
         .presentationBackgroundInteraction(.enabled(upThrough: .height(detent)))
+        // 点词自动朗读（决定 20），**默认关**：这个 App 大概率在图书馆和地铁上
+        // 用，点一下就出声会吓人一跳。`onChange` 盯着词本身——同一个面板换词
+        // 时不会重建，只有 `item` 变了。
+        .onAppear { if app.preferences.speakOnTap { speak() } }
+        .onChange(of: item.headword) { _, _ in
+            if app.preferences.speakOnTap { speak() }
+        }
+    }
+
+    private func speak() {
+        speaker.say(item.headword,
+                    voice: app.preferences.accent.voiceCode,
+                    rate: app.preferences.speechRate)
     }
 
     /// 按内容自适应，**最多半屏**（决定 26）。装不下的在面板里滚。
@@ -118,7 +132,7 @@ struct LookupSheet: View {
                 }
                 Spacer()
                 Button {
-                    speaker.say(item.headword)
+                    speak()
                 } label: {
                     Image(systemName: "speaker.wave.2.fill")
                         .font(.body)

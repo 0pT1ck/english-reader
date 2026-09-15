@@ -10,6 +10,7 @@ struct ReviewSessionScreen: View {
     @Bindable var model: ReviewModel
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
+    @State private var confirmingDismiss = false
 
     var body: some View {
         Group {
@@ -26,10 +27,29 @@ struct ReviewSessionScreen: View {
         }
         .navigationTitle("复习")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("不再复习这个词？", isPresented: $confirmingDismiss,
+                            titleVisibility: .visible) {
+            Button("我已经会了", role: .destructive) { model.dismissCurrent(app) }
+            Button("算了", role: .cancel) {}
+        } message: {
+            // 撤销标记之后条目退回 `new`，但遇见记录保留——它确实被遇见过。
+            // 这句话要说出来，因为「会了」和「删掉它」在人心里是两回事。
+            Text("它会离开复习队列，退回「没学过」那一档。"
+                 + "你读过它、在哪篇读到的，都还留着；以后再标一次它还会回来。")
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                // 内容待定（同 P6 决定 17）。空菜单会像坏了，所以它说人话。
-                Menu { Text("选项还没做") } label: { Image(systemName: "ellipsis") }
+                // P7 决定 22 留的空壳，P8 填上。代价当时写得很清楚：
+                // **词一旦标了，只能等 FSRS 慢慢放过它**——而这条出口
+                // 整条路本来就是通的，缺的只是这个菜单项。
+                Menu {
+                    Button("这个词我已经会了", systemImage: "checkmark.circle") {
+                        confirmingDismiss = true
+                    }
+                    .disabled(model.card == nil)
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
             }
         }
     }

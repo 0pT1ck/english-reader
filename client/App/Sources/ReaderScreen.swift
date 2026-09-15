@@ -64,6 +64,7 @@ struct ReaderScreen: View {
                         paragraph: paragraph,
                         marks: model.marks,
                         selected: model.selectedSeq,
+                        scale: app.preferences.fontScale,
                         onTap: { model.tap(seq: $0, app: app) }
                     )
                     .id(paragraph.id)
@@ -156,14 +157,23 @@ struct ReaderScreen: View {
         .accessibilityLabel("回到顶部")
     }
 
-    /// `···` 菜单。**内容待定，先把按钮做出来**（决定 17）。
-    /// 空菜单会像坏了，所以它说人话——同决定 30 的道理。
+    /// `···` 菜单。P6 决定 17 把它留成了一个说「选项还没做」的空壳，
+    /// **P8 填上字号**——这一项之所以在这里而不在设置页，是因为调字号要
+    /// 看着正文调：在设置页拖滑块、退出去看效果、不对再进来，
+    /// 是把两秒的动作做成一分钟。
     private var optionsMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                Text("选项还没做")
+                Picker("正文字号", selection: Binding(
+                    get: { app.preferences.fontScale },
+                    set: { app.preferences.fontScale = $0 }
+                )) {
+                    ForEach(FontStep.all) { step in
+                        Text(step.label).tag(step.value)
+                    }
+                }
             } label: {
-                Image(systemName: "ellipsis")
+                Image(systemName: "textformat.size")
             }
         }
     }
@@ -193,4 +203,20 @@ struct ReaderScreen: View {
             scrolledTo = model.resumeParagraph ?? Self.headerID
         }
     }
+}
+
+/// 字号的几档。**离散，不给连续滑块**：在一个菜单里拖滑块很难拖准，
+/// 而字号这东西本来就只有「小了／大了」两种诉求。
+struct FontStep: Identifiable {
+    let label: String
+    let value: Double
+    var id: Double { value }
+
+    static let all: [FontStep] = [
+        FontStep(label: "小", value: 0.9),
+        FontStep(label: "标准", value: 1.0),
+        FontStep(label: "大", value: 1.15),
+        FontStep(label: "更大", value: 1.3),
+        FontStep(label: "最大", value: 1.5),
+    ]
 }
