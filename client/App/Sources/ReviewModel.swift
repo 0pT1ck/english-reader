@@ -102,6 +102,16 @@ final class ReviewModel {
                 days = calendar.days
                 streak = calendar.streak
             }
+        } catch is CancellationError {
+            // **取消不是故障。**`IOSTransport` 早就把它和「离线」分开了，
+            // 注释写的是「用户划走了一屏就取消一次请求」——而这里原本把它
+            // 兜进了最后那个 catch，于是屏幕上说「复习打不开」，
+            // 后面跟一句 `Swift.CancellationError error 1`。
+            //
+            // 真机上一进复习就撞到了：`fetchDay` 要拉 1 MB 的今日包，
+            // 经隧道约一秒，而这一秒里视图重算一次，task 就被取消。
+            // 回到 loading 由 `.onAppear` 再试一次（见 `ReviewScreen`）。
+            phase = .loading
         } catch let error as TransportError {
             if case .offline = error {
                 phase = .offline("离线，连不上服务器")
@@ -112,6 +122,9 @@ final class ReviewModel {
             phase = .failed(error.localizedDescription)
         }
     }
+
+    /// 载入中吗。取消之后 `.task` 不会自己重来，所以要有人看着它。
+    var needsLoad: Bool { phase == .loading }
 
     private func apply(_ day: Components.Schemas.ReviewDayResponse) {
         weightDecay = day.weight_decay

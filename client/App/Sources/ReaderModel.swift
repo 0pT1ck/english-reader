@@ -78,6 +78,9 @@ final class ReaderModel {
             case .malformed(let detail):
                 phase = .failed("服务器回的东西看不懂：\(detail)")
             }
+        } catch is CancellationError {
+            // 同 `ReviewModel`：取消不是故障，回到 loading 让上层再试。
+            phase = .loading
         } catch {
             phase = .failed(error.localizedDescription)
         }

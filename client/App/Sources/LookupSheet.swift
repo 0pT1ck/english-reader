@@ -92,10 +92,16 @@ struct LookupSheet: View {
                 .padding(.vertical, 12)
         }
         .presentationDragIndicator(.visible)
-        .presentationDetents([.height(detent)])
+        // **两档，不是一档**（2026-09-15 真机之后改）。自适应那一档是初始高度，
+        // 但它依赖 `onGeometryChange` 量出来的内容高度，而那个值在面板刚呈现、
+        // 内容还没排完时会偏小——真机上第一次点词，面板只有三分之一屏。
+        // 量不准是治不干净的（那是时机问题），**能拖大就不是问题**：
+        // 内容少时仍然只占该占的，想看全一拖就到半屏。
+        .presentationDetents([.height(detent), .medium])
         // 背景可点：点下一个词要能穿过面板打到正文上（决定 25）。
         // 正文的滚动由阅读器那边关掉，一滑就收面板（决定 24）。
-        .presentationBackgroundInteraction(.enabled(upThrough: .height(detent)))
+        // **穿透要放到最高那一档**，否则拖大之后就点不动正文了。
+        .presentationBackgroundInteraction(.enabled(upThrough: .medium))
         // 点词自动朗读（决定 20），**默认关**：这个 App 大概率在图书馆和地铁上
         // 用，点一下就出声会吓人一跳。`onChange` 盯着词本身——同一个面板换词
         // 时不会重建，只有 `item` 变了。

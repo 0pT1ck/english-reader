@@ -746,12 +746,19 @@
           <tr><td class="topic">A3 · <code>app.yml</code></td><td class="ok">全过。编得过、装得上、起得来、不闪退——<b>设置屏那一大批只有一个编译错误</b>（<code>@Bindable</code> 传参该用 <code>$</code>）。</td></tr>
           <tr><td class="topic">A1 · P3 回归</td><td class="ok">44 项全过（原 42，§15 那条到期断言改完之后多了两条）。</td></tr>
           <tr><td class="topic">A1 · P4 回归</td><td class="wait">36 过、2 失败。两条都卡在余额上（见上面第 2 条），<b>不是回归</b>。</td></tr>
-          <tr><td class="topic">A1 · P0 回归</td><td class="ok">32 项全过。</td></tr>
+          <tr><td class="topic">A1 · P0／P1b／P1c 回归</td><td class="ok">32 ／ 28 ／ 15，全过。P1b 的 6.1 是那三条到期断言里的第三条，一并改了。</td></tr>
+          <tr><td class="topic">A1 · P2 回归</td><td class="wait">46 过、1 失败（7.9 词组判不完 → 余额）。<b>这一轮还揪出一个从来没被执行过的崩溃</b>：2026-09-12 为坑 §4.4b 加的等待循环把词组模块按一个没导入的名字调用，而那一行<b>只在「有待判词组」时才走</b>——在此之前从没有过。今天余额不足留下 14 处，脚本直接 <code>NameError</code>，一条结果都没报出来。</td></tr>
+          <tr><td class="topic">A4 · 后端三件</td><td class="ok">P7 那九处都在（<code>buckets_done</code>、音标与义项、<code>maxReveal = 1</code>、<code>article_title</code>、句子中文 366/398）。二维码那条不做了。<b><code>article.progress</code> 要等真机</b>——它至今仍是「有代码没跑过」。</td></tr>
         </tbody>
       </table>
     </div>
 
     <div class="callout">
+      <b>机器能验的到此为止全过了</b>（两条 CI 流水线在最后一个提交上都绿：
+      <code>swift test</code> 含日志那九个新测试、Core 能为 iOS 编译、契约没漂、
+      App 编得过装得上起得来不闪退）。<b>六套 Python 回归里剩下的三处失败，
+      指的都是同一件事——中转站余额不足。</b>
+      <br><br>
       <b>没验过的是「人用一遍」那一整块</b>——B、C、D、E 四组共 26 项，
       全都要在真机上走。<b>这个 Phase 到此为止仍然是「做完了，没验」</b>，
       跟 P6、P7 一样欠着，三个一起还。

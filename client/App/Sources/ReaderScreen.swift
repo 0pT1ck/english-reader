@@ -23,7 +23,14 @@ struct ReaderScreen: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar { optionsMenu }
             .task { await start() }
-            .onDisappear { model.reportProgress(app: app) }
+            .onDisappear {
+                model.reportProgress(app: app)
+                // **记完就发。**读到哪一段存在服务端（`progress.sentence_seq`），
+                // 而事件只是落进了发件箱——不发出去的话，下次打开这篇文章
+                // 服务端还以为你没读过，于是回到第一段。
+                // 退出一篇文章是个自然的同步点，而且就一条事件。
+                Task { await app.drain() }
+            }
             .sheet(isPresented: lookupBinding) {
                 if let item = model.lookup {
                     LookupSheet(item: item, maxHeight: viewportHeight / 2) {
@@ -56,7 +63,11 @@ struct ReaderScreen: View {
 
     private var reader: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 20) {
+            // **VStack 而不是 LazyVStack。**每段是一个 `UITextView`，而懒加载
+            // 意味着它们在滚动到跟前时才测量——于是恢复上次位置那一下，
+            // 十几段边测边排，真机上看到的就是「整体错位，几秒后归位」。
+            // 一篇文章十几段，一次全渲染的代价远小于那几秒的抖动。
+            VStack(alignment: .leading, spacing: 20) {
                 header.id(Self.headerID)
 
                 ForEach(model.paragraphs) { paragraph in

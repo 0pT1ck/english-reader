@@ -15,7 +15,11 @@ struct ReviewScreen: View {
                     ReviewSessionScreen(model: model)
                 }
         }
-        .task { if model.phase == .loading { await model.load(app) } }
+        // **两处触发，不是一处。**`.task` 在视图出现时跑，但它会在视图消失
+        // （切走一格、被重算）时取消——而取消之后没有任何东西会再叫它一次。
+        // 真机上第一次进复习就撞到了这个：包还没拉完 task 就没了。
+        .task { if model.needsLoad { await model.load(app) } }
+        .onAppear { if model.needsLoad { Task { await model.load(app) } } }
     }
 
     @ViewBuilder
