@@ -3,12 +3,10 @@ import ERContract
 
 /// 列表上一张卡片要显示的东西。
 ///
-/// **这是三个后端新字段唯一的落点。**话题、一句中文概括、待学数在契约里还没有
-/// （方案 §7 的 1–3 条），所以下面三个属性现在恒为 nil / 0，界面照旧留着位置。
-/// 后端加完字段、契约重新生成之后，要改的只有 `init(library:)` 这一个地方——
-/// 界面一行都不用动。
-///
-/// 之所以不让视图直接读契约类型，就是为了让这件事只有一处。
+/// **这是三个后端字段唯一的落点**：话题、一句中文概括、待学数。
+/// 2026-09-15 接上了——契约里 `topic` / `summary_zh` / `pending_count` 都在，
+/// 而这三样此前一直是 nil，界面只是留着位置。改动全在 `init(library:)` 一处，
+/// 视图一行都没动，这正是当初不让视图直接读契约类型的理由。
 struct ArticleCard: Identifiable, Hashable {
     let id: Int
     let title: String
@@ -46,17 +44,12 @@ struct ArticleCard: Identifiable, Hashable {
 
         let isGenerated = item.source == "generated"
 
-        // ↓↓↓ 后端字段加上、契约重新生成之后，改的就是这三行 ↓↓↓
-        //
-        //   topline = isGenerated ? (item.topic ?? "") : item.source_label
-        //   summary = isGenerated ? item.summary_zh : nil
-        //   pending = isGenerated ? item.pending_count : nil
-        //
-        // 在那之前：真题那一格现在就是对的（来源本来就有），
-        // 生成文那两格空着——**空着而不是编一个**，编出来的话
-        // 下一个人会以为这条路已经通了。
-        topline = isGenerated ? "" : item.source_label
-        summary = nil
-        pending = nil
+        // 真题显示来源（`六级 2019.06`），生成文显示话题。生成文没有话题时
+        // 宁可空着——真题的来源填进生成文那一格，读的人会以为它是从哪儿来的。
+        topline = isGenerated ? (item.topic ?? "") : item.source_label
+        summary = isGenerated ? item.summary_zh : nil
+        // 真题的 `target_count` 恒为 0（它不为教任何词而写），所以待学对它
+        // 没有意义——显示 0 会被读成「都学完了」。
+        pending = isGenerated ? item.pending_count : nil
     }
 }

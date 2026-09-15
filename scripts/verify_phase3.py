@@ -249,14 +249,34 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         conn.commit()
 
         probe_now = datetime.fromisoformat(probe_day + "T12:00:00+00:00")
-        keys = {i["item_key"] for i in session.collect(LEARNER, probe_now)}
+        collected = session.collect(LEARNER, probe_now)
+        keys = {i["item_key"] for i in collected}
         check("3.1", "标「不认识」的当天就来", "__probe_u" in keys)
-        check("3.2", "标「模糊」的当天不来", "__probe_f" not in keys,
-              "P2 那句「模糊只记录不调度」的前提是 P2 没有调度；到了 P3 必须验出差别，"
-              "否则三档就白分了")
+
+        # 这一条 2026-09-15 改过。原文守的是 P3 决定 18「模糊的当天不来」，
+        # 而 P7 §3 把它推翻了（卡片上写 3 而你标了 5，没有任何东西解释为什么），
+        # 于是旧断言天天报假警。改成守**始终成立的那一半**：决定 18 的理由
+        # ——你几分钟前刚读过它，答对证明不了什么——现在由 capped 承担。
+        # 删掉它会丢守卫，留着它会天天报假警，两种都比改一次贵（坑 §8）。
+        fuzzy_row = next((i for i in collected if i["item_key"] == "__probe_f"), None)
+        check("3.2", "标「模糊」的当天也来，而且这一次不算满分",
+              fuzzy_row is not None and int(fuzzy_row.get("capped") or 0) == 1,
+              "进了队列且 capped=1" if fuzzy_row else "模糊的探针没进队列")
+        unknown_row = next((i for i in collected if i["item_key"] == "__probe_u"), None)
+        check("3.2b", "标「不认识」的不封顶——三档还是有差别",
+              unknown_row is not None and int(unknown_row.get("capped") or 0) == 0,
+              "决定 18 的另一半：不认识当天就问，而且算数")
         keys_next = {i["item_key"] for i in
                      session.collect(LEARNER, probe_now + timedelta(days=1))}
-        check("3.3", "「模糊」第二天进队列", "__probe_f" in keys_next)
+        check("3.3", "「模糊」第二天还在队列里", "__probe_f" in keys_next)
+
+        # capped 只是一个标志位，真正要守的是它**降了级**。这一步不落库、
+        # 不依赖当天有什么数据，所以它是这三条里最结实的一条：
+        # 标志位传错了地方的话，上面两条照样通过，只有这条会红。
+        plain = scheduler.rating_for(0)
+        capped = scheduler.rating_for(0, capped=True)
+        check("3.4", "封顶真的把评级压下来了", capped != plain and capped < plain,
+              f"未封顶 {plain}，封顶 {capped}——Good 压成 Hard")
         conn.execute("DELETE FROM study_states WHERE item_key IN ('__probe_u','__probe_f')")
         conn.execute("DELETE FROM study_marks WHERE item_key IN ('__probe_u','__probe_f')")
         conn.commit()

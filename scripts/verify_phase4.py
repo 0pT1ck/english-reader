@@ -187,8 +187,12 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         missing = [k for k in kinds
                    if runtime_config.get(jobs.provider_key(k)) is None
                    or runtime_config.get(jobs.thinking_key(k)) is None]
+        # 2026-09-15 改过。原文还断言 `len(kinds) == 9`，而 09-13 为 P7 的翻译
+        # 加了 dsflash2 之后是 10 个——于是它一边报失败一边说「缺开关的：无」，
+        # 不满足的只是那个数字。**worker 的个数每个 Phase 都会变，那条规则不会**：
+        # 要守的是「每个用模型的地方都碰得到自己的设置」，不是有几个地方。
         check("A4.1", "每个用模型的地方都有自己的提供商与思考开关",
-              len(kinds) == 9 and not missing,
+              bool(kinds) and not missing,
               f"{len(kinds)} 个 worker，缺开关的：{missing or '无'}")
 
         check("A4.2", "旧的提供商设置迁移过来了，没丢",

@@ -41,11 +41,14 @@ extension Components.Schemas.Sense {
         return ""
     }
 
-    /// 词性（`n. / vt. / vi.`）。
+    /// 词性（`n. / vt. / vi.`）。2026-09-15 接上——`pos` 现在在契约里了。
     ///
-    /// **库里有数据，契约还没带出来**（方案 §7 第 4 条）——`senses.pos` 那一列
-    /// 一直在，只是没进 `Sense`。契约重新生成之后这里改成 `pos`，别处不用动。
-    var posText: String? { nil }
+    /// 空字符串当没有：库里那一列允许为空，而一个空的词性标签在屏幕上
+    /// 就是一块无法解释的空白。
+    var posText: String? {
+        guard let pos, !pos.isEmpty else { return nil }
+        return pos
+    }
 
     var examShareText: String? {
         guard let share = exam?.share, share > 0 else { return nil }

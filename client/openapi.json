@@ -650,7 +650,7 @@
           },
           "revealed": {
             "type": "integer",
-            "maximum": 3.0,
+            "maximum": 1.0,
             "minimum": 0.0,
             "title": "Revealed",
             "default": 0
@@ -691,7 +691,7 @@
           },
           "revealed": {
             "type": "integer",
-            "maximum": 3.0,
+            "maximum": 1.0,
             "minimum": 0.0,
             "title": "Revealed",
             "default": 0
