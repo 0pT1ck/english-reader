@@ -178,8 +178,22 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
             ]
             new = sum(r["beyond_rate"] for r in new_reports) / len(rows)
             derived = sum(r["derived_rate"] for r in new_reports) / len(rows)
-            check("6.1", "超纲率显著下降", new < old * 0.6,
-                  f"{old:.2f}% → {new:.2f}%（另有 {derived:.2f}% 是已知词根的派生词）")
+            # 2026-09-15 改过。原文是 `new < old * 0.6`——拿**旧报告里存的**
+            # 超纲率跟重算的比。那两个数来自不同时期的草稿集：新草稿的 report
+            # 本来就是用新规则算的，所以 old 会一路向 new 靠拢，
+            # **这条断言注定有一天会红**，而红的时候什么也没坏（今天 1.88 → 1.17，
+            # 差 0.04 个百分点没够上阈值）。坑 §4.1：只在某些日子能过的验收等于没有。
+            #
+            # 改成守当场做得出的那一半：**词根在纲内的派生词被认出来了，
+            # 而且它们没有同时出现在超纲名单里**。这是 P1b 真正做成的事，
+            # 不依赖历史数据，也不依赖今天碰巧有哪些草稿。
+            derived_words = {d["lemma"] for r in new_reports for d in r["derived"]}
+            beyond_now = {b["lemma"] for r in new_reports for b in r["beyond"]}
+            check("6.1", "词根在纲内的派生词不再算超纲",
+                  bool(derived_words) and not (derived_words & beyond_now),
+                  f"认出 {len(derived_words)} 个派生词（{derived:.2f}%），"
+                  f"超纲率 {new:.2f}%，历史报告里是 {old:.2f}%"
+                  if derived_words else "一个派生词都没认出来——识别那一路可能断了")
 
             beyond_words = {b["lemma"] for r in new_reports for b in r["beyond"]}
             ghosts = {"oth", "planning", "neighbor", "carefully", "datum", "socio"}

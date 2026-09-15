@@ -708,6 +708,59 @@
   <section>
     <div class="sec-head">
       <span class="sec-mark">§16</span>
+      <h2>实施结果</h2>
+      <span class="sec-note">2026-09-15 · 验收仍然欠着</span>
+    </div>
+    <p class="lede">方案当天定稿，当天做完。<b>下面每一条都是「写完了、编过了」，
+    不是「验过了」</b>——真机那一遍还没跑，别把这一节读成验收报告。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>做了什么</th><th>落在哪</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">客户端日志</td><td>新建 <code>ERCore/Log.swift</code>：四级、一天一个文件、三天轮转、JSONL、导出渲染成人读格式。<b>凭证在写入时就打码</b>，因为这份东西是要发出去的。九个测试，<b>轮转那条两头都验</b>（该没的没了、该在的还在）。</td></tr>
+          <tr><td class="topic">设置屏</td><td><code>SettingsScreen</code> 重写成八个区，外加四张二级页：<code>ConnectionScreen</code>、<code>CacheScreen</code>、<code>LogScreen</code>、<code>DeveloperScreen</code>。</td></tr>
+          <tr><td class="topic">开发者选项</td><td><code>AdminClient</code> 直接调管理接口（<code>X-Admin-Secret</code>，<b>后端一行没改</b>），加 <code>AdminConfigScreen</code>、<code>AdminLogScreen</code>、<code>AdminStatusScreen</code>。五样齐了。</td></tr>
+          <tr><td class="topic">两处空菜单</td><td>阅读的 <code>···</code> 填字号（五档，不给连续滑块）；复习的 <code>···</code> 填「这个词我已经会了」——<b>整条路本来就通着</b>，缺的只是一个菜单项。</td></tr>
+          <tr><td class="topic">拼写</td><td><code>SpellingScreen</code>。P3 设计、P5 实现、服务端每天把 <code>spelling_available</code> 置真——<b>而在此之前没有任何东西读过它</b>。</td></tr>
+          <tr><td class="topic">偏好</td><td><code>Preferences</code>：字号、口音、语速、点词朗读、DEBUG 开关、开发者解锁。<b>属性是计算的不是存储的</b>——<code>@Observable</code> 展开时会把存储属性变成计算属性，那里没有 <code>didSet</code> 的位置。</td></tr>
+          <tr><td class="topic">发件箱</td><td>上次同步的四个数显示出来了（P5 起就返回，一直没人显示）；<b>损坏事件有了出口</b>，它此前会让待发数永远卡着而无人知道为什么。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>路上撞到的四件事</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>P6 §13 说「Swift 契约没有重新生成」——其实 P7 期间已经生成过了</b><span>话题、概括、待学、词性四个字段<b>早就在生成物里</b>，只是那条欠账记录没更新。于是这个 Phase 真正要做的不是「重新生成」，而是<b>把三处写着「等契约生成之后改这三行」的桩接上</b>。<br><b>坑 §7.1 的反面</b>：注释描述的是意图，不保证实现跟上了——反过来也一样，<b>文档说欠着的东西可能已经还了</b>。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>中转站余额不足（HTTP 402），挡住所有花钱的动作</b><span>生成、翻译、判词组全部失败。<b>由此带出两条验收失败，都不是回归</b>：B5.1 三篇文章卡在 <code>annotating</code>，B5.2 十四处词组待判。<br>夜间备稿已<b>暂时关掉</b>——余额不足时它每跑一次就多留几篇打不开的废稿。充值之后要打开。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>A2.4 的失败是验法的问题，不是循环的问题</b><span>调度循环是<b>串行</b>的（<code>for name in due_tasks(): await to_thread(run_now, name)</code>），而夜间备稿只要到期就排在探针前面——一篇文章几十秒加重试，70 秒的窗口根本轮不到探针。<br>改成<b>等待期间先把别的任务让开，<code>finally</code> 原样还回去</b>。还回去这一步比看起来重要：关掉了没还回去的话，夜间备稿从此不再跑，而且是静默的。改完这一条就过了。</span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>编不过的时候看不见是哪一行</b><span>本机不装 Swift（开发场地那条决定），第一个拼写错误也要等 CI。<b>而 xcodebuild 的错误只在日志正文里，日志正文要认证才拉得到</b>——于是「编不过」看得见，「哪一行编不过」看不见，只能猜着改。<br>改 <code>app.yml</code>：失败时把 <code>error:</code> 行用 <code>::error::</code> 回显，它会变成 annotation，<b>不需要认证就读得到</b>。</span></div></div>
+    </div>
+
+    <h3>机器验过的</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>验收项</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">A2 · <code>client.yml</code></td><td class="ok">全过。<code>swift test</code> 含日志那九个新测试；Core 能为 iOS 编译；契约没漂。</td></tr>
+          <tr><td class="topic">A3 · <code>app.yml</code></td><td class="ok">全过。编得过、装得上、起得来、不闪退——<b>设置屏那一大批只有一个编译错误</b>（<code>@Bindable</code> 传参该用 <code>$</code>）。</td></tr>
+          <tr><td class="topic">A1 · P3 回归</td><td class="ok">44 项全过（原 42，§15 那条到期断言改完之后多了两条）。</td></tr>
+          <tr><td class="topic">A1 · P4 回归</td><td class="wait">36 过、2 失败。两条都卡在余额上（见上面第 2 条），<b>不是回归</b>。</td></tr>
+          <tr><td class="topic">A1 · P0 回归</td><td class="ok">32 项全过。</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>没验过的是「人用一遍」那一整块</b>——B、C、D、E 四组共 26 项，
+      全都要在真机上走。<b>这个 Phase 到此为止仍然是「做完了，没验」</b>，
+      跟 P6、P7 一样欠着，三个一起还。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
       <h2>还没定的</h2>
     </div>
     <div class="nots">

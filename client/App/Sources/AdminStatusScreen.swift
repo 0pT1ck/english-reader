@@ -29,14 +29,19 @@ struct AdminStatusScreen: View {
                 }
 
                 Section {
-                    ForEach(status.databases.keys.sorted(), id: \.self) { name in
+                    // 带 content 闭包的 `LabeledContent` 第一个参数要
+                    // `LocalizedStringKey`，而这里的名字是个变量——
+                    // 所以两边都显式给 `Text`，别让重载去猜。
+                    ForEach(databaseNames(status), id: \.self) { name in
                         if let database = status.databases[name] {
-                            LabeledContent(name) {
+                            LabeledContent {
                                 Text(database.exists
                                      ? SettingsModel.readable(database.size_bytes)
                                      : "不存在")
                                     .foregroundStyle(database.exists ? .secondary : .red)
                                     .monospacedDigit()
+                            } label: {
+                                Text(name)
                             }
                         }
                     }
@@ -52,12 +57,15 @@ struct AdminStatusScreen: View {
                     if status.logs_last_24h.isEmpty {
                         Text("一条都没有").foregroundStyle(.secondary)
                     } else {
-                        ForEach(status.logs_last_24h.keys.sorted(), id: \.self) { level in
-                            LabeledContent(level,
-                                           value: "\(status.logs_last_24h[level] ?? 0)")
-                                .foregroundStyle(level == "ERROR" || level == "CRITICAL"
-                                                 ? .red : .primary)
-                                .monospacedDigit()
+                        ForEach(logLevels(status), id: \.self) { level in
+                            LabeledContent {
+                                Text("\(status.logs_last_24h[level] ?? 0)")
+                                    .monospacedDigit()
+                            } label: {
+                                Text(level)
+                                    .foregroundStyle(level == "ERROR" || level == "CRITICAL"
+                                                     ? Color.red : Color.primary)
+                            }
                         }
                     }
                 }
@@ -76,6 +84,16 @@ struct AdminStatusScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+    }
+
+    /// 先算成数组再交给 `ForEach`：字典的 `keys.sorted()` 直接写在参数位置上，
+    /// 会让泛型推断连着后面几行一起失败，而报错指的是别的地方。
+    private func databaseNames(_ status: AdminClient.ServerStatus) -> [String] {
+        status.databases.keys.sorted()
+    }
+
+    private func logLevels(_ status: AdminClient.ServerStatus) -> [String] {
+        status.logs_last_24h.keys.sorted()
     }
 
     private func load() async {
