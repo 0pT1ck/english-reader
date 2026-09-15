@@ -80,7 +80,7 @@ struct AdminClient {
         return try await get("logs", query: query)
     }
 
-    func status() async throws -> JSONValue {
+    func status() async throws -> ServerStatus {
         try await get("status")
     }
 
@@ -125,6 +125,29 @@ struct AdminClient {
         let value_type: String
         let value: JSONValue?
         var id: String { key }
+    }
+
+    /// 服务状态里**只取一眼能看出「有没有事」的那几样**：几个库多大、
+    /// 过去一天各级别日志多少、装了哪些模块。别的（事件订阅表、设备清单、
+    /// 待恢复的备份）在手机上帮不上忙，而且它们会把这一屏挤成一张表格。
+    struct ServerStatus: Decodable {
+        let version: String
+        let time: String
+        let dev_mode: Bool
+        let databases: [String: Database]
+        let modules: [Module]
+        let logs_last_24h: [String: Int]
+
+        struct Database: Decodable {
+            let exists: Bool
+            let size_bytes: Int
+        }
+
+        struct Module: Decodable, Identifiable {
+            let name: String
+            let title: String
+            var id: String { name }
+        }
     }
 
     struct LogList: Decodable {

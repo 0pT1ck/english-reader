@@ -37,6 +37,10 @@ final class AppModel {
     /// 的唯一出口，而这个 Phase 没有别的地方能回答这个问题。
     private(set) var pendingEvents: Int = 0
 
+    /// 读不出来的事件文件有几条。**平时是 0**，非零意味着有一次标记既发不出去
+    /// 也读不回来——那时待发数会永远卡着不动，而没有这个数的话，没人知道为什么。
+    private(set) var damagedEvents: Int = 0
+
     init(connection: Connection = Connection(), preferences: Preferences = Preferences()) {
         self.connection = connection
         self.preferences = preferences
@@ -130,6 +134,28 @@ final class AppModel {
 
     func refreshPendingCount() {
         pendingEvents = outbox?.count ?? 0
+        // 分两步写：`try? outbox?.pending()` 嵌两层可选，`?? 0` 只解得开一层。
+        if let outbox, let pending = try? outbox.pending() {
+            damagedEvents = pending.damaged.count
+        } else {
+            damagedEvents = 0
+        }
+    }
+
+    /// 扔掉读不出来的那些事件文件。
+    ///
+    /// **这是个有损失的动作，所以只有人能按。**一条写坏的事件发不出去也读不出来，
+    /// 于是待发数永远减不到零——而它代表的那次标记，扔掉就真的没了。
+    /// 界面上必须把这句话说清楚，然后由人自己决定。
+    @discardableResult
+    func discardDamagedEvents() -> Int {
+        guard let outbox, let damaged = try? outbox.pending().damaged, !damaged.isEmpty
+        else { return 0 }
+        try? outbox.discardDamaged(damaged)
+        log?.write(.warn, "outbox.damaged.discarded", "扔掉了读不出来的事件",
+                   fields: ["count": String(damaged.count)])
+        refreshPendingCount()
+        return damaged.count
     }
 
     /// 把攒着的事件发出去。**界面上失败不作声**——发件箱的全部意义就是失败了

@@ -155,6 +155,9 @@ struct DeveloperScreen: View {
             NavigationLink { AdminLogScreen() } label: {
                 Label("服务端日志", systemImage: "server.rack")
             }
+            NavigationLink { AdminStatusScreen() } label: {
+                Label("服务状态", systemImage: "waveform.path.ecg")
+            }
         } footer: {
             Text("备份与恢复不在这里——那是要坐下来才能做的事。")
         }

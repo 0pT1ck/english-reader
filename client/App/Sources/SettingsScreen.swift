@@ -187,6 +187,25 @@ struct SettingsScreen: View {
                 LabeledContent("上次同步", value: Self.describe(sync))
                     .font(.footnote)
             }
+
+            // 平时这一段根本不出现。出现了就说明待发数会永远卡着不动，
+            // 而这是唯一能说清「为什么」的地方。
+            if app.damagedEvents > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label("\(app.damagedEvents) 条事件读不出来",
+                          systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                    Text("它们既发不出去也读不回来，待发数会一直卡着。"
+                         + "**扔掉它们意味着那几次标记没了。**")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("扔掉它们", role: .destructive) {
+                        app.discardDamagedEvents()
+                        model.load(app)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
         }
     }
 
