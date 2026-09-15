@@ -1,0 +1,561 @@
+<title>部署</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">2026-09-14 / 09-15 · 阿里云 · <b>开发阶段的部署，不是正式迁移</b></div>
+    <h1>部署</h1>
+    <p class="standfirst">把服务端打成 Docker，跑到阿里云那台机器上，
+    让写界面这几天手机有东西可连。<b>三个容器、两条入口、一次被备案拦掉的直连。</b></p>
+    <p class="thesis"><b>这件事原本排在整个项目做完之后。</b>提前的理由是具体的：
+    这几天要远程开发，而手机连不上家里的局域网——界面没有东西可连就验不了。
+    2026-09-14 由用户决定提前。<b>提前的只是「把服务端打成 Docker」这一件事</b>，
+    不是提前部署，也没有动「不跨 Phase 开发」那条铁律。</p>
+    <p class="thesis"><b>阿里云是部署目标，这是终点。</b>但现在跑在上面的是开发期实例：
+    主副本仍在 r5s，正式迁移仍然等整个项目开发完毕。
+    这两句话必须一起读——把它读成「已经部署了」会得出错误的操作结论，
+    最要紧的一条是<b>数据只许 r5s → 阿里云单向流动</b>（§8）。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>两件事在动手之前是不知道的，它们改变了做法。</b>
+    <br><br>
+    <b>一、P0 时写下的 Dockerfile 从来没有被构建过</b>，那份文档明确写着「部署验证推迟到项目末期」。
+    第一次真的去编它，撞出三个静默失败（§3）——每一个都不报错，只是把事情做错。
+    <br><br>
+    <b>二、「未备案只挡 80/443，高端口可用」这个判断是错的。</b>
+    直连在 8443 上跑通了四十分钟，随后被封，而且是<b>按 SNI 掐 TLS</b>（§6）。
+    整套 Caddy 直连因此暂时用不上，改由 Cloudflare Tunnel 承载（§7）。
+  </div>
+
+  <div class="figures">
+    <div class="fig"><div class="fig-val">3</div><div class="fig-key">个容器</div></div>
+    <div class="fig"><div class="fig-val">0</div><div class="fig-key">个入站端口（当前这条路）</div></div>
+    <div class="fig"><div class="fig-val">477</div><div class="fig-key">篇文章已就位</div></div>
+    <div class="fig"><div class="fig-val">1.0<span> MB</span></div><div class="fig-key">今日包，端到端实测</div></div>
+    <div class="fig"><div class="fig-val">3</div><div class="fig-key">个静默失败，构建时撞出</div></div>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>已定的决定</h2>
+      <span class="sec-note">2026-09-14 / 09-15</span>
+    </div>
+    <p class="lede">按定下的先后排。推翻过的那几条在正文里注明。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>#</th><th>决定</th><th>依据</th></tr>
+      <tr><td class="num">1</td><td>部署目标定为阿里云 x86_64</td><td>已有实例，内存实测够用</td></tr>
+      <tr><td class="num">2</td><td>提前做打包，正式迁移仍等项目完毕</td><td>远程开发要用，界面没东西可连就验不了</td></tr>
+      <tr><td class="num">3</td><td>先不搬数据 → <b>09-15 改为搬</b></td><td>空库连上去是空列表，UI 验不了</td></tr>
+      <tr><td class="num">4</td><td>管理台一并暴露公网，只靠密码</td><td>用户定；开发实例上护着的是可丢弃的拷贝</td></tr>
+      <tr><td class="num">5</td><td>HTTPS 走 Caddy + Let's Encrypt</td><td>iOS ATS 不接受公网明文</td></tr>
+      <tr><td class="num">6</td><td>证书走 DNS-01，自编带插件的 Caddy</td><td>未备案时 80/443 不可达，另两种挑战都要那两个端口</td></tr>
+      <tr><td class="num">7</td><td>每个服务一个文件夹，都用 compose</td><td>用户既有惯例，见 <code>/opt/appdata</code></td></tr>
+      <tr><td class="num">8</td><td>Caddy 独立成宿主机公共设施，不进仓库</td><td>将来别的服务也挂它；塞进仓库＝本项目拥有整机入口</td></tr>
+      <tr><td class="num">9</td><td>两个 stack 靠共享网络 <code>proxy</code> 相连</td><td>app 零发布端口，且两边启动顺序无关</td></tr>
+      <tr><td class="num">10</td><td>加一条 Cloudflare Tunnel，Caddy 那条留着</td><td>备案拦截实测（§6）；两条不冲突</td></tr>
+    </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>镜像长什么样</h2>
+    </div>
+    <p class="lede">两段式。构建段有 uv、编译链和轮子缓存，运行段只有解释器、虚拟环境和应用代码。
+    这个划分不是为了好看，是为了<b>公网上那台机器里不该带着一套编译工具链</b>。</p>
+
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>依赖层与代码层分开</b>
+        <span>改一个 <code>.py</code> 不会重新下载 spaCy 那一堆轮子。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>spaCy 模型在构建时装进去</b>
+        <span>它是从 GitHub releases 拉的 12 MB，是整条链上最容易在国内失败的一步——
+        所以让它发生在有出网能力的那台机器上，绝不留到运行时。
+        用 URL 装而不是 <code>spacy download</code>：后者在构建时现解析版本，两次构建可能不一样。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>非 root 运行</b>
+        <span>在家里的局域网上这是迂腐，在开着公网端口的机器上这是「处理函数里的 bug」
+        和「以 root 身份运行的处理函数里的 bug」之间的差别。</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what">
+        <b>数据库只在挂载卷上，绝不进镜像</b>
+        <span>重建或升级容器不许碰到学习记录。</span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what">
+        <b>uvicorn 直接起，不走 <code>run.py</code></b>
+        <span>那个启动器的存在意义是给双击 <code>.bat</code> 的人开浏览器、打印中文提示，
+        这里一条都不适用。加 <code>--proxy-headers</code>，让应用看见真实客户端地址和协议。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>第一次真的构建它，撞出三个静默失败</h2>
+      <span class="sec-note">每一个都不报错</span>
+    </div>
+    <p class="lede">P0 写下这份 Dockerfile 时，部署验证被明确推迟了。所以这是它第一次被执行。
+    三个问题的共同形状是：<b>没有任何东西出错，只是事情被做错了。</b></p>
+
+    <div class="checks">
+      <div class="check"><span class="check-n">1</span><span class="check-what">
+        <b>容器默认 UTC，而这个项目读的是本地时钟</b>
+        <span><code>core/tasks.py:204</code> 把 <code>"04:00"</code> 当成机器所在地的凌晨四点，
+        复习的「当天」也按本地零点切。容器留在 UTC 的话，<b>夜间备稿会在中午跑，日界提前八小时</b>——
+        全程零报错、零日志。镜像里写死 <code>TZ=Asia/Shanghai</code>。</span></span></div>
+      <div class="check"><span class="check-n">2</span><span class="check-what">
+        <b>绑定挂载按 uid 数字比对，不按用户名</b>
+        <span>容器用户的 uid 和宿主机目录的属主对不上，启动即 <code>PermissionError</code>，
+        报错里没有一个字提到权限模型。做成 <code>ER_UID</code>/<code>ER_GID</code> 可覆盖，
+        并把 <code>HOME</code> 设到可写位置——被覆盖成一个 <code>/etc/passwd</code> 里没有的 uid 时，
+        <code>HOME</code> 会是空的，然后某个要缓存目录的库以很难看懂的方式失败。</span></span></div>
+      <div class="check"><span class="check-n">3</span><span class="check-what">
+        <b>不设管理密码，容器直接崩，而报错跟密码无关</b>
+        <span>应用会生成一个密码并追加进 <code>/app/.env</code>——那个文件在镜像里不存在，
+        目录属于 root，于是进程带着一段 <code>PermissionError</code> 栈死掉。
+        compose 里用 <code>${VAR:?一句人话}</code> 提前拦住。</span></span></div>
+    </div>
+
+    <div class="callout" style="margin-top:1.8rem">
+      <b>这三个都是「跑一次」才看得见的。</b>读代码看不出来，
+      因为代码在它自己的假设下是对的——错的是假设，而假设不写在代码里。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>三个容器怎么摆</h2>
+    </div>
+    <p class="lede">按用户的惯例：<code>/opt/appdata</code> 下一个服务一个文件夹，
+    compose 文件在里面，数据目录并排放。</p>
+
+<pre>/opt/appdata/
+├── <b>cloudflared/</b>          出站隧道，当前的入口
+│   ├── docker-compose.yml
+│   └── .env                 TUNNEL_TOKEN
+├── <b>caddy/</b>                宿主机公共反代，等备案
+│   ├── docker-compose.yml
+│   ├── Dockerfile.caddy     自编，带 alidns 插件
+│   ├── Caddyfile            一个站点一段
+│   ├── .env                 域名、ACME 邮箱、DNS 密钥
+│   └── data/ config/        证书
+└── <b>English reader/</b>       仓库直接 clone 成这个目录
+    ├── docker/              Dockerfile、compose、.env
+    └── data/                四个 SQLite 库</pre>
+
+    <p>三者靠一个共享的 Docker 网络 <code>proxy</code> 连起来，
+    <code>docker network create proxy</code> 每台机器建一次，
+    各 stack 都声明 <code>external: true</code>——<b>谁先起谁后起都无所谓</b>。</p>
+
+<pre>手机 ──HTTPS──▶ Cloudflare ──隧道(出站)──▶ [cloudflared]
+                                              │ proxy 网络
+                                              ▼
+                                        [english-reader:8000]
+                                              ▲
+                      [caddy] ────────────────┘   （8443，等备案）</pre>
+
+    <p><b>app 容器一个端口都不发布</b>（<code>expose</code> 而不是 <code>ports</code>），
+    实测 <code>NetworkSettings.Ports</code> 是 <code>{"8000/tcp":null}</code>。
+    这条要守住：publish 出去就等于把整个 API、连同管理接口，用明文挂在公网 IP 上。</p>
+
+    <h3>Caddy 为什么要自己编</h3>
+    <p>官方镜像没有 DNS 插件，而未备案时证书<b>只能走 DNS-01</b>
+    （HTTP-01 要 80、TLS-ALPN-01 要 443，两个都不可达）。
+    所以拿官方的 <code>caddy:2.10-builder</code> 编一个带 <code>alidns</code> 的二进制，
+    再塞进官方的 <code>caddy:2.10-alpine</code>。两段都是官方镜像，只是多编译了一个插件。</p>
+
+    <h3>它为什么不在仓库里</h3>
+    <p>Caddy 现在是宿主机的公共入口，将来别的服务也挂它。
+    <b>放进这个仓库就等于让本项目拥有整台机器的入口</b>，下一个服务要加站点得来改这个仓库。
+    代价说清楚：那三十来行不在版本控制里，重装服务器要重写。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>在那台机器上构建，三条取包的路都要换</h2>
+      <span class="sec-note">73 KB/s → 496 秒</span>
+    </div>
+    <p class="lede">第一次构建跑了五十分钟只拉到 220 MB。问题不在镜像源，在守护进程。</p>
+
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>别给那台的 Docker 守护进程配代理。</b>
+      <span>BuildKit 会把守护进程的代理注入<b>每一个构建步骤</b>，
+      而那台的 mihomo 只有 73 KB/s。装依赖要几个小时。
+      去掉代理、改用国内源之后，同一层 <b>496 秒</b>装完。</span></span></div>
+      <div class="not"><i>2</i><span><b><code>docker.io</code> 要配镜像源，而且要能用的那种。</b>
+      <span>机器上原有的 <code>docker.xuanyuan.me</code> 会 403 限流，
+      <b>而且不回落到官方源</b>——整个构建当场失败，错误信息是那家的广告。
+      换成别的之后 <code>python:3.12-slim</code> 17.5 秒拉完。</span></span></div>
+      <div class="not"><i>3</i><span><b>宿主机连得上，不等于容器里连得上。</b>
+      <span><code>github.com</code> 在宿主机上有 484 KB/s，<b>在容器里是 000（完全不通）</b>。
+      我先在宿主机上量了速度、判断「直连就行」，然后构建在那一步失败。
+      判断某条路行不行，要<b>在 <code>docker run</code> 里判</b>。</span></span></div>
+    </div>
+
+    <div class="table-scroll" style="margin-top:1.8rem">
+    <table>
+      <tr><th>要什么</th><th>换成</th><th>怎么传</th></tr>
+      <tr><td>Python 包</td><td class="topic">mirrors.aliyun.com</td><td><code>PYPI_INDEX</code></td></tr>
+      <tr><td>Go 模块（编 Caddy）</td><td class="topic">goproxy.cn</td><td><code>GOPROXY</code></td></tr>
+      <tr><td>spaCy 模型</td><td class="topic">ghfast.top 前缀</td><td><code>SPACY_MODEL_URL</code></td></tr>
+      <tr><td>基础镜像</td><td class="topic">dockerproxy.net 等</td><td>守护进程 <code>registry-mirrors</code></td></tr>
+    </table>
+    </div>
+
+    <p style="margin-top:1.2rem">三个都是 Dockerfile 里的<b>参数，默认仍是官方源</b>——
+    仓库里的默认值不要改，换源是那台机器的事。
+    实际用的命令存在服务器上 <code>/root/build-er.sh</code> 和 <code>/root/build-caddy.sh</code>，
+    重建照着跑，不用重新想。</p>
+
+    <div class="callout" style="margin-top:1.8rem">
+      <b>一个和本项目无关但值得记的坑：</b><code>pkill -f &lt;模式&gt;</code> 会杀掉你自己那条命令。
+      <code>ssh host 'pkill -f "X"'</code> 的远端 shell，命令行里就含着 <code>X</code>，于是它匹配到自己，
+      <b>后半截脚本静默地不执行</b>，看起来像 ssh 断了。一小时里栽了三次，
+      第三次是换成 <code>pgrep</code> 之后还栽。正确做法是先取 PID 再按 PID 杀。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>备案：一个被实测推翻的判断</h2>
+      <span class="sec-note">这一节是这次最重要的发现</span>
+    </div>
+    <p class="lede">动手前我判断：「未备案只挡 80/443，高端口不在封禁范围，
+    所以 HTTPS 开在 8443 就能用。」<b>这个判断是错的。</b></p>
+
+    <p>直连在 <code>https://reader.cntick.top:8443</code> 上<b>确实跑通了</b>——
+    证书签发成功，从公网取 <code>/health</code> 返回 200，管理台、客户端接口、安全响应头全部正常。
+    <b>四十分钟后，同样的请求全部失败。</b></p>
+
+    <h3>怎么确定是备案拦截，而不是别的</h3>
+    <p>一开始的几个判断都不成立，值得记下来：</p>
+
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>不是安全组。</b>
+      <span>端口通着，明文 HTTP 打 8443 拿得到 Caddy 的 400。</span></span></div>
+      <div class="not"><i>×</i><span><b>不是 MTU 黑洞。</b>
+      <span>曾经很像：小包过得去、TLS 握手的大包过不去，而客户端侧量到路径 MTU 只有 1488。
+      但服务器出方向 1472 带 DF 通、5 MB 的 TLS 下载正常。</span></span></div>
+      <div class="not"><i>×</i><span><b>不是 Caddy。</b>
+      <span>它的日志从证书签发之后再没有任何连接记录——请求根本没到它那里。</span></span></div>
+      <div class="not"><i>×</i><span><b>「换个 SNI 也失败」这个对照不成立。</b>
+      <span>我用 <code>SNI=example.com</code> 做对照，也失败，于是一度以为「不是按域名掐的」。
+      <b>但 Caddy 只配了一个站点，对陌生 SNI 本来就会中断握手</b>——
+      这个测试分不出两种情况，等于没测。</span></span></div>
+    </div>
+
+    <h3>决定性的那一个测试</h3>
+    <p>对同一个 IP、同一个端口做两次 TLS 握手，唯一的差别是带不带 SNI：</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>握手</th><th>结果</th><th>说明</th></tr>
+      <tr><td><b>不带 SNI</b></td><td class="ok">有字节回来</td>
+          <td>Caddy 回 <code>fatal internal_error</code>：没有 SNI 它挑不了证书</td></tr>
+      <tr><td><b>带 <code>reader.cntick.top</code></b></td><td class="none">一个字节都没有</td>
+          <td>连接静默中断，服务端毫无察觉</td></tr>
+      <tr><td>明文 HTTP，同端口</td><td class="ok">400</td><td>Caddy 应答的</td></tr>
+    </table>
+    </div>
+
+    <p style="margin-top:1.2rem"><b>同一条路、同一个端口，只有带那个域名 SNI 的 TLS 被中途丢弃。</b>
+    这是决定性的：端口是通的、Caddy 是好的、MTU 是好的、TLS 本身是通的——
+    被识别并处理掉的就是那个域名。</p>
+
+    <div class="callout">
+      <b>要记住的不只是结论，还有方法。</b>
+      「换个 SNI 也失败」和「不带 SNI 有回应」看起来是同一类测试，
+      前者分不出两种情况，后者分得出。<b>判断一个测试有没有用，问的不是「它报不报错」，
+      而是「它区分得开吗」。</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>两条入口，都留着</h2>
+    </div>
+    <p class="lede">用户选了两条并行：隧道现在用，直连等备案。两者不冲突，
+    已经建好的东西一点不浪费。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th></th><th>A · Cloudflare Tunnel</th><th>B · Caddy 直连</th></tr>
+      <tr><td>地址</td><td><code>reader.cfoptick.com</code></td><td><code>reader.cntick.top:8443</code></td></tr>
+      <tr><td>状态</td><td class="ok">在用</td><td class="wait">建好了，被挡着</td></tr>
+      <tr><td>入站端口</td><td>0 个</td><td>8443</td></tr>
+      <tr><td>证书</td><td>Cloudflare 提供</td><td>Let's Encrypt，DNS-01，到 2026-12-14</td></tr>
+      <tr><td>延迟</td><td class="num">0.85–1.4 s</td><td class="num">直连，未测</td></tr>
+      <tr><td>备案</td><td>无关</td><td>过审前不可用</td></tr>
+    </table>
+    </div>
+
+    <p style="margin-top:1.2rem"><b>隧道之所以拦不到，是因为没有入站连接。</b>
+    <code>cloudflared</code> 从服务器主动出去连 Cloudflare，中间设备没有 SNI 可读。
+    代价是流量要绕一圈——实测隧道连的是 Cloudflare 的洛杉矶节点，
+    所以有接近一秒的延迟。</p>
+
+    <p>备案过审之后，把 <code>HTTPS_PORT</code> 改回 443、App 里换个地址就切回直连了。
+    <b>Caddy 那套不要删。</b></p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>数据怎么上去的，以及不许怎么下来</h2>
+      <span class="sec-note">这一节关系到一条不变量</span>
+    </div>
+    <p class="lede">原本定的是「先不搞数据」。但要验的是界面——
+    <b>空库连上去是空列表，列表、点词、复习几屏一个都验不了</b>。所以改成搬。</p>
+
+    <h3>快照不是 <code>cp</code></h3>
+    <p>三个库都有 WAL，直接拷可能拷出不一致的状态。用 <code>VACUUM INTO</code> 做一致性快照，
+    顺便压实：</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>库</th><th>原始</th><th>快照</th><th>内容</th></tr>
+      <tr><td><code>learning.db</code></td><td class="num">43.4 MB</td><td class="num">39.4 MB</td>
+          <td>477 篇文章、224,777 token、210 条待复习</td></tr>
+      <tr><td><code>content.db</code></td><td class="num">20.1 MB</td><td class="num">19.4 MB</td>
+          <td>13,741 义项、10,471 词族</td></tr>
+      <tr><td><code>dictionary.db</code></td><td class="num">116.3 MB</td><td class="num">110.9 MB</td>
+          <td>404,011 词条、318,207 词组</td></tr>
+    </table>
+    </div>
+
+    <p style="margin-top:1.2rem">传输 43 秒（<code>scp -C</code>），到达后三个库
+    <code>PRAGMA integrity_check</code> 全部 <code>ok</code>。</p>
+
+    <h3>副本上改了三处</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>夜间备稿关掉</b>
+      <span><code>task_generation_daily_enabled=false</code>。两台机器各自在 04:00 生成，
+      既烧钱，又让两边的 <code>content.db</code> 分叉——<b>而分叉之后你分不出哪份是对的</b>。</span></span></div>
+      <div class="not"><i>2</i><span><b>Bark 推送关掉</b>
+      <span>开发实例的告警混进真通道，就是在训练自己忽略它，而它是夜间任务失败的唯一出口。</span></span></div>
+      <div class="not"><i>3</i><span><b>两个 Web 页令牌换新</b>
+      <span>它们在公网上等于免密入口，副本不与主副本共用。</span></span></div>
+    </div>
+
+    <p style="margin-top:1.2rem"><b><code>data/secrets.json</code> 没有拷上去</b>——
+    那是 API 密钥，而那台机器的管理台开在公网上。所以开发实例上没有密钥，也生成不了东西。</p>
+
+    <div class="callout">
+      <b>开发阶段数据只许单向流动：r5s → 阿里云，永不回流。</b>
+      主副本一直在 r5s；开发实例上产生的标记、读完、复习记录<b>全部作废</b>，
+      别当成学习记录，别拷回来。这样「任何时候只有一份在被写」仍然成立。
+      <b>正式迁移的那一刻方向会反过来</b>，那是一次性的整体搬迁，不是同步。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>实测到哪一步</h2>
+      <span class="sec-note">都是真跑出来的</span>
+    </div>
+
+    <div class="checks">
+      <div class="check"><span class="check-n">1</span><span class="check-what">
+        <b>镜像能编、容器能起</b>
+        <span>先在 r5s 上（arm64）验证 Dockerfile 本身正确，再在目标机上编 amd64。
+        <code>english-reader:latest</code> 668 MB，<code>caddy-dns:latest</code> 144 MB。</span></span></div>
+      <div class="check"><span class="check-n">2</span><span class="check-what">
+        <b>四个库迁移完成、健康检查通过、容器内时间是 CST</b>
+        <span>最后一条是在验 <code>TZ</code> 那个静默失败真的修好了。</span></span></div>
+      <div class="check"><span class="check-n">3</span><span class="check-what">
+        <b>app 零发布端口</b>
+        <span><code>{"8000/tcp":null}</code>。而且这条断言换过一次——
+        一开始我用 <code>/dev/tcp</code> 扫端口，它对 8000/80/443 都说「开着」，
+        <b>分不出两种情况</b>。改成发真实 HTTP 请求 + 看服务器 <code>ss</code> 才算数。</span></span></div>
+      <div class="check"><span class="check-n">4</span><span class="check-what">
+        <b>端到端取到今日包</b>
+        <span>从公网签发设备令牌，再用它取 <code>/v1/client/today</code>：
+        200、1,034,294 字节、3 篇文章、21 条复习、2.8 秒。<b>这是「手机连上去有东西读」的真正答案</b>，
+        容器健康不是。</span></span></div>
+    </div>
+
+    <div class="figures" style="margin-top:2rem">
+      <div class="fig"><div class="fig-val">1613<span> MB</span></div><div class="fig-key">机器总内存，无 swap</div></div>
+      <div class="fig"><div class="fig-val">117<span> MB</span></div><div class="fig-key">app 容器占用</div></div>
+      <div class="fig"><div class="fig-val">4.7<span> / 40 GB</span></div><div class="fig-key">磁盘</div></div>
+      <div class="fig"><div class="fig-val">2.8<span> s</span></div><div class="fig-key">今日包，经隧道</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>欠着的，和动过的</h2>
+    </div>
+
+    <h3>欠着的</h3>
+    <div class="nots">
+      <div class="not"><i>!</i><span><b>Tunnel token 贴进过对话，该刷一串</b>
+      <span>它能让人跑一个自己的连接器接管那个主机名的流量，包括设备令牌。
+      拿不到账号权限，但换一串更干净。</span></span></div>
+      <div class="not"><i>!</i><span><b>ICP 过审后切回直连</b>
+      <span>能省掉那接近一秒的延迟。Caddy 那套不要删。</span></span></div>
+      <div class="not"><i>!</i><span><b>正式迁移还没做</b>
+      <span>仍然等整个项目开发完毕。那时数据流动方向反过来，是一次性搬迁。</span></span></div>
+    </div>
+
+    <h3>在那台机器上动过的配置</h3>
+    <div class="nots" style="margin-top:1rem">
+      <div class="not"><i>·</i><span><b>换了 Docker 镜像源</b>
+      <span>原有的会 403 限流且不回落官方源。原文件备份在
+      <code>/etc/docker/daemon.json.bak-2026-09-14</code>。</span></span></div>
+      <div class="not"><i>·</i><span><b>加了 DNS A 记录</b>
+      <span><code>reader.cntick.top</code> → <code>47.116.104.62</code>，用 RAM 子账号经 API 加的。</span></span></div>
+      <div class="not"><i>·</i><span><b>中途把 Docker 弄挂过一次</b>
+      <span>往 <code>daemon.json</code> 加了个 <code>_comment</code> 键，而它不接受未知键，
+      守护进程起不来。已修复。<b>那个文件不能写注释。</b></span></span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader · 部署</span>
+    <span>2026-09-14 / 09-15</span>
+    <span>阿里云 47.116.104.62 · x86_64 · Ubuntu 24.04</span>
+  </footer>
+
+</div>
