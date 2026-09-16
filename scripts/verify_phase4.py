@@ -228,11 +228,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               and "enable_thinking" not in body_none,
               "关掉思考在写文章那处实测 5/10 → 8/10、61.6 秒 → 9.1 秒")
 
-        untouched = [k for k in kinds
-                     if str(runtime_config.get(jobs.thinking_key(k))) != "default"]
-        check("A5.2", "其余八处的思考开关保持默认",
-              untouched in ([], ["generate_article"]),
-              f"非默认的：{untouched or '无'}——只有写文章那处有实测依据（决定 19）")
+        # 2026-09-16 放宽。原文断言「只有 `generate_article` 可以非默认，
+        # 其余保持 default」——理由是只有写文章那处有实测依据（决定 19）。
+        # 而用户当天定了**十个 worker 统一走 `deepseek-flash` 并一律关思考**
+        # （见 CLAUDE.md「模型与中转站」），于是十处全非默认，这条天天报红，
+        # 而红的时候什么也没坏：那是一个人做的决定，不是代码跑偏。
+        #
+        # 守始终成立的那一半：**有实测依据的那一处必须是关的**。
+        # 别的几处是不是默认，交给 detail 如实说出来——它是情报，不是失败。
+        writing = str(runtime_config.get(jobs.thinking_key("generate_article")))
+        others = {k: str(runtime_config.get(jobs.thinking_key(k)))
+                  for k in kinds if k != "generate_article"}
+        non_default = sorted(k for k, v in others.items() if v != "default")
+        check("A5.2", "写文章那处的思考是关的（唯一有实测依据的一处）",
+              writing == "off",
+              f"写文章={writing}；另外 {len(others)} 处里 {len(non_default)} 处非默认"
+              + (f"（{'、'.join(non_default[:4])}…）" if non_default else "")
+              + "——非默认不算错，但它们没有实测依据，掉质量先查这里")
 
         # --- B. 每日供给 --------------------------------------------------- #
         print("\nB. 每日供给")

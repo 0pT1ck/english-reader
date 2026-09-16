@@ -550,8 +550,7 @@ def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
         # with neither has no business sitting in the queue, and leaving it
         # there would make the ledger claim a signal the learner withdrew. The
         # row itself stays: it still records that the item was met, and when.
-        demoted = repository.demote_if_unmarked(learner_id, key, sense_id,
-                                                item_type=item_type)
+        repository.demote_if_unmarked(learner_id, key, sense_id, item_type=item_type)
         # **退回词池还不够：今天的复习队列里那一行还在。**
         # 上面那段注释写着「留在队列里等于让账本宣称一个学习者已经撤回的信号」——
         # 而在 2026-09-16 真机上发现，说的是意图，做的只有 `study_states`
@@ -559,9 +558,17 @@ def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
         #
         # 队列是 review 模块的表，所以这里只发事件，由那边决定这对复习意味着
         # 什么——跟「读完文章补句子池」同一个接法（架构铁律 6）。
-        if demoted:
-            events.emit("word.unmarked", learner_id=learner_id,
-                        item_type=item_type, item_key=key, sense_id=sense_id)
+        # **无条件发，不看词池变没变**（2026-09-16 订正）。
+        # 上一版写的是「`demote_if_unmarked` 返回 True 才发」——而那个函数
+        # 只在 `reviewing → new` 真的发生时才返回 True。于是一个**已经退回过**
+        # 的词再撤一次就什么都不发生，而这正是真机上遇到的情形：
+        # 旧版本执行过 demote 那一半、没关队列行，之后再点多少次都没用。
+        #
+        # 两件事的前提不同：「词池位置变没变」是关于 `study_states` 的，
+        # 「今天那道题还该不该问」是关于队列的。共用一个判断，第二件就会
+        # 在第一件已经完成时被跳过。
+        events.emit("word.unmarked", learner_id=learner_id,
+                    item_type=item_type, item_key=key, sense_id=sense_id)
         return
 
     raise InvalidRequest("未知的事件类型", type=event_type)
