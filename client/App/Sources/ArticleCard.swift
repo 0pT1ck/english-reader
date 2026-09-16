@@ -20,6 +20,12 @@ struct ArticleCard: Identifiable, Hashable {
     /// 「待学」= 这篇的目标词里还没进入学习流程的个数（决定 4、5）。
     /// **真题恒为 nil**：真题不为教任何词而写，`target_count` 恒为 0。
     let pending: Int?
+    /// 备稿日期，`Sep 16` 这样。卡片第一行右端，和话题同一行。
+    ///
+    /// **真题也有**：它那一格填的是入库的时刻，项目里这个字段一直叫「备稿时间」
+    /// （排序选项里就是这么写的），对真题同样成立，所以不像话题那样留空。
+    /// 解析不出来就是空字符串——那一行本来也可以空着。
+    let preparedLine: String
     let isRead: Bool
 
     var isExamPaper: Bool { source != "generated" }
@@ -40,6 +46,7 @@ struct ArticleCard: Identifiable, Hashable {
         source = item.source
         sourceLabel = item.source_label
         wordCount = item.word_count
+        preparedLine = Self.day(from: item.prepared_at)
         isRead = item.read_at != nil
 
         let isGenerated = item.source == "generated"
@@ -51,5 +58,37 @@ struct ArticleCard: Identifiable, Hashable {
         // 真题的 `target_count` 恒为 0（它不为教任何词而写），所以待学对它
         // 没有意义——显示 0 会被读成「都学完了」。
         pending = isGenerated ? item.pending_count : nil
+    }
+
+    /// `2026-09-15T11:13:10+00:00` → `Sep 16`。
+    ///
+    /// **按本地时区折算。**服务端存的是 UTC，而夜间备稿是凌晨四点跑的——
+    /// 北京时间 09-16 04:00 在 UTC 上是 09-15 20:00，照 UTC 写就会比
+    /// 「昨天夜里备的」整整差一天，而这一行正是给人看哪天备的。
+    ///
+    /// **locale 写死 `en_US_POSIX`**：跟着系统走的话中文机器上 `MMM`
+    /// 出来的是「9月」，而要的格式是 `Sep 16`。
+    ///
+    /// Formatter 都是 computed 而不是 `static let`——它们不是 `Sendable`，
+    /// 严格并发下存起来编译不过（`Log.swift` 里是同一个形状）。
+    private static func day(from iso: String?) -> String {
+        guard let iso else { return "" }
+        let parsers: [ISO8601DateFormatter.Options] = [
+            [.withInternetDateTime],
+            // 服务端现在写的是秒级，但 `isoformat()` 换个 timespec 就会带上
+            // 小数秒，而那时上面这个解析器只会静默返回 nil。
+            [.withInternetDateTime, .withFractionalSeconds],
+        ]
+        for options in parsers {
+            let parser = ISO8601DateFormatter()
+            parser.formatOptions = options
+            if let date = parser.date(from: iso) {
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                formatter.dateFormat = "MMM d"
+                return formatter.string(from: date)
+            }
+        }
+        return ""
     }
 }

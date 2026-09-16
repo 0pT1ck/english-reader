@@ -86,10 +86,14 @@ private struct ArticleCardRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(card.topline)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text(card.topline)
+                Spacer()
+                Text(card.preparedLine)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
 
             Text(card.title)
                 .font(.headline)
