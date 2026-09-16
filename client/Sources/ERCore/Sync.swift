@@ -32,6 +32,26 @@ public struct DayPackage: Sendable {
     /// would silently hide 452 exam papers and look complete while doing it.
     public var excludesExamPapers: Bool { decoded.excludes_exam_papers }
 
+    /// 服务端定的那几个数：每天几篇、「新备的」算几天、答错之后权重乘多少、
+    /// 拼写开不开。**客户端只读它们**——改它们是管理接口的事（P8 §7），
+    /// 而这几个值本来就随今日包发下来了，接进界面是零成本的。
+    public var settings: Components.Schemas.TodaySettings { decoded.settings }
+
+    /// 这份包是哪一天的。缓存要不要用，全看它——**昨天的包不是「旧一点」，
+    /// 是错的**：题目做完了、日期变了，照着它渲染会让人对着一份不存在的
+    /// 队列答题。
+    public var day: String? { decoded.day ?? decoded.reviews.day }
+
+    /// 顶层回显的学习者。客户端据此认出「这是别人的缓存」，
+    /// 而设置页拿它显示名字——**它是服务端给的值，不是自己编的**。
+    public var learner: Components.Schemas.Learner { decoded.learner }
+
+    /// 哪些留好的位置真的有值了。`level_estimate` 至今为假，
+    /// 所以账号那一行写的是「功能待开发」而不是空白或者 0。
+    public var capabilities: Components.Schemas.Capabilities { decoded.capabilities }
+
+    public var articleCount: Int { decoded.articles.count }
+
     public var metadata: [ArticleMeta] {
         decoded.articles.map { article in
             ArticleMeta(
@@ -85,15 +105,27 @@ public actor SyncEngine {
     /// throwing on an absent one.
     public func fetchDay() async throws -> DayPackage {
         do {
+            // **先问「变了吗」，而不是直接要一兆。**服务端拿本地这一份的版本号
+            // 比一比，没变就回 304 和零字节——今日包实测约 1 MB，过隧道
+            // 0.85–1.4 秒，而绝大多数时候它跟盘上那份**一模一样**。
+            var headers: [String: String] = [:]
+            if let etag = day.etag(), day.load() != nil {
+                headers["If-None-Match"] = etag
+            }
             let response = try await transport.send(
-                HTTPRequest(method: .get, path: "/v1/client/today"))
+                HTTPRequest(method: .get, path: "/v1/client/today", headers: headers))
+
+            if response.isNotModified, let cached = day.load() {
+                // 没变。本地那份就是最新的，一个字节都不用传。
+                return try DayPackage(raw: cached)
+            }
             guard response.isOK else {
                 throw TransportError.server(
                     status: response.status,
                     body: String(decoding: response.body.prefix(400), as: UTF8.self))
             }
             let package = try DayPackage(raw: response.body)
-            try day.store(response.body)
+            try day.store(response.body, etag: response.header("ETag"))
             try articles.remember(package.metadata)
             for article in package.articles where article.preparing == nil {
                 // Cached individually as well as inside the package: an article
@@ -108,6 +140,23 @@ public actor SyncEngine {
             guard case .offline = error, let cached = day.load() else { throw error }
             return try DayPackage(raw: cached)
         }
+    }
+
+    /// The cached package, without touching the network.
+    ///
+    /// **`fetchDay` asks the server first and only falls back to this when the
+    /// radio is off — which is not what 架构前提 2 describes.** The package is
+    /// meant to be what the day runs on; re-fetching it before showing anything
+    /// means every entry to the review tab waits for a megabyte to come back
+    /// through the tunnel, measured at 0.85–1.4s because it goes via Los
+    /// Angeles. The screen has the answer on disk the whole time.
+    ///
+    /// So callers show this first and refresh behind it. `day` is checked by
+    /// the caller against its own idea of today: a package from yesterday is a
+    /// wrong answer, not a stale one.
+    public func cachedDay() -> DayPackage? {
+        guard let data = day.load() else { return nil }
+        return try? DayPackage(raw: data)
     }
 
     /// One article, from the cache when it is there and from the server when it
@@ -135,6 +184,25 @@ public actor SyncEngine {
             try articles.storeBody(id, response.body)
         }
         return decoded
+    }
+
+    /// The check-in calendar and the streak.
+    ///
+    /// Its own endpoint rather than fields on the day package, because
+    /// 跨 Phase 不变量 only allows obvious shapes to be reserved in place and a
+    /// list of days is not one. No offline fallback: a calendar that silently
+    /// shows stale days is worse than one that says it could not load.
+    public func calendar(days: Int = 7)
+        async throws -> Components.Schemas.CalendarResponse {
+        let response = try await transport.send(
+            HTTPRequest(method: .get, path: "/v1/client/reviews/calendar?days=\(days)"))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return try JSONDecoder().decode(
+            Components.Schemas.CalendarResponse.self, from: response.body)
     }
 
     public func library(shelf: String = "fresh", source: String? = nil)

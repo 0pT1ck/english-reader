@@ -363,9 +363,11 @@ func review() async throws {
 /// **Not a free choice.** The sentences you already read are hints; the ones you
 /// have not are questions — so asking with a hint would be showing the answer.
 /// The server has already split them, and this only picks within the right pile.
+/// Delegates: which sentence a direction asks with is a rule, and it now lives
+/// in Core so the phone and this cannot disagree about it.
 func askedSentence(_ card: Components.Schemas.ReviewItem,
                    _ direction: ReviewDirection) -> Components.Schemas.SentenceCard? {
-    card.questions.first ?? card.hints.first
+    HintLadder.askedSentence(for: card, direction: direction)
 }
 
 func question(_ card: Components.Schemas.ReviewItem,

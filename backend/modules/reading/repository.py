@@ -46,7 +46,8 @@ def _now() -> str:
 # --------------------------------------------------------------------------- #
 
 
-def create_article(source: str, source_ref: str, title: str, body: str) -> int:
+def create_article(source: str, source_ref: str, title: str, body: str, *,
+                   topic: str | None = None, summary_zh: str | None = None) -> int:
     """Reserve a row before analysis starts, so a crash leaves a visible failure.
 
     Returns the existing id when this source has already been ingested — a paper
@@ -63,8 +64,9 @@ def create_article(source: str, source_ref: str, title: str, body: str) -> int:
 
     cursor = conn.execute(
         "INSERT INTO reading_articles (source, source_ref, title, body, status,"
-        " prepared_at, created_at) VALUES (?,?,?,?,'pending',?,?)",
-        (source, source_ref, title, body, _now(), _now()),
+        " topic, summary_zh, prepared_at, created_at)"
+        " VALUES (?,?,?,?,'pending',?,?,?,?)",
+        (source, source_ref, title, body, topic, summary_zh, _now(), _now()),
     )
     conn.commit()
     return int(cursor.lastrowid or 0)
@@ -159,14 +161,32 @@ def list_articles(
     # being marked — it says what the generator aimed at, which is what makes a
     # generated article different from an exam paper (which aimed at nothing and
     # reads 0).
+    # 「待学」= 这篇的目标词里**还没进入学习流程**的个数。
+    #
+    # 判据是标记，不是「有没有 study_states 行」——读完一篇文章会给它遇见过的
+    # 每个词都留一行（记的是遇见次数），所以按行的有无来数，读过一篇之后这个
+    # 数就会莫名其妙地归零。进复习队列只有标记一条路，所以数的就是标记。
+    #
+    # 第二个条件管的是已经学出师的词：它们标记还留着，但不该再算「待学」。
+    #
+    # **真题恒为 0**，因为它们的 target_count 本来就是 0——真题不为教任何词而写。
     rows = get_connection("learning").execute(
         "SELECT a.*, p.percent, p.sentence_seq,"
         " (SELECT COUNT(DISTINCT t.headword) FROM reading_tokens t"
-        "  WHERE t.article_id = a.id AND t.is_target = 1) AS target_count"
+        "  WHERE t.article_id = a.id AND t.is_target = 1) AS target_count,"
+        " (SELECT COUNT(DISTINCT t.headword) FROM reading_tokens t"
+        "  WHERE t.article_id = a.id AND t.is_target = 1"
+        "    AND NOT EXISTS (SELECT 1 FROM study_marks m"
+        "                    WHERE m.learner_id = ? AND m.item_type = 'word'"
+        "                      AND m.item_key = t.headword)"
+        "    AND NOT EXISTS (SELECT 1 FROM study_states s"
+        "                    WHERE s.learner_id = ? AND s.item_type = 'word'"
+        "                      AND s.item_key = t.headword AND s.pool <> 'new')"
+        " ) AS pending_count"
         " FROM reading_articles a"
         " LEFT JOIN reading_progress p ON p.article_id = a.id AND p.learner_id = ?"
         f" WHERE {' AND '.join(where)}",
-        [learner_id, *params],
+        [learner_id, learner_id, learner_id, *params],
     ).fetchall()
 
     items = []

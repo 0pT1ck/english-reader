@@ -124,16 +124,36 @@ def scheduler(*, fuzz: bool | None = None) -> Scheduler:
     return Scheduler(**kwargs)
 
 
-def rating_for(misses: int, *, easy: bool = False) -> Rating:
+def rating_for(misses: int, *, easy: bool = False, revealed: int = 0,
+               capped: bool = False) -> Rating:
     """Grade from how many times the item was missed today.
 
     ``easy`` is only honoured on a clean round: claiming a word was trivial
     after failing it twice is not a claim about anything.
+
+    ``revealed`` — **taking a hint costs a grade** (P7 决定，2026-09-13). Until
+    then the hint was free: reveal the context and the first letter, press
+    「认识」, and the scheduler saw ``misses=0`` → ``Good`` and stretched the
+    interval exactly as if you had recalled it unaided. FSRS's ``Hard`` already
+    means "recalled, but with effort", which is what a hint says.
+
+    ``capped`` — the same ceiling, for a different reason: a word marked
+    今天 as 模糊 enters today's pool (P7 推翻 P3 决定 18), but you read it
+    minutes ago, so answering it correctly proves nothing. Scheduling it as
+    ``Good`` would inflate the first interval for **the most commonly used
+    mark there is**. Capping keeps the review without believing it.
+
+    Both only ever lower the grade — neither can turn a miss into a pass.
     """
     misses = max(0, int(misses))
     if easy and misses == 0:
         return EASY_RATING
-    return MISS_RATING.get(misses, WORST_RATING)
+    rating = MISS_RATING.get(misses, WORST_RATING)
+    if (int(revealed) > 0 or capped) and rating is EASY_RATING:
+        rating = MISS_RATING[0]
+    if (int(revealed) > 0 or capped) and rating is MISS_RATING[0]:
+        rating = MISS_RATING[1]          # Good → Hard
+    return rating
 
 
 def _parse(value: Any) -> datetime | None:
@@ -179,14 +199,15 @@ def from_card(card: Card, *, reps: int, lapses: int) -> dict[str, Any]:
 
 
 def review(state: dict[str, Any] | None, misses: int, now: datetime,
-           *, easy: bool = False, fuzz: bool | None = None) -> Outcome:
+           *, easy: bool = False, revealed: int = 0, capped: bool = False,
+           fuzz: bool | None = None) -> Outcome:
     """One item, one day's worth of asking, resolved into the next due date.
 
     ``misses`` is how many times the day's round was failed. ``now`` is passed
     in rather than read from the clock so that the schedule can be tested
     without waiting.
     """
-    rating = rating_for(misses, easy=easy)
+    rating = rating_for(misses, easy=easy, revealed=revealed, capped=capped)
     card = to_card(state)
     updated, _log = scheduler(fuzz=fuzz).review_card(card, rating, now)
 

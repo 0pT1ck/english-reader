@@ -191,7 +191,8 @@ def analyse_into(article_id: int, body: str, target_words: set[str]) -> dict[str
 
 
 def ingest(source: str, source_ref: str, title: str, body: str, *,
-           target_words: set[str] | None = None) -> int:
+           target_words: set[str] | None = None,
+           topic: str | None = None, summary_zh: str | None = None) -> int:
     """Full ingest of one article, up to the point annotation takes over.
 
     Analysis and difficulty are synchronous — they are local and take under a
@@ -201,7 +202,8 @@ def ingest(source: str, source_ref: str, title: str, body: str, *,
     if not body or not body.strip():
         raise InvalidRequest("文章正文是空的")
 
-    article_id = repository.create_article(source, source_ref, title, body)
+    article_id = repository.create_article(
+        source, source_ref, title, body, topic=topic, summary_zh=summary_zh)
     current = repository.article_row(article_id)
     if current["status"] == "ready":
         return article_id
@@ -324,7 +326,8 @@ def ingest_draft(draft_id: int) -> int:
     from backend.core.db import get_connection
 
     row = get_connection("learning").execute(
-        "SELECT id, title, body, target_words FROM generation_drafts WHERE id = ?",
+        "SELECT id, title, body, target_words, topic, summary_zh"
+        " FROM generation_drafts WHERE id = ?",
         (draft_id,),
     ).fetchone()
     if row is None:
@@ -340,6 +343,9 @@ def ingest_draft(draft_id: int) -> int:
     return ingest(
         "generated", f"draft-{draft_id}", row["title"] or f"草稿 {draft_id}",
         row["body"], target_words=targets,
+        # 话题与概括是写的时候就定下的，入库只是搬过来——重新算一遍既是重复
+        # 付钱，也会让同一篇文章在草稿页和列表里说两句不同的话。
+        topic=row["topic"], summary_zh=row["summary_zh"],
     )
 
 

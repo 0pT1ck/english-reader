@@ -23,7 +23,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.review import routes, sentences
+from backend.modules.review import repository, routes, sentences, translate
 from backend.modules.review.schema import MIGRATIONS
 
 log = get_logger("review")
@@ -173,6 +173,32 @@ runtime_config.register(
         group="review",
         order=80,
     ),
+    runtime_config.ConfigSpec(
+        key="review_translate_batch",
+        default=10,
+        value_type="int",
+        title="翻译句子时一批几条",
+        description=(
+            "看中文想英文那个方向的题面，是句子的中文译文。翻译一条一条互不相干，"
+            "但输出长度会累积——P1c 实测过快模型在长结构化列表的后半段会漂。"
+            "所以批次切小，宁可多跑几批。"
+        ),
+        group="review",
+        order=90,
+    ),
+    runtime_config.ConfigSpec(
+        key="review_translate_provider",
+        default="",
+        value_type="str",
+        title="翻译句子用哪个提供商",
+        description=(
+            "留空就走默认提供商。翻译是整理不是写作，要的是快模型。"
+            "2026-09-13 实测：中转站上 deepseek-flash 与 deepseek-v4-flash-0731 都可用，"
+            "而且是两个不同的模型、不是别名。"
+        ),
+        group="review",
+        order=91,
+    ),
 )
 
 
@@ -180,6 +206,38 @@ def _register_workers() -> None:
     """Batch work this module contributes. Registered at startup so the module
     can be removed as a directory without leaving a dangling job kind."""
     jobs.register_worker(sentences.WORKER)
+    jobs.register_worker(translate.WORKER)
+
+
+def on_word_unmarked(event: Event) -> None:
+    """撤回标记之后，把它今天的那道题也收掉。
+
+    Reading sends the item back to the ``new`` pool; the queue row for today is
+    this module's business. Without this the word keeps being asked all day —
+    found on a device 2026-09-16, pressing 「这个词我已经会了」 and watching it
+    come back on the next draw.
+
+    **Closed rather than deleted.** The row is the day's record of what was
+    planned; deleting it would make today's progress numbers disagree with
+    themselves. It is marked done with no answer recorded — nothing was
+    answered, and `review_history` stays the log of actual answers.
+    """
+    learner_id = int(event.get("learner_id") or 1)
+    item_key = str(event.get("item_key") or "")
+    sense_id = int(event.get("sense_id") or 0)
+    item_type = str(event.get("item_type") or "word")
+    if not item_key:
+        return
+    try:
+        closed = repository.close_open_queue_rows(
+            learner_id, item_type=item_type, item_key=item_key, sense_id=sense_id)
+    except Exception as exc:  # noqa: BLE001 - undoing a mark must not fail on this
+        log.warning("review.unmark.failed",
+                    f"撤回标记后没能收掉今天的题：{exc}", item=item_key)
+        return
+    if closed:
+        log.info("review.unmark.closed",
+                 f"撤回标记，收掉了今天 {closed} 道题", item=item_key, closed=closed)
 
 
 def on_article_finished(event: Event) -> None:
@@ -234,5 +292,6 @@ MODULE = Module(
         ),
     ],
     on_startup=_register_workers,
-    subscriptions={"article.finished": [on_article_finished]},
+    subscriptions={"article.finished": [on_article_finished],
+                   "word.unmarked": [on_word_unmarked]},
 )

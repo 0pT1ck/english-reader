@@ -106,7 +106,7 @@
   <div class="callout">
     <b>大概要花你二十分钟</b>，全在 App Store Connect 的网页上，不用开 Xcode。
     <b>所有要填的东西我都写好了，照抄就行，没有需要你拿主意的地方。</b>
-    做完把第 2 步的三样东西发给我。
+    做完把第 2 步的四样东西发给我。
   </div>
 
   <section>
@@ -154,12 +154,20 @@
           </div>
           <span><b>角色必须是 Admin</b>：低一级的不能让自动化去申请签名证书，
           那样<b>证书每年过期一次，每次都得再麻烦你</b>。Admin 之后这件事就自动了。</span>
-          <span>建好之后把这三样发我：</span>
+          <span><b>如果嫌下载文件、再发给我这一串麻烦</b>，还有一条更省事的：
+        <b>把我的角色从 Developer 提成 Admin</b>（用户和访问 → 用户 → 点我 → 改角色），
+        我自己去建这把密钥，第 2 件事你就一下都不用点。
+        <b>代价你要知道</b>：Admin 的<b>人</b>比 Admin 的<b>密钥</b>权限更大——
+        除了签名和上传，还能邀请人、改账号设置。<b>哪条都行，你挑</b>；
+        嫌权限大就照原样建密钥，那样给出去的只有签名和上传。<br><br>
+        建好之后把这<b>四样</b>发我：</span>
           <ul>
             <li><b>Issuer ID</b>——页面上方那一长串 UUID</li>
             <li><b>Key ID</b>——密钥那一行上就有</li>
             <li><b>那个 <code>.p8</code> 文件</b>——<b style="color:var(--stop)">只能下载一次</b>，
               点了下载就立刻存好，页面刷新之后再也拿不到了</li>
+            <li><b>Team ID</b>——10 位的那串（字母加数字），在
+              <b>会员资格</b>那一页上。自动化拿它去申请签名，缺了它这一步就走不了</li>
           </ul>
         </div>
       </div>
@@ -268,8 +276,11 @@
     </div>
     <p class="lede">这一节是给我自己看的，你不用管。</p>
     <div class="nots">
-      <div class="not"><i>·</i><span>三样东西存成 GitHub secrets：<code>ASC_ISSUER_ID</code>、
-      <code>ASC_KEY_ID</code>、<code>ASC_KEY_P8</code>（base64）</span></div>
+      <div class="not"><i>·</i><span>四样东西存成 GitHub secrets：<code>ASC_ISSUER_ID</code>、
+      <code>ASC_KEY_ID</code>、<code>ASC_KEY_P8</code>（<b>base64，不是文件本身</b>）、
+      <code>ASC_TEAM_ID</code>。<br><b>2026-09-15 订正：原本这里只写了三样，
+      而 workflow 第一步查的是四样</b>——少的那个是 Team ID，
+      朋友那边照旧文档做完就正好缺它，而缺了的报错要等触发之后才看得见</span></div>
       <div class="not"><i>·</i><span>上传的 job <b>只接 <code>workflow_dispatch</code> 与 tag 触发</b>。
       <b>不能接 <code>pull_request</code></b>——公开仓库里同仓库的 PR 能拿到 secret</span></div>
       <div class="not"><i>·</i><span>走 cloud signing：<code>xcodebuild -allowProvisioningUpdates

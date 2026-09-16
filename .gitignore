@@ -38,3 +38,9 @@ client/.build/
 
 # 命令行客户端的本地状态（发件箱、缓存）
 client/.ercli/
+
+# iOS 工程文件是 XcodeGen 从 client/App/project.yml 生成的。
+# 提交它没有意义：这台机器上没有 Xcode，改不了也读不懂，
+# 而且它是每次生成都会变的机器产物。要看工程结构就看那份 YAML。
+client/App/*.xcodeproj/
+client/App/DerivedData/

@@ -1,0 +1,209 @@
+name: 远程操控模拟器
+
+# 手动触发，**只手动触发**。
+#
+# 这条 workflow 会把一台 runner 挂在那儿等人连进来，最长几十分钟。
+# 让它跟着 push 跑，等于每推一次就白烧一台机器。
+#
+# 它存在的理由是铁律：「每个 Phase 结束由用户实际跑一遍验收清单」。
+# 而这个 Phase 没有 Mac、真机要等 TestFlight，所以用户能亲手点到界面的
+# 唯一办法，就是连进 runner 里的模拟器。
+#
+# **代价要认**：每次都要重新排队、重新起（环境留不住），走的是 VNC 所以会顿。
+# 手感判断不了的那部分，留给真机那一遍。
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 挂多久（分钟），到点自动结束；也可以随时在 Actions 页面取消
+        required: true
+        default: "45"
+
+jobs:
+  remote:
+    name: 起一台带模拟器的 Mac，等你连
+    runs-on: macos-26
+    # 比 minutes 多留一点，让收尾步骤跑得完。
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 先检查要用的东西齐不齐
+        env:
+          TS_AUTHKEY: ${{ secrets.TS_AUTHKEY }}
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$TS_AUTHKEY" ]   || missing="$missing TS_AUTHKEY"
+          [ -n "$VNC_PASSWORD" ] || missing="$missing VNC_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "::error::缺这几个仓库 secret：$missing"
+            exit 1
+          fi
+          # 传统 VNC 的密码就是 8 位，多出来的会被悄悄截掉——
+          # 然后你在 Windows 上用完整密码怎么连都连不上，而且看不出为什么。
+          if [ ${#VNC_PASSWORD} -gt 8 ]; then
+            echo "::error::VNC_PASSWORD 超过 8 个字符。传统 VNC 只认前 8 位，"
+            echo "::error::多出来的会被悄悄截掉，然后你会连不上还查不出原因。"
+            exit 1
+          fi
+          echo "齐了"
+
+      - name: 选定 Xcode
+        run: |
+          set -euo pipefail
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$APP"
+          xcodebuild -version
+
+      - name: 装 XcodeGen 并生成工程
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          xcodegen generate
+
+      - name: 编译并装进模拟器
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project EnglishReader.xcodeproj \
+            -scheme EnglishReader \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO
+          APP_PATH=$(find DerivedData -name 'EnglishReader.app' -type d | head -1)
+          [ -n "$APP_PATH" ] || { echo "::error::没编出 .app"; exit 1; }
+          # 用 grep 而不是塞一段 python 进来：跨行的内联脚本在 YAML 块标量里
+          # **会把缩进破掉**，而那样整份 workflow 连解析都过不去。
+          # 「iPhone 17 (」后面紧跟左括号，所以不会误中 iPhone 17 Pro。
+          DEVICE=$(xcrun simctl list devices available \
+            | grep -m1 'iPhone 17 (' \
+            | grep -oE '[0-9A-Fa-f-]{36}')
+          if [ -z "$DEVICE" ]; then
+            echo "::error::镜像里没有 iPhone 17 的模拟器"
+            xcrun simctl list devices available | head -40
+            exit 1
+          fi
+          xcrun simctl boot "$DEVICE" || true
+          xcrun simctl bootstatus "$DEVICE" -b
+          xcrun simctl install "$DEVICE" "$APP_PATH"
+          echo "DEVICE=$DEVICE" >> "$GITHUB_ENV"
+
+      # 走 Tailscale 而不是把端口捅到公网：runner 加进你自己的 tailnet，
+      # 你从 Windows 直接连它的 tailnet 地址。**没有一个端口暴露在外面。**
+      # 节点是 ephemeral 的，job 一结束就自己从你的设备列表里消失。
+      - name: 加入 tailnet
+        uses: tailscale/github-action@v4
+        with:
+          # 用普通的 auth key，不用 OAuth。
+          # OAuth 客户端不属于任何人，所以它建出来的机器**必须挂在一个 tag 上**，
+          # 而那意味着先去改 ACL——为了连一次模拟器，多出一整套要配的东西。
+          # auth key 是你自己的，节点就归你，不用碰 ACL。
+          authkey: ${{ secrets.TS_AUTHKEY }}
+          statedir: /tmp/tailscale-state/
+
+      # runner 上没人动鼠标，显示器会睡过去——**VNC 连上就是一片黑**。
+      # 这一步跟「开不开得了屏幕共享」无关，是在它之前就要解决的事。
+      - name: 别让屏幕睡过去
+        run: |
+          set -euo pipefail
+          # -d 别让显示器睡、-i 别让系统闲置睡、-m 别让磁盘睡、-u 装作有人在用
+          nohup caffeinate -dimsu > /dev/null 2>&1 &
+          # 屏保和自动锁屏一起关掉。锁屏之后 VNC 看到的是锁屏界面，
+          # 而在没有图形登录会话的机器上，那个界面本身就是黑的。
+          defaults -currentHost write com.apple.screensaver idleTime 0 || true
+          sudo pmset -a displaysleep 0 sleep 0 disksleep 0 || true
+          echo "叫醒了"
+
+      - name: 打开屏幕共享
+        env:
+          VNC_PASSWORD: ${{ secrets.VNC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          # `-setvnclegacy` 是关键：macOS 自带的屏幕共享用的是 Apple 自己那套
+          # 认证，Windows 上的普通 VNC 客户端多半谈不拢。开了传统模式之后，
+          # 认的就是下面这个密码，任何 VNC 客户端都连得上。
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate -configure -access -on \
+            -clientopts -setvnclegacy -vnclegacy yes \
+            -setvncpw -vncpw "$VNC_PASSWORD" \
+            -restart -agent -privs -all
+          echo "开了"
+
+      - name: 把模拟器窗口打开，并报出连接地址
+        run: |
+          set -euo pipefail
+          open -a Simulator --args -CurrentDeviceUDID "$DEVICE" || open -a Simulator
+          sleep 8
+          xcrun simctl launch "$DEVICE" com.optick.englishreader || true
+          IP=$(tailscale ip -4 | head -1)
+          echo "::notice::VNC 连这里：$IP:5900"
+          {
+            echo "## 连进来"
+            echo ""
+            echo "在 Windows 的 VNC 客户端里填：**\`$IP:5900\`**"
+            echo ""
+            echo "密码是仓库 secret \`VNC_PASSWORD\`。"
+            echo ""
+            echo "进去之后模拟器窗口已经开着，App 也已经装好启动了。"
+            echo "要重装重启：\`xcrun simctl install / launch\`，或者直接在模拟器里点。"
+            echo ""
+            echo "用完在 Actions 页面取消这次运行就行，不用等它自己到点。"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # **黑屏有两种原因，它们在屏幕上长得一模一样**：
+      #   ① runner 这边根本没有可画的桌面（没有图形会话 / 显示器睡了）
+      #   ② 桌面是好的，是 VNC 客户端跟 Apple 那套协议谈不拢
+      # 所以在宿主机上自己截一张。这张要是也黑的就是 ①，是正常桌面就是 ②。
+      # 一个分不出两种情况的检查等于没有检查（坑 §6.7）。
+      - name: 黑屏诊断——在宿主机上自己截一张
+        run: |
+          set -euo pipefail
+          echo "--- 谁登录着 ---"
+          who || true
+          echo "--- 有没有图形登录会话 ---"
+          ps aux | grep -i '[l]oginwindow' || echo "（没有 loginwindow —— 那就没有图形会话）"
+          echo "--- 有没有显示器 ---"
+          system_profiler SPDisplaysDataType 2>/dev/null | head -30 || true
+          echo "--- 屏幕共享在不在跑 ---"
+          ps aux | grep -i '[s]creensharing\|[A]RDAgent' | head -5 || true
+          echo "--- 宿主机截图 ---"
+          screencapture -x /tmp/10-host-desktop.png || echo "screencapture 失败"
+          ls -la /tmp/*.png || true
+
+      # **在等待之前就把它传上去。**放在 job 末尾的话，要等你连完、
+      # 会话结束才看得到——而这张图正是用来决定要不要连的。
+      - name: 先把诊断图传上来
+        uses: actions/upload-artifact@v4
+        with:
+          name: black-screen-diagnosis
+          path: /tmp/*.png
+          if-no-files-found: warn
+
+      - name: 挂着等你
+        run: |
+          set -euo pipefail
+          MINUTES=${{ github.event.inputs.minutes }}
+          echo "挂 $MINUTES 分钟。随时可以在 Actions 页面取消。"
+          # 每分钟出一行，一是让日志看得出还活着，二是 Actions 对长时间
+          # 没有输出的步骤不友好。
+          for i in $(seq 1 "$MINUTES"); do
+            sleep 60
+            echo "还剩 $((MINUTES - i)) 分钟"
+          done
+
+      - name: 走之前截一张
+        if: always()
+        run: |
+          xcrun simctl io "$DEVICE" screenshot /tmp/final.png 2>/dev/null || true
+
+      - name: 截图
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remote-screenshots
+          path: /tmp/*.png
+          if-no-files-found: ignore

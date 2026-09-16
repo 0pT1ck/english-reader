@@ -1,25 +1,79 @@
-# Deployment on the NanoPi (or any Linux host).
+# The application. One service, no public port.
 #
-#   docker compose -f docker/docker-compose.yml up -d --build
+#   cp env.example .env   # then fill it in
+#   docker compose --env-file .env up -d --build
 #
-# The data directory is bind-mounted from the host so `docker compose down`,
-# image rebuilds and version upgrades never touch learning.db.
+# TLS and the public port belong to the host's shared Caddy, which lives in its
+# own directory and serves every site on the machine. The two stacks meet on an
+# external Docker network, so this one publishes nothing and is reachable only
+# by name from the proxy:
+#
+#   docker network create proxy      # once per host
+#
+# That is also what makes the arrangement safe. iOS App Transport Security
+# refuses plain HTTP to a public host, so TLS is a functional requirement rather
+# than hardening — but the certificate and the port are the proxy's business,
+# not this project's.
+
+name: english-reader
+
 services:
-  english-reader:
+  app:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    image: english-reader:latest
     container_name: english-reader
     restart: unless-stopped
-    ports:
-      - "8000:8000"
+
+    # No `ports:` on purpose. Publishing 8000 as well would quietly leave the
+    # whole API, admin surface included, available over plain HTTP on the
+    # public IP, bypassing the proxy entirely.
+    expose:
+      - "8000"
+
+    networks:
+      - proxy
+
     volumes:
-      - ../data:/app/data
+      # Bind mount, not a named volume: the databases must be visible on the
+      # host for scp, for the backup button's output, and for the rule that
+      # exactly one copy is ever being written.
+      - ${ER_DATA_DIR:-../data}:/app/data
+
+    # The kernel checks uid numbers against the host directory, not names.
+    # Set these to the owner of the data directory on the host (`id -u`,
+    # `id -g`), or chown that directory to 10001 and leave them alone.
+    user: "${ER_UID:-10001}:${ER_GID:-10001}"
+
     environment:
-      # Generated on first start and written to .env if unset. Set it explicitly
-      # here (or in a .env file next to this one) for a deployed instance.
-      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:-}
-      # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server,
-      # set to the LAN proxy when running behind one.
+      # Required, and deliberately fatal when missing. Left unset, the app
+      # generates a password and appends it to /app/.env — which does not exist
+      # in the image and sits in a root-owned directory, so the container dies
+      # with a PermissionError traceback that says nothing about passwords.
+      ER_ADMIN_SECRET: ${ER_ADMIN_SECRET:?.env 里必须设 ER_ADMIN_SECRET，见 env.example}
+      # Outbound proxy for LLM APIs and Bark. Usually empty on a cloud server.
       ER_PROXY_URL: ${ER_PROXY_URL:-}
       ER_LOG_LEVEL: ${ER_LOG_LEVEL:-INFO}
+      ER_DEV_MODE: "false"
+      # "04:00" and the review day boundary are local time, not UTC.
+      TZ: ${TZ:-Asia/Shanghai}
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health',timeout=4).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  proxy:
+    # Created once per host and shared with the proxy's own stack, so neither
+    # has to start before the other.
+    external: true

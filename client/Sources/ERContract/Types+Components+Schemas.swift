@@ -331,6 +331,10 @@ extension Components {
             public var id: Swift.Int
             /// - Remark: Generated from `#/components/schemas/ArticleBody/title`.
             public var title: Swift.String
+            /// - Remark: Generated from `#/components/schemas/ArticleBody/topic`.
+            public var topic: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/ArticleBody/summary_zh`.
+            public var summary_zh: Swift.String?
             /// 原文。跟 tokens 一起下发而不是二选一：token 的下标指进这里，客户端不用重新分词就能还原空格和分段。还没准备好时是 null
             ///
             /// - Remark: Generated from `#/components/schemas/ArticleBody/body`.
@@ -366,6 +370,8 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - title:
+            ///   - topic:
+            ///   - summary_zh:
             ///   - body: 原文。跟 tokens 一起下发而不是二选一：token 的下标指进这里，客户端不用重新分词就能还原空格和分段。还没准备好时是 null
             ///   - source:
             ///   - source_label:
@@ -380,6 +386,8 @@ extension Components {
             public init(
                 id: Swift.Int,
                 title: Swift.String,
+                topic: Swift.String? = nil,
+                summary_zh: Swift.String? = nil,
                 body: Swift.String? = nil,
                 source: Swift.String? = nil,
                 source_label: Swift.String? = nil,
@@ -394,6 +402,8 @@ extension Components {
             ) {
                 self.id = id
                 self.title = title
+                self.topic = topic
+                self.summary_zh = summary_zh
                 self.body = body
                 self.source = source
                 self.source_label = source_label
@@ -409,6 +419,8 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case title
+                case topic
+                case summary_zh
                 case body
                 case source
                 case source_label
@@ -557,6 +569,68 @@ extension Components {
                 case phrases
                 case glossary
                 case progress
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarDay`.
+        public struct CalendarDay: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarDay/day`.
+            public var day: Swift.String
+            /// complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
+            ///
+            /// - Remark: Generated from `#/components/schemas/CalendarDay/status`.
+            public var status: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CalendarDay/is_today`.
+            public var is_today: Swift.Bool
+            /// Creates a new `CalendarDay`.
+            ///
+            /// - Parameters:
+            ///   - day:
+            ///   - status: complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
+            ///   - is_today:
+            public init(
+                day: Swift.String,
+                status: Swift.String,
+                is_today: Swift.Bool
+            ) {
+                self.day = day
+                self.status = status
+                self.is_today = is_today
+            }
+            public enum CodingKeys: String, CodingKey {
+                case day
+                case status
+                case is_today
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CalendarResponse`.
+        public struct CalendarResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CalendarResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// - Remark: Generated from `#/components/schemas/CalendarResponse/days`.
+            public var days: [Components.Schemas.CalendarDay]
+            /// 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
+            ///
+            /// - Remark: Generated from `#/components/schemas/CalendarResponse/streak`.
+            public var streak: Swift.Int
+            /// Creates a new `CalendarResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - days:
+            ///   - streak: 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
+            public init(
+                learner: Components.Schemas.Learner,
+                days: [Components.Schemas.CalendarDay],
+                streak: Swift.Int
+            ) {
+                self.learner = learner
+                self.days = days
+                self.streak = streak
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case days
+                case streak
             }
         }
         /// Which reserved slots actually carry values yet.
@@ -1134,6 +1208,14 @@ extension Components {
             public var id: Swift.Int
             /// - Remark: Generated from `#/components/schemas/LibraryArticle/title`.
             public var title: Swift.String
+            /// 话题。**真题恒为 null**——它们那一格显示的是来源。库里已经攒下的生成文也是 null：2026-09-13 定不补
+            ///
+            /// - Remark: Generated from `#/components/schemas/LibraryArticle/topic`.
+            public var topic: Swift.String?
+            /// 一句中文概括。**真题恒为 null**，那一行就空着
+            ///
+            /// - Remark: Generated from `#/components/schemas/LibraryArticle/summary_zh`.
+            public var summary_zh: Swift.String?
             /// generated 生成文 / cet4 / cet6 / kaoyan
             ///
             /// - Remark: Generated from `#/components/schemas/LibraryArticle/source`.
@@ -1158,6 +1240,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/LibraryArticle/target_count`.
             public var target_count: Swift.Int
+            /// 「待学」：这篇的目标词里**还没进入学习流程**的个数。判据是标记，不是有没有词池行——读完一篇会给遇见过的每个词都留一行，按行数就会读完之后莫名归零。**标记了就不再计入**，不用等学会，所以这个数在阅读过程中会往下掉。真题恒为 0
+            ///
+            /// - Remark: Generated from `#/components/schemas/LibraryArticle/pending_count`.
+            public var pending_count: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/LibraryArticle/difficulty`.
             public var difficulty: Components.Schemas.DifficultyProfile?
             /// 把画像压成一个数，用来排序
@@ -1173,6 +1259,8 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - title:
+            ///   - topic: 话题。**真题恒为 null**——它们那一格显示的是来源。库里已经攒下的生成文也是 null：2026-09-13 定不补
+            ///   - summary_zh: 一句中文概括。**真题恒为 null**，那一行就空着
             ///   - source: generated 生成文 / cet4 / cet6 / kaoyan
             ///   - source_label:
             ///   - word_count:
@@ -1181,12 +1269,15 @@ extension Components {
             ///   - read_at: 读完的时刻。没读完是 null
             ///   - percent: 读到百分之几
             ///   - target_count: 这篇为教几个词而写。真题恒为 0——它们不为教任何词而写，读完只记下你亲手标记的东西
+            ///   - pending_count: 「待学」：这篇的目标词里**还没进入学习流程**的个数。判据是标记，不是有没有词池行——读完一篇会给遇见过的每个词都留一行，按行数就会读完之后莫名归零。**标记了就不再计入**，不用等学会，所以这个数在阅读过程中会往下掉。真题恒为 0
             ///   - difficulty:
             ///   - difficulty_score: 把画像压成一个数，用来排序
             ///   - difficulty_for_you: 这篇对你的预期生词率。要水平估计才算得出来，所以现在恒为 null——看 capabilities.level_estimate
             public init(
                 id: Swift.Int,
                 title: Swift.String,
+                topic: Swift.String? = nil,
+                summary_zh: Swift.String? = nil,
                 source: Swift.String,
                 source_label: Swift.String,
                 word_count: Swift.Int,
@@ -1195,12 +1286,15 @@ extension Components {
                 read_at: Swift.String? = nil,
                 percent: Swift.Double,
                 target_count: Swift.Int,
+                pending_count: Swift.Int? = nil,
                 difficulty: Components.Schemas.DifficultyProfile? = nil,
                 difficulty_score: Swift.Double? = nil,
                 difficulty_for_you: Swift.Double? = nil
             ) {
                 self.id = id
                 self.title = title
+                self.topic = topic
+                self.summary_zh = summary_zh
                 self.source = source
                 self.source_label = source_label
                 self.word_count = word_count
@@ -1209,6 +1303,7 @@ extension Components {
                 self.read_at = read_at
                 self.percent = percent
                 self.target_count = target_count
+                self.pending_count = pending_count
                 self.difficulty = difficulty
                 self.difficulty_score = difficulty_score
                 self.difficulty_for_you = difficulty_for_you
@@ -1216,6 +1311,8 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case title
+                case topic
+                case summary_zh
                 case source
                 case source_label
                 case word_count
@@ -1224,6 +1321,7 @@ extension Components {
                 case read_at
                 case percent
                 case target_count
+                case pending_count
                 case difficulty
                 case difficulty_score
                 case difficulty_for_you
@@ -1532,6 +1630,10 @@ extension Components {
             public var weight: Swift.Double
             /// - Remark: Generated from `#/components/schemas/ReviewItem/done`.
             public var done: Swift.Bool
+            /// 被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReviewItem/word`.
+            public var word: Components.Schemas.WordCard?
             /// - Remark: Generated from `#/components/schemas/ReviewItem/sense`.
             public var sense: Components.Schemas.SenseCard?
             /// 用来出题的句子，你没读到过的
@@ -1555,6 +1657,7 @@ extension Components {
             ///   - misses:
             ///   - weight: 抽题权重。答错减半，让卡住的词自己让路，但永不排除
             ///   - done:
+            ///   - word: 被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用
             ///   - sense:
             ///   - questions: 用来出题的句子，你没读到过的
             ///   - hints: 提示用的句子，当初读到它的那一句
@@ -1569,6 +1672,7 @@ extension Components {
                 misses: Swift.Int,
                 weight: Swift.Double,
                 done: Swift.Bool,
+                word: Components.Schemas.WordCard? = nil,
                 sense: Components.Schemas.SenseCard? = nil,
                 questions: [Components.Schemas.SentenceCard],
                 hints: [Components.Schemas.SentenceCard]
@@ -1583,6 +1687,7 @@ extension Components {
                 self.misses = misses
                 self.weight = weight
                 self.done = done
+                self.word = word
                 self.sense = sense
                 self.questions = questions
                 self.hints = hints
@@ -1598,6 +1703,7 @@ extension Components {
                 case misses
                 case weight
                 case done
+                case word
                 case sense
                 case questions
                 case hints
@@ -1637,6 +1743,30 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/ReviewProgress/buckets`.
             public var buckets: Components.Schemas.ReviewProgress.bucketsPayload
+            /// 各桶各做完了几条。**新开一个字段而不是改 `buckets` 的含义**——铁律 5 不许改字段含义。两张卡片上的「已复习/共」要的就是这两个数
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReviewProgress/buckets_done`.
+            public struct buckets_donePayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Swift.Int]
+                /// Creates a new `buckets_donePayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Swift.Int] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// 各桶各做完了几条。**新开一个字段而不是改 `buckets` 的含义**——铁律 5 不许改字段含义。两张卡片上的「已复习/共」要的就是这两个数
+            ///
+            /// - Remark: Generated from `#/components/schemas/ReviewProgress/buckets_done`.
+            public var buckets_done: Components.Schemas.ReviewProgress.buckets_donePayload?
             /// 拼写这一轮开没开。当天复习全部走完之后才为真——它是强化选项，不进调度，拼错只记一笔
             ///
             /// - Remark: Generated from `#/components/schemas/ReviewProgress/spelling_available`.
@@ -1649,6 +1779,7 @@ extension Components {
             ///   - done:
             ///   - remaining:
             ///   - buckets: 各桶各有几条
+            ///   - buckets_done: 各桶各做完了几条。**新开一个字段而不是改 `buckets` 的含义**——铁律 5 不许改字段含义。两张卡片上的「已复习/共」要的就是这两个数
             ///   - spelling_available: 拼写这一轮开没开。当天复习全部走完之后才为真——它是强化选项，不进调度，拼错只记一笔
             public init(
                 session: Components.Schemas.ReviewSession? = nil,
@@ -1656,6 +1787,7 @@ extension Components {
                 done: Swift.Int,
                 remaining: Swift.Int,
                 buckets: Components.Schemas.ReviewProgress.bucketsPayload,
+                buckets_done: Components.Schemas.ReviewProgress.buckets_donePayload? = nil,
                 spelling_available: Swift.Bool
             ) {
                 self.session = session
@@ -1663,6 +1795,7 @@ extension Components {
                 self.done = done
                 self.remaining = remaining
                 self.buckets = buckets
+                self.buckets_done = buckets_done
                 self.spelling_available = spelling_available
             }
             public enum CodingKeys: String, CodingKey {
@@ -1671,6 +1804,7 @@ extension Components {
                 case done
                 case remaining
                 case buckets
+                case buckets_done
                 case spelling_available
             }
         }
@@ -1721,6 +1855,10 @@ extension Components {
             public var id: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Sense/ordinal`.
             public var ordinal: Swift.Int
+            /// 词性（n. / vt. / vi.）。**只是说明，从不决定义项怎么分**——名词的 address（地址）和动词的 address（写地址）是同一个概念。这一列 P1b 起就在库里，2026-09-13 才带进契约：手机端的点词面板要显示它
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sense/pos`.
+            public var pos: Swift.String?
             /// 用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/concept_en`.
@@ -1811,6 +1949,7 @@ extension Components {
             /// - Parameters:
             ///   - id:
             ///   - ordinal:
+            ///   - pos: 词性（n. / vt. / vi.）。**只是说明，从不决定义项怎么分**——名词的 address（地址）和动词的 address（写地址）是同一个概念。这一列 P1b 起就在库里，2026-09-13 才带进契约：手机端的点词面板要显示它
             ///   - concept_en: 用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文
             ///   - gloss_zh: 中文释义
             ///   - exam: 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
@@ -1818,6 +1957,7 @@ extension Components {
             public init(
                 id: Swift.Int,
                 ordinal: Swift.Int,
+                pos: Swift.String? = nil,
                 concept_en: Swift.String? = nil,
                 gloss_zh: Components.Schemas.Sense.gloss_zhPayload? = nil,
                 exam: Components.Schemas.SenseExam? = nil,
@@ -1825,6 +1965,7 @@ extension Components {
             ) {
                 self.id = id
                 self.ordinal = ordinal
+                self.pos = pos
                 self.concept_en = concept_en
                 self.gloss_zh = gloss_zh
                 self.exam = exam
@@ -1833,6 +1974,7 @@ extension Components {
             public enum CodingKeys: String, CodingKey {
                 case id
                 case ordinal
+                case pos
                 case concept_en
                 case gloss_zh
                 case exam
@@ -2049,10 +2191,24 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SentenceCard/source`.
             public var source: Swift.String?
-            /// 最深一级提示可以跳回原文。生成的句子没有，客户端退回英文释义
+            /// 提示可以说出处，也留着将来跳回原文。生成的句子没有——而生成的句子本来就不会当提示
             ///
             /// - Remark: Generated from `#/components/schemas/SentenceCard/article_id`.
             public var article_id: Swift.Int?
+            /// 提示上那句「——文章a」。join 出来的，不另存一份
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentenceCard/article_title`.
+            public var article_title: Swift.String?
+            /// 整句中文翻译，**看中文想英文那个方向的题面**。还没翻到的是 null。这跟「句子里不许出现中文」那条禁令不冲突：禁的是英文题面里混中文
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentenceCard/text_zh`.
+            public var text_zh: Swift.String?
+            /// 目标词在中文里的位置，给高亮用。**null 是正当答案**——有些词在中文里没有能单独拎出来的片段，那时不高亮、整句照显。高亮错位置比不高亮糟：它会把「估计」从中间劈开，而没有东西会报错
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentenceCard/zh_start`.
+            public var zh_start: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/SentenceCard/zh_end`.
+            public var zh_end: Swift.Int?
             /// Creates a new `SentenceCard`.
             ///
             /// - Parameters:
@@ -2063,7 +2219,11 @@ extension Components {
             ///   - surface: 被挖掉的那个词在句子里的原样
             ///   - first_letter: 看义想词的第一级提示。**在服务端算**——什么算首字母是一条规则，而规则按架构前提 1 留在这边
             ///   - source: generated 生成的 / corpus 语料里的
-            ///   - article_id: 最深一级提示可以跳回原文。生成的句子没有，客户端退回英文释义
+            ///   - article_id: 提示可以说出处，也留着将来跳回原文。生成的句子没有——而生成的句子本来就不会当提示
+            ///   - article_title: 提示上那句「——文章a」。join 出来的，不另存一份
+            ///   - text_zh: 整句中文翻译，**看中文想英文那个方向的题面**。还没翻到的是 null。这跟「句子里不许出现中文」那条禁令不冲突：禁的是英文题面里混中文
+            ///   - zh_start: 目标词在中文里的位置，给高亮用。**null 是正当答案**——有些词在中文里没有能单独拎出来的片段，那时不高亮、整句照显。高亮错位置比不高亮糟：它会把「估计」从中间劈开，而没有东西会报错
+            ///   - zh_end:
             public init(
                 id: Swift.Int,
                 text: Swift.String,
@@ -2072,7 +2232,11 @@ extension Components {
                 surface: Swift.String,
                 first_letter: Swift.String,
                 source: Swift.String? = nil,
-                article_id: Swift.Int? = nil
+                article_id: Swift.Int? = nil,
+                article_title: Swift.String? = nil,
+                text_zh: Swift.String? = nil,
+                zh_start: Swift.Int? = nil,
+                zh_end: Swift.Int? = nil
             ) {
                 self.id = id
                 self.text = text
@@ -2082,6 +2246,10 @@ extension Components {
                 self.first_letter = first_letter
                 self.source = source
                 self.article_id = article_id
+                self.article_title = article_title
+                self.text_zh = text_zh
+                self.zh_start = zh_start
+                self.zh_end = zh_end
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -2092,6 +2260,10 @@ extension Components {
                 case first_letter
                 case source
                 case article_id
+                case article_title
+                case text_zh
+                case zh_start
+                case zh_end
             }
         }
         /// What the scheduler decided when an item left the pool.
@@ -2620,6 +2792,157 @@ extension Components {
                 case _type = "type"
                 case input
                 case ctx
+            }
+        }
+        /// The whole word, as the reveal screen shows it.
+        ///
+        /// Duplicates what the article glossary carries, and that is the point:
+        /// **the review payload has to stand on its own.** Article bodies are cleared
+        /// one at a time (P5 决定 10) and the word may have been met months ago, so a
+        /// client reaching into a cached article for this would lose half its card
+        /// whenever the cache was tidied — silently.
+        ///
+        /// - Remark: Generated from `#/components/schemas/WordCard`.
+        public struct WordCard: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/WordCard/headword`.
+            public var headword: Swift.String
+            /// - Remark: Generated from `#/components/schemas/WordCard/phonetic`.
+            public var phonetic: Swift.String?
+            /// 词典那一堆逗号隔开的释义。义项集缺席时的退路
+            ///
+            /// - Remark: Generated from `#/components/schemas/WordCard/translation`.
+            public var translation: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/WordCard/senses`.
+            public var senses: [Components.Schemas.WordSense]?
+            /// Creates a new `WordCard`.
+            ///
+            /// - Parameters:
+            ///   - headword:
+            ///   - phonetic:
+            ///   - translation: 词典那一堆逗号隔开的释义。义项集缺席时的退路
+            ///   - senses:
+            public init(
+                headword: Swift.String,
+                phonetic: Swift.String? = nil,
+                translation: Swift.String? = nil,
+                senses: [Components.Schemas.WordSense]? = nil
+            ) {
+                self.headword = headword
+                self.phonetic = phonetic
+                self.translation = translation
+                self.senses = senses
+            }
+            public enum CodingKeys: String, CodingKey {
+                case headword
+                case phonetic
+                case translation
+                case senses
+            }
+        }
+        /// One sense of the word being tested, for the reveal screen's 常见释义 list.
+        ///
+        /// - Remark: Generated from `#/components/schemas/WordSense`.
+        public struct WordSense: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/WordSense/id`.
+            public var id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/WordSense/ordinal`.
+            public var ordinal: Swift.Int
+            /// 词性。说明用，从不决定义项怎么分
+            ///
+            /// - Remark: Generated from `#/components/schemas/WordSense/pos`.
+            public var pos: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/WordSense/concept_en`.
+            public var concept_en: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/WordSense/gloss_zh`.
+            public struct gloss_zhPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/WordSense/gloss_zh/value1`.
+                public var value1: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/WordSense/gloss_zh/value2`.
+                public var value2: Swift.String?
+                /// Creates a new `gloss_zhPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: [Swift.String]? = nil,
+                    value2: Swift.String? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try decoder.decodeFromSingleValueContainer()
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeFirstNonNilValueToSingleValueContainer([
+                        self.value1,
+                        self.value2
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/WordSense/gloss_zh`.
+            public var gloss_zh: Components.Schemas.WordSense.gloss_zhPayload?
+            /// - Remark: Generated from `#/components/schemas/WordSense/exam_frequency`.
+            public var exam_frequency: Swift.Int?
+            /// 占这个词全部真题出现的百分之几。总数为零时是 null。**客户端按它降序排，绝不按 ordinal**——那个序号是模型猜的
+            ///
+            /// - Remark: Generated from `#/components/schemas/WordSense/share`.
+            public var share: Swift.Double?
+            /// Creates a new `WordSense`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - ordinal:
+            ///   - pos: 词性。说明用，从不决定义项怎么分
+            ///   - concept_en:
+            ///   - gloss_zh:
+            ///   - exam_frequency:
+            ///   - share: 占这个词全部真题出现的百分之几。总数为零时是 null。**客户端按它降序排，绝不按 ordinal**——那个序号是模型猜的
+            public init(
+                id: Swift.Int,
+                ordinal: Swift.Int,
+                pos: Swift.String? = nil,
+                concept_en: Swift.String? = nil,
+                gloss_zh: Components.Schemas.WordSense.gloss_zhPayload? = nil,
+                exam_frequency: Swift.Int? = nil,
+                share: Swift.Double? = nil
+            ) {
+                self.id = id
+                self.ordinal = ordinal
+                self.pos = pos
+                self.concept_en = concept_en
+                self.gloss_zh = gloss_zh
+                self.exam_frequency = exam_frequency
+                self.share = share
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case ordinal
+                case pos
+                case concept_en
+                case gloss_zh
+                case exam_frequency
+                case share
             }
         }
     }

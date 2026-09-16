@@ -53,4 +53,23 @@ MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_drafts_set    ON generation_drafts (word_set);
         """,
     ),
+    Migration(
+        version=4,
+        name="topic and one-line summary on drafts, carried into the article",
+        database="learning",
+        apply="""
+        -- 话题以前是写进 ``word_set`` 的——那一列说的是「A 组还是 B 组目标词」，
+        -- 两件事共用一列，谁都说不清读出来的是哪一个。给它一列自己的地方。
+        --
+        -- ``summary_zh`` 是新的：手机端列表卡片上标题下面那一行。
+        -- 写的时候顺手生成，入库时原样搬进 ``reading_articles``——
+        -- 入库时再算一遍等于同一篇文章在两个地方说两句不同的话。
+        ALTER TABLE generation_drafts ADD COLUMN topic      TEXT;
+        ALTER TABLE generation_drafts ADD COLUMN summary_zh TEXT;
+
+        -- 已有的行：话题从它当初被塞进去的地方搬过来，概括补不了，留空。
+        UPDATE generation_drafts SET topic = word_set
+            WHERE topic IS NULL AND word_set IS NOT NULL AND word_set <> '';
+        """,
+    ),
 ]

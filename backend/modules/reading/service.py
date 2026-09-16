@@ -112,6 +112,10 @@ def library(learner_id: int, *, shelf: str = "fresh", source: str | None = None,
             {
                 "id": row["id"],
                 "title": row["title"],
+                # 卡片上标题的上一行与下一行。真题两样都是 null——
+                # 它们那一格显示的是 source_label（2026-09-13 定，真题不补）。
+                "topic": row.get("topic"),
+                "summary_zh": row.get("summary_zh"),
                 "source": row["source"],
                 "source_label": row["source_label"],
                 "word_count": row["word_count"],
@@ -123,6 +127,9 @@ def library(learner_id: int, *, shelf: str = "fresh", source: str | None = None,
                 # papers — they were not written to teach anything, so finishing
                 # one records only what the reader marked by hand.
                 "target_count": row.get("target_count") or 0,
+                # 「待学」：目标词里还没被标记过、也还没学出师的个数。
+                # **标记了就不再计入**，所以读着读着这个数会往下掉。
+                "pending_count": row.get("pending_count") or 0,
                 "difficulty": row["difficulty"],
                 "difficulty_score": row["difficulty_score"],
                 # P3 fills this in; the column exists so the client's list can
@@ -166,6 +173,9 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                 {
                     "id": s["id"],
                     "ordinal": s["ordinal"],
+                    # 说明用，从不决定义项怎么分：名词的 address（地址）
+                    # 和动词的 address（写地址）是同一个概念。
+                    "pos": s["pos"],
                     # Layer ① proper: the English concept definition, written
                     # with words already known, so looking a word up is itself
                     # reading input rather than a switch into Chinese.
@@ -292,6 +302,8 @@ def article(learner_id: int, article_id: int) -> dict[str, Any]:
         "article": {
             "id": row["id"],
             "title": row["title"],
+            "topic": row["topic"],
+            "summary_zh": row["summary_zh"],
             # The original text, sent alongside the tokens rather than instead
             # of them: token offsets index into it, so a client can render the
             # exact spacing and paragraphing without re-tokenising anything.
@@ -539,6 +551,24 @@ def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
         # there would make the ledger claim a signal the learner withdrew. The
         # row itself stays: it still records that the item was met, and when.
         repository.demote_if_unmarked(learner_id, key, sense_id, item_type=item_type)
+        # **退回词池还不够：今天的复习队列里那一行还在。**
+        # 上面那段注释写着「留在队列里等于让账本宣称一个学习者已经撤回的信号」——
+        # 而在 2026-09-16 真机上发现，说的是意图，做的只有 `study_states`
+        # 那一半（坑 §7.1）。点完「这个词我已经会了」，它照样来。
+        #
+        # 队列是 review 模块的表，所以这里只发事件，由那边决定这对复习意味着
+        # 什么——跟「读完文章补句子池」同一个接法（架构铁律 6）。
+        # **无条件发，不看词池变没变**（2026-09-16 订正）。
+        # 上一版写的是「`demote_if_unmarked` 返回 True 才发」——而那个函数
+        # 只在 `reviewing → new` 真的发生时才返回 True。于是一个**已经退回过**
+        # 的词再撤一次就什么都不发生，而这正是真机上遇到的情形：
+        # 旧版本执行过 demote 那一半、没关队列行，之后再点多少次都没用。
+        #
+        # 两件事的前提不同：「词池位置变没变」是关于 `study_states` 的，
+        # 「今天那道题还该不该问」是关于队列的。共用一个判断，第二件就会
+        # 在第一件已经完成时被跳过。
+        events.emit("word.unmarked", learner_id=learner_id,
+                    item_type=item_type, item_key=key, sense_id=sense_id)
         return
 
     raise InvalidRequest("未知的事件类型", type=event_type)

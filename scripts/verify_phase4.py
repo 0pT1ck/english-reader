@@ -168,11 +168,28 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         conn.commit()
         fired_by_loop = len(fired)
         waited = 0.0
-        with TestClient(app):                      # 进 lifespan，循环真的起来
-            limit = tasks.TICK_SECONDS * 2 + 10    # 有出口的等待（坑 §7.2）
-            while waited < limit and len(fired) == fired_by_loop:
-                time.sleep(1.0)
-                waited += 1.0
+
+        # **别的任务必须先让开**，2026-09-15 加。循环是串行的
+        # （`for name in due_tasks(): await to_thread(run_now, name)`），
+        # 而夜间备稿只要到期就排在探针前面——一篇文章几十秒，加上重试，
+        # 70 秒的窗口根本轮不到探针。于是这一条会在「循环其实好好的」时候报红，
+        # 指着一个没坏的东西（坑 §1.2 那个形状）。
+        # 探针自己留着，别的一律先关掉，`finally` 保证原样还回去——
+        # 关掉了没还回去的话，夜间备稿就从此不再跑，而且是静默的。
+        others = [name for name in tasks.registered() if name != PROBE]
+        was_enabled = {name: bool(runtime_config.get(tasks.enabled_key(name)))
+                       for name in others}
+        for name in others:
+            runtime_config.set(tasks.enabled_key(name), False)
+        try:
+            with TestClient(app):                  # 进 lifespan，循环真的起来
+                limit = tasks.TICK_SECONDS * 2 + 10  # 有出口的等待（坑 §7.2）
+                while waited < limit and len(fired) == fired_by_loop:
+                    time.sleep(1.0)
+                    waited += 1.0
+        finally:
+            for name, enabled in was_enabled.items():
+                runtime_config.set(tasks.enabled_key(name), enabled)
         check("A2.4", "调度循环自己把到点的任务跑起来了",
               len(fired) > fired_by_loop,
               f"服务起来 {waited:.0f} 秒后自动触发——验的是循环接没接进 lifespan，"
@@ -187,8 +204,12 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         missing = [k for k in kinds
                    if runtime_config.get(jobs.provider_key(k)) is None
                    or runtime_config.get(jobs.thinking_key(k)) is None]
+        # 2026-09-15 改过。原文还断言 `len(kinds) == 9`，而 09-13 为 P7 的翻译
+        # 加了 dsflash2 之后是 10 个——于是它一边报失败一边说「缺开关的：无」，
+        # 不满足的只是那个数字。**worker 的个数每个 Phase 都会变，那条规则不会**：
+        # 要守的是「每个用模型的地方都碰得到自己的设置」，不是有几个地方。
         check("A4.1", "每个用模型的地方都有自己的提供商与思考开关",
-              len(kinds) == 9 and not missing,
+              bool(kinds) and not missing,
               f"{len(kinds)} 个 worker，缺开关的：{missing or '无'}")
 
         check("A4.2", "旧的提供商设置迁移过来了，没丢",
@@ -207,11 +228,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               and "enable_thinking" not in body_none,
               "关掉思考在写文章那处实测 5/10 → 8/10、61.6 秒 → 9.1 秒")
 
-        untouched = [k for k in kinds
-                     if str(runtime_config.get(jobs.thinking_key(k))) != "default"]
-        check("A5.2", "其余八处的思考开关保持默认",
-              untouched in ([], ["generate_article"]),
-              f"非默认的：{untouched or '无'}——只有写文章那处有实测依据（决定 19）")
+        # 2026-09-16 放宽。原文断言「只有 `generate_article` 可以非默认，
+        # 其余保持 default」——理由是只有写文章那处有实测依据（决定 19）。
+        # 而用户当天定了**十个 worker 统一走 `deepseek-flash` 并一律关思考**
+        # （见 CLAUDE.md「模型与中转站」），于是十处全非默认，这条天天报红，
+        # 而红的时候什么也没坏：那是一个人做的决定，不是代码跑偏。
+        #
+        # 守始终成立的那一半：**有实测依据的那一处必须是关的**。
+        # 别的几处是不是默认，交给 detail 如实说出来——它是情报，不是失败。
+        writing = str(runtime_config.get(jobs.thinking_key("generate_article")))
+        others = {k: str(runtime_config.get(jobs.thinking_key(k)))
+                  for k in kinds if k != "generate_article"}
+        non_default = sorted(k for k, v in others.items() if v != "default")
+        check("A5.2", "写文章那处的思考是关的（唯一有实测依据的一处）",
+              writing == "off",
+              f"写文章={writing}；另外 {len(others)} 处里 {len(non_default)} 处非默认"
+              + (f"（{'、'.join(non_default[:4])}…）" if non_default else "")
+              + "——非默认不算错，但它们没有实测依据，掉质量先查这里")
 
         # --- B. 每日供给 --------------------------------------------------- #
         print("\nB. 每日供给")
@@ -302,6 +335,24 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
             check("C1.1", "今日包拿得到", package.status_code == 200,
                   f"HTTP {package.status_code}")
             data = package.json() if package.status_code == 200 else {}
+
+            # 条件请求（2026-09-16 加）。今日包实测约 1 MB，而客户端每开一次
+            # 复习都要它——内容没变就该回 304 和零字节。
+            # **两头都验**：只验「带 ETag 回 304」的话，一个永远回 304 的服务端
+            # 也能通过，而那意味着改动永远传不到手机上。
+            etag = package.headers.get("etag")
+            again = http.get("/v1/client/today",
+                             headers={**headers, "If-None-Match": etag or "x"})
+            stale = http.get("/v1/client/today",
+                             headers={**headers, "If-None-Match": '"stale"'})
+            check("C1.6", "今日包没变时只回 304，一个字节都不传",
+                  bool(etag) and again.status_code == 304 and len(again.content) == 0,
+                  f"{len(package.content)} 字节 → {len(again.content)} 字节"
+                  if etag else "响应里没有 ETag")
+            check("C1.7", "版本对不上时照样给全量",
+                  stale.status_code == 200 and len(stale.content) > 1000,
+                  f"陈旧的 ETag 换回 {len(stale.content)} 字节——"
+                  f"永远回 304 的服务端会让改动永远到不了手机上")
 
             wanted_fields = {"learner", "capabilities", "day", "articles",
                              "extra_articles", "reviews", "settings"}

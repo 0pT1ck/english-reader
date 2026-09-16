@@ -26,7 +26,7 @@ from backend.core.db import get_connection
 from backend.core.logging import get_logger
 from backend.modules.generation import checker, parser, prompts
 from backend.modules.llm import client, jobs
-from backend.modules.llm.providers import Provider
+from backend.modules.llm.providers import Provider, default_provider
 
 log = get_logger("generation.pipeline")
 
@@ -48,6 +48,9 @@ class Written:
     body: str
     target_words: list[str]
     topic: str
+    #: 一句中文概括，手机端列表卡片上标题下面那一行。写不出来就是空的——
+    #: 它不是文章合格与否的一部分。
+    summary: str
     report: Any
     ok: bool
     #: Why it was rejected, in the reader's language. Empty when it passed.
@@ -101,6 +104,45 @@ def verdict(report: Any) -> tuple[list[str], list[str]]:
     return failures, notes
 
 
+SUMMARY_SYSTEM = "你是一位中文编辑，为英语阅读材料写一句话导读。"
+
+SUMMARY_INSTRUCTION = (
+    "用一句中文概括下面这篇英文文章，**不超过 30 个字**。\n"
+    "写的是这篇讲了什么，不是评价；不要出现「本文」「这篇文章」这类字眼。\n"
+    "只输出那一句话本身，不要引号。"
+)
+
+
+def summarise(title: str, body: str) -> str:
+    """一句中文概括——手机端列表卡片上，标题下面那一行。
+
+    **用默认提供商，不是写文章那个。**这是一次整理，不是一次写作，
+    「数据整理用快模型、写文章用贵模型」那条分工在这里成立。
+
+    **失败不影响整篇。**概括是卡片上的一行字；为它把一篇已经写好、已经付过钱的
+    文章丢掉是荒唐的。所以这里吞掉异常、返回空字符串，那一行就空着——
+    空着而不是编一句，编出来的会被当成真的。
+    """
+    try:
+        completion = client.complete(
+            default_provider(),
+            [
+                {"role": "system", "content": SUMMARY_SYSTEM},
+                {"role": "user",
+                 "content": SUMMARY_INSTRUCTION + "\n\n" + title + "\n\n" + body},
+            ],
+            max_tokens=120,
+            temperature=0.3,
+        )
+    except Exception as exc:  # noqa: BLE001 - 一行字不值得让整篇失败
+        log.warning("draft.summary.failed", f"这一篇的概括没写出来：{exc}")
+        return ""
+    text = " ".join(completion.text.split()).strip().strip("\"“”")
+    # 模型偶尔会答两句。**截断而不是重试**：重试要再付一次钱，而多出来的那半句
+    # 在卡片上本来就显示不下。
+    return text[:40]
+
+
 def write_one(
     provider: Provider,
     *,
@@ -145,6 +187,7 @@ def write_one(
         )
 
     article = parser.parse(completion.text)
+    summary = summarise(article.title, article.body)
     report = checker.check(
         article.body,
         target_words=plan.target_words,
@@ -156,15 +199,20 @@ def write_one(
     conn = get_connection("learning")
     cursor = conn.execute(
         "INSERT INTO generation_drafts (title, body, model, scheme, prompt_version,"
-        " word_set, target_words, prompt, report, created_at, note)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        " word_set, topic, summary_zh, target_words, prompt, report, created_at, note)"
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             article.title,
             article.body,
             provider.model,
             scheme,
             prompts.PROMPT_VERSION,
+            # word_set 这一列一直被拿来存话题，保持原样不动——改它会让
+            # 控制台按它分组的那几个视图当场看不懂旧行。话题从现在起**同时**
+            # 写进它自己那一列，新的读法只认后者。
             plan.topic or "",
+            plan.topic or "",
+            summary,
             json.dumps(plan.target_words, ensure_ascii=False),
             text,
             json.dumps(report.as_dict(), ensure_ascii=False),
@@ -195,6 +243,7 @@ def write_one(
         body=article.body,
         target_words=list(plan.target_words),
         topic=plan.topic or "",
+        summary=summary,
         report=report,
         ok=not failures,
         failures=failures,

@@ -41,9 +41,15 @@ log = get_logger("review.session")
 WORD_TO_SENSE = 1      # 看词想义
 SENSE_TO_WORD = 2      # 看义想词
 
-#: How far the hints go, per direction. Both are four levels and the level
-#: reached is the score — behaviour rather than a self-rated difficulty.
-MAX_REVEAL = 3
+#: How far the hints go. **One level as of P7** (2026-09-13): 「不确定」 is a
+#: single tap that shows the whole hint and turns the three buttons into two.
+#: Three levels were a ladder the interface never wanted, and the middle rung
+#: of the 看义想词 ladder handed over the answer a level early.
+#:
+#: So ``revealed`` is now 0 or 1 — and as of the same date it is no longer only
+#: recorded: taking the hint caps the grade at Hard (``scheduler.rating_for``),
+#: because a hint that costs nothing is a hint everyone takes first.
+MAX_REVEAL = 1
 
 
 def _now(now: datetime | None = None) -> datetime:
@@ -68,9 +74,12 @@ def collect(learner_id: int, now: datetime) -> list[dict[str, Any]]:
 
     * due by the schedule                            → ``due``
     * never scheduled, marked **today** as 不认识     → ``today``, asked today
-    * never scheduled, marked **today** as 模糊       → **not today**; it waits
-      for tomorrow, because right now you have just read it and of course you
-      know it
+    * never scheduled, marked **today** as 模糊       → ``today`` as well, but
+      **capped**: P3 决定 18 kept these until tomorrow because "you have just
+      read it and of course you know it". P7 overturned that for one reason —
+      the card said 3 when you had marked 5, and nothing explained why. The
+      original argument was not wrong though, so the answer still does not
+      count for full marks: see ``capped`` on the queue row.
     * never scheduled, marked on an earlier day       → ``due``, it is overdue
     """
     today = repository.today(now)
@@ -100,10 +109,14 @@ def collect(learner_id: int, now: datetime) -> list[dict[str, Any]]:
         if key in seen:
             continue
         kind = marked_today.get(key)
-        if kind == "fuzzy":
-            continue                      # 决定 18 — starts tomorrow
         seen.add(key)
-        chosen.append({**row, "bucket": "today" if kind else "due"})
+        chosen.append({
+            **row,
+            "bucket": "today" if kind else "due",
+            # Only the fuzzy ones: 不认识 was always asked the same day (决定 18's
+            # other half) and P3 accepted a full grade for it.
+            "capped": 1 if kind == "fuzzy" else 0,
+        })
 
     return chosen
 
@@ -139,11 +152,14 @@ def next_question(learner_id: int, *, now: datetime | None = None,
 
     row = rng.choices(open_rows, weights=_weights(open_rows), k=1)[0]
     finished = repository.finished_article_ids(learner_id)
+    seen = repository.seen_sentence_ids(learner_id)
     used = repository.sentences_used_today(session["id"])
     sentence = sentences.pick_question(
-        row["item_key"], row["sense_id"], finished=finished, exclude=used, rng=rng
+        row["item_key"], row["sense_id"], finished=finished, exclude=used,
+        seen_sentence_ids=seen, rng=rng
     )
-    hint = sentences.pick_hint(row["item_key"], row["sense_id"], finished=finished, rng=rng)
+    hint = sentences.pick_hint(row["item_key"], row["sense_id"], finished=finished,
+                               seen_sentence_ids=seen, rng=rng)
 
     return {
         "session_id": session["id"],
@@ -186,6 +202,10 @@ def answer(learner_id: int, queue_id: int, *, passed: bool, revealed: int = 0,
 
     # Claimed, not inferred, and only on a clean round — see scheduler.EASY_RATING.
     claimed_easy = bool(row["easy"]) or (easy and misses == 0)
+    # The most help taken on this item today, not the most recent: a hint on the
+    # first direction still counted, even if the second went unaided.
+    revealed_max = max(int(row["revealed"] or 0), max(0, min(MAX_REVEAL, int(revealed))))
+    capped = bool(row["capped"])
 
     settled: dict[str, Any] | None = None
 
@@ -193,17 +213,18 @@ def answer(learner_id: int, queue_id: int, *, passed: bool, revealed: int = 0,
         # Unlock the second direction, then put it back — see the module note on
         # why it is not asked straight away.
         repository.update_queue(queue_id, step=SENSE_TO_WORD, asks=asks,
-                                easy=int(claimed_easy))
+                                easy=int(claimed_easy), revealed=revealed_max)
     elif passed and direction == SENSE_TO_WORD:
         repository.update_queue(queue_id, asks=asks, easy=int(claimed_easy),
-                                done_at=repository.now_iso())
-        settled = settle(learner_id, item, misses=misses, easy=claimed_easy, now=now)
+                                revealed=revealed_max, done_at=repository.now_iso())
+        settled = settle(learner_id, item, misses=misses, easy=claimed_easy,
+                         revealed=revealed_max, capped=capped, now=now)
     else:
         weight = max(0.0001, float(row["weight"]) * decay)
         # Failing the second direction locks it again (决定 7). A miss also
         # withdraws any earlier "that was easy": it plainly was not.
         repository.update_queue(queue_id, step=WORD_TO_SENSE, asks=asks, misses=misses,
-                                easy=0, weight=weight)
+                                easy=0, revealed=revealed_max, weight=weight)
 
     repository.record_answer(
         learner_id, row["session_id"], item,
@@ -222,15 +243,22 @@ def answer(learner_id: int, queue_id: int, *, passed: bool, revealed: int = 0,
 
 
 def settle(learner_id: int, item: dict[str, Any], *, misses: int, easy: bool = False,
+           revealed: int = 0, capped: bool = False,
            now: datetime, fuzz: bool | None = None) -> dict[str, Any]:
-    """Hand one finished round to the scheduler and store what comes back."""
+    """Hand one finished round to the scheduler and store what comes back.
+
+    ``revealed`` and ``capped`` are two ceilings on the grade, both of which can
+    only lower it — see :func:`scheduler.rating_for` for what each one means.
+    """
     state = repository.state_of(learner_id, item["item_type"], item["item_key"],
                                 item["sense_id"])
-    outcome = scheduler.review(state, misses, now, easy=easy, fuzz=fuzz)
+    outcome = scheduler.review(state, misses, now, easy=easy,
+                               revealed=revealed, capped=capped, fuzz=fuzz)
     repository.save_state(learner_id, item["item_type"], item["item_key"],
                           item["sense_id"], outcome.state)
     log.info("review.settled", "一个义项结算完毕",
              item=item["item_key"], sense_id=item["sense_id"], misses=misses, easy=easy,
+             revealed=revealed, capped=capped,
              rating=int(outcome.rating), interval_days=round(outcome.interval_days, 2))
     return {
         "rating": int(outcome.rating),
@@ -253,20 +281,32 @@ def progress(learner_id: int, now: datetime | None = None) -> dict[str, Any]:
         # means nothing is done, which means spelling is not on offer, and
         # saying so is more useful than saying nothing.
         return {"session": None, "total": 0, "done": 0, "remaining": 0,
-                "buckets": {}, "spelling_available": False}
+                "buckets": {}, "buckets_done": {}, "spelling_available": False}
     rows = repository.queue_rows(session["id"])
     done = [r for r in rows if r["done_at"]]
     buckets: dict[str, int] = {}
+    # **A second dict rather than changing what `buckets` holds.** 铁律 5 forbids
+    # changing a field's meaning; a client written against "buckets is a count
+    # per pool" must keep working. The two cards need 已复习/共, so the other
+    # half arrives beside it.
+    buckets_done: dict[str, int] = {}
     for r in rows:
         buckets[r["bucket"]] = buckets.get(r["bucket"], 0) + 1
+        buckets_done.setdefault(r["bucket"], 0)
+        if r["done_at"]:
+            buckets_done[r["bucket"]] += 1
     return {
         "session": session,
         "total": len(rows),
         "done": len(done),
         "remaining": len(rows) - len(done),
         "buckets": buckets,
+        "buckets_done": buckets_done,
+        # 三个条件，第三个 2026-09-16 补：**这一轮拼过了就不再提示**。
+        # 少了它，拼完回到主界面那一行还在，点进去又是全部的词。
         "spelling_available": bool(runtime_config.get("review_spelling"))
-                              and len(rows) > 0 and len(done) == len(rows),
+                              and len(rows) > 0 and len(done) == len(rows)
+                              and not session.get("spelling_at"),
     }
 
 
@@ -304,10 +344,12 @@ def day_payload(learner_id: int, *, now: datetime | None = None) -> dict[str, An
     state = ensure(learner_id, now)
     rows = repository.queue_rows(state["id"])
     finished = repository.finished_article_ids(learner_id)
+    seen = repository.seen_sentence_ids(learner_id)
 
     items = []
     for row in rows:
-        questions, hints = sentences.split_pools(row["item_key"], row["sense_id"], finished)
+        questions, hints = sentences.split_pools(
+            row["item_key"], row["sense_id"], finished, seen)
         items.append({
             "queue_id": row["id"],
             "item_type": row["item_type"],
@@ -320,6 +362,15 @@ def day_payload(learner_id: int, *, now: datetime | None = None) -> dict[str, An
             "weight": float(row["weight"]),
             "done": bool(row["done_at"]),
             "sense": sense_of(row["sense_id"]),
+            # The whole word, not just the sense being tested — the reveal
+            # screen shows what P6's tap panel shows. **It has to come from
+            # here**: the same data also sits in the article's glossary, but
+            # article bodies are cleared per-article (P5 决定 10) and this word
+            # may have been met two months ago. A review payload that leans on
+            # a cached article is one that loses half its card, silently.
+            # Measured: 392 bytes and 2.2 senses per word, 11.5 KB across a
+            # 30-item day against a 1.2 MB package — under 1%.
+            "word": word_of(row["item_key"]),
             "questions": [sentences.as_card(s) for s in questions],
             "hints": [sentences.as_card(s) for s in hints],
         })
@@ -334,6 +385,55 @@ def day_payload(learner_id: int, *, now: datetime | None = None) -> dict[str, An
         "progress": progress(learner_id, now),
         "clock": clock.status(),
         "items": items,
+    }
+
+
+def word_of(headword: str) -> dict[str, Any] | None:
+    """Everything the reveal screen shows about one word.
+
+    Shares its shape with the reading glossary on purpose — the two screens show
+    the same thing, and two shapes would drift.
+    """
+    import json
+
+    from backend.modules.senses import repository as senses_repo
+    from backend.modules.vocabulary import repository as dictionary
+
+    sense_list = senses_repo.senses_of(headword)
+    entry = dictionary.lookup(headword)
+    if not sense_list and not entry:
+        return None
+
+    # The share, not the raw count: "78%" answers "is this the meaning the exam
+    # actually tests" and a bare 38 does not. Computed the same way the reading
+    # path computes it — one rule, not two.
+    exam_total = sum(s.get("exam_frequency") or 0 for s in sense_list)
+
+    out_senses = []
+    for item in sense_list:
+        gloss = item.get("gloss_zh")
+        if isinstance(gloss, str):
+            try:
+                gloss = json.loads(gloss)
+            except (TypeError, ValueError):
+                gloss = [gloss]
+        out_senses.append({
+            "id": item["id"],
+            "ordinal": item["ordinal"],
+            "pos": item.get("pos"),
+            "concept_en": item.get("concept_en"),
+            "gloss_zh": gloss,
+            "exam_frequency": item.get("exam_frequency") or 0,
+            "share": (round((item.get("exam_frequency") or 0) / exam_total * 100, 1)
+                      if exam_total else None),
+        })
+
+    return {
+        "headword": headword,
+        "phonetic": entry["phonetic"] if entry else None,
+        # The dictionary's comma pile, as a fallback for words with no sense set.
+        "translation": entry["translation"] if entry else None,
+        "senses": out_senses,
     }
 
 

@@ -214,17 +214,26 @@ public final class ArticleCache: @unchecked Sendable {
 /// a field this client does not know about must survive to the next one.
 public final class DayCache: @unchecked Sendable {
     private let file: URL
+    private let fileManager: FileManager
     private let lock = NSLock()
 
     public init(directory: URL, fileManager: FileManager = .default) throws {
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         self.file = directory.appendingPathComponent("today.json")
+        self.fileManager = fileManager
     }
 
-    public func store(_ data: Data) throws {
+    public func store(_ data: Data, etag: String? = nil) throws {
         lock.lock()
         defer { lock.unlock() }
         try data.write(to: file, options: .atomic)
+        // **版本号和内容一起写、一起没。**留下一个指向旧内容的 etag，
+        // 服务端会说「没变」，而客户端手里已经不是那一份了。
+        if let etag, let encoded = etag.data(using: .utf8) {
+            try? encoded.write(to: etagFile, options: .atomic)
+        } else {
+            try? fileManager.removeItem(at: etagFile)
+        }
     }
 
     public func load() -> Data? {
@@ -233,5 +242,16 @@ public final class DayCache: @unchecked Sendable {
         return try? Data(contentsOf: file)
     }
 
+    /// 本地这一份的版本号，随请求带上去给服务端比。
+    public func etag() -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = try? Data(contentsOf: etagFile),
+              let text = String(data: data, encoding: .utf8), !text.isEmpty else { return nil }
+        return text
+    }
+
     public var hasPackage: Bool { load() != nil }
+
+    private var etagFile: URL { file.deletingPathExtension().appendingPathExtension("etag") }
 }

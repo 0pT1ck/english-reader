@@ -1,0 +1,212 @@
+name: 推 TestFlight
+
+# **只接手动触发。**这一条写死在这里，不是靠自觉。
+#
+# 仓库是公开的，而**同一个仓库里提的 PR 是拿得到 secret 的**——
+# 如果这条 workflow 接 `pull_request`，任何人提个 PR 就能把别人的
+# 开发者密钥打印出来。那把密钥是朋友的开发者身份，不是我们的。
+#
+# 所以：没有 `push`，没有 `pull_request`，只有 `workflow_dispatch`。
+# 改这一段之前先想清楚上面这句。
+on:
+  workflow_dispatch:
+    inputs:
+      notes:
+        description: 这一版给测试员看的说明（留空就用提交标题）
+        required: false
+        default: ""
+      dry_run:
+        description: 只归档验签名、不上传（第一次接线时用）
+        type: boolean
+        required: false
+        default: false
+
+  # **只为让 GitHub 认得这条 workflow。**一个只有 workflow_dispatch 的文件，
+  # 如果从没在默认分支出现过、也从没跑过，就不在 Actions 的列表里——
+  # 于是「手动触发」这件事本身触发不了（API 回 404）。
+  # 推一次这个文件会跑一个空 job 把它登记上，之后手动触发就通了。
+  # 下面那个 `if` 保证 push 触发时**什么都不做**。
+  push:
+    branches: [ios]
+    paths: ['.github/workflows/testflight.yml']
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: 归档、签名、传上去
+    # push 只是来登记的，不干活——真正的上传只认手动触发。
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 先检查密钥齐不齐
+        env:
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=""
+          [ -n "$ASC_ISSUER_ID" ] || missing="$missing ASC_ISSUER_ID"
+          [ -n "$ASC_KEY_ID" ]    || missing="$missing ASC_KEY_ID"
+          [ -n "$ASC_KEY_P8" ]    || missing="$missing ASC_KEY_P8"
+          [ -n "$ASC_TEAM_ID" ]   || missing="$missing ASC_TEAM_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::缺这几个仓库 secret：$missing"
+            echo "::error::ASC_KEY_P8 要填 .p8 文件的 base64，不是文件本身。"
+            exit 1
+          fi
+          echo "齐了"
+
+      - name: 选定 Xcode
+        run: |
+          set -euo pipefail
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$APP"
+          xcodebuild -version
+
+      - name: 装 XcodeGen 并生成工程
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          xcodegen generate
+
+      # 每次上传的构建号必须是新的，否则 App Store Connect 直接拒收，
+      # 而那个报错长得像「包有问题」。用 run_number：它单调递增、不会重复，
+      # 也不用有人记得去手动加一。
+      - name: 定版本号
+        working-directory: client/App
+        run: |
+          set -euo pipefail
+          BUILD=${{ github.run_number }}
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" Info.plist
+          echo "构建号 $BUILD"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist
+
+      # 密钥落成文件才能给 xcodebuild 用。放在 runner 的临时目录里，
+      # job 一结束整台机器就销毁——**不要写进仓库目录**，那会被后面的步骤打包进去。
+      - name: 把密钥落成文件
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          echo "$ASC_KEY_P8" | base64 --decode \
+            > "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          # 只验格式，不打印内容。
+          head -1 "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            | grep -q "BEGIN PRIVATE KEY" \
+            || { echo "::error::解出来的不是一个 .p8——ASC_KEY_P8 是不是没 base64？"; exit 1; }
+          echo "密钥就位"
+
+      # `-allowProvisioningUpdates` 加上那三个 authentication 参数，就是「云签名」：
+      # 证书和描述文件由 Xcode 拿着 API 密钥自己去申请。
+      # **这正是那把密钥必须是 Admin 级的原因**——低一级的申请不了分发证书，
+      # 那样证书每年过期一次、每次都要再去麻烦人。
+      - name: 归档
+        working-directory: client/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_TEAM_ID: ${{ secrets.ASC_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project EnglishReader.xcodeproj \
+            -scheme EnglishReader \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/EnglishReader.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$ASC_TEAM_ID"
+
+      # 归档也可能「成功」而什么都没有——坑 §6.6 的形状。
+      - name: 确认归档里真有东西
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/EnglishReader.xcarchive/Products/Applications/EnglishReader.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::归档里没有 .app——上一步可能是空跑"
+            find "$RUNNER_TEMP/EnglishReader.xcarchive" -maxdepth 4 | head -30
+            exit 1
+          fi
+          echo "产物：$APP"
+          # 真机包必须是签过的。没签的包传上去会被拒，而那个报错不提「没签名」。
+          codesign -dv "$APP" 2>&1 | head -10
+          # 而且必须是给 iOS 设备的，不是模拟器的（platform 2 才是 iOS）。
+          otool -l "$APP/EnglishReader" | grep -A5 LC_BUILD_VERSION \
+            | head -12 | tee "$RUNNER_TEMP/platform.txt"
+          if grep -qiE 'platform +(2|ios)$' "$RUNNER_TEMP/platform.txt"; then
+            echo "确认：目标平台是 iOS 设备"
+          else
+            echo "::error::读不到 iOS 设备的平台标记——可能编成了模拟器包，"
+            echo "::error::也可能这个检查该改了。两种都不该放过。"
+            otool -l "$APP/EnglishReader" | head -60
+            exit 1
+          fi
+
+      - name: 写导出配置
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ secrets.ASC_TEAM_ID }}</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          plutil -lint "$RUNNER_TEMP/ExportOptions.plist"
+
+      # `destination: upload` 让这一步导出完直接传，省掉一个单独的上传工具。
+      - name: 导出并上传
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        working-directory: client/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/EnglishReader.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: 说一声传上去了
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          {
+            echo "## 传上去了"
+            echo ""
+            echo "构建号 **${{ github.run_number }}**，提交 \`${{ github.sha }}\`。"
+            echo ""
+            echo "内部测试员**不用等审核**，App Store Connect 处理完（通常几分钟）"
+            echo "TestFlight 里就能装。"
+            echo ""
+            echo "说明：${{ github.event.inputs.notes }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # 密钥不留在盘上。job 结束整台机器都销毁，这一步是**多一层**：
+      # 上面任何一步失败时它照样跑。
+      - name: 擦掉密钥
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/private_keys" || true

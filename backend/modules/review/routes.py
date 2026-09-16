@@ -22,10 +22,13 @@ from backend.core import auth, runtime_config
 from backend.core.db import get_connection
 from backend.core.logging import get_logger
 from backend.modules.reading import repository as reading_repository
-from backend.modules.review import clock, repository, scheduler, sentences, session
+from backend.modules.review import (
+    calendar, clock, repository, scheduler, sentences, session, translate,
+)
 from backend.modules.review.contract import (
     AnswerResponse,
     AnswersResponse,
+    CalendarResponse,
     ReviewDayResponse,
     SpellingResponse,
     SpellingsResponse,
@@ -67,6 +70,22 @@ class AnswerIn(BaseModel):
     #: "That was trivial." Only honoured on a round with no misses — the server
     #: checks, so a client cannot talk its way into a longer interval.
     easy: bool = False
+
+
+@client_router.get("/reviews/calendar", summary="打卡日历与连续天数",
+                   response_model=CalendarResponse)
+async def reviews_calendar(device_id: DeviceId, days: int = Query(7, ge=1, le=60)
+                           ) -> dict[str, Any]:
+    """The last ``days`` days and the streak.
+
+    **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
+    allows obvious shapes to be reserved in place; a list of days is not one, so
+    it arrives as its own endpoint the way the invariant says complex additions
+    should.
+    """
+    learner_id = _learner(device_id)
+    return {"learner": auth.learner_profile(learner_id),
+            **calendar.calendar(learner_id, days=days)}
 
 
 @client_router.post("/reviews/answer", summary="上报一次作答",
@@ -210,8 +229,17 @@ def _apply_spelling(learner_id: int, item_key: str, typed: str) -> dict[str, Any
     session_row = repository.session_for(learner_id, repository.today())
     typed = typed.strip()
     correct = typed.lower() == item_key.strip().lower()
-    repository.record_spelling(learner_id, session_row["id"] if session_row else None,
-                               item_key, item_key, typed, correct)
+    session_id = session_row["id"] if session_row else None
+    repository.record_spelling(learner_id, session_id, item_key, item_key, typed, correct)
+
+    # **拼完了要留下痕迹。**`spelling_at` 这一列从 P3 建表起就在，而在
+    # 2026-09-16 之前**没有任何代码写过它**——于是 `spelling_available` 只看
+    # 「条目都做完了」，拼过多少遍都照样提示，每次还从第一个词拼起。
+    # 真机上就是这么发现的：account 拼了好几遍，每次进去还在。
+    if session_id is not None:
+        expected = {w["item_key"] for w in session.spelling_words(learner_id)}
+        if expected and expected <= repository.spelled_keys(session_id):
+            repository.mark_spelled(session_id)
     return {"correct": correct, "expected": item_key}
 
 
@@ -304,6 +332,35 @@ async def admin_generate(payload: dict[str, Any] | None = None) -> dict[str, Any
         provider_id=payload.get("provider_id"),
     )
     return {"job_id": job_id}
+
+
+@admin_router.post("/review/sentences/translate", summary="给句子配中文")
+async def admin_translate(payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Queue the translation batch.
+
+    ``limit`` caps it — used to spot-check a small batch before letting the
+    whole pool run, which is the only cheap way to find out whether the prompt
+    aligns the target word correctly.
+    """
+    payload = payload or {}
+    limit = payload.get("limit")
+    job_id = translate.start(
+        limit=int(limit) if limit else None,
+        provider_id=payload.get("provider_id"),
+    )
+    return {"job_id": job_id, "pending": translate.pending_count()}
+
+
+@admin_router.get("/review/sentences/translate", summary="还有多少句子没配中文")
+async def admin_translate_status() -> dict[str, Any]:
+    conn = get_connection("learning")
+    total = int(conn.execute("SELECT COUNT(*) FROM review_sentences").fetchone()[0])
+    done = int(conn.execute(
+        "SELECT COUNT(*) FROM review_sentences WHERE text_zh IS NOT NULL").fetchone()[0])
+    aligned = int(conn.execute(
+        "SELECT COUNT(*) FROM review_sentences WHERE zh_start IS NOT NULL").fetchone()[0])
+    return {"total": total, "translated": done, "aligned": aligned,
+            "pending": total - done}
 
 
 @admin_router.get("/review/pool", summary="句子池的覆盖情况")
@@ -403,10 +460,12 @@ async def admin_word_sentences(item_key: str, sense_id: int = Query(0),
                                item_type: str = Query("word")) -> dict[str, Any]:
     rows = repository.sentences_of(item_type, item_key, sense_id)
     finished = repository.finished_article_ids(1)
+    seen = repository.seen_sentence_ids(1)
     out = []
     for row in rows:
         card = sentences.as_card(row)
-        is_hint = row["source"] == "corpus" and row["article_id"] in finished
+        is_hint = row["source"] == "corpus" and (
+            row["article_id"] in finished or row["sentence_id"] in seen)
         out.append({**card,
                     "pool": "提示池（你读过这篇）" if is_hint else "考句池",
                     "article_title": row["article_title"],

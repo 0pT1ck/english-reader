@@ -1,0 +1,74 @@
+# XcodeGen project description.
+#
+# 为什么工程文件是生成的而不是提交的：这台机器上没有 Xcode，而 `.xcodeproj`
+# 是一坨机器写的 plist——手写它不可维护，而且两个人（这里是「两次会话」）
+# 同时改它必然冲突。写成 YAML 之后，工程结构是能读、能 diff、能讲道理的东西。
+#
+# CI 上一行 `xcodegen generate` 就还原出工程。
+name: EnglishReader
+options:
+  bundleIdPrefix: com.optick
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  # 生成物不进版本控制（见 .gitignore），所以每次都是干净的。
+  generateEmptyDirectories: false
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    # 决定 3（P5）：只面向 iPhone 17 / iOS 26，不背任何向下兼容。
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # **这里不关签名。**关在这儿的话归档也跟着不签，
+    # 而不签的包装不进真机——模拟器那条构建在命令行上自己传
+    # CODE_SIGNING_ALLOWED=NO 就够了，别让它顺手把上架那条路也堵死。
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  ERClient:
+    # Core 就在上一级目录，本地引用而不是走 Git——它跟 App 是同一个仓库、
+    # 同一次改动，走远程引用等于要求自己先推一次才能编译。
+    path: ..
+
+targets:
+  EnglishReader:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Assets.xcassets
+    dependencies:
+      - package: ERClient
+        product: ERCore
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: English Reader
+        CFBundleShortVersionString: "0.1"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # 阅读器是竖屏的东西，横屏没有任何用处，先不开。
+        UIRequiresFullScreen: true
+        # 家里的后端是 http，不是 https。**只对局域网开例外**，不是全局关掉 ATS——
+        # 全局关掉会让将来换成公网地址时悄悄地继续用明文。
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        NSLocalNetworkUsageDescription: 用来连接你自己电脑上的 English Reader 后端。
+        # 不声明的话，**每次上传 TestFlight 都会被问一遍「用没用非豁免加密」**，
+        # 而且要在网页上手动答，答完才发得出去。这个 App 只用系统 HTTPS，
+        # 属于豁免范围，所以在这里一次性答掉。
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.optick.englishreader
+        # **没有它上传会被拒**，而报错说的是「缺 CFBundleIconName」和
+        # 「缺 120x120 图标」——听起来像少了文件，其实是没告诉 Xcode
+        # 用哪个图标集。设了它，`CFBundleIconName` 由编译器自己写进 plist，
+        # 各尺寸也从那张 1024 自动切。
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        TARGETED_DEVICE_FAMILY: "1"
