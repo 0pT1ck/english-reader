@@ -35,7 +35,7 @@ Scheme = Literal["anchor", "whitelist", "descriptive"]
 
 # Bumped whenever the wording below changes, so a draft can always be traced
 # back to the exact prompt that produced it.
-PROMPT_VERSION = "p1b-1"
+PROMPT_VERSION = "p1b-2"
 
 SCHEME_LABELS = {
     "anchor": "描述性约束 + 难度锚点",
@@ -194,6 +194,106 @@ def pick_anchor_words(learn_tier: str, count: int, *, known_tiers: list[str]) ->
     return sorted(band[::step][:count])
 
 
+#: 从低到高。决定谁是用词上限，以及谁在上限之上。
+TIER_ORDER = ["zk", "gk", "cet4", "cet6", "ky"]
+TIER_FULL = {
+    "zk": "中考", "gk": "高考", "cet4": "大学英语四级（CET-4）",
+    "cet6": "大学英语六级（CET-6）", "ky": "考研",
+}
+TIER_SHORT = {"zk": "中考", "gk": "高考", "cet4": "四级", "cet6": "六级", "ky": "考研"}
+#: 上限之下那一层的人——自查那句话要问的是「他认识吗」。
+TIER_READER = {
+    "zk": "初中毕业生", "gk": "高中毕业生", "cet4": "刚过四级的学生",
+    "cet6": "刚过六级的学生", "ky": "考过研的学生",
+}
+#: 任何一层之上都还有这三个。它们不在 tags 体系里，但模型认得这三个名字。
+BEYOND_ALL = ["雅思", "托福", "GRE"]
+
+# 越界词的样本与替代说法。**不是清单，是「一类词长什么样」**——这一类的特征是
+# 正式、抽象、拉丁词根，而模型感觉不到它们难，因为对它自己来说它们再平常不过。
+#
+# 这十六个词是 2026-09-16 从实测里挑的：gemini-3.8-flash-high 十篇草稿中越界最多的
+# 那些，每个配一个四级里说得出的替代。**只对 cet4 成立**，换学习等级要重新测一批。
+CET4_TRAPS = [
+    "ambitious → eager；mechanism → way / system；transition → change；",
+    "municipal → city；rigorous → strict / careful；infrastructure → roads and bridges；",
+    "initially → at first；bias → unfair opinion；maritime → sea；historic → important；",
+    "simulation → test run；logistic → practical；administrative → office；",
+    "dismantle → take apart；precede → come before；skeptic → doubter。",
+]
+
+# 同一件事的第二种形状：**具体名词**。压住抽象词之后剩下的越界词全变成了
+# storehouse / smokestack / townspeople 这类复合词，而「必须写具体的事」是另一条
+# 硬要求——所以这一段给的是出口而不是禁令，否则模型会靠写空泛来守规矩。
+CET4_CONCRETE = [
+    "【具体的东西也要用常见词说】storehouse、smokestack、workroom、truckload、townspeople",
+    "这类复合词看着简单，多数不在四级表里。",
+    "**不要为了避开它们就把文章写空**——照旧写具体的人和事，只是把名字换成常见词组成的说法：",
+    "a building where goods are kept、a tall chimney、a back room、a full truck、the people of the town。",
+]
+
+
+def _ceiling_block(allowed_tiers: list[str]) -> list[str]:
+    """用词上限那一段——**讲成考试的名字，不要讲成词数**。
+
+    2026-09-16 实测，同一个模型（gemini-3.8-flash-high）同样十个种子：
+    原来那句「限制在最常见的约 4000 个英语单词以内」几乎没有约束力，超纲中位
+    5.82%、十篇零合格；换成这里的说法之后 0.56%、七篇合格，与 gpt-5.5 在旧提示词
+    下的 0.39% / 八篇基本持平。命中率没有赔进去（24.1 对 23.7）。
+
+    为什么：词数是模型算不出来的东西（坑 §1.1，数量约束一概无感），而「六级词」
+    「考研词」是它知道的类别。它写 mechanism、municipal、rigorous 不是因为不守规矩，
+    是因为它感觉不到这些词难——直到你告诉它这些词属于哪一级。
+
+    三段叠加，各自的实测份额（四种子小样本）：只讲考纲 2.12%、只给陷阱表 3.28%、
+    只加自查 3.67%、三段合起来 0.88%。**它们互补，不是同一句话说三遍。**
+
+    ``allowed_count`` 不再出现在提示词里，就是这次量出来的结论；参数留着，
+    因为草稿表里存着它、控制台按它分组。
+    """
+    ranked = [t for t in TIER_ORDER if t in allowed_tiers] or ["cet4"]
+    ceiling = ranked[-1]
+    above = [TIER_SHORT[t] for t in TIER_ORDER[TIER_ORDER.index(ceiling) + 1:]] + BEYOND_ALL
+    reader = TIER_READER[ranked[-2]] if len(ranked) > 1 else TIER_READER[ceiling]
+    # 末尾是 GRE 时补一个空格，别让中英文挤在一起。
+    above_text = "、".join(above) + (" " if above[-1].isascii() else "")
+    count_text = "零一两三四五六七八九"[len(ranked)] if len(ranked) < 10 else str(len(ranked))
+
+    parts = [
+        f"【用词限制】这篇文章写给正在准备**{TIER_FULL[ceiling]}**的中国学生看。",
+        f"**只用{TIER_SHORT[ceiling]}大纲以内的词**——也就是"
+        f"{'、'.join(TIER_SHORT[t] for t in ranked)}这{count_text}份词汇表覆盖的词。",
+        f"**凡是要到{above_text}才学到的词，一个都不要用。**",
+        f"判断办法：这个词如果只在{above[0]}词汇书里见到，就换成{TIER_SHORT[ceiling]}里的同义说法。",
+        "读这篇文章的人要把文中每一个生词都搞懂，一个学不会的词既学不到，还占掉注意力。",
+        "拿不准某个词是否超范围时，换一个更常见的说法——",
+        "用简单的词把事情说清楚，比用一个准确但超纲的词更有价值。",
+        "人名、地名、机构名不受此限制。",
+    ]
+
+    # 陷阱表与具体名词那两段是拿 cet4 测出来的，例词也全是 cet4 的越界词。
+    # 换等级时它们会说错话，所以只在四级这一档给出。
+    if ceiling == "cet4":
+        parts += [
+            "【最容易踩的那一类】下面这些词看着平常，其实全部超出四级范围（六级或考研词）。",
+            "它们不是一份完整清单，是**一类词的样子**：正式的、抽象的、拉丁词根的。",
+            "写的时候遇到同一类的词就换成右边的说法：",
+            *CET4_TRAPS,
+        ]
+
+    parts += [
+        "【写完自查】交稿前把全文**逐词**过一遍，对每一个词问一句：",
+        f"中国{reader}认识它吗？答案是「不一定」的，就换成他一定认识的说法。",
+        "宁可用三个简单词把意思说出来，也不要留一个难词。",
+        "目标词表里的词是例外——它们本来就是要学的，不要换掉。",
+    ]
+
+    if ceiling == "cet4":
+        parts += [*CET4_CONCRETE, f"{TIER_SHORT[ceiling]}学生读得懂的具体，才叫具体。"]
+
+    return parts
+
+
 def _whitelist(allowed_tiers: list[str], limit: int = 6000) -> list[str]:
     clause, params = _tier_clause(allowed_tiers)
     rows = get_connection("dictionary").execute(
@@ -228,12 +328,7 @@ def build_prompt(
     parts: list[str] = [
         f"写一篇英语短文，约 {length} 词。",
         "",
-        f"【用词限制】限制在最常见的约 {allowed_count} 个英语单词以内。",
-        "**不要使用超出这个范围的词。**读这篇文章的人要把文中每一个生词都搞懂，",
-        "一个学不会的词既学不到，还占掉注意力。",
-        "拿不准某个词是否超范围时，换一个更常见的说法——",
-        "用简单的词把事情说清楚，比用一个准确但超纲的词更有价值。",
-        "人名、地名、机构名不受此限制。",
+        *_ceiling_block(allowed_tiers),
     ]
 
     if scheme == "anchor":
