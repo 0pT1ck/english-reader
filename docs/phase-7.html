@@ -133,7 +133,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 7 · 方案定稿 · 2026-09-13 · 22 条决定、3 条明确不做</div>
+    <div class="eyebrow">Phase 7 · 已验收 · 2026-09-13 定稿，09-16 通过 · 22 条决定、3 条明确不做</div>
     <h1>复习界面</h1>
     <p class="standfirst">把复习那几屏搬到手机上。规则一条都不用新定——Core 里全实现过、也测过了，
     这个 Phase 画的是它们的样子。</p>
@@ -144,7 +144,15 @@
     <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-6.html">Phase 6</a></p>
   </header>
 
-  <div class="callout" style="margin-top:2.5rem">
+  <div class="callout" style="margin-top:2.5rem; border-left-color:var(--good)">
+    <b>2026-09-16 验收通过</b>，和 P6、P8 一起在 TestFlight 的真机上走完。
+    复习这条链逼出来的问题最多：整格打不开（请求被取消当成了故障）、
+    「我已经会了」点完还回来、拼写每次从头拼、看中文想英文那一面空白。
+    <b>而定下来的规则本身一条没错</b>——提示降级与模糊封顶都用服务端数据对账验实了。
+    结果见 <a href="./phase-8.html">Phase 8 文档</a> §18。
+  </div>
+
+  <div class="callout">
     <b>方案 2026-09-13 定稿。</b>界面五屏走完，22 条决定、3 条明确不做、九处后端改动。
     <br><br>
     <b>还没做的是实现</b>——读这份文档时，每个「已定」的意思都是「定了怎么做」，不是「做好了」。
@@ -624,8 +632,8 @@
         <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
         <tbody>
           <tr><td class="topic">20</td><td class="ok">已定</td><td><b>两张卡都做完</b>才显示这一屏。<b>只做完一张的话直接回主界面</b>——那时反馈是那张卡变成绿色的「已完成」（决定 3）。<br>分开是因为文案：只做完「今日学习」就说「您已完成今天的所有复习」是句假话。</td></tr>
-          <tr><td class="topic">21</td><td class="not">不做</td><td><b>拼写那一轮，P7 不做。</b>P3 决定 13 把它定为「当天复习全部走完之后的<b>可选强化</b>」，砍掉不破坏主线。<b>代价</b>：服务端的 <code>spelling_available</code> 会在做完那一刻变 true 而没人读它，P3 做好的那套闲置。</td></tr>
-          <tr><td class="topic">22</td><td class="not">不做</td><td><b><code>···</code> 菜单，P7 不做</b>，照 P6 的办法：按钮做出来，点开说「选项还没做」。<b>代价</b>：「这个词我已经会了，别再考」这条出口仍然够不着——词一旦标了，只能等 FSRS 慢慢放过它。</td></tr>
+          <tr><td class="topic">21</td><td class="not">不做</td><td><b>拼写那一轮，P7 不做</b>（<b>P8 补上了</b>）。P3 决定 13 把它定为「当天复习全部走完之后的<b>可选强化</b>」，砍掉不破坏主线。<b>代价</b>：服务端的 <code>spelling_available</code> 会在做完那一刻变 true 而没人读它，P3 做好的那套闲置。</td></tr>
+          <tr><td class="topic">22</td><td class="not">不做</td><td><b><code>···</code> 菜单，P7 不做</b>（<b>P8 填上了「这个词我已经会了」</b>），照 P6 的办法：按钮做出来，点开说「选项还没做」。<b>代价</b>：「这个词我已经会了，别再考」这条出口仍然够不着——词一旦标了，只能等 FSRS 慢慢放过它。</td></tr>
           <tr><td class="topic">24</td><td class="ok">已定</td><td><b>揭晓屏加音标。</b>§10 第 5 条本来就要让复习响应带上整个词的资料，音标顺路多一次 join，几乎白送。</td></tr>
           <tr><td class="topic">25</td><td class="ok">已定</td><td><b>翻译批次用 <code>deepseek-flash</code></b>（基元律动中转站里 DS 就叫这个）。<b>单独一条提供商记录 + 自己的配置项，不动默认提供商</b>——别的任务（标注、义项）照旧走它们自己的。<br><b>2026-09-13 实测</b>：<code>deepseek-flash</code> 与配置里默认提供商用的 <code>deepseek-v4-flash-0731</code> <b>都回 200，是两个不同的模型不是别名</b>（返回的 fingerprint 不一样）。</td></tr>
           <tr><td class="topic">23</td><td class="not">不做</td><td><b>同一个词当天第二次出现时不作任何说明。</b>（看词想义过了 → 解锁看中文想英文 → 放回池子重新抽，中间隔着别的词。）<b>代价</b>：第二次见到会愣一下。</td></tr>

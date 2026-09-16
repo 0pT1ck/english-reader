@@ -137,7 +137,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 8 · 方案讨论稿 · 2026-09-15 · 39 条决定、30 项验收</div>
+    <div class="eyebrow">Phase 8 · 已验收 · 2026-09-15 定稿，09-16 通过 · 39 条决定、30 项验收</div>
     <h1>设置与验收</h1>
     <p class="standfirst">设置屏把前两个 Phase 欠下的出口一次给齐；然后三个 Phase 的验收一起还，
     在 TestFlight 的真机上。</p>
@@ -150,7 +150,13 @@
   </header>
 
   <div class="callout" style="margin-top:2.5rem">
-    <b>这是讨论稿。</b>标「已定」的是用户 2026-09-15 当场拍板的，
+    <b>2026-09-16 验收通过，P6 与 P7 的欠账一并结清。</b>三个 Phase 的验收压在这一次，
+    在 TestFlight 的真机上走完——<b>而这一次真机把十一个问题逼了出来</b>，
+    其中九个是代码，一个是内容（记进了主文档 §M 的数据清洗），
+    <b>一个是我自己的流程疏忽</b>（改完服务端没部署，见 §18）。
+    完整结果见 <b>§18</b>。
+    <br><br>
+    <b>下面是方案原文，保持定稿时的样子。</b>标「已定」的是用户 2026-09-15 当场拍板的，
     标<b>「拟定」</b>的是我提的、等确认，标「不做」的是明确划出去的边界。
     <br><br>
     <b>用户已拍板的：</b>
@@ -772,6 +778,86 @@
     </div>
     <div class="nots">
       <div class="not"><i>?</i><span><b>开发者选项里原生做的那五样够不够</b>（§8 决定 26）——跳天、任务、配置、日志、状态。判据是「验收与开发期天天要用」，而<b>天天要用什么，要真验过一次才知道</b>：这一条<b>本来就该留到验收之后再答</b></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§18</span>
+      <h2>验收结果：三个 Phase 一起还</h2>
+      <span class="sec-note">2026-09-16 通过</span>
+    </div>
+    <p class="lede">P6 的阅读、P7 的复习、P8 的设置，欠了三个 Phase 的账在这一天一次还清。
+    <b>真机验收的价值全在这一节</b>——三十项清单里过了的不必细说，
+    要记的是<b>它逼出来的十一个问题</b>，其中大半在模拟器上和 CI 上都看不见。</p>
+
+    <h3>真机逼出来的九个代码问题</h3>
+    <div class="checks">
+      <div class="check"><div class="check-n">1</div><div class="check-what"><b>复习整格打不开</b><span>屏幕上是「复习打不开 · <code>Swift.CancellationError error 1</code>」。<b>传输层一直把「请求被取消」和「离线」分得很清楚</b>（注释原话：用户划走一屏就取消一次请求，这既不是离线也不是故障），而两个 model 的兜底 <code>catch</code> 把它扫进了故障。<b>拉今日包要一秒，这一秒里视图重算一次就被取消</b>；而 <code>.task</code> 取消之后不会自己回来，于是那是一块死掉的错误屏。</span></div></div>
+      <div class="check"><div class="check-n">2</div><div class="check-what"><b>退出文章回不到上次位置</b><span>用户自己订正了现象：「点了手动上报之后就可以」——<b>那句话就是答案</b>。位置存在服务端，而进度事件只落进了发件箱。退出一篇文章现在立刻上报一次。<br><b>这条顺带把 <code>article.progress</code> 验掉了</b>，它从 P5 结束欠到现在，一直标着「有代码没跑过」。</span></div></div>
+      <div class="check"><div class="check-n">3</div><div class="check-what"><b>正文进去错位，三到八秒才归位</b><span>每段是一个 <code>UITextView</code>，而它们在 <code>LazyVStack</code> 里——恢复上次位置那一下，十几段边测边排。<b>一篇文章十几段不需要懒加载。</b></span></div></div>
+      <div class="check"><div class="check-n">4</div><div class="check-what"><b>点词面板只有三分之一屏</b><span>自适应高度依赖内容还没排完时量到的值，读小了。<b>时机问题追不干净</b>，所以给了第二档 detent：初始按内容自适应，一拖到半屏。</span></div></div>
+      <div class="check"><div class="check-n">5</div><div class="check-what"><b>越答越卡——这一条是这个 Phase 自己引入的</b><span><code>Outbox.count</code> 只列目录名，而 <code>pending()</code> <b>会读取并解码发件箱里的每一个文件</b>。为了显示「损坏条目数」，我让每次 <code>record()</code> 都调它——<b>于是每答一题就把待发的全部事件重读重解一遍</b>，答二十题就是 1+2+…+20 次解码。<br><b>教训</b>：给一个热路径加"顺便统计一下"之前，先问那个统计要读多少东西。</span></div></div>
+      <div class="check"><div class="check-n">6</div><div class="check-what"><b>每次开复习都下 1 MB</b><span>用户的原话是「有新的数据本地就应该先拉上，从服务器拉的时候比对一下，同一条就跳过」。做成了条件请求：实测 <b>1,034,294 字节 → 0 字节</b>。<br><b>而他那句话照字面做会失败</b>：整包哈希每秒都变，查下来只有两个字段在动——<code>clock.simulated_now</code> 与 <code>real_now</code>，它们是「响应什么时候生成的」，不是「里面装了什么」。<b>它们照常下发，只是不参与版本号。</b></span></div></div>
+      <div class="check"><div class="check-n">7</div><div class="check-what"><b>「这个词我已经会了」点完还会回来</b><span>两层。第一层：撤销标记只把词退回了 <code>new</code> 池，<b>当天的队列行还开着</b>——而那段代码上面的注释早就写着「留在队列里等于让账本宣称一个学习者已经撤回的信号」。第二层更隐蔽：修好之后我写的是「词池真的变了才发事件」，<b>而一个已经退回过的词再撤一次不会变</b>，于是那正是真机上的情形——怎么点都没用。<br><b>两个动作的前提不同，不该共用一个判断</b>：词池位置是 <code>study_states</code> 的事，今天那道题还问不问是队列的事。</span></div></div>
+      <div class="check"><div class="check-n">8</div><div class="check-what"><b>拼写每次进去都从头拼</b><span><code>spelling_at</code> 这一列从 P3 建表就在，<b>而在此之前没有任何代码写过它</b>。于是「拼写可用」只问「条目都答完了吗」——拼完这个答案还是"是"。</span></div></div>
+      <div class="check"><div class="check-n">9</div><div class="check-what"><b>看中文想英文那一面是空白</b><span>那个词是 <code>after</code>：句子池一条都没有（刚标的词，例句要生成而生成跑不动），义项的中文又恰好是 null——<b>三层兜底同时落空</b>。现在最后一格是词典释义，再不济说一句为什么没有。<b>贫乏的问题还能答，空白的不能。</b></span></div></div>
+    </div>
+
+    <h3>第十个：内容的问题，归给数据清洗</h3>
+    <div class="callout">
+      复习考 <code>account</code>，句子是 <code>take drug timing into <b>account</b></code>，
+      中文对齐到「考虑」，而屏幕上显示的义项是「认为；视为」——<b>三样东西互相矛盾</b>。
+      根因是<b>义项集里没有正确答案</b>（<code>account</code> 四个义项没有「考虑」），
+      而词组 <code>take into account</code> 明明已经识别出来了，却没有人用它。
+      <br><br>
+      用户当场定为<b>将来数据大清洗的目标</b>：换掉全部义项集、补齐词组。
+      完整的三层根因与实测规模记在<b>主文档 §M</b>，
+      连同那句必须一起读的警告——<b>「全部更换」会静默作废 95,058 条标注</b>。
+    </div>
+
+    <h3>第十一个：不是代码，是我的流程疏忽</h3>
+    <div class="callout">
+      <b>服务端的三处修复写完了、在 r5s 上跑了回归、全绿，然后交给真机验——
+      而手机连的是阿里云，那台跑的是前一天构建的镜像。</b>
+      于是「我已经会了」照旧不收队列行、拼写照旧重复提示、
+      客户端发出去的 <code>If-None-Match</code> 没有人认。
+      <br><br>
+      <b>客户端更新了不等于服务端更新了</b>：App 走 TestFlight，服务端要
+      git pull + 重新构建镜像 + 重启容器，<b>两条路完全不同</b>，
+      而开发机上的绿灯不说明是哪份代码在回答那台手机。
+      判断方法已经写进 CLAUDE.md 的部署一节：
+      <code>docker exec english-reader grep -c &lt;刚加的函数名&gt; /app/backend/…</code>，
+      答案是 0 就是没上去。
+      <br><br>
+      <b>顺带两条构建上的教训</b>：把长构建的输出接到 ssh 管道上，
+      ssh 一断它就卡在写输出上（进程还在、负载 0、看着像在干活）——
+      要 <code>setsid nohup … &gt; 文件</code> 彻底脱离终端；
+      以及<b>杀掉一次构建会让那一层的缓存没写完</b>，下一次就得从头下载整棵依赖树
+      （第一次 17 分钟还没完，缓存正常之后重建只要 <b>45 秒</b>）。
+    </div>
+
+    <h3>清单结果</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>组</th><th>内容</th><th>结果</th></tr></thead>
+        <tbody>
+          <tr><td class="topic">A</td><td>机器：CI 两条流水线、Python 六套回归</td><td class="ok">全过。余额不足挡住的三条（词组待判、文章卡在标注）<b>不是回归</b></td></tr>
+          <tr><td class="topic">B</td><td>P6 阅读八项：列表、点词、面板、标记、读完、跳回、离线、那串没跑过的 API</td><td class="ok">过。<b>点词命中是当初判断「最可能塌」的一条，实际一次就准</b></td></tr>
+          <tr><td class="topic">C</td><td>P7 复习七项：日历与两张卡、双向解锁、提示计分、完成屏、拼写、我已经会了、模糊封顶</td><td class="ok">过。提示降级与模糊封顶是<b>拿服务端数据对账验实的</b>（开过提示的三条评级 Hard，对照组 Good）</td></tr>
+          <tr><td class="topic">D</td><td>P8 设置九项：连接与测试、缓存、发件箱、开发者选项五样、日志导出、账号那一行</td><td class="ok">过</td></tr>
+          <tr><td class="topic">E</td><td>跨天两项：断网走完一天、跳一天再来</td><td class="ok">过</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout">
+      <b>这次验收最该记住的一句</b>：P6 结束时写下「验过的只有能编译和能启动，
+      列表、点词、标记、读完一次都没被真实流程走过」——
+      <b>而真机一跑，逼出来的九个代码问题里有七个，是模拟器和 CI 永远看不见的那一类</b>：
+      请求被取消、一秒的网络延迟、越用越慢、三层兜底同时落空。
+      欠三个 Phase 的账确实省了两次约人，但<b>代价是这九个问题同时到来</b>，
+      而它们本可以分三次遇到。
     </div>
   </section>
 
