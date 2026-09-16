@@ -30,8 +30,15 @@ struct SettingsScreen: View {
                 aboutSection
             }
             .navigationTitle("设置")
-            .task { model.load(app) }
-            .refreshable { model.load(app) }
+            .task {
+                model.load(app)
+                // 损坏条目要读整个发件箱，所以只在这一屏出现时算一次。
+                app.refreshDamagedCount()
+            }
+            .refreshable {
+                model.load(app)
+                app.refreshDamagedCount()
+            }
             .alert("还没做", isPresented: $model.showLoginNotice) {
                 Button("好", role: .cancel) {}
             } message: {

@@ -132,14 +132,26 @@ final class AppModel {
         }
     }
 
+    /// 待发条数。**只数文件，不读文件。**
+    ///
+    /// 2026-09-16 修：这里一度顺手调了 `outbox.pending()` 去数损坏条目，
+    /// 而那个方法会**读取并解码发件箱里的每一个文件**——它是给上报用的。
+    /// 而 `record()` 每记一条事件就调一次这里，于是每答一题就把待发的全部
+    /// 事件重读重解一遍，答得越多越慢。真机上表现为「越用越卡」。
+    ///
+    /// 损坏条目改成按需算（`refreshDamagedCount`），它只有设置页要看。
     func refreshPendingCount() {
         pendingEvents = outbox?.count ?? 0
-        // 分两步写：`try? outbox?.pending()` 嵌两层可选，`?? 0` 只解得开一层。
-        if let outbox, let pending = try? outbox.pending() {
-            damagedEvents = pending.damaged.count
-        } else {
+    }
+
+    /// 读不出来的事件文件有几条。**贵，所以只在有人要看的时候算**——
+    /// 它要把发件箱整个读一遍。
+    func refreshDamagedCount() {
+        guard let outbox, let pending = try? outbox.pending() else {
             damagedEvents = 0
+            return
         }
+        damagedEvents = pending.damaged.count
     }
 
     /// 扔掉读不出来的那些事件文件。

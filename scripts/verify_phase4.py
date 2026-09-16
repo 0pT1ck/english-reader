@@ -324,6 +324,24 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                   f"HTTP {package.status_code}")
             data = package.json() if package.status_code == 200 else {}
 
+            # 条件请求（2026-09-16 加）。今日包实测约 1 MB，而客户端每开一次
+            # 复习都要它——内容没变就该回 304 和零字节。
+            # **两头都验**：只验「带 ETag 回 304」的话，一个永远回 304 的服务端
+            # 也能通过，而那意味着改动永远传不到手机上。
+            etag = package.headers.get("etag")
+            again = http.get("/v1/client/today",
+                             headers={**headers, "If-None-Match": etag or "x"})
+            stale = http.get("/v1/client/today",
+                             headers={**headers, "If-None-Match": '"stale"'})
+            check("C1.6", "今日包没变时只回 304，一个字节都不传",
+                  bool(etag) and again.status_code == 304 and len(again.content) == 0,
+                  f"{len(package.content)} 字节 → {len(again.content)} 字节"
+                  if etag else "响应里没有 ETag")
+            check("C1.7", "版本对不上时照样给全量",
+                  stale.status_code == 200 and len(stale.content) > 1000,
+                  f"陈旧的 ETag 换回 {len(stale.content)} 字节——"
+                  f"永远回 304 的服务端会让改动永远到不了手机上")
+
             wanted_fields = {"learner", "capabilities", "day", "articles",
                              "extra_articles", "reviews", "settings"}
             check("C1.2", "契约字段齐全", wanted_fields <= set(data),

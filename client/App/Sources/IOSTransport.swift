@@ -45,11 +45,24 @@ struct IOSTransport: Transport {
             urlRequest.httpBody = body
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
+        // Core 自己要带的头（现在只有 `If-None-Match`）。认证不在这里——
+        // 那是宿主的事，它才知道令牌。
+        for (name, value) in request.headers {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
 
         let started = Date()
         do {
             let (data, response) = try await session.data(for: urlRequest)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            let http = response as? HTTPURLResponse
+            let status = http?.statusCode ?? 0
+            // 头的键统一小写：`URLSession` 不保证大小写，而 Core 按小写查。
+            var headers: [String: String] = [:]
+            for (key, value) in http?.allHeaderFields ?? [:] {
+                if let name = key as? String, let text = value as? String {
+                    headers[name.lowercased()] = text
+                }
+            }
             let milliseconds = Int(Date().timeIntervalSince(started) * 1000)
 
             if (200..<300).contains(status) {
@@ -70,7 +83,7 @@ struct IOSTransport: Transport {
                                     "status": String(status),
                                     "ms": String(milliseconds)])
             }
-            return HTTPResponse(status: status, body: data)
+            return HTTPResponse(status: status, body: data, headers: headers)
         } catch let error as URLError where error.code == .cancelled {
             // 用户划走了一屏就取消一次请求，这既不是离线也不是故障。
             throw CancellationError()

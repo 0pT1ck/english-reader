@@ -18,24 +18,41 @@ public struct HTTPRequest: Sendable, Equatable {
     /// base belongs to the host's configuration, not to the core's requests.
     public let path: String
     public let body: Data?
+    /// Extra request headers. **Only what the core decides**: authentication
+    /// belongs to the host, which knows the token; this is for things like
+    /// `If-None-Match`, where the decision is about cached content and so
+    /// belongs here.
+    public let headers: [String: String]
 
-    public init(method: Method, path: String, body: Data? = nil) {
+    public init(method: Method, path: String, body: Data? = nil,
+                headers: [String: String] = [:]) {
         self.method = method
         self.path = path
         self.body = body
+        self.headers = headers
     }
 }
 
 public struct HTTPResponse: Sendable, Equatable {
     public let status: Int
     public let body: Data
+    /// Response headers, lowercased keys. Empty when the host does not supply
+    /// them — a transport written before this existed keeps working.
+    public let headers: [String: String]
 
-    public init(status: Int, body: Data) {
+    public init(status: Int, body: Data, headers: [String: String] = [:]) {
         self.status = status
         self.body = body
+        self.headers = headers
     }
 
     public var isOK: Bool { (200..<300).contains(status) }
+
+    /// **304 是好消息，不是错误**：服务端说「你那份还是对的」，
+    /// 于是这一次传的是零字节，而不是一兆。
+    public var isNotModified: Bool { status == 304 }
+
+    public func header(_ name: String) -> String? { headers[name.lowercased()] }
 }
 
 /// Why a request did not produce a response.

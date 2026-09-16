@@ -105,15 +105,27 @@ public actor SyncEngine {
     /// throwing on an absent one.
     public func fetchDay() async throws -> DayPackage {
         do {
+            // **先问「变了吗」，而不是直接要一兆。**服务端拿本地这一份的版本号
+            // 比一比，没变就回 304 和零字节——今日包实测约 1 MB，过隧道
+            // 0.85–1.4 秒，而绝大多数时候它跟盘上那份**一模一样**。
+            var headers: [String: String] = [:]
+            if let etag = day.etag(), day.load() != nil {
+                headers["If-None-Match"] = etag
+            }
             let response = try await transport.send(
-                HTTPRequest(method: .get, path: "/v1/client/today"))
+                HTTPRequest(method: .get, path: "/v1/client/today", headers: headers))
+
+            if response.isNotModified, let cached = day.load() {
+                // 没变。本地那份就是最新的，一个字节都不用传。
+                return try DayPackage(raw: cached)
+            }
             guard response.isOK else {
                 throw TransportError.server(
                     status: response.status,
                     body: String(decoding: response.body.prefix(400), as: UTF8.self))
             }
             let package = try DayPackage(raw: response.body)
-            try day.store(response.body)
+            try day.store(response.body, etag: response.header("ETag"))
             try articles.remember(package.metadata)
             for article in package.articles where article.preparing == nil {
                 // Cached individually as well as inside the package: an article
