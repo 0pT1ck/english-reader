@@ -209,11 +209,60 @@ def queue_rows(session_id: int, *, open_only: bool = False) -> list[dict[str, An
     return [dict(r) for r in rows]
 
 
+def close_open_queue_rows(learner_id: int, *, item_type: str, item_key: str,
+                          sense_id: int, now: datetime | None = None) -> int:
+    """Close today's unanswered rows for one item. Returns how many.
+
+    Used when a mark is withdrawn: the item leaves the pool, so today's question
+    has nothing behind it any more.
+
+    **Only today's, and only the unanswered ones.** A row that was already
+    answered is a record of something that happened and stays exactly as it is;
+    future sessions are not touched because they will be rebuilt from the pool,
+    which no longer contains this item.
+    """
+    session = session_for(learner_id, today(now))
+    if session is None:
+        return 0
+    conn = get_connection("learning")
+    cursor = conn.execute(
+        "UPDATE review_queue SET done_at = ? WHERE session_id = ? AND item_type = ?"
+        " AND item_key = ? AND sense_id = ? AND done_at IS NULL",
+        (now_iso(), session["id"], item_type, item_key, sense_id),
+    )
+    conn.commit()
+    if cursor.rowcount and not queue_rows(session["id"], open_only=True):
+        # Withdrawing the last open item finishes the day, same as answering it
+        # would have — otherwise the session stays open forever with nothing in
+        # it to answer.
+        finish_session(session["id"])
+    return int(cursor.rowcount)
+
+
 def update_queue(queue_id: int, **fields: Any) -> None:
     columns = ", ".join(f"{k} = ?" for k in fields)
     conn = get_connection("learning")
     conn.execute(f"UPDATE review_queue SET {columns} WHERE id = ?", (*fields.values(), queue_id))
     conn.commit()
+
+
+def mark_spelled(session_id: int) -> None:
+    """Stamp that the spelling pass happened. Idempotent."""
+    conn = get_connection("learning")
+    conn.execute(
+        "UPDATE review_sessions SET spelling_at = ? WHERE id = ? AND spelling_at IS NULL",
+        (now_iso(), session_id),
+    )
+    conn.commit()
+
+
+def spelled_keys(session_id: int) -> set[str]:
+    """Which words already have an attempt recorded for this session."""
+    rows = get_connection("learning").execute(
+        "SELECT DISTINCT item_key FROM spelling_attempts WHERE session_id = ?",
+        (session_id,),
+    ).fetchall()
+    return {r["item_key"] for r in rows}
 
 
 def finish_session(session_id: int) -> None:

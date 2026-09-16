@@ -157,3 +157,29 @@ struct HintTests {
                 "看词想义的题面是英文，中文高亮在那儿没有意义")
     }
 }
+
+extension HintTests {
+    /// 方向 2 的题面**永远不能是空的**。
+    ///
+    /// 2026-09-16 真机上出过：那个词的句子池一条都没有（刚标记的词，例句还没
+    /// 生成出来），而它的义项又恰好没有中文——三层兜底全落空，屏幕上是一片
+    /// 空白，人不知道被问的是什么。**贫乏的问题还能答，空白的不能。**
+    @Test func senseToWordNeverAsksNothing() {
+        // 没有句子、没有义项中文、只有词典释义。
+        let bare = Components.Schemas.ReviewItem(
+            queue_id: 1, item_type: "word", item_key: "after", sense_id: 0,
+            bucket: "today", direction: 1, asks: 0, misses: 0, weight: 1, done: false,
+            word: Components.Schemas.WordCard(headword: "after", translation: "在…之后"),
+            questions: [], hints: [])
+        let prompt = HintLadder.prompt(for: bare, asked: nil, direction: .senseToWord)
+        #expect(!prompt.isEmpty)
+        #expect(prompt.contains("在…之后"))
+
+        // 连词典释义都没有时，说一句话，仍然不是空白。
+        let barest = Components.Schemas.ReviewItem(
+            queue_id: 2, item_type: "word", item_key: "after", sense_id: 0,
+            bucket: "today", direction: 1, asks: 0, misses: 0, weight: 1, done: false,
+            questions: [], hints: [])
+        #expect(!HintLadder.prompt(for: barest, asked: nil, direction: .senseToWord).isEmpty)
+    }
+}

@@ -104,6 +104,22 @@ public enum HintLadder {
         return value.value2 ?? ""
     }
 
+    /// 方向 2 最后的退路。**问题可以贫乏，但不能是空白。**
+    ///
+    /// 上面那条链——中文句子 → 挖空的英文 → 义项中文——每一环都可能是空的，
+    /// 而 2026-09-16 真机上三环全空过：那个词的句子池一条都没有（它是刚标的，
+    /// 例句要生成而生成跑不动），义项的 `gloss_zh` 又恰好是 null。
+    /// 于是屏幕上什么都没有，人不知道被问的是什么。
+    ///
+    /// 词典释义是最后一格：它不区分义项、也没有语境，但它**总是在**。
+    /// 再不济就说一句为什么没有——一句解释也比一张白纸强。
+    static func lastResort(_ item: Components.Schemas.ReviewItem) -> String {
+        if let translation = item.word?.translation, !translation.isEmpty {
+            return translation
+        }
+        return "这个词还没有可用的中文提示——想想它是哪个词"
+    }
+
     /// What the question itself says.
     ///
     /// Here rather than in the renderer for the same reason as the hints: which
@@ -123,7 +139,10 @@ public enum HintLadder {
             if let asked { return asked.text }
             return item.item_key
         case .senseToWord:
-            guard let asked else { return chineseGloss(item) }
+            guard let asked else {
+                let gloss = chineseGloss(item)
+                return gloss.isEmpty ? lastResort(item) : gloss
+            }
             // **The Chinese sentence, not a blanked English one** (P7 决定 15).
             // Filling a blank is a production task, and the whole system is
             // aimed at "read it and recognise it" — asking which English word a
@@ -135,7 +154,10 @@ public enum HintLadder {
             // translation yet — that is a real state, not an error, and it is
             // better than an empty question.
             if let zh = asked.text_zh, !zh.isEmpty { return zh }
-            return blanked(asked)
+            let blank = blanked(asked)
+            if !blank.isEmpty { return blank }
+            let gloss = chineseGloss(item)
+            return gloss.isEmpty ? lastResort(item) : gloss
         }
     }
 

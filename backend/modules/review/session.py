@@ -302,8 +302,11 @@ def progress(learner_id: int, now: datetime | None = None) -> dict[str, Any]:
         "remaining": len(rows) - len(done),
         "buckets": buckets,
         "buckets_done": buckets_done,
+        # 三个条件，第三个 2026-09-16 补：**这一轮拼过了就不再提示**。
+        # 少了它，拼完回到主界面那一行还在，点进去又是全部的词。
         "spelling_available": bool(runtime_config.get("review_spelling"))
-                              and len(rows) > 0 and len(done) == len(rows),
+                              and len(rows) > 0 and len(done) == len(rows)
+                              and not session.get("spelling_at"),
     }
 
 

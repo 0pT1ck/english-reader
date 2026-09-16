@@ -229,8 +229,17 @@ def _apply_spelling(learner_id: int, item_key: str, typed: str) -> dict[str, Any
     session_row = repository.session_for(learner_id, repository.today())
     typed = typed.strip()
     correct = typed.lower() == item_key.strip().lower()
-    repository.record_spelling(learner_id, session_row["id"] if session_row else None,
-                               item_key, item_key, typed, correct)
+    session_id = session_row["id"] if session_row else None
+    repository.record_spelling(learner_id, session_id, item_key, item_key, typed, correct)
+
+    # **拼完了要留下痕迹。**`spelling_at` 这一列从 P3 建表起就在，而在
+    # 2026-09-16 之前**没有任何代码写过它**——于是 `spelling_available` 只看
+    # 「条目都做完了」，拼过多少遍都照样提示，每次还从第一个词拼起。
+    # 真机上就是这么发现的：account 拼了好几遍，每次进去还在。
+    if session_id is not None:
+        expected = {w["item_key"] for w in session.spelling_words(learner_id)}
+        if expected and expected <= repository.spelled_keys(session_id):
+            repository.mark_spelled(session_id)
     return {"correct": correct, "expected": item_key}
 
 

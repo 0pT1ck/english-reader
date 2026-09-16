@@ -23,7 +23,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.review import routes, sentences, translate
+from backend.modules.review import repository, routes, sentences, translate
 from backend.modules.review.schema import MIGRATIONS
 
 log = get_logger("review")
@@ -209,6 +209,37 @@ def _register_workers() -> None:
     jobs.register_worker(translate.WORKER)
 
 
+def on_word_unmarked(event: Event) -> None:
+    """撤回标记之后，把它今天的那道题也收掉。
+
+    Reading sends the item back to the ``new`` pool; the queue row for today is
+    this module's business. Without this the word keeps being asked all day —
+    found on a device 2026-09-16, pressing 「这个词我已经会了」 and watching it
+    come back on the next draw.
+
+    **Closed rather than deleted.** The row is the day's record of what was
+    planned; deleting it would make today's progress numbers disagree with
+    themselves. It is marked done with no answer recorded — nothing was
+    answered, and `review_history` stays the log of actual answers.
+    """
+    learner_id = int(event.get("learner_id") or 1)
+    item_key = str(event.get("item_key") or "")
+    sense_id = int(event.get("sense_id") or 0)
+    item_type = str(event.get("item_type") or "word")
+    if not item_key:
+        return
+    try:
+        closed = repository.close_open_queue_rows(
+            learner_id, item_type=item_type, item_key=item_key, sense_id=sense_id)
+    except Exception as exc:  # noqa: BLE001 - undoing a mark must not fail on this
+        log.warning("review.unmark.failed",
+                    f"撤回标记后没能收掉今天的题：{exc}", item=item_key)
+        return
+    if closed:
+        log.info("review.unmark.closed",
+                 f"撤回标记，收掉了今天 {closed} 道题", item=item_key, closed=closed)
+
+
 def on_article_finished(event: Event) -> None:
     """Top up the sentence pools the moment an article is read.
 
@@ -261,5 +292,6 @@ MODULE = Module(
         ),
     ],
     on_startup=_register_workers,
-    subscriptions={"article.finished": [on_article_finished]},
+    subscriptions={"article.finished": [on_article_finished],
+                   "word.unmarked": [on_word_unmarked]},
 )

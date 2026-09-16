@@ -550,7 +550,18 @@ def _apply(learner_id: int, event_type: str, payload: dict[str, Any]) -> None:
         # with neither has no business sitting in the queue, and leaving it
         # there would make the ledger claim a signal the learner withdrew. The
         # row itself stays: it still records that the item was met, and when.
-        repository.demote_if_unmarked(learner_id, key, sense_id, item_type=item_type)
+        demoted = repository.demote_if_unmarked(learner_id, key, sense_id,
+                                                item_type=item_type)
+        # **退回词池还不够：今天的复习队列里那一行还在。**
+        # 上面那段注释写着「留在队列里等于让账本宣称一个学习者已经撤回的信号」——
+        # 而在 2026-09-16 真机上发现，说的是意图，做的只有 `study_states`
+        # 那一半（坑 §7.1）。点完「这个词我已经会了」，它照样来。
+        #
+        # 队列是 review 模块的表，所以这里只发事件，由那边决定这对复习意味着
+        # 什么——跟「读完文章补句子池」同一个接法（架构铁律 6）。
+        if demoted:
+            events.emit("word.unmarked", learner_id=learner_id,
+                        item_type=item_type, item_key=key, sense_id=sense_id)
         return
 
     raise InvalidRequest("未知的事件类型", type=event_type)
