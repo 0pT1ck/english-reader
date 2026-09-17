@@ -260,6 +260,11 @@ def main() -> int:
 
     from backend.modules.review import scheduler as sched
 
+    # Built once here only to read the effective parameters back out of it —
+    # the cases below each build their own through `review()`, which is what
+    # keeps them exercising the real path rather than a copy of it.
+    built = sched.scheduler(fuzz=False)
+
     # Recorded, not assumed. These are the settings the vectors were made with;
     # the mirror has to be handed the same ones.
     settings = {
@@ -269,10 +274,20 @@ def main() -> int:
         "enable_fuzzing": False,
         "desired_retention": float(runtime_config.get("fsrs_desired_retention")),
         "maximum_interval": int(runtime_config.get("fsrs_maximum_interval")),
-        # `[]`/None means "whatever the package ships with" — which is the
-        # current configuration, and which the Swift side must match by using
-        # its own built-in FSRS-6 defaults rather than a hand-copied array.
-        "parameters": sched._parameters(),
+        # **The effective array, never "whatever the package ships with".**
+        # 2026-09-17: the two packages do not agree on what they ship with.
+        # `py-fsrs` 6.3.2 defaults to FSRS-6 (21 numbers); `swift-fsrs` keeps
+        # FSRS-6's vector in a *separate* constant and still defaults `w` to
+        # FSRS-5's 19. Two sides each reaching for "the default" would therefore
+        # run different algorithms and produce different intervals — with
+        # nothing to report, because both are behaving as documented.
+        #
+        # So the array is written out in full and the mirror is fed exactly it.
+        # `configured` records whether it came from the console or from the
+        # package, because that is the interesting part for a human reading the
+        # file; the numbers are authoritative either way.
+        "parameters": list(built.parameters),
+        "parameters_configured": sched._parameters() is not None,
     }
 
     grades = grade_cases()
@@ -317,7 +332,9 @@ def main() -> int:
     print(f"  设置：{settings['fsrs_package']}，"
           f"retention {settings['desired_retention']}，"
           f"上限 {settings['maximum_interval']} 天，"
-          f"参数 {'内置默认' if not settings['parameters'] else '自定义'}")
+          f"{len(settings['parameters'])} 个参数"
+          f"（FSRS-{'6' if len(settings['parameters']) == 21 else '5'}，"
+          f"{'控制台配的' if settings['parameters_configured'] else '包自带的'}）")
     print()
     print("评级映射（misses/easy/revealed/capped -> 评级）：")
     for c in grades:
