@@ -74,6 +74,19 @@ public struct LoggedEvent: Codable, Equatable, Sendable {
 
     public let payload: [String: JSONValue]
 
+    /// 这一种事件上报到哪个端点，以及在 `/events` 上叫什么。
+    ///
+    /// **推导出来的，不是存在事件里的第二个字段。** 两个字段说同一件事，
+    /// 早晚会有一条记录说两种话。
+    public var eventType: String? {
+        switch kind {
+        case .marked: "word.marked"
+        case .unmarked: "word.unmarked"
+        case .read: "article.finished"
+        case .answered, .spelled, .decided: nil
+        }
+    }
+
     public init(localSequence: Int, idemKey: String = UUID().uuidString,
                 kind: Kind, occurredAt: String = ISO8601DateFormatter().string(from: Date()),
                 payload: [String: JSONValue]) {
@@ -218,12 +231,39 @@ public final class EventLog: @unchecked Sendable {
     public struct Cursor: Codable, Equatable, Sendable {
         /// 本地序号报到哪儿了（含）。-1 ＝ 一条都没报。
         public var reportedThrough: Int
+        /// 水位线之上、已经单独报掉的那些序号。
+        ///
+        /// **一个水位线不够用。** 服务端的回应是**逐条**的（「silence is not
+        /// consent」），所以一批里可能第 5 条落了、第 6 条被拒、第 7 条又落了。
+        /// 只有水位线的话，被拒的那一条会把它后面全部挡住——那比重发一条更糟。
+        /// **平时这个数组是空的**：事件按顺序发、按顺序落，水位线自己就往前走。
+        public var reportedAbove: [Int]
         /// 从服务端拉到哪个全序序号了（含）。0 ＝ 还没拉过。
         public var pulledThrough: Int
 
-        public init(reportedThrough: Int = -1, pulledThrough: Int = 0) {
+        public init(reportedThrough: Int = -1, reportedAbove: [Int] = [],
+                    pulledThrough: Int = 0) {
             self.reportedThrough = reportedThrough
+            self.reportedAbove = reportedAbove
             self.pulledThrough = pulledThrough
+        }
+
+        /// 这个序号报过了没有。
+        public func isReported(_ sequence: Int) -> Bool {
+            sequence <= reportedThrough || reportedAbove.contains(sequence)
+        }
+
+        /// 记下一批报掉的序号，并把水位线尽量往前推。
+        ///
+        /// 推到「连续报掉的最后一个」为止，剩下的留在集合里——
+        /// 这样被拒的那一条只挡住自己。
+        public mutating func reporting(_ sequences: [Int]) {
+            var above = Set(reportedAbove).union(sequences)
+            while above.contains(reportedThrough + 1) {
+                reportedThrough += 1
+                above.remove(reportedThrough)
+            }
+            reportedAbove = above.sorted()
         }
     }
 
@@ -244,8 +284,78 @@ public final class EventLog: @unchecked Sendable {
     }
 
     /// 还没上报的那些，最旧的在前。
-    public func unreported() throws -> [LoggedEvent] {
-        let through = cursor().reportedThrough
-        return try load().events.filter { $0.localSequence > through }
+    ///
+    /// **顺序就是发出去的顺序。** 复习作答是一个状态机——过了看词想义才解锁
+    /// 看义想词——所以乱序重放会在服务端造出一个和设备上不一样的一天。
+    ///
+    /// - Parameter kinds: 只要这几种。**`decided` 现在没有去处**：
+    ///   §5 定了决策日志存在服务端，但那个端点还没做（§6 的活）。
+    ///   不过滤的话它会永远堆在「待发」里，让那个数字变成噪音。
+    public func unreported(kinds: Set<LoggedEvent.Kind>? = nil) throws -> [LoggedEvent] {
+        let cursor = cursor()
+        return try load().events.filter { event in
+            guard !cursor.isReported(event.localSequence) else { return false }
+            guard let kinds else { return true }
+            return kinds.contains(event.kind)
+        }
+    }
+
+    /// 记下这一批报掉了。
+    public func markReported(_ sequences: [Int]) throws {
+        var cursor = cursor()
+        cursor.reporting(sequences)
+        try setCursor(cursor)
+    }
+}
+
+extension LoggedEvent {
+    /// 上报时用的那个信封。
+    ///
+    /// **复用 `OutboxEntry` 而不是另写一套线上形状**：三个端点的请求体是发件箱
+    /// 那边写好的（`EventEnvelope` 与 `FlatEnvelope`），再写一份就是同一件事
+    /// 说两遍，而两遍早晚不一样。
+    ///
+    /// 返回 nil ＝ 这一种没有去处。现在只有 `decided` 是这样（§5 定了它存服务端，
+    /// 端点是 §6 的活）。
+    public var envelope: OutboxEntry? {
+        let destination: OutboxEntry.Kind
+        switch kind {
+        case .marked, .unmarked, .read: destination = .reading
+        case .answered: destination = .answer
+        case .spelled: destination = .spelling
+        case .decided: return nil
+        }
+        return OutboxEntry(idemKey: idemKey, kind: destination,
+                           eventType: eventType ?? "", payload: payload,
+                           occurredAt: occurredAt as String)
+    }
+
+    /// 有去处的那几种。
+    public static let sendableKinds: Set<Kind> = [.marked, .unmarked, .read,
+                                                  .answered, .spelled]
+}
+
+extension OutboxEntry {
+    /// 这条事件在日志里算哪一种。**nil ＝ 它不是那五种之一。**
+    ///
+    /// 打开文章、读到哪、点了哪个词，这三样是**遥测**：它们不改变任何状态，
+    /// 而状态是日志的纯函数。把不改状态的东西放进日志，只会让重放变慢、
+    /// 让「五种事件」那条规矩变松。它们照旧只进发件箱。
+    ///
+    /// **放在 Core 里而不是各宿主各写一份**：App 和 `ercli` 都要这个判断，
+    /// 而两份判断早晚会在某一种事件上分家——那时一台设备把它记进历史、
+    /// 另一台没有，而两边都不会报错。
+    public var loggedKind: LoggedEvent.Kind? {
+        switch kind {
+        case .answer: .answered
+        case .spelling: .spelled
+        case .reading:
+            switch eventType {
+            case "word.marked": .marked
+            case "word.unmarked": .unmarked
+            case "article.finished": .read
+            default: nil
+            }
+        }
     }
 }

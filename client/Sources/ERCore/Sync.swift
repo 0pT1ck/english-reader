@@ -117,18 +117,35 @@ public struct SyncReport: Sendable, Equatable {
     public var offline = false
 
     public init() {}
+
+    /// 把另一次尝试的结果并进来。
+    ///
+    /// `remaining` 不相加——它是「之后还剩几条」，由调用方在最后统一数一次，
+    /// 两个来源各数一半再加起来，只会在中途变化时给出一个谁都不认的数。
+    mutating func merge(_ other: SyncReport) {
+        landed += other.landed
+        duplicates += other.duplicates
+        rejected += other.rejected
+        offline = offline || other.offline
+    }
 }
 
 public actor SyncEngine {
     private let transport: any Transport
     private let outbox: Outbox
+    private let events: EventLog?
     private let articles: ArticleCache
     private let day: DayCache
 
+    /// - Parameter events: 事件日志。**P9 起它才是那五种事件的来源**；
+    ///   发件箱退化成「遥测那几条的队列」。传 nil 是为了让老的调用点
+    ///   （和只测传输的测试）还编得过，那时行为和 P9 之前一样。
     public init(transport: any Transport, outbox: Outbox,
+                events: EventLog? = nil,
                 articles: ArticleCache, day: DayCache) {
         self.transport = transport
         self.outbox = outbox
+        self.events = events
         self.articles = articles
         self.day = day
     }
@@ -270,18 +287,25 @@ public actor SyncEngine {
     @discardableResult
     public func drain() async throws -> SyncReport {
         var report = SyncReport()
+        if let events {
+            // **五种事件从日志走，不从发件箱走**（P9）。
+            //
+            // 在这之前两处都写:一条事件先进日志再进发件箱。那中间有一个窄口子——
+            // 崩在两次写之间，事件在日志里而发件箱里没有，**于是它永远发不出去**，
+            // 而屏幕上什么都不会说（本机重放算得出它，服务端永远不知道）。
+            // 现在只有日志是那份记录，发件箱只装遥测。
+            report.merge(try await drainLog(events))
+        }
         let pending = try outbox.pending()
         if !pending.damaged.isEmpty {
             // Left in place rather than discarded here: throwing away an event
             // is a loss, and it should be a decision the caller makes out loud.
             report.rejected += pending.damaged.count
         }
-        guard !pending.entries.isEmpty else {
-            report.remaining = outbox.count
-            return report
-        }
-
-        for kind in [OutboxEntry.Kind.reading, .answer, .spelling] {
+        // **不提前返回。** 上一版在发件箱为空时直接 return，而那条路绕过了下面
+        // 「还剩几条」的统计——日志那半的剩余量会被算成 0，
+        // 于是待发数在「发件箱空、日志还有」时显示成零。
+        for kind in pending.entries.isEmpty ? [] : [OutboxEntry.Kind.reading, .answer, .spelling] {
             let batch = pending.entries.filter { $0.kind == kind }
             guard !batch.isEmpty else { continue }
             do {
@@ -300,7 +324,55 @@ public actor SyncEngine {
                 break
             }
         }
+        // 最后统一数一次，而不是两个来源各数一半——中途变化时那种加法
+        // 会给出一个谁都不认的数。
         report.remaining = outbox.count
+        if let events {
+            report.remaining += (try? events.unreported(
+                kinds: LoggedEvent.sendableKinds).count) ?? 0
+        }
+        return report
+    }
+
+    /// 把日志里还没上报的发出去。
+    ///
+    /// **按种类分批，但序号顺序不打乱。** 复习作答是状态机，乱序会在服务端造出
+    /// 另一个一天;而一批里的回应是**逐条**的，所以哪一条落了就记哪一条——
+    /// 被拒的那一条只挡住自己，不挡它后面的（见 `Cursor.reporting`）。
+    private func drainLog(_ events: EventLog) async throws -> SyncReport {
+        var report = SyncReport()
+        let pending = try events.unreported(kinds: LoggedEvent.sendableKinds)
+        guard !pending.isEmpty else { return report }
+
+        var landed: [Int] = []
+        for kind in [OutboxEntry.Kind.reading, .answer, .spelling] {
+            let batch = pending.compactMap { event -> (LoggedEvent, OutboxEntry)? in
+                guard let envelope = event.envelope, envelope.kind == kind else {
+                    return nil
+                }
+                return (event, envelope)
+            }
+            guard !batch.isEmpty else { continue }
+            do {
+                let verdicts = try await post(kind, batch.map(\.1))
+                for (event, envelope) in batch {
+                    switch verdicts[envelope.idemKey] {
+                    case .landed: report.landed += 1; landed.append(event.localSequence)
+                    case .duplicate: report.duplicates += 1
+                        landed.append(event.localSequence)
+                    case .rejected: report.rejected += 1
+                    case nil:
+                        // 服务端没提这一条。**沉默不等于同意**——留着下次再发。
+                        break
+                    }
+                }
+            } catch let error as TransportError {
+                guard case .offline = error else { throw error }
+                report.offline = true
+                break
+            }
+        }
+        if !landed.isEmpty { try events.markReported(landed) }
         return report
     }
 

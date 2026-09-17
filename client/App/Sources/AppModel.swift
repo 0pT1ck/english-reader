@@ -131,30 +131,11 @@ final class AppModel {
         }
         engine = SyncEngine(
             transport: IOSTransport(baseURL: url, token: connection.token, log: log),
-            outbox: outbox, articles: cache, day: dayCache
+            outbox: outbox, events: events, articles: cache, day: dayCache
         )
     }
 
     // MARK: 发件箱
-
-    /// 这条事件在日志里算哪一种。**nil ＝ 它不是那五种之一。**
-    ///
-    /// 打开文章、读到哪、点了哪个词，这三样是遥测:它们不改变任何状态，
-    /// 而且状态是日志的纯函数——把不改状态的东西放进日志，只会让重放变慢、
-    /// 让「五种事件」那条规矩变松。它们照旧只进发件箱。
-    private static func loggedKind(_ entry: OutboxEntry) -> LoggedEvent.Kind? {
-        switch entry.kind {
-        case .answer: return .answered
-        case .spelling: return .spelled
-        case .reading:
-            switch entry.eventType {
-            case "word.marked": return .marked
-            case "word.unmarked": return .unmarked
-            case "article.finished": return .read
-            default: return nil
-            }
-        }
-    }
 
     /// 记一条事件。**先落盘再说成功**——反过来的话用户会看见「已标记」
     /// 而它其实没写进去。
@@ -162,14 +143,20 @@ final class AppModel {
     func record(_ entry: OutboxEntry) -> Bool {
         guard let outbox else { return false }
         do {
-            // **先写日志，再写发件箱。** 日志是事实，发件箱是「还没送出去的那些」——
-            // 顺序反了的话，一次崩溃可能留下一条已上报却不在本地历史里的事件，
-            // 而那条事件从此只存在于服务端，本地重放永远算不出它。
-            if let kind = Self.loggedKind(entry), let events {
+            // **五种事件只进日志，遥测只进发件箱——不再两处都写。**
+            //
+            // 上一版是先写日志再写发件箱，那中间有一个窄口子:崩在两次写之间，
+            // 事件在日志里而发件箱里没有，**于是它永远发不出去**，
+            // 而屏幕上什么都不会说（本机重放算得出它，服务端永远不知道）。
+            // 现在 `drain()` 直接从日志取那五种（`SyncEngine.drainLog`），
+            // 一条事件只有一个家。映射在 Core 里（`OutboxEntry.loggedKind`），
+            // 和 `ercli` 共用一份。
+            if let kind = entry.loggedKind, let events {
                 try events.append(kind: kind, payload: entry.payload,
                                   idemKey: entry.idemKey, occurredAt: entry.occurredAt)
+            } else {
+                try outbox.append(entry)
             }
-            try outbox.append(entry)
             refreshPendingCount()
             refreshProjection()
             log?.write(.debug, "outbox.recorded", "记下一条事件",
@@ -242,7 +229,14 @@ final class AppModel {
     ///
     /// 损坏条目改成按需算（`refreshDamagedCount`），它只有设置页要看。
     func refreshPendingCount() {
-        pendingEvents = outbox?.count ?? 0
+        // 发件箱只剩遥测了，**待发数要把日志里还没上报的那些算进去**——
+        // 否则标了一个词、待发数显示 0，而它其实还没送出去。
+        // `decided` 不算:它还没有去处（端点是 §6 的活），算进去就是永远非零的噪音。
+        var unsent = 0
+        if let events, let pending = try? events.unreported(kinds: LoggedEvent.sendableKinds) {
+            unsent = pending.count
+        }
+        pendingEvents = (outbox?.count ?? 0) + unsent
     }
 
     /// 读不出来的事件文件有几条。**贵，所以只在有人要看的时候算**——

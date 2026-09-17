@@ -99,13 +99,27 @@ func usage() {
 // MARK: - Wiring
 
 let outbox = try Outbox(directory: stateDirectory.appendingPathComponent("outbox"))
+// 事件日志（P9）。**这五种事件从这儿上报，不从发件箱**——发件箱只剩遥测。
+let events = try EventLog(directory: stateDirectory.appendingPathComponent("events"))
+
+/// 记一条事件。**一条事件只有一个家**：五种进日志，遥测进发件箱。
+/// 映射那一份在 Core 里（`OutboxEntry.loggedKind`），和 App 共用——
+/// 两份判断早晚会在某一种事件上分家，而那时两边都不会报错。
+func record(_ entry: OutboxEntry) throws {
+    if let kind = entry.loggedKind {
+        try events.append(kind: kind, payload: entry.payload,
+                          idemKey: entry.idemKey, occurredAt: entry.occurredAt)
+    } else {
+        try record(entry)
+    }
+}
 let articleCache = try ArticleCache(directory: stateDirectory.appendingPathComponent("articles"))
 let dayCache = try DayCache(directory: stateDirectory.appendingPathComponent("day"))
 
 let transport: any Transport = flag("offline")
     ? OfflineTransport()
     : URLSessionTransport(baseURL: baseURL, token: token)
-let engine = SyncEngine(transport: transport, outbox: outbox,
+let engine = SyncEngine(transport: transport, outbox: outbox, events: events,
                         articles: articleCache, day: dayCache)
 
 if let warning = ProxyEnvironment.warning() { print(Ink.yellow(warning)) }
@@ -162,7 +176,7 @@ func read(_ id: Int) async throws {
     print(Ink.dim("目标词 \(display.tokens.filter { $0.role == .target }.count) 个，"
         + "超纲 \(display.tokens.filter { $0.role == .beyondSyllabus }.count) 处，"
         + "词组 \(display.phrases.count) 处"))
-    try outbox.append(.articleOpened(id))
+    try record(.articleOpened(id))
 }
 
 func look(_ id: Int, _ seq: Int) async throws {
@@ -170,7 +184,7 @@ func look(_ id: Int, _ seq: Int) async throws {
     let renderer = ArticleRenderer(article)
     print(renderer.panel(at: seq))
     if case .word(let headword, _)? = renderer.display.target(at: seq) {
-        try outbox.append(.wordTapped(headword, articleId: id))
+        try record(.wordTapped(headword, articleId: id))
     }
 }
 
@@ -182,13 +196,13 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
     switch display.target(at: seq) {
     case .phrase(let phrase):
         // 词组是一个整体，就按一个整体标记——点它的任何一半都一样。
-        try outbox.append(.marked(phrase.phrase, kind: kind, itemType: "phrase",
+        try record(.marked(phrase.phrase, kind: kind, itemType: "phrase",
                                   articleId: id))
         print(Ink.red("标记词组：\(phrase.phrase)") + Ink.dim("（\(kind.rawValue)）"))
     case .word(let headword, _):
         let senseId = (article.tokens ?? [])
             .first { $0.seq == seq }?.sense_id ?? 0
-        try outbox.append(.marked(headword, senseId: senseId, kind: kind, articleId: id))
+        try record(.marked(headword, senseId: senseId, kind: kind, articleId: id))
         print(Ink.red("标记：\(headword)") + Ink.dim("（义项 \(senseId)，\(kind.rawValue)）"))
     case nil:
         print(Ink.dim("⟨\(seq)⟩ 这里没有可标记的东西"))
@@ -205,11 +219,11 @@ func unmark(_ id: Int, _ seq: Int) async throws {
     let display = ArticleDisplay(article: article)
     switch display.target(at: seq) {
     case .phrase(let phrase):
-        try outbox.append(.unmarked(phrase.phrase, itemType: "phrase"))
+        try record(.unmarked(phrase.phrase, itemType: "phrase"))
         print(Ink.green("撤销词组标记：\(phrase.phrase)"))
     case .word(let headword, _):
         let senseId = (article.tokens ?? []).first { $0.seq == seq }?.sense_id ?? 0
-        try outbox.append(.unmarked(headword, senseId: senseId))
+        try record(.unmarked(headword, senseId: senseId))
         print(Ink.green("撤销标记：\(headword)") + Ink.dim("（义项 \(senseId)）"))
     case nil:
         print(Ink.dim("⟨\(seq)⟩ 这里没有可撤销的东西"))
@@ -221,7 +235,7 @@ func finish(_ id: Int) async throws {
     let article = try await engine.article(id)
     let sentences = article.sentences?.count ?? 0
     // 记账只在读完这一刻发生，而且只发生一次——服务端也会拒绝第二次。
-    try outbox.append(.articleFinished(id, sentenceSeq: max(0, sentences - 1)))
+    try record(.articleFinished(id, sentenceSeq: max(0, sentences - 1)))
     print(Ink.green("读完 #\(id)")
         + Ink.dim("——遇见次数 +1，词池位置不动；标记过的才进复习队列"))
 }
@@ -325,7 +339,7 @@ func review() async throws {
         let next = state.applying(answer, weightDecay: day.weight_decay)
         states[queueId] = next
 
-        try outbox.append(.answered(queueId: queueId, passed: answer.passed,
+        try record(.answered(queueId: queueId, passed: answer.passed,
                                     revealed: answer.revealed,
                                     sentenceId: asked?.id, easy: answer.easy))
 
@@ -482,7 +496,7 @@ func spell() async throws {
         }
         print("  > ", terminator: "")
         let typed = readAnswer("")
-        try outbox.append(.spelled(word, typed: typed))
+        try record(.spelled(word, typed: typed))
         print(typed.lowercased() == word.lowercased()
             ? Ink.green("  对了") : Ink.red("  应该是 \(word)"))
     }
@@ -511,7 +525,7 @@ func walk() async throws {
     print("   \(display.tokens.count) 个 token，"
         + "目标词 \(display.tokens.filter { $0.role == .target }.count)，"
         + "词组 \(display.phrases.count)")
-    try outbox.append(.articleOpened(id))
+    try record(.articleOpened(id))
 
     // Look one word up and, if the article has a phrase, look that up too —
     // the phrase branch is the one where a wrong answer is a wrong meaning
@@ -519,7 +533,7 @@ func walk() async throws {
     if let target = display.tokens.enumerated().first(where: { $0.element.role == .target }) {
         print("\n\(Ink.bold("③ 查一个目标词"))")
         print(renderer.panel(at: target.offset))
-        try outbox.append(.wordTapped(target.element.headword ?? "", articleId: id))
+        try record(.wordTapped(target.element.headword ?? "", articleId: id))
     }
     if let phrase = display.phrases.first {
         print("\n\(Ink.bold("④ 查一个词组"))——点它的任何一半都该到同一个地方")
@@ -528,7 +542,7 @@ func walk() async throws {
         print(sameFromOtherHalf == .phrase(phrase)
             ? Ink.green("   两半都指向整个词组")
             : Ink.red("   两半指向的不是同一个东西——词组渲染坏了"))
-        try outbox.append(.marked(phrase.phrase, kind: .unknown, itemType: "phrase",
+        try record(.marked(phrase.phrase, kind: .unknown, itemType: "phrase",
                                   articleId: id))
         print(Ink.dim("   标记了这个词组（整体）"))
     }
@@ -536,11 +550,11 @@ func walk() async throws {
     if let target = display.tokens.enumerated().first(where: { $0.element.role == .target }),
        let headword = target.element.headword {
         let senseId = (first.tokens ?? []).first { $0.seq == target.offset }?.sense_id ?? 0
-        try outbox.append(.marked(headword, senseId: senseId, kind: .unknown, articleId: id))
+        try record(.marked(headword, senseId: senseId, kind: .unknown, articleId: id))
         print("\n\(Ink.bold("⑤ 标记一个生词"))：\(headword)（义项 \(senseId)）")
     }
 
-    try outbox.append(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1))
+    try record(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1))
     print("\n\(Ink.bold("⑥ 读完"))——记账只在这一刻发生")
 
     // ⑦⑧ 复习与拼写。**这一半原先不在 walk 里**——它走到读完就停了，于是状态机、
@@ -599,7 +613,7 @@ func walkReview(_ day: Components.Schemas.ReviewDayResponse) async throws {
         print(Ink.dim("  ⟨\(queueId)⟩ ") + question(card, sentence, state.direction))
         let answer = promptAnswer(card, sentence, state.direction)
         states[queueId] = state.applying(answer, weightDecay: day.weight_decay)
-        try outbox.append(.answered(queueId: queueId, passed: answer.passed,
+        try record(.answered(queueId: queueId, passed: answer.passed,
                                     revealed: answer.revealed,
                                     sentenceId: sentence?.id, easy: answer.easy))
     }
@@ -620,7 +634,7 @@ func walkReview(_ day: Components.Schemas.ReviewDayResponse) async throws {
         // walk 是无人值守的，这里故意拼错，好让「拼错了会怎样」这条路真的被走过，
         // 而不是每次都走对的那一支。要手动做拼写就用 `ercli spell`。
         let typed = String(word.dropLast())
-        try outbox.append(.spelled(word, typed: typed))
+        try record(.spelled(word, typed: typed))
         print("   \(word) ← 打成「\(typed)」"
             + (typed == word ? Ink.green("  对")
                              : Ink.red("  错——只记录，不影响复习安排")))

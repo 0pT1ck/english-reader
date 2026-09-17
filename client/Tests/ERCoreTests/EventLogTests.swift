@@ -124,4 +124,74 @@ struct EventLogTests {
         #expect(Set(LoggedEvent.Kind.allCases.map(\.rawValue)) ==
                 ["marked", "unmarked", "read", "answered", "spelled", "decided"])
     }
+
+    // MARK: 上报水位线
+
+    /// **一个水位线不够用。** 服务端的回应是逐条的，所以一批里可能第 5 条落了、
+    /// 第 6 条被拒、第 7 条又落了。只有水位线的话，被拒的那一条会把后面全挡住。
+    @Test("被拒的那一条只挡住自己，不挡它后面的")
+    func aRejectedEventBlocksOnlyItself() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = try EventLog(directory: directory)
+        for index in 0..<8 {
+            try log.append(kind: .answered, payload: ["n": .int(index)])
+        }
+
+        // 0–4 落了，5 被拒，6、7 落了。
+        try log.markReported([0, 1, 2, 3, 4, 6, 7])
+        let cursor = log.cursor()
+        #expect(cursor.reportedThrough == 4, "水位线推到 4，实际 \(cursor.reportedThrough)")
+        #expect(cursor.reportedAbove == [6, 7], "6、7 单独记着")
+        #expect(try log.unreported().map(\.localSequence) == [5],
+                "只剩被拒那一条要重发")
+
+        // 补上 5 之后水位线一口气推到底，集合清空。
+        try log.markReported([5])
+        #expect(log.cursor().reportedThrough == 7)
+        #expect(log.cursor().reportedAbove.isEmpty, "追上之后集合要清干净")
+        #expect(try log.unreported().isEmpty)
+    }
+
+    /// `decided` 还没有去处（§5 定了它存服务端，端点是 §6 的活）。
+    /// **不过滤的话它会永远堆在「待发」里，让那个数字变成噪音。**
+    @Test("按种类过滤:决策事件不算在待发里")
+    func decisionsAreNotWaitingToBeSent() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = try EventLog(directory: directory)
+        try log.append(kind: .marked, payload: ["item_key": .string("a")])
+        try log.append(kind: .decided, payload: ["pick": .int(1)])
+        try log.append(kind: .answered, payload: ["passed": .bool(true)])
+
+        #expect(try log.unreported().count == 3, "全部三条都还没报")
+        #expect(try log.unreported(kinds: LoggedEvent.sendableKinds).count == 2,
+                "有去处的只有两条")
+        #expect(LoggedEvent.Kind.decided.envelopeIsMissing,
+                "决策事件现在没有信封")
+    }
+
+    @Test("每一种事件的去处和名字都是推导出来的，不是存着的第二个字段")
+    func destinationsAreDerived() {
+        let cases: [(LoggedEvent.Kind, OutboxEntry.Kind?, String?)] = [
+            (.marked, .reading, "word.marked"),
+            (.unmarked, .reading, "word.unmarked"),
+            (.read, .reading, "article.finished"),
+            (.answered, .answer, nil),
+            (.spelled, .spelling, nil),
+            (.decided, nil, nil),
+        ]
+        for (kind, destination, type) in cases {
+            let event = LoggedEvent(localSequence: 0, kind: kind, payload: [:])
+            #expect(event.envelope?.kind == destination, "\(kind) 的去处不对")
+            #expect(event.eventType == type, "\(kind) 的事件名不对")
+        }
+    }
+}
+
+private extension LoggedEvent.Kind {
+    /// 这一种现在有没有去处。写成扩展只为让上面那条断言读得通顺。
+    var envelopeIsMissing: Bool {
+        LoggedEvent(localSequence: 0, kind: self, payload: [:]).envelope == nil
+    }
 }
