@@ -48,14 +48,25 @@ struct ReviewScreen: View {
                             .font(.headline)
                     }
                     PoolCard(title: "今日学习", done: model.todayDone, total: model.todayTotal) {
-                        model.begin(bucket: "today")
+                        model.begin(bucket: .today)
                     }
                     PoolCard(title: "温故知新", done: model.dueDone, total: model.dueTotal) {
-                        model.begin(bucket: "due")
+                        model.begin(bucket: .due)
                     }
                     // 拼写是**可选强化**（P3 决定 13），所以它不是第三张卡片：
                     // 卡片是「今天要做的事」，而这一行只在两个池子都走完之后
                     // 才出现，出现了也可以不理。
+                    // **投影说该问、而包里还没有它的句子。** 平时是 0；
+                    // 非零的情形是真实的:你离线标了个词，包还没重新取下来。
+                    // 那个词没丢（投影里它在），只是还问不了——
+                    // 不说出来的话，「今天 12 个」和「13 个」的差别没人解释得了。
+                    if model.awaitingContent > 0 {
+                        Text("还有 \(model.awaitingContent) 个词等着句子备好，"
+                             + "联网取一次今日包就会出现")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
                     if model.spellingEnabled && model.spellingAvailable
                         && !model.spellingWords.isEmpty {
                         NavigationLink {

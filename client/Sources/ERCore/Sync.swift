@@ -37,6 +37,43 @@ public struct DayPackage: Sendable {
     /// 而这几个值本来就随今日包发下来了，接进界面是零成本的。
     public var settings: Components.Schemas.TodaySettings { decoded.settings }
 
+    /// 排期参数，**从原始字节里读**。
+    ///
+    /// 服务端 2026-09-17 把它们加进了 `settings`（P9：排期搬到设备上之后，
+    /// 设备必须知道服务端配的是什么）。这里不走生成的契约类型，而是直接解 `raw`
+    /// —— 原始字节保留的理由原话就是「a field this version of the client does
+    /// not understand must still survive to the next one」，而重新生成 Swift
+    /// 契约要 Swift 工具链，r5s 上不装（开发场地那条决定的代价）。
+    ///
+    /// **服务端没下发就返回 nil，绝不回落到一份本地默认。**
+    /// 两边各用自己的默认会跑出不同的间隔，而且两边都在按自己的文档正常工作、
+    /// 没有东西会报错——这正是 swift-fsrs 与 py-fsrs 那次差点踩进去的形状。
+    /// 宁可说「服务端还没更新」，也不能悄悄算出别的排期。
+    public var schedulerSettings: ReviewScheduler.Settings? {
+        struct Wire: Decodable {
+            struct Settings: Decodable {
+                let fsrs_parameters: [Double]?
+                let fsrs_desired_retention: Double?
+                let fsrs_maximum_interval: Int?
+                let fsrs_fuzz: Bool?
+            }
+            let settings: Settings
+        }
+        guard let wire = try? JSONDecoder().decode(Wire.self, from: raw),
+              let parameters = wire.settings.fsrs_parameters, !parameters.isEmpty,
+              let retention = wire.settings.fsrs_desired_retention,
+              let maximum = wire.settings.fsrs_maximum_interval else { return nil }
+        return ReviewScheduler.Settings(
+            requestRetention: retention,
+            maximumInterval: maximum,
+            parameters: parameters,
+            // **投影里一律关抖动。** 抖动是「排下一次」时的一点随机，而投影是
+            // 把历史重放一遍——重放时抖一次就和当时排的对不上了。
+            // 服务端那个开关(`fsrs_fuzz`)管的是服务端自己排期，这里不跟。
+            enableFuzz: false
+        )
+    }
+
     /// 这份包是哪一天的。缓存要不要用，全看它——**昨天的包不是「旧一点」，
     /// 是错的**：题目做完了、日期变了，照着它渲染会让人对着一份不存在的
     /// 队列答题。

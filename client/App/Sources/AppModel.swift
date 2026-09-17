@@ -3,12 +3,16 @@ import Observation
 import ERCore
 import ERContract
 
-/// App 共用的那一份东西：三类本地存储、发件箱、同步引擎。
+/// App 共用的那一份东西：本地存储、事件日志、发件箱、同步引擎、投影。
 ///
-/// **本地存三类，只有一类不能丢**（P5 决定 8）：发件箱是客户端唯一独有的数据，
-/// 元信息和正文缓存丢了都能重新拿。这里把三个目录分开建，就是为了让
-/// 「清缓存不许碰发件箱」这条不变量在文件系统上就成立——清理动的是
-/// `bodies/`，发件箱在 `outbox/`，两者没有交集。
+/// **哪些丢不得，P9 把答案改了。** P5 决定 8 说只有发件箱丢不得——因为别的
+/// 都是服务端已有东西的副本。而 P9 之后 **事件日志是学习记录的第一副本**
+/// （`phase-9.html` §5），它是这台设备上真正不可重建的那一份；发件箱降级成
+/// 「还没送出去的那些」。
+///
+/// 每一类一个目录，就是为了让「清缓存不许碰记录」这条不变量**在文件系统上**
+/// 成立，而不是靠纪律：清理动 `articles/`，日志在 `events/`，发件箱在
+/// `outbox/`，三者没有交集。
 @MainActor
 @Observable
 final class AppModel {
@@ -20,6 +24,23 @@ final class AppModel {
     private(set) var cache: ArticleCache?
     private(set) var dayCache: DayCache?
     private(set) var engine: SyncEngine?
+
+    /// 事件日志（P9）。**设备上学习记录的第一副本**，屏幕上的每个数都由重放它算出来。
+    private(set) var events: EventLog?
+
+    /// 重放出来的投影。记一条事件就重算一次——实测全部历史 375 条、
+    /// 一年 2.5 万条，重放是毫秒级的（`phase-9.html` §14 U3），
+    /// 所以不缓存、不做增量，**一个来源比一个快一点的缓存值钱**。
+    private(set) var projection = Projection()
+
+    /// 排期参数，今日包带下来的那一份。
+    ///
+    /// **nil ＝ 服务端还没下发。** 那时投影算不了排期，界面要说出来，
+    /// 而不是回落到一份本地默认——两边各用自己的默认会跑出不同的间隔，
+    /// 而且两边都不会报错（`phase-9.html` §16 ②那个形状）。
+    private(set) var schedulerSettings: ReviewScheduler.Settings?
+    /// 答错之后权重乘多少。规则是服务端的，客户端从袋子里抽。
+    private(set) var weightDecay: Double = 0.5
 
     /// 客户端自己的日志（P8 §9）。**和发件箱、缓存并列建在同一个根下**，
     /// 但它是第四类：丢了不影响任何学习记录，三天之后本来也要自己删掉。
@@ -69,6 +90,10 @@ final class AppModel {
             ).appendingPathComponent("EnglishReader", isDirectory: true)
 
             outbox = try Outbox(directory: root.appendingPathComponent("outbox"))
+            // **和发件箱并列、各自一个目录。** 清缓存动的是 `articles/`，
+            // 发件箱在 `outbox/`，日志在 `events/`——三者在文件系统上就没有交集，
+            // 所以「清缓存不许碰记录」这条不变量不靠纪律保证。
+            events = try EventLog(directory: root.appendingPathComponent("events"))
             cache = try ArticleCache(directory: root.appendingPathComponent("articles"))
             dayCache = try DayCache(directory: root.appendingPathComponent("day"))
             library = LibraryStore(directory: root.appendingPathComponent("library"))
@@ -80,6 +105,7 @@ final class AppModel {
             log = file
             storageFailure = nil
             refreshPendingCount()
+            refreshProjection()
         } catch {
             storageFailure = "本地存储建不起来：\(error.localizedDescription)"
             // 日志本身可能就是没建起来的那个，所以这条要两头都说：
@@ -111,14 +137,41 @@ final class AppModel {
 
     // MARK: 发件箱
 
+    /// 这条事件在日志里算哪一种。**nil ＝ 它不是那五种之一。**
+    ///
+    /// 打开文章、读到哪、点了哪个词，这三样是遥测:它们不改变任何状态，
+    /// 而且状态是日志的纯函数——把不改状态的东西放进日志，只会让重放变慢、
+    /// 让「五种事件」那条规矩变松。它们照旧只进发件箱。
+    private static func loggedKind(_ entry: OutboxEntry) -> LoggedEvent.Kind? {
+        switch entry.kind {
+        case .answer: return .answered
+        case .spelling: return .spelled
+        case .reading:
+            switch entry.eventType {
+            case "word.marked": return .marked
+            case "word.unmarked": return .unmarked
+            case "article.finished": return .read
+            default: return nil
+            }
+        }
+    }
+
     /// 记一条事件。**先落盘再说成功**——反过来的话用户会看见「已标记」
     /// 而它其实没写进去。
     @discardableResult
     func record(_ entry: OutboxEntry) -> Bool {
         guard let outbox else { return false }
         do {
+            // **先写日志，再写发件箱。** 日志是事实，发件箱是「还没送出去的那些」——
+            // 顺序反了的话，一次崩溃可能留下一条已上报却不在本地历史里的事件，
+            // 而那条事件从此只存在于服务端，本地重放永远算不出它。
+            if let kind = Self.loggedKind(entry), let events {
+                try events.append(kind: kind, payload: entry.payload,
+                                  idemKey: entry.idemKey, occurredAt: entry.occurredAt)
+            }
             try outbox.append(entry)
             refreshPendingCount()
+            refreshProjection()
             log?.write(.debug, "outbox.recorded", "记下一条事件",
                        fields: ["kind": entry.kind.rawValue, "pending": String(pendingEvents)])
             return true
@@ -131,6 +184,54 @@ final class AppModel {
             return false
         }
     }
+
+    /// 重放一次日志。记一条事件之后、以及启动时各一次。
+    ///
+    /// **算不了排期就不算，但照样重放。** 没有 `schedulerSettings` 时
+    /// 记忆状态那一半是空的，而词池、遇见次数、当天那一轮照样对——
+    /// 半个投影比一个用猜来的参数算出来的完整投影有用得多。
+    func refreshProjection() {
+        guard let events else { return }
+        guard let load = try? events.load() else {
+            log?.write(.error, "projection.unreadable", "日志读不出来")
+            return
+        }
+        projection = Projection.replay(
+            load, weightDecay: weightDecay,
+            settings: schedulerSettings ?? Self.unusableSettings
+        )
+        if load.damaged > 0 || load.tornTail {
+            // **断尾和坏行是两件事。** 断尾是崩在写的那一刻，那条事件从未被确认过；
+            // 坏行是别的原因，要查。
+            log?.write(load.damaged > 0 ? .warn : .info, "projection.replayed",
+                       "重放时有读不出来的行",
+                       fields: ["damaged": String(load.damaged),
+                                "torn_tail": load.tornTail ? "yes" : "no",
+                                "events": String(load.events.count)])
+        }
+    }
+
+    /// 服务端还没下发排期参数时用的占位。
+    ///
+    /// **参数个数故意是错的**，所以 `ReviewScheduler.review` 会抛
+    /// `wrongParameterCount` 而不是算出一个数来。投影因此拿不到记忆状态，
+    /// 而界面据此说「服务端还没更新」——**宁可缺一半，也不要一半是编的**。
+    private static let unusableSettings = ReviewScheduler.Settings(
+        requestRetention: 0.9, maximumInterval: 180, parameters: [], enableFuzz: false)
+
+    /// 今日包带来的那几个服务端参数。**每次取到包都调它。**
+    func adopt(_ package: DayPackage) {
+        weightDecay = package.settings.weight_decay
+        schedulerSettings = package.schedulerSettings
+        if schedulerSettings == nil {
+            log?.write(.warn, "settings.scheduler.missing",
+                       "今日包里没有排期参数——服务端还是旧镜像")
+        }
+        refreshProjection()
+    }
+
+    /// 排期算不算得出来。界面据此决定要不要说话。
+    var canSchedule: Bool { schedulerSettings != nil }
 
     /// 待发条数。**只数文件，不读文件。**
     ///

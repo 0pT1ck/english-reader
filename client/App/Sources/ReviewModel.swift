@@ -40,9 +40,24 @@ final class ReviewModel {
 
     private(set) var weightDecay: Double = 0.5
 
-    /// 本地这一份状态机。服务端那份是权威，但离线时要照样走得下去。
-    private var states: [Int: ReviewItemState] = [:]
-    private var cards: [Int: Components.Schemas.ReviewItem] = [:]
+    /// 今天要问的，由**投影**组出来（P9）。桶、方向、权重、封顶都在里面。
+    ///
+    /// **在这之前这几个数来自服务端快照里的 `progress.buckets_done`**，而那是
+    /// 它上次收到上报时的样子——于是复习完一池子、回主界面一刷新就变回 0/13，
+    /// 刷几次才回来。病根不是哪一行写错了，是「我做了多少」有两个来源而旧的那个赢
+    /// （`phase-9.html` §1）。现在只有一个来源。
+    private(set) var entries: [Projection.QueueEntry] = []
+
+    /// 题目的内容：句子、义项、整个词。**这半仍然是服务端的**——
+    /// 那条线说服务端只管生文，而句子正是生出来的东西（`phase-9.html` §2）。
+    private var content: [Projection.Key: Components.Schemas.ReviewItem] = [:]
+
+    /// 投影说该问、而今日包里还没有它的句子，有几个。
+    ///
+    /// **平时是 0。** 非零的情形是真实的:你离线标了个词，包还没重新取下来。
+    /// 那个词没有丢（投影里它在），只是还问不了。**要显示出来**——
+    /// 否则「今天 12 个」和「今天 13 个」的差别没人解释得了。
+    private(set) var awaitingContent = 0
 
     /// 拼写这一轮开没开（P3 决定 13）。两个标志位是两件事：
     /// `spellingEnabled` 是「这个功能开着」，`spellingAvailable` 是
@@ -55,7 +70,7 @@ final class ReviewModel {
     /// 拼的是词形，跟义项无关。
     var spellingWords: [SpellingWord] {
         var seen = Set<String>()
-        return cards.values
+        return content.values
             .sorted { $0.queue_id < $1.queue_id }
             .filter { seen.insert($0.item_key).inserted }
             .map { SpellingWord(key: $0.item_key,
@@ -74,8 +89,8 @@ final class ReviewModel {
     }
 
     /// 正在做哪一个池子。nil＝在主界面。
-    private(set) var bucket: String?
-    private(set) var current: Int?
+    private(set) var bucket: Projection.Bucket?
+    private(set) var current: Projection.Key?
     private(set) var step: Step = .asking
     private(set) var asked: Components.Schemas.SentenceCard?
     private(set) var hint: Hint?
@@ -111,13 +126,17 @@ final class ReviewModel {
         //
         // **只认今天的**：昨天的包不是「旧一点」，是错的。日期对不上就老实等。
         if let cached = await engine.cachedDay(), cached.day == Self.localToday {
+            app.adopt(cached)
             apply(cached.reviews)
+            sync(app)
             phase = .ready
         }
 
         do {
             let package = try await engine.fetchDay()
+            app.adopt(package)
             apply(package.reviews)
+            sync(app)
             phase = .ready
             // 日历单独一条请求，拿不到不影响复习本身。
             if let calendar = try? await engine.calendar(days: 7) {
@@ -158,27 +177,43 @@ final class ReviewModel {
         return formatter.string(from: Date())
     }
 
+    /// 从今日包里取**内容**。
+    ///
+    /// **一个数都不从这里取了。** 包里的 `progress`、`direction`、`asks`、
+    /// `weight`、`done` 全部不再读——它们是服务端上次收到上报时的样子，
+    /// 而本机的事实在日志里。留着它们不读比删掉它们安全（铁律 5：老服务端照旧下发），
+    /// 但读它们就是把那个 0/13 又请回来。
     private func apply(_ day: Components.Schemas.ReviewDayResponse) {
         weightDecay = day.weight_decay
-        states.removeAll()
-        cards.removeAll()
+        content.removeAll()
         for item in day.items {
-            cards[item.queue_id] = item
-            states[item.queue_id] = ReviewItemState(
-                direction: ReviewDirection(rawValue: item.direction) ?? .wordToSense,
-                asks: item.asks, misses: item.misses,
-                weight: item.weight, done: item.done)
+            content[Projection.Key(itemType: item.item_type,
+                                   key: item.item_key,
+                                   senseId: item.sense_id)] = item
         }
         spellingEnabled = day.spelling_enabled
-        spellingAvailable = day.progress.spelling_available
-        let total = day.progress.buckets.additionalProperties
-        // `buckets_done` has a default on the server, so it is optional on the
-        // wire — a client built before it existed has to keep decoding (铁律 5).
-        let done = day.progress.buckets_done?.additionalProperties ?? [:]
-        todayTotal = total["today"] ?? 0
-        todayDone = done["today"] ?? 0
-        dueTotal = total["due"] ?? 0
-        dueDone = done["due"] ?? 0
+    }
+
+    /// 把投影里今天那一份读过来。**记完一条事件就调它。**
+    ///
+    /// 只把**有句子的**放进 `entries`：没有句子的问不了，而把它算进「共」
+    /// 会让 13/13 永远到不了。它们的数目单独报（``awaitingContent``）。
+    private func sync(_ app: AppModel) {
+        let day = Self.localToday
+        let now = Date()
+        let all = app.projection.todayQueue(day: day, now: now)
+        entries = all.filter { content[$0.key] != nil }
+        awaitingContent = all.count - entries.count
+
+        todayTotal = entries.count { $0.bucket == .today }
+        todayDone = entries.count { $0.bucket == .today && $0.state.done }
+        dueTotal = entries.count { $0.bucket == .due }
+        dueDone = entries.count { $0.bucket == .due && $0.state.done }
+
+        // 拼写那一轮：当天该复习的全部走完之后才为真（P3 决定 13）。
+        // **这个判断也搬下来了**——它本来读的是服务端 `progress.spelling_available`，
+        // 而那个字段和那两个数一样，是上次上报时的样子。
+        spellingAvailable = !entries.isEmpty && entries.allSatisfy { $0.state.done }
     }
 
     private func describe(_ error: TransportError) -> String {
@@ -193,7 +228,7 @@ final class ReviewModel {
     // MARK: 一道题
 
     /// 进某个池子，抽第一题。
-    func begin(bucket name: String) {
+    func begin(bucket name: Projection.Bucket) {
         bucket = name
         next()
     }
@@ -206,33 +241,39 @@ final class ReviewModel {
     /// 抽下一题。**只从这个池子里抽**，权重和衰减率都来自服务端。
     private func next() {
         guard let name = bucket else { return }
-        let pool = states.keys.filter { cards[$0]?.bucket == name }.sorted()
+        let pool = entries.filter { $0.bucket == name }
         current = draw.pick(
             from: pool,
-            weight: { self.states[$0]?.weight ?? 1 },
-            isOpen: { !(self.states[$0]?.done ?? true) },
+            weight: { $0.state.weight },
+            isOpen: { !$0.state.done },
             random: Double.random(in: 0..<1)
-        )
+        )?.key
         step = .asking
         revealed = 0
         claimedEasy = false
         hint = nil
         asked = nil
-        if let id = current, let card = cards[id], let state = states[id] {
-            asked = HintLadder.askedSentence(for: card, direction: state.direction)
+        if let card, let entry = entry(of: current) {
+            asked = HintLadder.askedSentence(for: card, direction: entry.state.direction)
         }
     }
 
-    var card: Components.Schemas.ReviewItem? { current.flatMap { cards[$0] } }
+    /// 队列里那一条。
+    private func entry(of key: Projection.Key?) -> Projection.QueueEntry? {
+        guard let key else { return nil }
+        return entries.first { $0.key == key }
+    }
+
+    var card: Components.Schemas.ReviewItem? { current.flatMap { content[$0] } }
     /// 这道题用的那一句，揭晓时还要拿它补另一面。
     var askedCard: Components.Schemas.SentenceCard? { asked }
 
     /// **两个池子都做完了。**决定 20 只在这时候才显示「今天的所有复习」那一屏——
     /// 只做完一张卡就这么说是句假话，那时直接回主界面，反馈是那张卡变绿。
     var allDone: Bool {
-        states.values.allSatisfy { $0.done }
+        !entries.isEmpty && entries.allSatisfy { $0.state.done }
     }
-    var direction: ReviewDirection { current.flatMap { states[$0]?.direction } ?? .wordToSense }
+    var direction: ReviewDirection { entry(of: current)?.state.direction ?? .wordToSense }
 
     /// 题面那一句（方向 2 是整句中文）。
     var prompt: String {
@@ -297,14 +338,14 @@ final class ReviewModel {
 
     /// 现在能不能说「太简单了」。
     var canClaimEasy: Bool {
-        guard let id = current, let state = states[id] else { return false }
-        return state.misses == 0 && !claimedEasy
+        guard let entry = entry(of: current) else { return false }
+        return entry.state.misses == 0 && !claimedEasy
     }
 
     /// 这一轮已经磕过了，所以那一项是灰的——菜单上要说得出为什么。
     var easyWithdrawn: Bool {
-        guard let id = current, let state = states[id] else { return false }
-        return state.misses > 0
+        guard let entry = entry(of: current) else { return false }
+        return entry.state.misses > 0
     }
 
     /// 「这个词我已经会了，别再考」（P8 §10 第 2 条）。
@@ -317,41 +358,42 @@ final class ReviewModel {
     /// **当场从今天的池子里拿掉，不等服务端回话**：离线也要对，而这条事件
     /// 带着幂等键，重复上报算正常。
     func dismissCurrent(_ app: AppModel) {
-        guard let id = current, let card = cards[id] else { return }
+        guard let key = current, let card else { return }
         app.record(.unmarked(card.item_key, senseId: card.sense_id,
                              itemType: card.item_type))
         app.log?.write(.info, "review.dismissed", "把一个词移出了复习",
                        fields: ["item": card.item_key])
-        // 不计进「已复习」那个数：它没被复习，是被拿走了。
-        states[id]?.done = true
-        cards.removeValue(forKey: id)
+        // **不用手动把它从名单上拿掉。** 撤销标记让它退回 `new`，
+        // 而投影只收 `reviewing` 那一档——重放一次它自己就不在了。
+        // 「不计进已复习」也因此自动成立:它没被复习，是被拿走了。
+        content.removeValue(forKey: key)
+        sync(app)
         next()
     }
 
     /// 「下一个」。**作答在这一刻才落盘**——揭晓屏能改主意，点按钮那一下就发的话
     /// 改回来也追不回已经发出去的事。
+    /// 「下一个」。**作答在这一刻才落盘**——揭晓屏能改主意，点按钮那一下就发的话
+    /// 改回来也追不回已经发出去的事。
+    ///
+    /// **落盘之后重放，不自己改数。** 上一版在这里手动 `todayDone += 1`，
+    /// 那是「同一个数有两处在写」——而这个 Phase 的全部内容就是把那种情况消掉。
+    /// 现在写完日志重放一次，数字是算出来的。
     func advance(_ app: AppModel) {
-        guard let id = current, let state = states[id], case .revealed(let passed) = step
+        guard let key = current, let card, case .revealed(let passed) = step
         else { return }
-
-        let answer = ReviewAnswer(passed: passed, revealed: revealed, easy: claimedEasy)
-        states[id] = state.applying(answer, weightDecay: weightDecay)
 
         // **事件自带条目身份，不只带 `queue_id`**（P9，phase-9.html §16）。
         // 那个号是服务端队列表的行号，而那张表每天重建、编号天天不一样——
         // 日志里引一个只有别处才解释得了的标识符，就不是可重放的日志：
         // 换台设备重放它，这条作答指不到任何词。`queue_id` 照旧带着（铁律 5，
         // 只增不减），身份是新加的那几个字段。
-        let card = cards[id]
-        app.record(.answered(queueId: id, passed: passed, revealed: revealed,
-                             sentenceId: asked?.id, easy: claimedEasy,
-                             itemType: card?.item_type, itemKey: card?.item_key,
-                             senseId: card?.sense_id))
-
-        // 两张卡的数字跟着本地状态走，不等服务端回话——离线也要对。
-        if states[id]?.done == true, let name = cards[id]?.bucket {
-            if name == "today" { todayDone += 1 } else { dueDone += 1 }
-        }
+        app.record(.answered(queueId: card.queue_id, passed: passed,
+                             revealed: revealed, sentenceId: asked?.id,
+                             easy: claimedEasy,
+                             itemType: key.itemType, itemKey: key.key,
+                             senseId: key.senseId))
+        sync(app)
         next()
     }
 }

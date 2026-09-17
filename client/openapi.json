@@ -591,7 +591,7 @@
           "client:today"
         ],
         "summary": "今日包：当天的文章与复习，一次拿全",
-        "description": "One response the client can work from all day without a network.\n\nNew endpoint rather than fields added to an existing one — 架构铁律 5 lets\nus add, never change, and P2 deliberately left this shape unguessed\n(`phase-2.html` §6) rather than bolting an invented one onto `/articles`.\n\n**Does not include exam papers** (决定 9). They have their own entrance at\n``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in\n``excludes_exam_papers`` so a client cannot conclude otherwise by accident.",
+        "description": "One response the client can work from all day without a network.\n\nNew endpoint rather than fields added to an existing one — 架构铁律 5 lets\nus add, never change, and P2 deliberately left this shape unguessed\n(`phase-2.html` §6) rather than bolting an invented one onto `/articles`.\n\n**Does not include exam papers** (决定 9). They have their own entrance at\n``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in\n``excludes_exam_papers`` so a client cannot conclude otherwise by accident.\n\n**条件请求（2026-09-16 加）。** 这个包实测约 1 MB，而客户端每次开复习那一格\n都要它——绝大多数时候内容跟手机上那份**一模一样**，却照样过一遍隧道\n（实测 0.85–1.4 秒，流量也是真金白银）。带 ``If-None-Match`` 来、内容没变，\n就回 304 和零字节。\n\n**加的是一个响应头和一条分支，不是新字段**，所以老客户端一行不用改：\n它不发 ``If-None-Match``，就永远走 200 那条路（铁律 5）。\n\n哈希算的是**序列化之后的响应体**，不是它的某几个字段——任何一处变化都算变化，\n包括复习进度、文章读到哪。宁可多发一次，也不能把变了的说成没变。",
         "operationId": "today_v1_client_today_get",
         "parameters": [
           {
@@ -2890,6 +2890,32 @@
           "spelling_enabled": {
             "type": "boolean",
             "title": "Spelling Enabled"
+          },
+          "fsrs_parameters": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "title": "Fsrs Parameters",
+            "description": "FSRS 的参数向量。**21 个是 FSRS-6，19 个是 FSRS-5**，下发的是服务端实际生效的那一组，不是「用默认」——两边的「默认」不是同一组数。"
+          },
+          "fsrs_desired_retention": {
+            "type": "number",
+            "title": "Fsrs Desired Retention",
+            "description": "目标可提取性",
+            "default": 0.9
+          },
+          "fsrs_maximum_interval": {
+            "type": "integer",
+            "title": "Fsrs Maximum Interval",
+            "description": "间隔上限（天）。FSRS 自己默认 36500，那是「记一辈子」的答案；这个项目对着一场有日期的考试，落在考试之后的间隔不是复习。",
+            "default": 180
+          },
+          "fsrs_fuzz": {
+            "type": "boolean",
+            "title": "Fsrs Fuzz",
+            "description": "抖动。开着让同一天学的一批词不会永远同一天回来；验收与向量一律关掉，否则两种语言的随机数种子不同就成了「分歧」。",
+            "default": true
           }
         },
         "type": "object",
@@ -2898,7 +2924,8 @@
           "weight_decay",
           "spelling_enabled"
         ],
-        "title": "TodaySettings"
+        "title": "TodaySettings",
+        "description": "服务端定的那几个数，随今日包一起下发。**客户端只读它们。**\n\n**2026-09-17 加上排期那四个（P9）。** 在那之前客户端从不计算间隔，所以不需要\n它们；而 P9 把排期搬到了设备上（`phase-9.html` §4），它现在必须知道服务端配的\n是什么。**不许在客户端写一份默认值**：两边各用自己的默认，就会跑出不同的间隔，\n而且两边都在按自己的文档正常工作、没有东西会报错——这正是 swift-fsrs\n与 py-fsrs 默认参数不一致那次差点踩进去的形状（§16 ②）。"
       },
       "Token": {
         "properties": {

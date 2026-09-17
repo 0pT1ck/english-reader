@@ -57,6 +57,25 @@ def choose_articles(learner_id: int, *, limit: int, extra: int) -> list[dict[str
     return [dict(r) for r in rows]
 
 
+def scheduler_settings() -> dict[str, Any]:
+    """What the device needs to reproduce this server's schedule.
+
+    Read through the scheduler module rather than off the config keys, so that
+    "what the scheduler actually runs with" has one answer. ``parameters`` is
+    the effective vector, not the configured one: the configured value is empty
+    by default, meaning "whatever the package ships with", and the two packages
+    do not ship with the same thing.
+    """
+    from backend.modules.review import scheduler as review_scheduler
+
+    return {
+        "fsrs_parameters": list(review_scheduler.scheduler(fuzz=False).parameters),
+        "fsrs_desired_retention": float(runtime_config.get("fsrs_desired_retention")),
+        "fsrs_maximum_interval": int(runtime_config.get("fsrs_maximum_interval")),
+        "fsrs_fuzz": bool(runtime_config.get("fsrs_fuzz")),
+    }
+
+
 def package(learner_id: int) -> dict[str, Any]:
     """The whole day, in one response."""
     limit = int(runtime_config.get("today_article_count"))
@@ -104,6 +123,10 @@ def package(learner_id: int) -> dict[str, Any]:
             "fresh_days": int(runtime_config.get("reading_fresh_days")),
             "weight_decay": float(runtime_config.get("review_weight_decay")),
             "spelling_enabled": bool(runtime_config.get("review_spelling")),
+            # 排期那四个（P9）。**下发的是实际生效的参数向量**，不是「空表示用
+            # 默认」——`py-fsrs` 与 Swift 那边的内置默认不是同一组数，
+            # 各取自己的默认就会给出不同的间隔，而两边都不会报错。
+            **scheduler_settings(),
         },
         # Stated in the response, not only in the docs: a client that assumes
         # this is the whole day would silently hide 452 exam papers.
