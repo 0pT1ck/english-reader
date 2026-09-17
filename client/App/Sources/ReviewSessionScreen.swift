@@ -25,6 +25,7 @@ struct ReviewSessionScreen: View {
                 question
             }
         }
+        .reviewBackground()
         .navigationTitle("复习")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("不再复习这个词？", isPresented: $confirmingDismiss,

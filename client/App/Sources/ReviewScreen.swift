@@ -10,6 +10,7 @@ struct ReviewScreen: View {
     var body: some View {
         NavigationStack {
             content
+                .reviewBackground()
                 .navigationTitle("复习")
                 .navigationDestination(isPresented: sessionBinding) {
                     ReviewSessionScreen(model: model)
