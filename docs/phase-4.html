@@ -62,6 +62,8 @@
               font-family:var(--f-mono); }
   h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
   h3:first-of-type { margin-top:0.4rem; }
+  h4 { font-family:var(--f-mix); font-size:0.94rem; font-weight:600; margin:1.6rem 0 0.7rem; color:var(--ink-mid); }
+  .note { font-size:0.84rem; color:var(--ink-mid); }
   .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
   p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
   .table-scroll { overflow-x:auto; }
@@ -191,7 +193,7 @@
           <tr><td class="topic">15</td><td><b><code>reading_fresh_days</code> 保持 3 天。</b>每天三篇的话货架上稳定在九篇上下，正是 B9 要的「打开就是十几篇、一眼能挑完」。（按每天八到十篇时曾考虑改成 1 天，前提没了。）</td></tr>
           <tr><td class="topic">16</td><td><b>加餐改成朴素版</b>：还想读就再多给一篇。原本「装次日到期的复习词、今天多读明天就轻」的性质随 E2 走了。</td></tr>
           <tr><td class="topic">17</td><td><b>选文规则关在一个函数里，每次决策入决策日志。</b>它是<b>明知临时</b>的规则——没有水平估计，只能按「新备未读优先」排。§A 将来上线要换，换的时候只换那一处。</td></tr>
-          <tr><td class="topic">18</td><td><b>写文章继续用 gpt-5.5；<code>deepseek-flash</code> 关掉思考后作为已验证的备选。</b>2026-09-11 三方配对实测（同样 10 个种子、同样的目标词，见 §4）：两者<b>合格率打平 8/10</b>，超纲、均句长、最长句全部持平，<b>只差目标词命中</b>（24.4 对 22.3），而 deepseek 快 <b>8.5 倍</b>。<br>不换的理由是<b>省下的时间不值那两个词</b>：大头在标注（两边都是 5 分钟），换模型只把每天 10.5 分钟压到 6 分钟，而那是凌晨四点没人等的四分半。<br><b>备选要留着且已经验过</b>：中转站额度断了、每天篇数要往上加、或者充值不及时，直接切。<b>切的时候必须两件一起做——关思考 ＋ 给足预算。</b>只换模型不关思考是 <b>5/10 加 61 秒</b>，比现在更糟。这条反直觉，最容易只做一半。<br><b>顺带订正</b>：<code>deepseek-v4.1-flash</code> 这个名字在中转站上是 <code>MODEL_NOT_AVAILABLE</code>，因为 DeepSeek 官方已把名字改成不带版本不带日期的 <code>deepseek-flash</code>，中转站跟着改了。主文档 §M 那条「等中转站放开」要跟着改。</td></tr>
+          <tr><td class="topic">18</td><td><b>写文章继续用 gpt-5.5；<code>deepseek-flash</code> 关掉思考后作为已验证的备选。</b>2026-09-11 三方配对实测（同样 10 个种子、同样的目标词，见 §4）：两者<b>合格率打平 8/10</b>，超纲、均句长、最长句全部持平，<b>只差目标词命中</b>（24.4 对 22.3），而 deepseek 快 <b>8.5 倍</b>。<br>不换的理由是<b>省下的时间不值那两个词</b>：大头在标注（两边都是 5 分钟），换模型只把每天 10.5 分钟压到 6 分钟，而那是凌晨四点没人等的四分半。<br><b>备选要留着且已经验过</b>：中转站额度断了、每天篇数要往上加、或者充值不及时，直接切。<b>切的时候必须两件一起做——关思考 ＋ 给足预算。</b>只换模型不关思考是 <b>5/10 加 61 秒</b>，比现在更糟。这条反直觉，最容易只做一半。<br><b>顺带订正</b>：<code>deepseek-v4.1-flash</code> 这个名字在中转站上是 <code>MODEL_NOT_AVAILABLE</code>，因为 DeepSeek 官方已把名字改成不带版本不带日期的 <code>deepseek-flash</code>，中转站跟着改了。主文档 §M 那条「等中转站放开」要跟着改。<br><b>2026-09-16：这条不再是现状。</b>中转站与 ShuaiAPI 当天双双断供，写文章改用 <code>gemini-3.8-flash-high</code>（自建网关，免费），并为它改了提示词——见 §4 末尾「中转站断供之后换 gemini」。<b>那里有两条与本条相反的事实</b>：关思考对 gemini 无效（网关忽略该字段），以及<b>模型换了之后合格率主要由提示词决定</b>——同一个模型 0/10 与 7/10 的差别全在提示词上。</td></tr>
           <tr><td class="topic">19</td><td><b>每一个用模型的地方各有自己的开关：一个提供商，一个思考开关。</b>现在 9 个 worker 里只有 3 个有自己的提供商配置项（<code>gen_provider</code>、<code>review_gen_provider</code>、<code>annotate_provider</code>——而最后一个是空的），其余 6 个硬落到「默认提供商」；<b>思考开关则一个都没有</b>，<code>client.complete()</code> 根本不接受这个参数。<br>做法：<code>Worker</code> 按 <code>kind</code> <b>自动登记</b>两个配置项（提供商、思考三态），管理台「模型」页一页列全；现有那三个键走<b>版本化迁移</b>搬过去，不丢已有设置。这条是铁律 6「参数一律配置化、新模块一处登记自动挂载」的直接应用。<br><b>但默认值只改写文章那一处。</b>关思考的实测只覆盖 <code>generate_article</code>；另外 8 处（标注、造句、判词组、义项集、词族）关掉会怎样<b>没有测过</b>，默认一律保持现状（不发这个字段）。要改哪一处，先在那一处拿数说话——坑 §2.4 记的就是把「写文章」和「造例句」的横评结论搞混那次。</td></tr>
         </tbody>
       </table>
@@ -295,6 +297,95 @@
     deepseek 关思考有一篇 18/25 直接挂、一篇 20/25 压线过。换过去等于把一部分失败从「超纲」挪到「命中」。</p>
     <p><b>仍然要打的折</b>：10 个种子不算多，而且都是同一套提示词、同一个学习等级。
     上线后头两周盯 <code>llm_jobs</code> 的丢弃率，实际值偏离这三行太多就回来改决定 3 的上限。</p>
+
+    <h3 style="margin-top:1.6rem">2026-09-16：中转站断供之后换 gemini，连带把提示词改了</h3>
+    <p>决定 18 那套分工在 2026-09-15 当天全断了：基元律动余额不足（四个 key 是同一个账户，换 provider 换不出余额），
+    ShuaiAPI 通道不可用。用户另配了一条免费的路——<code>gemini-3.8-flash-high</code>，
+    自建网关 <code>gcli2api</code> 转 OpenAI 协议。<b>这一节是它的横评，以及由此逼出来的提示词改版。</b></p>
+
+    <p>方法照搬上面那一轮：<b>同样 10 个种子、同样的目标词、同样的合格线</b>，一样跑 <code>pipeline.write_one</code>。
+    先做了阴性对照——在跑 gemini 的那台机器上重算历史草稿的超纲率（<code>0.73→0.73</code>、<code>1.36→1.36</code>、
+    <code>5.08→5.08</code>），逐位复现，所以量出来的差别不是环境差别。
+    两台机器同一个 seed 给出的目标词与话题也逐字对过，跨机比对成立。</p>
+
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>配置</th><th>合格</th><th>超纲中位</th><th>命中均值</th><th>均句长</th><th>每篇耗时</th></tr></thead>
+        <tbody>
+          <tr><td>gemini · <b>旧</b>提示词</td><td class="num">0 / 10</td><td class="num">5.82%</td><td class="num">23.7</td><td class="num">18.7</td><td class="num">31.9s</td></tr>
+          <tr><td>gemini · 旧提示词 · 关思考（5 种子）</td><td class="num">0 / 5</td><td class="num">4.75%</td><td class="num">24.0</td><td class="num">19.4</td><td class="num">27.5s</td></tr>
+          <tr><td><b>gemini · 新提示词</b></td><td class="num"><b>7 / 10</b></td><td class="num"><b>0.56%</b></td><td class="num"><b>24.1</b></td><td class="num">18.6</td><td class="num">35.4s</td></tr>
+          <tr><td>gpt-5.5 · 旧提示词（2026-09-11 那一轮）</td><td class="num">8 / 10</td><td class="num">0.39%</td><td class="num">24.4</td><td class="num">15.8</td><td class="num">77.0s</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>① <b>原样上阵不能用，而且不是差一点</b>：15 篇（含关思考那 5 篇）里超纲 ≤1% 的<b>一篇都没有</b>，
+    ≥5% 的有 8 篇。放宽阈值救不了——放到 3% 也只有 1/10 能过。</p>
+
+    <p>② <b>关思考这条杠杆在它身上不起作用</b>：<code>enable_thinking: false</code> 发过去，
+    5 篇的结果与不发参数那组落在噪声里（4.75% 对 5.82% 中位）。那个自建网关多半直接忽略这个字段。
+    <b>决定 18 里「切模型必须两件一起做」那条经验在这里用不上</b>，别照搬。</p>
+
+    <p>③ <b>输在哪，超纲词的性质比数字更说明问题</b>：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>模型</th><th>每篇超纲 token</th><th>都是些什么词</th></tr></thead>
+        <tbody>
+          <tr><td>gemini（旧提示词，10 篇）</td><td class="num">15.2</td><td><code>ambitious · maritime · municipal · transition · mechanism · rigorous · initially · infrastructure · bias</code><br>查词典，<b>几乎全带 <code>cet6</code> 标签</b></td></tr>
+          <tr><td>gpt-5.5（41 篇历史草稿）</td><td class="num">1.4</td><td><code>wetland · stall · cleanup · donor · plumber · inhaler</code><br>多是<b>无任何考纲标签</b>的具体名词，话题绕不开的那种</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>也就是说它不是乱蹦词，<b>是默认按六级／考研的笔调写</b>，抽象名词随手就来。均句长 18.7 对 15.8，同向印证。
+    seed 1 与 seed 2 做过同题头对头：gemini 2.67% / 6.04%，gpt-5.5 在同一话题下 <b>0.00% / 0.44%</b>——
+    不是话题刁钻，是模型。（gpt-5.5 只跑得了两篇，ShuaiAPI 那点余额当场用光。）</p>
+
+    <h4>提示词：讲考纲的名字，不要讲词数</h4>
+    <p>原来那句是「限制在最常见的约 4000 个英语单词以内」。<b>这正是坑 §1.1 的形状</b>——
+    词数是模型算不出来的东西，它只能大概比划。而「六级词」「考研词」是它知道的类别：
+    它写 <code>mechanism</code>、<code>municipal</code>、<code>rigorous</code> 不是不守规矩，
+    <b>是感觉不到这些词难，直到你告诉它这些词属于哪一级</b>。</p>
+    <p>五版，每版同样的种子，仓库代码一行没动（变体是在一次性脚本里 patch <code>build_prompt</code> 的返回值）：</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>版本</th><th>加了什么</th><th>超纲中位</th><th>合格</th><th>命中</th></tr></thead>
+        <tbody>
+          <tr><td>原版</td><td>「最常见的约 4000 个词以内」</td><td class="num">5.82%</td><td class="num">0 / 10</td><td class="num">23.7</td></tr>
+          <tr><td>v1</td><td><b>讲考纲</b>：四级大纲以内，六级／考研／雅思托福 GRE 才学的词一个不用</td><td class="num">2.12%<sup>※</sup></td><td class="num">1 / 4</td><td class="num">23.2</td></tr>
+          <tr><td>v2</td><td><b>越界词对照表</b>：16 个它常写的词，每个配一个四级里的替代说法</td><td class="num">3.28%<sup>※</sup></td><td class="num">0 / 4</td><td class="num">23.8</td></tr>
+          <tr><td>v3</td><td><b>写完逐词自查</b>：「中国高中毕业生认识它吗」</td><td class="num">3.67%<sup>※</sup></td><td class="num">0 / 4</td><td class="num">22.8</td></tr>
+          <tr><td>v4</td><td>v1 + v2 + v3</td><td class="num">0.90%</td><td class="num">5 / 10</td><td class="num">23.8</td></tr>
+          <tr><td><b>v5（落地的那版）</b></td><td>v4 再加：<b>具体名词也要用常见词说</b>，并挑明「不许为了避开就把文章写空」</td><td class="num"><b>0.56%</b></td><td class="num"><b>7 / 10</b></td><td class="num"><b>24.1</b></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note"><sup>※</sup> v1–v3 是 4 个种子的初筛，噪声大（同一版同一种子两次跑能差 0.4 个百分点），只用来排序，不当结论。</p>
+
+    <p><b>三段是互补的，不是同一句话说三遍</b>：2.12 / 3.28 / 3.67 各自单独，合起来 0.88。
+    v5 那一段是为了<b>压住前四段压不掉的那一类</b>——抽象词没了之后，剩下的越界词全变成
+    <code>storehouse</code>、<code>smokestack</code>、<code>townspeople</code> 这种复合名词，
+    而「必须写具体的事」是另一条硬要求（§B 内容要求）。所以那一段给的是<b>出口而不是禁令</b>：
+    照旧写具体的人和事，只把名字换成常见词组成的说法。不这么写，模型会靠写空泛来守规矩。</p>
+
+    <p><b>没有把命中率赔进去</b>：24.1 对原版的 23.7，比 <code>deepseek-flash</code> 关思考的 22.3 还高。
+    十篇里有三篇 <b>0.00%</b>。</p>
+
+    <p>落地在 <code>prompts.py</code> 的 <code>_ceiling_block()</code>，<code>PROMPT_VERSION</code> 升到 <code>p1b-2</code>。
+    <b>按 <code>allowed_tiers</code> 参数化</b>，将来把系统对准六级时这段话会自己改口；
+    越界词对照表和具体名词那两段的例词全是四级的越界词，<b>只在四级这一档给出</b>，换等级要重新测一批。</p>
+
+    <p><b>要打的折，三条</b>：
+    ① 只在 gemini 上验过，<b>gpt-5.5 在新提示词下没测</b>（额度当场用光），所以「新提示词对所有模型都更好」是推的不是测的；
+    ② 10 个种子仍然不算多，而单种子的波动能到 0.4 个百分点；
+    ③ 合格率 7/10 落在决定 3 算 <code>gen_daily_attempt_cap</code> 时假定的 60–80% 区间内，上限 12 不用动。</p>
+
+    <h4>顺带查出一个 checker 的假阳性</h4>
+    <p>v4 那一轮里有三篇的「超纲词」是 <code>vance</code>（虚构人名 Dr. Vance，后文单用时 spaCy 不再标成专名）、
+    <code>boer</code> / <code>dutch</code>（民族名，<code>Dutch</code> 被标成形容词）、<code>c</code>（vitamin C）。
+    <code>checker</code> 本来会跳过 <code>PROPN</code>，这几种漏了。剔掉它们，v4 实际是 <b>7/10 而不是 5/10</b>。</p>
+    <p><b>度量没有动。</b>发现噪声就顺手改宽算法，正是坑 §1.2 的反面——那样量出来的好看数字谁也不知道是真的还是算法让的。
+    记在这里，要不要修是独立的一件事，它影响的是所有模型的评分。</p>
 
     <h3 style="margin-top:1.6rem">每天的代价</h3>
     <div class="table-scroll">
@@ -491,7 +582,7 @@
   <footer>
     <span>English Reader</span>
     <span>Phase 4 · 方案与实施</span>
-    <span>2026-09-11 · 验收通过</span>
+    <span>2026-09-11 · 验收通过<br>2026-09-16 · §4 续记：换 gemini 与提示词改版</span>
   </footer>
 
 </div>

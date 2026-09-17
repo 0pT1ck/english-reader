@@ -229,7 +229,14 @@
         <thead><tr><th>#</th><th>状态</th><th>决定</th></tr></thead>
         <tbody>
           <tr><td class="topic">1</td><td class="ok">已定</td><td><b>「文章 / 真题」用一条分段控件分开。</b>正好对上 Core 已有的两个列表（P5 决定 19：真题走 <code>/library?source=…</code>），<b>内核一行不用改</b>。</td></tr>
-          <tr><td class="topic">2</td><td class="ok">已定</td><td><b>卡片第一行是话题</b>，不是文体。生成文章时一起落库。<b>真题这一格显示来源</b>（<code>source_label</code>，现成有）。</td></tr>
+          <tr><td class="topic">2</td><td class="ok">已定</td><td><b>卡片第一行是话题</b>，不是文体。生成文章时一起落库。<b>真题这一格显示来源</b>（<code>source_label</code>，现成有）。
+          <br><b>2026-09-16 补：这一行右端加上备稿日期</b>，<code>Sep 16</code> 这样，右对齐。
+          那半行本来是空的，而「这篇是哪天备的」在每天出稿之后是列表上最想知道的一件事。
+          <b>服务端一行没改</b>——契约里 <code>prepared_at</code> 早就有，客户端此前没接。
+          三处要留意：<b>按本地时区折算</b>（夜间备稿跑在本地 04:00，在 UTC 上是前一天，照 UTC 写每篇都会早一天）；
+          <b>locale 写死 <code>en_US_POSIX</code></b>（跟系统走的话中文手机上 <code>MMM</code> 出来是「9月」）；
+          <b>真题也显示</b>——它那一格填的是入库时刻，而这个字段在项目里一直就叫「备稿时间」（排序菜单对所有文章都这么叫），
+          不像话题那样留空。</td></tr>
           <tr><td class="topic">3</td><td class="ok">已定</td><td><b>卡片第二行是一句中文概括。真题暂不补</b>，那一行留空。将来要了再批量生成。</td></tr>
           <tr><td class="topic">4</td><td class="ok">已定</td><td><b>第三行是「504 词 · 23 待学」。</b>「待学」= 这篇的目标词里还没进入学习流程的个数——<b>只要标记了、进了复习队列就不再计入</b>，不用等学会。所以它在阅读过程中会实时往下掉。<b>真题这一格恒为 0</b>（真题不为教任何词而写，<code>target_count</code> 恒为 0），留空。</td></tr>
           <tr><td class="topic">5</td><td class="ok">已定</td><td><b>不叫「生词」叫「待学」。</b>「生词」读起来是「你不认识的词」，而标记一个词（明确说了不认识）这个数反而减一，讲不通。<b>「待学」也不完全贴切</b>（不一定这些词全不认识，也不一定没有更多），但比「生词」合适，暂定。</td></tr>
@@ -652,8 +659,8 @@
 
   <footer>
     <div>English Reader</div>
-    <div>Phase 6 · 界面 · 已结束，验收欠着</div>
-    <div>2026-09-13</div>
+    <div>Phase 6 · 界面 · 2026-09-16 与 P7、P8 一起验收通过</div>
+    <div>2026-09-13 · 09-16 补记备稿日期那一行</div>
   </footer>
 
 </div>
