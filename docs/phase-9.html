@@ -1156,6 +1156,32 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     只是还问不了。<b>算进「共」会让 13/13 永远到不了；不说出来，
     「今天 12 个」和「13 个」的差别没人解释得了。</b></p>
 
+    <h3>⑨ 一条事件只有一个家 — 做完</h3>
+    <p><b>在这之前一条标记写两处</b>：先进日志，再进发件箱。
+    那中间有一个窄口子——<b>崩在两次写之间，事件在日志里而发件箱里没有</b>，
+    于是它永远发不出去，而屏幕上什么都不会说（本机重放算得出它，服务端永远不知道）。
+    现在 <code>drain()</code> 直接从日志取那五种（<code>SyncEngine.drainLog</code>），
+    发件箱只剩<b>遥测</b>——打开文章、读到哪、点了哪个词，那三样不改变任何状态，
+    所以它们本来就不在日志里。</p>
+    <p><b>映射搬进了 Core</b>（<code>OutboxEntry.loggedKind</code>），App 与
+    <code>ercli</code> 共用一份：两份判断早晚会在某一种事件上分家，
+    而那时<b>一台设备把它记进历史、另一台没有，两边都不会报错</b>。
+    <code>ercli</code> 那 17 处 <code>outbox.append</code> 全部改走同一个 <code>record()</code>。</p>
+
+    <div class="callout">
+      <b>一个水位线不够用，这一条是想清楚才写的，不是撞出来的。</b>
+      服务端的回应是**逐条**的（Core 里那句注释：「silence is not consent」），
+      所以一批里可能第 5 条落了、第 6 条被拒、第 7 条又落了。
+      <b>只有水位线的话，被拒的那一条会把它后面全部挡住</b>——那比重发一条糟得多。
+      所以水位线之上单独记一个集合，追上了就清空。
+      <b>平时那个集合是空的</b>:事件按顺序发、按顺序落。
+      <br><br>
+      <b>决策事件从「待发」里过滤掉。</b> §5 定了它存服务端，
+      但那个端点还没做（§6 的活）——不过滤的话它会永远堆在那儿，
+      把待发数变成一个永远非零的噪音。而<b>待发数现在要算上日志</b>，
+      否则标了一个词、待发显示 0，而它其实还没送出去。
+    </div>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1177,10 +1203,6 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="nots">
       <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
         <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>发件箱与日志合成一条</b>
-        <span><code>drain()</code> 现在还读发件箱，而 <code>EventLog.unreported()</code>
-        已经能回答同一个问题。合了之后「日志是事实、发件箱是队列」才落到代码上，
-        现在是两份平行写入。</span></span></div>
       <div class="not"><i>·</i><span><b>「读完」事件带上词表</b>
         <span>§9 定的那条。现在 <code>article.finished</code> 不带 <code>met</code>，
         所以投影里的遇见次数还是 0。</span></span></div>
@@ -1200,12 +1222,12 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">8</div>
-        <div class="fig-key">做完的活（①–⑧）</div></div>
+      <div class="fig"><div class="fig-val">9</div>
+        <div class="fig-key">做完的活（①–⑨）</div></div>
       <div class="fig"><div class="fig-val">4</div>
         <div class="fig-key">路上撞到的、写进文档的教训</div></div>
-      <div class="fig"><div class="fig-val">90</div>
-        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 25）</div></div>
+      <div class="fig"><div class="fig-val">93</div>
+        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 28）</div></div>
       <div class="fig"><div class="fig-val">44<span> / 40</span></div>
         <div class="fig-key">verify_phase3 与 phase4 仍然全过</div></div>
     </div>
