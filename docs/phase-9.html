@@ -1117,6 +1117,45 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <b>那个条件就是会让现算出错的条件，不钉住它，这条守卫哪天就变成空跑。</b>
     </div>
 
+    <h3>⑧ 复习那几屏改读投影 — 做完。<b>这是这个 Phase 的那一刀</b></h3>
+    <p>两张卡上那两个数、队列、方向、权重、封顶、拼写开没开，
+    <b>现在全部来自重放</b>。今日包照旧读，但<b>只取内容</b>——句子、义项、整个词，
+    因为生出它们正是服务端存在的理由。</p>
+    <p><b>包里的 <code>progress</code>、<code>direction</code>、<code>asks</code>、
+    <code>weight</code>、<code>done</code> 一个都不读了。</b>
+    它们是服务端上次收到上报时的样子，而那正是「复习完一池子、刷新变回 0/13」的来源。
+    字段留在线上不删（铁律 5，老服务端照旧下发），<b>读它们才是把症状请回来</b>。</p>
+    <p><code>advance()</code> 不再手动 <code>todayDone += 1</code>——
+    那是「同一个数有两处在写」，而这个 Phase 的全部内容就是把那种情况消掉。
+    现在写完日志重放一次，数字是算出来的。<code>dismissCurrent()</code> 同理，
+    不再手改名单:撤销标记让条目退回 <code>new</code>，而投影只收 <code>reviewing</code>，
+    重放一次它自己就不在了。</p>
+
+    <div class="callout">
+      <b>服务端现在把排期参数随今日包下发，而 Core 从原始字节里读它，
+      不从生成的契约类型读。</b>
+      原始字节保留的理由原话就是「a field this version of the client does not
+      understand must still survive to the next one」，而重新生成 Swift 契约要
+      Swift 工具链、r5s 上不装。四个字段都是可选的（不在 <code>required</code> 里），
+      老客户端照旧解得开。
+      <br><br>
+      <b>故意没有本地默认值。</b> 服务端没下发就是 nil，投影那时把记忆状态留空、
+      界面说「服务端还没更新」——<b>宁可缺一半，也不要一半是编的</b>。
+      两边各取自己的默认会跑出不同的间隔，而且两边都在按自己的文档正常工作、
+      没有东西会报错（§16 ② 那个形状）。
+      <br><br>
+      <b>由此有一条运维后果要记住：阿里云那台跑的是旧镜像。</b>
+      合回去之后要 <code>git pull</code> ＋ 重建镜像 ＋ 重启容器，
+      否则手机上会一直说「服务端还没更新」——而这句话是对的。
+      判断标准别靠记忆:<code>docker exec english-reader grep -c fsrs_parameters
+      /app/backend/modules/today/service.py</code>，答案是 0 就是没上去。
+    </div>
+
+    <p><b>投影说该问、而包里还没有它的句子的那些，单独计数并显示出来。</b>
+    这种情形是真实的:离线标了个词、包还没重新取下来。那个词没丢（投影里它在），
+    只是还问不了。<b>算进「共」会让 13/13 永远到不了；不说出来，
+    「今天 12 个」和「13 个」的差别没人解释得了。</b></p>
+
     <h3>Web 学习页什么时候删：P10</h3>
     <p>2026-09-17 用户定：<b>这个 Phase 完成之后，放到 P10 删。</b>
     §11 那张表照旧成立（<code>reader.html</code> 719 行、<code>review.html</code> 549 行，
@@ -1128,9 +1167,13 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="nots">
       <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
         <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>复习那几屏改读投影</b>
-        <span>队列和那两个数已经算得出来，缺的是让 <code>ReviewModel</code> 读它
-        而不是读今日包里的 <code>progress</code>。</span></span></div>
+      <div class="not"><i>·</i><span><b>发件箱与日志合成一条</b>
+        <span><code>drain()</code> 现在还读发件箱，而 <code>EventLog.unreported()</code>
+        已经能回答同一个问题。合了之后「日志是事实、发件箱是队列」才落到代码上，
+        现在是两份平行写入。</span></span></div>
+      <div class="not"><i>·</i><span><b>「读完」事件带上词表</b>
+        <span>§9 定的那条。现在 <code>article.finished</code> 不带 <code>met</code>，
+        所以投影里的遇见次数还是 0。</span></span></div>
       <div class="not"><i>·</i><span><b>双向同步与服务端序号</b>
         <span>§6 的三条细则。服务端要新增「收事件并发序号」与「拉某序号之后的事件」。</span></span></div>
       <div class="not"><i>·</i><span><b>进度报告落到服务端</b>
@@ -1145,14 +1188,14 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">7</div>
-        <div class="fig-key">做完的活（①–⑦）</div></div>
+      <div class="fig"><div class="fig-val">8</div>
+        <div class="fig-key">做完的活（①–⑧）</div></div>
       <div class="fig"><div class="fig-val">4</div>
         <div class="fig-key">路上撞到的、写进文档的教训</div></div>
       <div class="fig"><div class="fig-val">90</div>
         <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 25）</div></div>
-      <div class="fig"><div class="fig-val">44</div>
-        <div class="fig-key">verify_phase3 仍然全过</div></div>
+      <div class="fig"><div class="fig-val">44<span> / 40</span></div>
+        <div class="fig-key">verify_phase3 与 phase4 仍然全过</div></div>
     </div>
   </section>
 
