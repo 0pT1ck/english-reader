@@ -1156,12 +1156,22 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     只是还问不了。<b>算进「共」会让 13/13 永远到不了；不说出来，
     「今天 12 个」和「13 个」的差别没人解释得了。</b></p>
 
-    <h3>Web 学习页什么时候删：P10</h3>
-    <p>2026-09-17 用户定：<b>这个 Phase 完成之后，放到 P10 删。</b>
-    §11 那张表照旧成立（<code>reader.html</code> 719 行、<code>review.html</code> 549 行，
-    一共 1268 行要废），只是动手的时间往后挪一个 Phase。
-    <b>理由是中间那段不能既没网也没旧入口</b>：<code>verify_phase2</code> 的人工项 M1
-    指着 <code>/admin/reader</code>，而验收网搬家（§12）要等队列组成搬完。</p>
+    <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
+    <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
+    同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
+    （<code>reader.html</code> 719 行、<code>review.html</code> 549 行，
+    一共 1268 行要废；词池页 176 行改成看上报的快照）。</p>
+    <p><b>改成放在结尾，那条顾虑就自己解决了。</b> 原来担心的是「中间那段既没网也没旧入口」——
+    <code>verify_phase2</code> 的人工项 M1 指着 <code>/admin/reader</code>，
+    而验收网搬家（§12）要等队列组成搬完。<b>放在最后做，等于把顺序钉死成
+    「先搬网，再拆旧入口」</b>，那正是 §12 那条纪律要的顺序。</p>
+    <div class="callout">
+      <b>由此这个 Phase 的收尾顺序是定的，不是随手排的：</b>
+      <br>① 服务端那半（§6 同步、§7 进度报告、§8 稳定键、§10 数据库重切、§11 模块劈开）
+      <br>② <b>§12 验收网搬家</b>——搬完才有网
+      <br>③ <b>最后才删 Web 学习页</b>，并把 M1 改写成「在手机或 ercli 上读一篇」
+      <br>倒过来做任何一步，中间都会出现一段既没有网、也没有旧入口的时间。
+    </div>
 
     <h3>下一步</h3>
     <div class="nots">
@@ -1182,8 +1192,10 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
         <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
         <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
-      <div class="not"><i>·</i><span><b>义项稳定键、数据库重切、Web 学习页废弃、验收网搬家</b>
-        <span>§8、§10、§11、§12，都还没动。</span></span></div>
+      <div class="not"><i>·</i><span><b>义项稳定键、数据库重切、模块劈开</b>
+        <span>§8、§10、§11，都还没动。</span></span></div>
+      <div class="not"><i>·</i><span><b>§12 验收网搬家，然后才删 Web 学习页</b>
+        <span>这两步是这个 Phase 的最后两步，顺序不能倒。</span></span></div>
     </div>
 
     <h3>已经花掉的与已经拿到的</h3>
