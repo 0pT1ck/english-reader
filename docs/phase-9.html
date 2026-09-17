@@ -786,9 +786,13 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <b>而且这件事只需要验一次</b>——搬完之后服务端不再需要 FSRS，
         <code>py-fsrs</code> 从依赖里删掉，<b>世上只剩一份实现，没有「两边要永远一致」这个负担</b>。
         要对齐的只是<b>一次性迁移</b>：现有 30 条 <code>study_states</code> 与 147 条作答历史。</span></span></div>
-      <div class="check"><span class="check-n">U2 ?</span><span class="check-what">
-        <b>设备上用什么存？——唯一还挡着动手的那一个</b>
-        <span><b>倾向：系统自带的 SQLite（<code>libsqlite3</code>）＋ 一层薄封装，由一个 actor 独占连接。</b>
+      <div class="check"><span class="check-n">U2 ✓改了</span><span class="check-what">
+        <b>设备上用什么存？——定的是 SQLite，做的时候改成了追加式日志</b>
+        <span><b>结论见 §16 第 ④ 条</b>：一个追加式文件、一行一条 JSON，投影在内存里。
+        下面这段是当时的推理，留着是因为<b>它错在哪里值得记住</b>——
+        我主张 SQLite 的理由是「客户端现在真需要查询了」，
+        而 U3 量完之后（375 条、2.5 万条/年）那个理由不成立。</span>
+        <span style="opacity:.62"><b>当时的倾向：系统自带的 SQLite（<code>libsqlite3</code>）＋ 一层薄封装，由一个 actor 独占连接。</b>
         <br>四个理由：① <b>零依赖</b>——<code>libsqlite3</code> 随 iOS 出厂，
         而 P5 定的是「每个依赖都要单独核实能不能编」，能不加就不加；
         ② 要搬的那些表<b>本来就是 SQLite 表</b>，schema 知识直接转移；
@@ -799,7 +803,7 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <code>SwiftData</code> 在 iOS 26 ＋ Swift 6 严格并发下没验过，而且它想拥有模型层，
         跟「状态是日志的纯函数」拧着；<code>GRDB</code>（MIT、成熟）多一个依赖，
         而它给的东西这里用不上多少。
-        <br><b>这一条要你点头</b>，它决定事件仓库长什么样，第一行代码就卡在这儿。</span></span></div>
+        </span></span></div>
       <div class="check"><span class="check-n">U3 ✓</span><span class="check-what">
         <b>重放不是问题，暂时不做快照</b>
         <span>2026-09-17 数的真实数据：<b>现在全部历史一共 375 条事件</b>——
@@ -988,20 +992,109 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     当场变小的路径（<code>again</code> 不受 1.0 下限约束），
     实测 5.0 → 1.596818，和取 max 的那条区分得开。</p>
 
+    <h3>④ 事件日志 — 做完。<b>U2 那个决定改了</b></h3>
+    <p><code>client/Sources/ERCore/EventLog.swift</code>（251 行）＋ 6 项测试。
+    <b>一个追加式文件,一行一条 JSON</b>——不是 SQLite,也不是发件箱那套「一条一个文件」。</p>
+    <div class="callout">
+      <b>U2 原本定的是「系统 SQLite ＋ 薄封装」,2026-09-17 改掉。三条依据:</b>
+      <br><br>
+      <b>① 量太小,数据库没活可干。</b> 实测全部历史 <b>375 条</b>事件,
+      增速约 70 条/天 ＝ <b>2.5 万条/年</b>,一年约 5 MB。重放两万五千条是毫秒级的,
+      投影整个放内存里、启动时重放一次就有——<b>比任何查询都快</b>。
+      我当初主张 SQLite 的理由是「客户端现在真需要查询了」,而 U3 量完之后那个理由不成立。
+      <br><br>
+      <b>② Linux 那一课刚上过。</b> 从 Swift 用 SQLite 在 Linux 上要
+      systemLibrary ＋ modulemap ＋ 容器里装 <code>libsqlite3-dev</code>。
+      <b>和 <code>import JavaScriptCore</code> 同一个形状的风险,而且这次是自找的。</b>
+      <br><br>
+      <b>③ 有数据库会把人引回旧错误。</b> 一张 <code>study_states</code> 表摆在那儿,
+      下一个人就会把它当事实来源直接改——<b>而 P9 存在的全部理由就是那件事</b>。
+      「只有日志能写,投影只能算」这条规矩,靠「没有别的东西可以写」来保证最结实。
+      <br><br>
+      <b>发件箱那条「一条一个文件」的理由不适用。</b> 它的原话是
+      「a log only grows, so it has to be compacted, and compaction rewrites the
+      whole file」——<b>而这份日志永不压缩</b>(它是事实,只增不减,5 MB/年没必要),
+      所以那个失败模式不存在。反过来,两万五千个文件会让每次追加都去列一遍目录,
+      <b>而那正是发件箱越用越慢的原因</b>(P8 §18 修过一次同形状的)。
+      <br><br>
+      <b>唯一的崩溃损伤是断尾</b>:最后一行写了一半。而那一行按定义是「还没告诉用户
+      已经保存」的那条——和发件箱依赖的是同一个性质。丢掉它,但<b>报出来</b>,
+      而且<b>和「中间坏了一行」分开报</b>:前者是崩在写的那一刻,后者要查。
+      <br><br>
+      <b>「报到哪儿了」存在日志之外的小文件里,绝不回头改日志。</b>
+      改日志就意味着重写它,而重写是这份文件唯一没有的危险操作。
+    </div>
+
+    <h3>⑤ 投影 — 做完,不变量带守卫</h3>
+    <p><code>Projection.swift</code>(317 行)＋ <code>ProjectionTests.swift</code>(11 项)。
+    把日志重放成屏幕要的一切:词池、遇见次数、记忆状态、当天计数。
+    <b>没有一样是独立存着的事实</b>——所以「两个来源,旧的那个赢」这件事在结构上不可能再发生。</p>
+    <p><b>每一条规则都是先去服务端查清楚再镜像的,没有一条是猜的:</b></p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>规则</th><th>镜像的是</th></tr>
+      <tr><td>读完只加遇见次数,不改词池</td><td>跨 Phase 不变量,服务端由
+        <code>verify_phase2</code> 7.4 守</td></tr>
+      <tr><td>进复习池只有标记这一条路</td><td>同上,7.1</td></tr>
+      <tr><td>撤销退回 <code>new</code>,遇见记录保留</td><td>同上,7.13</td></tr>
+      <tr><td><b>撤销不清记忆状态</b></td><td><code>demote_if_unmarked</code> 只动
+        <code>pool</code> 一列——所以再标一次接着原排期走。
+        <b>这条是查出来的,我原本以为要清</b></td></tr>
+      <tr><td><b>标记是一个集合,不是布尔</b></td><td><code>clear_mark</code> 只清指定
+        那一种,<code>demote_if_unmarked</code> 一种都不剩才退回</td></tr>
+      <tr><td><b>只有 <code>reviewing</code> 会被退回</b></td><td>那句 SQL 的
+        <code>AND pool = 'reviewing'</code>——<code>graduated</code> 不往回拉</td></tr>
+      <tr><td>一轮走完才调调度器,评级看当天失误几次</td><td>P3 决定 11
+        （修订版）</td></tr>
+      <tr><td>模糊当天封顶,用掉就没了</td><td>P7 推翻 P3 决定 18</td></tr>
+      <tr><td>拼写不动任何状态</td><td>P3 决定 13</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>撞到第三件,这条影响契约:<code>answered</code> 事件现在只带
+      <code>queue_id</code>,而那是服务端队列表的行号。</b>
+      <br><br>
+      P9 之后队列是设备自己组的,<b>日志里引一个别处的行号就不是可重放的日志了</b>——
+      换台设备、或者服务端那张表重建过,这条事件就指不到任何东西。
+      <br><br>
+      所以 <code>answered</code> 必须自带条目身份(<code>item_type</code> /
+      <code>item_key</code> / <code>sense_id</code>)。
+      投影已经按自带身份实现,<b>但发这条事件的那一端还没改</b>
+      （<code>Events.swift</code> 的 <code>answered(queueId:…)</code>）。
+      这是「①内容 id 不可变」之外的第二条同类教训:
+      <b>日志里不许出现只有别处才能解释的标识符。</b>
+    </div>
+
     <h3>下一步</h3>
     <div class="nots">
+      <div class="not"><i>·</i><span><b>把 <code>answered</code> 事件改成自带身份</b>
+        <span>上面那条契约教训的落点。改完之后日志才真的可重放。</span></span></div>
+      <div class="not"><i>·</i><span><b>今天的队列由投影组出来</b>
+        <span>到期的 ＋ 当天标的，桶、方向、权重、封顶。
+        这一步之后复习那几屏才能不依赖服务端的今日包。</span></span></div>
+      <div class="not"><i>·</i><span><b>双向同步与服务端序号</b>
+        <span>§6 的三条细则。服务端要新增「收事件并发序号」与「拉某序号之后的事件」。</span></span></div>
+      <div class="not"><i>·</i><span><b>进度报告落到服务端</b>
+        <span>§7。<code>poolSnapshot()</code> 已经算得出来，缺的是接收它、
+        以及让 <code>words_in_progress</code> 改读它。</span></span></div>
       <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
-        <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以从依赖里去掉了。
-        <b>但要等队列组成也搬完</b>——现在删掉，服务端的 <code>/reviews</code> 就先塌了。</span></span></div>
-      <div class="not"><i>·</i><span><b>事件仓库</b>
-        <span>五种事件的追加式日志 ＋ 重放出来的投影。这是后面所有东西的地基。
-        <b>U2 那个决定要改</b>，理由见下。</span></span></div>
-      <div class="not"><i>·</i><span><b>评级映射已经是定稿的那一版</b>
-        <span>Swift 那份要照新表实现，别照 P8 之前的行为——差别就在 <code>easy</code> 那三格。</span></span></div>
-      <div class="not"><i>·</i><span><b><code>refactor</code> 分支已登记进 CI</b>
-        <span><code>client.yml</code> 与 <code>app.yml</code> 都加了。
-        首次推送两个工作流都跑了、都绿——<b>验过触发确实生效</b>，
-        不是假设（坑 §6.6：绿着的空跑比没有这个 job 更糟）。</span></span></div>
+        <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
+        <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
+      <div class="not"><i>·</i><span><b>义项稳定键、数据库重切、Web 学习页废弃、验收网搬家</b>
+        <span>§8、§10、§11、§12，都还没动。</span></span></div>
+    </div>
+
+    <h3>已经花掉的与已经拿到的</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">5</div>
+        <div class="fig-key">做完的活（①–⑤）</div></div>
+      <div class="fig"><div class="fig-val">3</div>
+        <div class="fig-key">路上撞到的、写进文档的教训</div></div>
+      <div class="fig"><div class="fig-val">76</div>
+        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 11）</div></div>
+      <div class="fig"><div class="fig-val">44</div>
+        <div class="fig-key">verify_phase3 仍然全过</div></div>
     </div>
   </section>
 
