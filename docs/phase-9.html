@@ -1209,6 +1209,96 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     本身就违反那条线（它是学习记录，不是内容）——那是 §11 模块劈开时要拆掉的，
     不是这一步。</p>
 
+    <h3>⑪ 双向同步 — 做完（§6）</h3>
+    <p><code>GET /v1/client/events?after=N</code> ＋ <code>SyncEngine.pull()</code>。
+    <b>而全序序号原来就有，不用新造。</b></p>
+    <div class="callout">
+      <b>动手前先查了一遍，结果 §6 缩小了一大半。</b>
+      <code>client_events</code> 这张表从 P2 起就是 <code>AUTOINCREMENT</code>，
+      <b>它一直就是「服务端收到即分配的单调序号」</b>；而且它的注释早就把设备时钟
+      与服务端时钟分开存着，原话是「both are kept so a disagreement is visible
+      rather than silently resolved」——正是 §6 细则 ① 要的那件事。
+      <br><br>
+      <b>所以没有新建事件表。</b> 新建会得到第二个顺序，然后两个顺序说反话。
+      §6 实际缺的只有<b>一个拉取端点</b>:推那一半三个端点本来就在，
+      而拉回自己推上去的事件按 <code>idem_key</code> 跳过就行——
+      <b>这比让服务端按设备过滤好</b>:按设备过滤要服务端知道「哪台设备产生了哪条」，
+      而设备换了令牌就不认了，那时它会以为自己的历史不存在。
+    </div>
+    <p><b>先推后拉，一趟里完成。</b> 反过来的话这一趟拉不到自己刚做的事，
+    下一趟才拉到——中间那段时间「另一台设备的变化看得见、自己的看不见」，
+    那种半态最难解释。翻页<b>有上限（200 页）</b>，不写「跑到服务端说没有为止」——
+    那个循环在服务端一直说 <code>more: true</code> 时没有出口（坑 §7.2 那一类）。</p>
+
+    <h3>⑫ 进度报告落地 — 做完（§7）</h3>
+    <p>新模块 <code>backend/modules/progress/</code>:<code>PUT /v1/client/progress/pool</code>
+    收快照，<code>learner_pool</code> 存它，生成改读它。
+    <b>PUT 因为它是替换</b>——语义说对了，重试就天然安全。</p>
+    <p><b>整份替换用「删了重插」，而且在一个事务里。</b> 逐条 upsert 会留下上一份里
+    已经撤销掉的词:撤销标记让条目退回 <code>new</code>，而 <code>new</code> 不在上报
+    范围内，所以它在新快照里「不出现」——<b>而逐条 upsert 读不出一个「不出现」。</b></p>
+    <div class="callout">
+      <b><code>words_in_progress</code> 没有快照时回落到 <code>study_states</code>，
+      并且大声说出来。</b>
+      静默回落会让「设备从没报过」看起来和「一个词都没在学」一样，
+      于是生成把你正在学的词当生词再教一遍——<b>而那是静默的</b>，
+      只表现为「这篇怎么全是我标过的词」。
+      所以 <code>words_in_progress()</code> 返回的是<b>可选值</b>:
+      空集合是「一个都没学」，<code>None</code> 是「不知道」，两件事差别很大。
+      §11 拆掉 <code>study_states</code> 之后这条回落一起删。
+    </div>
+
+    <h3>⑬ 义项稳定键 — 做完（§8）</h3>
+    <p><code>senses.sense_key</code>（13,741 条全部回填，键唯一）＋ <code>senses_retired</code>
+    ＋ <code>sense_key_map</code>（永不删除）＋ <code>store_senses</code> 重写。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>验的</th><th>结果</th></tr>
+      <tr><td>原样重放同一份义项集</td><td class="ok"><b>id 一个都没变</b>（从前会全变），
+        而且 <code>senses.replaced</code> 不再误触发——19 篇文章不会被无谓地排上重标注</td></tr>
+      <tr><td>把义项顺序颠倒</td><td class="ok"><b>id 跟着键走，不跟着序号走</b></td></tr>
+      <tr><td>去掉一条</td><td class="ok"><b>退休而不是删除</b>，按 id 反查仍然找得到</td></tr>
+      <tr><td>再加回来</td><td class="ok"><b>复活原来那一行，id 不变</b></td></tr>
+      <tr><td>同一个意思换个说法写</td><td class="wait">键变、旧的退休——
+        <b>这是设计边界，不是缺陷</b>:键认的是那句 <code>concept_en</code>，
+        不是那个意思，而「两句话是不是同一个意思」正是那个躲不掉的判断题</td></tr>
+    </table>
+    </div>
+    <p><b>退休的行搬到另一张表，不是在原表里打标记。</b>
+    有<b>二十处</b>代码在读 <code>senses</code>，要它们全都记得加一句「排除退休的」
+    不现实，而漏一处的后果是一个已经退休的义项出现在界面上——<b>静默的</b>。
+    搬出去之后那二十处自然只看得见活的、<b>一处都不用改</b>；
+    只有按 id 反查的那两处（复习卡片、造例句）要加回落，而它们是数得出来的。
+    <br><b>顺带撤了一个预留</b>:<code>sentences.py</code> 里原本写着
+    <code>hasattr(senses, "sense_by_id")</code>——那个函数现在真的做出来了。</p>
+    <p><b>回填时撞出一处数据缺陷</b>:<code>underground</code> 有两条
+    <code>concept_en</code> 完全相同的义项（#1 与 #4）。键把它照了出来，
+    按序号加了后缀。<b>13,741 条里只有这一处。</b></p>
+
+    <div class="callout">
+      <b>⑭ 我自己造的一次事故，记在这儿而不是抹掉。</b>
+      <br><br>
+      验 <code>store_senses</code> 时我<b>直接拿真实的 <code>content.db</code> 跑了
+      变更型探针</b>——用 <code>account</code> 这个真词，把它四条义项的
+      <code>gloss_zh</code> 写成了 <code>["x"]</code>。
+      连带触发了 <code>senses.replaced</code>，订阅者把 <b>22 处语境标注清成了空</b>
+      （全库 93,063 → 93,041），19 篇文章被排上重新标注。
+      <br><br>
+      <b>义项那一半已经从迁移前的备份精确修回</b>（四条 gloss、model、考频、id 全对，
+      13,741 条、键唯一）。<b>22 处标注还没修</b>——见下面那条。
+      <br><br>
+      <b>教训不是「小心一点」，是「探针不许碰真库」。</b>
+      坑 §4.1 说的是验收脚本要自己种探针、用完删掉；
+      我这次连「用探针词」都没做到，直接改了真词。
+      改法:<b>把库用 SQLite 自己的备份 API 拷进沙箱</b>（不是 <code>cp</code>——
+      有 WAL，直接拷可能不一致），在副本上验，探针词用
+      <code>__sense_probe__</code>，前后各清一次。后来那六条性质就是这么验的。
+      <br><br>
+      <b>验收网抓到了它:</b><code>verify_phase2</code> 的 <b>2.1 报 163/164</b>
+      （「全篇实词都有语境义项」）。<b>网是有用的</b>——而这一条同时说明
+      「先搬网再搬代码」那条纪律为什么值。
+    </div>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1230,26 +1320,21 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="nots">
       <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
         <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>双向同步与服务端序号</b>
-        <span>§6 的三条细则。服务端要新增「收事件并发序号」与「拉某序号之后的事件」。</span></span></div>
-      <div class="not"><i>·</i><span><b>进度报告落到服务端</b>
-        <span>§7。<code>poolSnapshot()</code> 已经算得出来，缺的是接收它、
-        以及让 <code>words_in_progress</code> 改读它。</span></span></div>
       <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
         <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
         <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
-      <div class="not"><i>·</i><span><b>义项稳定键、数据库重切、模块劈开</b>
-        <span>§8、§10、§11，都还没动。</span></span></div>
+      <div class="not"><i>·</i><span><b>数据库重切、模块劈开</b>
+        <span>§10、§11，都还没动。</span></span></div>
       <div class="not"><i>·</i><span><b>§12 验收网搬家，然后才删 Web 学习页</b>
         <span>这两步是这个 Phase 的最后两步，顺序不能倒。</span></span></div>
     </div>
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">10</div>
-        <div class="fig-key">做完的活（①–⑩），客户端那一侧齐了</div></div>
-      <div class="fig"><div class="fig-val">4</div>
-        <div class="fig-key">路上撞到的、写进文档的教训</div></div>
+      <div class="fig"><div class="fig-val">13</div>
+        <div class="fig-key">做完的活（①–⑬）</div></div>
+      <div class="fig"><div class="fig-val">5<span> ＋1 次事故</span></div>
+        <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
       <div class="fig"><div class="fig-val">95<span>+</span></div>
         <div class="fig-key">CI 上的 Core 测试（原 65 起）</div></div>
       <div class="fig"><div class="fig-val">44<span> / 40</span></div>
