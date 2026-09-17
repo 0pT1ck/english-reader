@@ -65,11 +65,18 @@ public struct Projection: Sendable, Equatable {
         /// 最近一次标记发生在哪一天(本地日期,`yyyy-MM-dd`)。
         /// 当天池与封顶要用它。
         public var lastMarkedDay: String?
-        /// 当天这一次要不要封顶。**只有「模糊」封顶**:「不认识」在 P3 就是当天问、
-        /// 当天算全分(决定 18 的另一半)。
-        public var cappedToday: Bool = false
 
         public init() {}
+
+        /// 这一天要不要封顶。**算出来的,不是存着的。**
+        ///
+        /// 三个条件缺一不可,镜像服务端 `session.collect`:标的是**模糊**
+        /// (「不认识」在 P3 就是当天问、当天算全分,决定 18 的另一半)、
+        /// 标在**今天**、而且**从没排过期**——已经有记忆状态的词是到期回来的,
+        /// 不是几分钟前才读到的。
+        public func capped(on day: String) -> Bool {
+            marks.contains(.fuzzy) && lastMarkedDay == day && memory == nil
+        }
     }
 
     /// 一天的记录,打卡条要用。
@@ -81,7 +88,15 @@ public struct Projection: Sendable, Equatable {
         public init() {}
     }
 
+    /// 当天那一轮走到哪儿了。**只保留最近一天的**——跨天就是新的一轮
+    /// (P3 决定 7:解锁每一轮重新挣)。
+    public struct Round: Sendable, Equatable {
+        public var day: String
+        public var state: ReviewItemState
+    }
+
     public var items: [Key: Item] = [:]
+    public var rounds: [Key: Round] = [:]
     public var days: [String: Day] = [:]
     /// 重放时读不出来的事件数。**平时是 0。**
     public var damagedEvents = 0
@@ -103,10 +118,6 @@ public struct Projection: Sendable, Equatable {
         var projection = Projection()
         projection.damagedEvents = load.damaged
 
-        // 当天那一轮的进行状态,按条目分开记。一轮走完(两个方向都过)才交给
-        // 调度器算下一次——「一天是一次复习」,而评级是那一天失误了几次。
-        var rounds: [Key: (state: ReviewItemState, day: String)] = [:]
-
         for event in load.events {
             projection.throughLocalSequence = event.localSequence
             let day = Self.day(of: event.occurredAt)
@@ -117,7 +128,6 @@ public struct Projection: Sendable, Equatable {
                 var item = projection.items[key] ?? Item()
                 if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
                     item.marks.insert(kind)
-                    item.cappedToday = kind == .fuzzy
                 }
                 // **进复习队列只有这一条路。** 已经 graduated 的不往回拉:
                 // 镜像服务端,只有 `reviewing` 这一档被 demote 碰过。
@@ -143,7 +153,6 @@ public struct Projection: Sendable, Equatable {
                 if item.marks.isEmpty && item.pool == .reviewing { item.pool = .new }
                 // **遇见记录与记忆状态都保留。** 它确实被遇见过;而你对它的记忆
                 // 也没有因为撤一个标记就重置。
-                item.cappedToday = false
                 projection.items[key] = item
 
             case .read:
@@ -170,8 +179,8 @@ public struct Projection: Sendable, Equatable {
                 projection.days[day] = record
 
                 // 跨天了就是新的一轮。
-                var round = rounds[key]?.day == day
-                    ? rounds[key]!.state
+                var round = projection.rounds[key]?.day == day
+                    ? projection.rounds[key]!.state
                     : ReviewItemState()
                 guard round.acceptsAnswer else { break }
 
@@ -181,7 +190,7 @@ public struct Projection: Sendable, Equatable {
                     easy: Self.bool(event.payload["easy"]) ?? false
                 )
                 round = round.applying(answer, weightDecay: weightDecay)
-                rounds[key] = (round, day)
+                projection.rounds[key] = Round(day: day, state: round)
 
                 guard round.done else { break }
                 // 一轮走完,交给调度器。**评级看的是这一天失误了几次**,不是问了几次。
@@ -195,13 +204,13 @@ public struct Projection: Sendable, Equatable {
                     state: item.memory, misses: round.misses, now: at,
                     easy: round.easy,
                     revealed: Self.int(event.payload["revealed"]) ?? 0,
-                    capped: item.cappedToday,
+                    capped: item.capped(on: day),
                     settings: settings
                 ) {
                     item.memory = outcome.state
                 }
-                // 当天那一次的封顶用掉就没了——它说的是「你几分钟前才读到它」。
-                item.cappedToday = false
+                // 封顶算出来就自己消失了:这一轮之后 `memory` 不再是 nil，
+                // 而 `capped(on:)` 的第三个条件正是「从没排过期」。
                 projection.items[key] = item
 
             case .spelled:
@@ -313,5 +322,106 @@ public struct Projection: Sendable, Equatable {
     static func bool(_ value: JSONValue?) -> Bool? {
         if case .bool(let flag)? = value { return flag }
         return nil
+    }
+}
+
+// MARK: - 今天的队列
+
+extension Projection {
+
+    /// 两个池子。
+    public enum Bucket: String, Sendable, Codable, CaseIterable {
+        /// 今天刚标的，今天就问（P3 决定 18／19）。
+        case today
+        /// 排期说到点了，或者标了却一直没排上（那是欠着的）。
+        case due
+    }
+
+    public struct QueueEntry: Sendable, Equatable {
+        public var key: Key
+        public var bucket: Bucket
+        /// 这一次封顶。见 ``Item/capped(on:)``。
+        public var capped: Bool
+        /// 这一轮走到哪儿了。抽题、解锁、权重都看它。
+        public var state: ReviewItemState
+    }
+
+    /// 今天该问哪些，每个在哪个池子里。
+    ///
+    /// **逐条镜像服务端 `session.collect`**，一条都不是这里新想的：
+    ///
+    /// * 排期到点的 → `due`
+    /// * 从没排过期、**今天**标的 → `today`，而且标的是「模糊」就封顶
+    /// * 从没排过期、**更早**标的 → `due`，它是欠着的
+    ///
+    /// **只看 `reviewing` 这一档。** `new` 是你没想学的（不认识却不标记
+    /// ＝ 不想学，系统不替你查证），`graduated` 是已经放过它了。
+    ///
+    /// - Parameters:
+    ///   - day: 本地日期 `yyyy-MM-dd`。**用设备时钟切**，排序才用服务端序号。
+    ///   - now: 判到期用的时刻。传进来而不是读时钟，这样排期能被测。
+    public func todayQueue(day: String, now: Date) -> [QueueEntry] {
+        var entries: [QueueEntry] = []
+        for (key, item) in items where item.pool == .reviewing {
+            let bucket: Bucket
+            if let due = item.memory?.dueAt {
+                // 还没到点的不进来。**这是唯一一条会把条目挡在外面的规则**，
+                // 剩下的都在里面——一个标过的词永远不会「消失」，只会等到点。
+                guard due <= now else { continue }
+                bucket = .due
+            } else {
+                bucket = item.lastMarkedDay == day ? .today : .due
+            }
+            let round = rounds[key]?.day == day ? rounds[key]!.state : ReviewItemState()
+            entries.append(QueueEntry(key: key, bucket: bucket,
+                                      capped: item.capped(on: day), state: round))
+        }
+        // 稳定的顺序，抽题才复现得出来（抽的随机数由调用方注入）。
+        return entries.sorted {
+            ($0.key.key, $0.key.senseId) < ($1.key.key, $1.key.senseId)
+        }
+    }
+
+    /// 两张卡片上的那两个数。
+    ///
+    /// **这就是 §1 那个 0/13 的落点。** 它们现在从重放算出来，
+    /// 而不是读服务端快照里的 `progress.buckets_done`——所以答完一张，
+    /// 数字当场对，刷新也不会倒退，离线也一样。
+    ///
+    /// 写成「已复习/共」而不是「已复习/待复习」（P7 决定 2）：后者会让 30 变成 23。
+    public struct Progress: Sendable, Equatable {
+        public var total: [Bucket: Int] = [:]
+        public var done: [Bucket: Int] = [:]
+
+        public init() {}
+
+        public func total(_ bucket: Bucket) -> Int { total[bucket] ?? 0 }
+        public func done(_ bucket: Bucket) -> Int { done[bucket] ?? 0 }
+        /// 两个池子都走完了。**只有这时候才能说「今天的所有复习」**——
+        /// 只做完一张卡就那么说是句假话（P7 决定 20）。
+        public var allDone: Bool {
+            let everything = Bucket.allCases
+            let t = everything.reduce(0) { $0 + total($1) }
+            return t > 0 && everything.allSatisfy { done($0) >= total($0) }
+        }
+    }
+
+    public func progress(day: String, now: Date) -> Progress {
+        var progress = Progress()
+        for entry in todayQueue(day: day, now: now) {
+            progress.total[entry.bucket, default: 0] += 1
+            if entry.state.done { progress.done[entry.bucket, default: 0] += 1 }
+        }
+        return progress
+    }
+
+    /// 拼写那一轮开没开：**当天该复习的全部走完之后才为真**（P3 决定 13）。
+    ///
+    /// 第三个条件是 2026-09-16 服务端补的：这一轮拼过了就不再提示，
+    /// 少了它拼完回主界面那一行还在、点进去又是全部的词。
+    /// 这里由调用方给 `spelledToday`，因为「拼过没有」是当天的事实，
+    /// 投影里 `days` 那张表还没记它。
+    public func spellingAvailable(day: String, now: Date, spelledToday: Bool) -> Bool {
+        !spelledToday && progress(day: day, now: now).allDone
     }
 }

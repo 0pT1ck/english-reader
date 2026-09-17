@@ -172,8 +172,8 @@ struct ProjectionTests {
         let memory = try #require(projection.items[Self.word("municipal")]?.memory)
         #expect(abs(memory.stability - 1.2931) < 1e-6,
                 "封顶应当按 Hard 算,实际 \(memory.stability)")
-        #expect(projection.items[Self.word("municipal")]?.cappedToday == false,
-                "封顶用掉就没了——它说的是「你几分钟前才读到它」")
+        #expect(projection.items[Self.word("municipal")]?.capped(on: "2026-01-01") == false,
+                "封顶算出来就自己没了:这一轮之后不再是「从没排过期」")
     }
 
     @Test("拼写不动任何状态,只是记一笔")
@@ -228,5 +228,138 @@ struct ProjectionTests {
         let projection = Projection.replay(load, weightDecay: 0.5, settings: Self.settings)
         #expect(projection.damagedEvents == 2)
         #expect(projection.throughLocalSequence == 0)
+    }
+
+    // MARK: 今天的队列与那两个数（§1 那个 0/13 的落点）
+
+    static let now = Projection.date(of: "2026-01-05T09:00:00+00:00")!
+
+    @Test("今天标的进 today，更早标的进 due，都没排过期")
+    func todayAndOverdueSplit() {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("fresh"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+            (.marked, ["item_key": .string("owed"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
+        ])
+        let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
+        #expect(queue.count == 2)
+        #expect(queue.first { $0.key.key == "fresh" }?.bucket == .today)
+        #expect(queue.first { $0.key.key == "owed" }?.bucket == .due,
+                "标了却一直没排上的是欠着的，不是今天的")
+    }
+
+    @Test("排期没到点的不进队列;到点的进 due")
+    func onlyDueItemsCome() throws {
+        // 答完一轮 ⇒ 有了排期。Good 的首次间隔是 2 天。
+        let events: [(LoggedEvent.Kind, [String: JSONValue], String)] = [
+            (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
+            (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
+             "2026-01-01T09:00:00+00:00"),
+            (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
+             "2026-01-01T09:05:00+00:00"),
+        ]
+        let projection = Self.replay(events)
+        let due = try #require(projection.items[Self.word("municipal")]?.memory?.dueAt)
+
+        // 到期前一天:不该来。
+        let before = due.addingTimeInterval(-86_400)
+        #expect(projection.todayQueue(day: "2026-01-02", now: before).isEmpty,
+                "没到点就不该问它")
+        // 到期那一刻:来了，而且在 due 池。
+        let queue = projection.todayQueue(day: "2026-01-03", now: due)
+        #expect(queue.count == 1)
+        #expect(queue.first?.bucket == .due)
+        #expect(queue.first?.capped == false, "到期回来的不封顶——它不是几分钟前才读到的")
+    }
+
+    @Test("当天标「模糊」的封顶;标「不认识」的不封顶")
+    func onlyFuzzyIsCapped() {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("vague"), "kind": .string("fuzzy")],
+             "2026-01-05T08:00:00+00:00"),
+            (.marked, ["item_key": .string("unknown_one"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+        ])
+        let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
+        #expect(queue.first { $0.key.key == "vague" }?.capped == true)
+        #expect(queue.first { $0.key.key == "unknown_one" }?.capped == false,
+                "「不认识」在 P3 就是当天问、当天算全分")
+    }
+
+    @Test("new 与 graduated 都不进队列")
+    func onlyReviewingItemsCome() {
+        let met: JSONValue = .array([.object(["item_key": .string("seen_only")])])
+        let projection = Self.replay([
+            (.read, ["article_id": .int(1), "met": met], "2026-01-05T07:00:00+00:00"),
+            (.marked, ["item_key": .string("dropped"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+            (.unmarked, ["item_key": .string("dropped")], "2026-01-05T08:30:00+00:00"),
+        ])
+        #expect(projection.todayQueue(day: "2026-01-05", now: Self.now).isEmpty,
+                "只遇见过的、和撤销过的，都不该来")
+    }
+
+    /// **这条就是 §1 那个症状的守卫。** 答完一张，数字当场是 1/2；
+    /// 而在 P9 之前它读的是服务端快照，刷新一次就倒退成 0/2。
+    @Test("两张卡的数字是重放算出来的，答完当场对，再重放一次也不倒退")
+    func theCountsNeverGoBackwards() {
+        let events: [(LoggedEvent.Kind, [String: JSONValue], String)] = [
+            (.marked, ["item_key": .string("one"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+            (.marked, ["item_key": .string("two"), "kind": .string("unknown")],
+             "2026-01-05T08:01:00+00:00"),
+            (.answered, ["item_key": .string("one"), "passed": .bool(true)],
+             "2026-01-05T09:00:00+00:00"),
+            (.answered, ["item_key": .string("one"), "passed": .bool(true)],
+             "2026-01-05T09:01:00+00:00"),
+        ]
+        let progress = Self.replay(events).progress(day: "2026-01-05", now: Self.now)
+        #expect(progress.total(.today) == 2)
+        #expect(progress.done(.today) == 1, "答完一张就是 1，不是 0")
+        #expect(progress.allDone == false)
+
+        // 重放同一份日志任意多次，结果一样——**它是纯函数**，
+        // 所以「刷新一下变回 0」这件事在结构上不可能再发生。
+        let again = Self.replay(events).progress(day: "2026-01-05", now: Self.now)
+        #expect(again == progress)
+    }
+
+    @Test("两个池子都走完才算「今天的所有复习」")
+    func allDoneNeedsBothBuckets() {
+        // 一张今天的、一张欠着的;只做完今天那张。
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("fresh"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+            (.marked, ["item_key": .string("owed"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
+            (.answered, ["item_key": .string("fresh"), "passed": .bool(true)],
+             "2026-01-05T09:00:00+00:00"),
+            (.answered, ["item_key": .string("fresh"), "passed": .bool(true)],
+             "2026-01-05T09:01:00+00:00"),
+        ])
+        let progress = projection.progress(day: "2026-01-05", now: Self.now)
+        #expect(progress.done(.today) == 1)
+        #expect(progress.total(.due) == 1)
+        #expect(progress.allDone == false, "另一个池子还欠着，不能说「今天的所有复习」")
+        #expect(projection.spellingAvailable(day: "2026-01-05", now: Self.now,
+                                             spelledToday: false) == false)
+    }
+
+    @Test("跨天就是新的一轮:昨天的进度不算今天的")
+    func aNewDayIsANewRound() {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("owed"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
+            // 昨天答了一半（只过了第一向）。
+            (.answered, ["item_key": .string("owed"), "passed": .bool(true)],
+             "2026-01-04T09:00:00+00:00"),
+        ])
+        let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
+        #expect(queue.count == 1)
+        #expect(queue.first?.state.direction == .wordToSense,
+                "解锁每一轮重新挣（P3 决定 7），昨天挣到的不带到今天")
+        #expect(queue.first?.state.asks == 0)
     }
 }
