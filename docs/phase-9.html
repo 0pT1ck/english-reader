@@ -881,10 +881,20 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       提前返回，所以下面那句 <code>if (revealed &gt; 0 or capped) and rating is EASY_RATING</code>
       <b>永远到不了</b>——它的存在本身说明作者原本想让 Easy → Good → Hard 连着降。
       <br><br>
-      <b>后果是可以顺手撞上的</b>：开提示看了答案 → 点「认识」→ 再点「太简单了」，
-      <b>拿到 8 天，而不是降级之后的 1 天</b>。而 <code>rating_for</code> 的文档写着
-      「Both only ever lower the grade」——<b>这句话对 Easy 不成立。</b>
-      向量全枚举把它当场照出来了：<code>misses=0 E R -</code> → <code>Easy</code>。
+      <b>今天踩不到，而它踩不到的方式本身是个问题。</b>
+      核过两个客户端：<b>iOS App 根本没有「太简单了」这个按钮</b>
+      （<code>···</code> 菜单里只有「这个词我已经会了」，作答时 <code>easy</code> 恒为 false）；
+      <b><code>ercli</code> 有那个选项，但写着 <code>case "4" where revealed == 0</code></b>
+      ——开过提示就不给这个选项。所以只有手搓一个 API 请求才够得着。
+      <br><br>
+      <b>也就是说这条规则现在靠界面挡着，而那正是铁律 1 反对的事</b>：
+      规则该在规则里成立，不该靠某个按钮的显示条件。
+      将来多一个客户端，或者谁把那个 <code>where revealed == 0</code> 去掉，洞就露出来了。
+      <br><br>
+      向量全枚举把它当场照出来了：<code>misses=0 E R -</code> → <code>Easy</code>（8 天），
+      而 <code>misses=0 - R -</code> → <code>Hard</code>（1 天）。
+      <code>rating_for</code> 的文档写着「Both only ever lower the grade」——
+      <b>这句话对 Easy 不成立。</b>
       <br><br>
       <b>向量先按真实行为钉住，没有顺手改。</b>改它是动一条已定的调度规则
       （P7 那条「提示要付代价」到底该不该压过 Easy），按铁律要讨论了才算。
