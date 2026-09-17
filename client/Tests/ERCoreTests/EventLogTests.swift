@@ -171,6 +171,42 @@ struct EventLogTests {
                 "决策事件现在没有信封")
     }
 
+    @Test("拉来的事件落盘之后立刻算已上报——它本来就来自服务端")
+    func pulledEventsAreNotPushedBack() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = try EventLog(directory: directory)
+
+        try log.append(kind: .marked, payload: ["item_key": .string("mine")])
+        try log.appendPulled(kind: .marked, payload: ["item_key": .string("theirs")],
+                             idemKey: "from-other-device",
+                             occurredAt: "2026-01-01T09:00:00Z")
+
+        #expect(try log.load().events.count == 2, "两条都在日志里——它是「知道的全部」")
+        #expect(try log.unreported().map(\.localSequence) == [0],
+                "只有自己那条要上报")
+        #expect(try log.knownIdemKeys().contains("from-other-device"))
+    }
+
+    @Test("线上那个 type 到 kind 的映射只有一份，遥测映射成 nil")
+    func wireTypesMapToKinds() {
+        let cases: [(String, LoggedEvent.Kind?)] = [
+            ("word.marked", .marked),
+            ("word.unmarked", .unmarked),
+            ("article.finished", .read),
+            ("review.answered", .answered),
+            ("review.spelled", .spelled),
+            // 遥测:不改变状态，所以不进日志。
+            ("article.opened", nil),
+            ("article.progress", nil),
+            ("word.tapped", nil),
+            ("something.new", nil),
+        ]
+        for (type, expected) in cases {
+            #expect(LoggedEvent.kind(forWireType: type) == expected, "\(type) 映射不对")
+        }
+    }
+
     @Test("每一种事件的去处和名字都是推导出来的，不是存着的第二个字段")
     func destinationsAreDerived() {
         let cases: [(LoggedEvent.Kind, OutboxEntry.Kind?, String?)] = [

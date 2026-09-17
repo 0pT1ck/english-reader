@@ -233,6 +233,77 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "client:reading"
+        ],
+        "summary": "按序号往后取事件（多设备同步用）",
+        "description": "这个学习者的事件，序号大于 ``after`` 的那些。\n\n**P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，\n而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。\n\n**序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是\n``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；\n再造一个会得到第二个顺序，然后两个顺序说反话。\n**服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。\n\n**拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在\n那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:\n按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，\n那时它会以为自己的历史不存在。\n\n**GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义\n都该按读取来。",
+        "operationId": "event_feed_v1_client_events_get",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "After"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 500,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventFeedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/v1/client/reviews": {
@@ -1523,6 +1594,45 @@
         "title": "EventBatchResponse",
         "description": "Duplicates are the protocol working, not a fault.\n\nAn offline client retries whatever it is unsure about. What matters to the\nclient is the per-item verdict: 决定 11 says it may delete an outbox file\nonly for a key this list reports as landed — never on the strength of the\nHTTP status alone."
       },
+      "EventFeedResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/LoggedEventOut"
+            },
+            "type": "array",
+            "title": "Events"
+          },
+          "through": {
+            "type": "integer",
+            "title": "Through",
+            "description": "这一批里最大的序号。**一条都没有时回传你给的那个 after**，这样客户端不用区分「空」和「到底了」"
+          },
+          "latest": {
+            "type": "integer",
+            "title": "Latest",
+            "description": "服务端手上最大的序号。`through < latest` 就是还有"
+          },
+          "more": {
+            "type": "boolean",
+            "title": "More",
+            "description": "还有没有下一段"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "events",
+          "through",
+          "latest",
+          "more"
+        ],
+        "title": "EventFeedResponse",
+        "description": "按序号往后取一段事件。"
+      },
       "EventResult": {
         "properties": {
           "idem_key": {
@@ -1906,6 +2016,64 @@
           "articles"
         ],
         "title": "LibraryResponse"
+      },
+      "LoggedEventOut": {
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "title": "Sequence",
+            "description": "全序序号。游标用它，**会有缺口，那是对的**"
+          },
+          "idem_key": {
+            "type": "string",
+            "title": "Idem Key",
+            "description": "设备生成的幂等键。拉回自己的事件时靠它认出来"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type",
+            "description": "事件类型，如 word.marked / review.answered"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "**原样，服务端不解释**"
+          },
+          "occurred_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurred At",
+            "description": "设备时钟"
+          },
+          "received_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Received At",
+            "description": "服务端收到的时刻"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sequence",
+          "idem_key",
+          "type",
+          "payload"
+        ],
+        "title": "LoggedEventOut",
+        "description": "事件日志里的一条，原样下发。\n\n**这是多设备的会合点**（P9 §6）。一台设备把它的事件推上来，另一台按序号\n拉下去，两边各自重放同一份日志，得出同一个状态——所以不需要合并算法。\n\n**`sequence` 是服务端收到即分配的全序号**，而 `occurred_at` 是设备时钟、\n可能是错的。**两个用途分开**:排序用序号，判「当天」用设备时钟。\n合用一个数就会在两台手机时间不同步时排出一个谁都没经历过的顺序。"
       },
       "Phrase": {
         "properties": {

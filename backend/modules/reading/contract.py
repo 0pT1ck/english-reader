@@ -330,6 +330,38 @@ class EventResult(BaseModel):
     reason: str | None = None
 
 
+class LoggedEventOut(BaseModel):
+    """事件日志里的一条，原样下发。
+
+    **这是多设备的会合点**（P9 §6）。一台设备把它的事件推上来，另一台按序号
+    拉下去，两边各自重放同一份日志，得出同一个状态——所以不需要合并算法。
+
+    **`sequence` 是服务端收到即分配的全序号**，而 `occurred_at` 是设备时钟、
+    可能是错的。**两个用途分开**:排序用序号，判「当天」用设备时钟。
+    合用一个数就会在两台手机时间不同步时排出一个谁都没经历过的顺序。
+    """
+
+    sequence: int = Field(description="全序序号。游标用它，**会有缺口，那是对的**")
+    idem_key: str = Field(description="设备生成的幂等键。拉回自己的事件时靠它认出来")
+    type: str = Field(description="事件类型，如 word.marked / review.answered")
+    payload: dict[str, Any] = Field(description="**原样，服务端不解释**")
+    occurred_at: str | None = Field(default=None, description="设备时钟")
+    received_at: str | None = Field(default=None, description="服务端收到的时刻")
+
+
+class EventFeedResponse(BaseModel):
+    """按序号往后取一段事件。"""
+
+    learner: Learner
+    events: list[LoggedEventOut]
+    through: int = Field(
+        description="这一批里最大的序号。**一条都没有时回传你给的那个 after**，"
+        "这样客户端不用区分「空」和「到底了」"
+    )
+    latest: int = Field(description="服务端手上最大的序号。`through < latest` 就是还有")
+    more: bool = Field(description="还有没有下一段")
+
+
 class EventBatchResponse(BaseModel):
     """Duplicates are the protocol working, not a fault.
 

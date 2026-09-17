@@ -273,8 +273,21 @@ final class AppModel {
         let before = pendingEvents
         do {
             let report = try await engine.drain()
+            // **先推后拉。** 顺序有意义:推完再拉，自己刚推上去的那些会在同一趟
+            // 回来（游标是「大于某个号」），按幂等键跳过——而反过来的话，
+            // 这一趟拉不到自己刚做的事，下一趟才拉到，中间那段时间另一台设备的
+            // 变化看得见、自己的看不见，那种半态最难解释。
+            let adopted = (try? await engine.pull()) ?? 0
+            if adopted > 0 {
+                log?.write(.info, "sync.pulled", "收下了别处做的事",
+                           fields: ["adopted": String(adopted)])
+                refreshProjection()
+            }
             lastSync = report
             refreshPendingCount()
+            // 上报把游标推了，待发数跟着变；投影不受影响（上报不改事实），
+            // 所以这里只刷数，不重放。
+
             if before > 0 || report.landed > 0 {
                 log?.write(report.rejected > 0 ? .warn : .info, "sync.drained", "上报了一批",
                            fields: ["landed": String(report.landed),

@@ -863,6 +863,58 @@ def record_event(idem_key: str, device_id: int, learner_id: int, event_type: str
     return None
 
 
+def events_after(learner_id: int, after: int, limit: int) -> list[dict[str, Any]]:
+    """一个学习者的事件，序号大于 ``after`` 的那些，按序号升序。
+
+    **`client_events.id` 就是那个全序序号。** P9 §6 的细则 ① 要一个「服务端收到即
+    分配的单调序号」——而这张表从 P2 起就是 ``AUTOINCREMENT``，它一直是。
+    新建一套会得到第二个顺序，然后两个顺序说反话。
+
+    **序号会有缺口**，那是对的:按 ``learner_id`` 过滤之后别人的事件不在里面，
+    而缺口对「大于某个号」这种游标毫无影响。
+
+    **payload 原样返回，不解释。** 服务端对学习记录只有两种关系:生文需要的
+    那一小撮信号，和它不解释的存档（`phase-9.html` §2）。这是后者。
+    """
+    rows = get_connection("learning").execute(
+        "SELECT id, idem_key, type, payload, occurred_at, received_at"
+        " FROM client_events WHERE learner_id = ? AND id > ?"
+        " ORDER BY id LIMIT ?",
+        (learner_id, int(after), int(limit)),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"] or "{}")
+        except ValueError:
+            # 存进去的不是 JSON。**报出来而不是跳过**:一条读不出来的事件会让
+            # 重放少算一笔，而跳过它的话没人知道少了什么。
+            payload = {}
+            log.warning(
+                "event.payload.unreadable",
+                f"事件 {row['idem_key']} 的 payload 解不开，按空对象下发",
+                idem_key=row["idem_key"], sequence=int(row["id"]),
+            )
+        out.append({
+            "sequence": int(row["id"]),
+            "idem_key": row["idem_key"],
+            "type": row["type"],
+            "payload": payload,
+            "occurred_at": row["occurred_at"],
+            "received_at": row["received_at"],
+        })
+    return out
+
+
+def latest_event_sequence(learner_id: int) -> int:
+    """这个学习者最大的那个序号。0 ＝ 一条都没有。"""
+    row = get_connection("learning").execute(
+        "SELECT COALESCE(MAX(id), 0) AS n FROM client_events WHERE learner_id = ?",
+        (learner_id,),
+    ).fetchone()
+    return int(row["n"] or 0)
+
+
 def finish_event(event_id: int, error: str | None = None) -> None:
     conn = get_connection("learning")
     conn.execute(

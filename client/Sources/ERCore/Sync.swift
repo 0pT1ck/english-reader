@@ -259,6 +259,98 @@ public actor SyncEngine {
             Components.Schemas.CalendarResponse.self, from: response.body)
     }
 
+    /// 从会合点把别的设备做的事拉下来。
+    ///
+    /// **P9 §6:同步是双向的。** 在这之前只有上报——一台设备把事件送上去，
+    /// 而另一台永远看不到它。状态是事件日志的纯函数，所以只要两台设备手里的
+    /// 日志一样，算出来的状态就一样：**不需要合并算法**。Anki 撞到真冲突时要
+    /// 弹窗让人选「上传还是下载」，我们不用。
+    ///
+    /// **自己的事件会原样拉回来，按幂等键跳过。** 游标是「大于某个号」，
+    /// 而自己推上去的那些也在那个号后面。
+    ///
+    /// 返回收下了几条新的。`nil` 表示没有日志可写（没接日志的老调用点）。
+    @discardableResult
+    public func pull(pageLimit: Int = 500) async throws -> Int {
+        guard let events else { return 0 }
+        var known = try events.knownIdemKeys()
+        var cursor = events.cursor()
+        var adopted = 0
+
+        // **有上限地翻页，不写没有出口的循环。** 一年约 2.5 万条事件、一页 500，
+        // 所以一次同步最多几十页；给到 200 页是留足余量，而不是「跑到没有为止」——
+        // 后者在服务端一直说 `more: true` 时会永不退出。
+        for _ in 0..<200 {
+            let response = try await transport.send(HTTPRequest(
+                method: .get,
+                path: "/v1/client/events?after=\(cursor.pulledThrough)&limit=\(pageLimit)"))
+            guard response.isOK else {
+                throw TransportError.server(
+                    status: response.status,
+                    body: String(decoding: response.body.prefix(400), as: UTF8.self))
+            }
+            let page = try Self.feed(from: response.body)
+            for item in page.events {
+                guard !known.contains(item.idemKey) else { continue }
+                // 遥测（打开文章、读到哪、点了哪个词）不进日志——它们不改变状态。
+                guard let kind = LoggedEvent.kind(forWireType: item.type) else { continue }
+                try events.appendPulled(kind: kind, payload: item.payload,
+                                        idemKey: item.idemKey,
+                                        occurredAt: item.occurredAt ?? "")
+                known.insert(item.idemKey)
+                adopted += 1
+            }
+            // **游标一页一推。** 崩在中途的话下次从这一页之后接着走，
+            // 而已经写进日志的那些靠幂等键不会重复。
+            cursor.pulledThrough = page.through
+            try events.setCursor(cursor)
+            guard page.more else { break }
+        }
+        return adopted
+    }
+
+    struct Feed: Sendable {
+        struct Item: Sendable {
+            let sequence: Int
+            let idemKey: String
+            let type: String
+            let payload: [String: JSONValue]
+            let occurredAt: String?
+        }
+        let events: [Item]
+        let through: Int
+        let more: Bool
+    }
+
+    /// 解会合点的回应。
+    ///
+    /// **手写解码，不走生成的契约类型。** 生成一次要 Swift 工具链，而 r5s 上不装
+    /// （开发场地那条决定的代价）。这里解的字段少而稳，手写的风险小于
+    /// 「等到能重新生成那天再接」。
+    static func feed(from body: Data) throws -> Feed {
+        struct Wire: Decodable {
+            struct Item: Decodable {
+                let sequence: Int
+                let idem_key: String
+                let type: String
+                let payload: [String: JSONValue]
+                let occurred_at: String?
+            }
+            let events: [Item]
+            let through: Int
+            let more: Bool
+        }
+        guard let wire = try? JSONDecoder().decode(Wire.self, from: body) else {
+            throw TransportError.malformed("事件流解不开")
+        }
+        return Feed(
+            events: wire.events.map {
+                Feed.Item(sequence: $0.sequence, idemKey: $0.idem_key, type: $0.type,
+                          payload: $0.payload, occurredAt: $0.occurred_at)
+            },
+            through: wire.through, more: wire.more)
+    }
+
     public func library(shelf: String = "fresh", source: String? = nil)
         async throws -> Components.Schemas.LibraryResponse {
         var path = "/v1/client/library?shelf=\(shelf)"

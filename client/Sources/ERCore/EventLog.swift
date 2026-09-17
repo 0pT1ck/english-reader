@@ -33,6 +33,21 @@ import Foundation
 /// 已经保存」的那条事件——和发件箱依赖的是同一个性质。载入时把它丢掉并报出来。
 public struct LoggedEvent: Codable, Equatable, Sendable {
 
+    /// 线上那个 `type` 对应哪一种。**nil ＝ 不是那五种之一**（遥测）。
+    ///
+    /// 会合点下发的是服务端存的那个 `type` 字符串，而日志按 `kind` 分类——
+    /// 这个映射是两边唯一的接缝，所以它只有一份，在这里。
+    public static func kind(forWireType type: String) -> Kind? {
+        switch type {
+        case "word.marked": .marked
+        case "word.unmarked": .unmarked
+        case "article.finished": .read
+        case "review.answered": .answered
+        case "review.spelled": .spelled
+        default: nil
+        }
+    }
+
     /// 五种事件（phase-9.html §5）。**别的都算得回来**，所以别往这里加。
     ///
     /// `marked` 与 `unmarked` 是同一件事的两个方向：标记让一个词进复习队列
@@ -298,6 +313,33 @@ public final class EventLog: @unchecked Sendable {
             guard let kinds else { return true }
             return kinds.contains(event.kind)
         }
+    }
+
+    /// 日志里已有的幂等键。
+    ///
+    /// **拉取时用它去重。** 自己推上去的事件会从会合点原样拉回来（游标是
+    /// 「大于某个号」，而自己的事件也在那个号后面），靠幂等键认出来跳过。
+    /// **比让服务端按设备过滤好**:按设备过滤要服务端知道「哪台设备产生了哪条」，
+    /// 而设备换了令牌就不认了，那时它会以为自己的历史不存在。
+    public func knownIdemKeys() throws -> Set<String> {
+        Set(try load().events.map(\.idemKey))
+    }
+
+    /// 收下一条从会合点拉来的事件。
+    ///
+    /// **追加进同一份日志，而不是另开一份。** 日志是「这台设备知道的全部事实」，
+    /// 不是「这台设备产生的事实」——状态是日志的纯函数，而状态里当然要包含
+    /// 另一台设备做的事。
+    ///
+    /// 落盘之后**立刻标成已上报**:它本来就来自服务端，再推回去是白跑一趟。
+    /// 这也是为什么日志从不回头改——「报过没有」是游标那个小文件的事。
+    @discardableResult
+    public func appendPulled(kind: LoggedEvent.Kind, payload: [String: JSONValue],
+                             idemKey: String, occurredAt: String) throws -> LoggedEvent {
+        let event = try append(kind: kind, payload: payload,
+                               idemKey: idemKey, occurredAt: occurredAt)
+        try markReported([event.localSequence])
+        return event
     }
 
     /// 记下这一批报掉了。

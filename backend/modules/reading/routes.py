@@ -37,6 +37,7 @@ from backend.modules.reading import (
 from backend.modules.reading.contract import (
     ArticleResponse,
     EventBatchResponse,
+    EventFeedResponse,
     LibraryResponse,
 )
 
@@ -129,6 +130,49 @@ async def report_events(device_id: DeviceId, batch: EventBatch) -> dict[str, Any
         auth.learner_for_device(device_id),
         [event.model_dump() for event in batch.events],
     )
+
+
+#: 一次最多下发多少条。取 500 是因为一年约 2.5 万条（P9 §14 U3 实测），
+#: 500 一段意味着新设备首次同步约五十个来回——够快，而且每一段都小。
+EVENT_PAGE_MAX = 500
+
+
+@client_router.get("/events", summary="按序号往后取事件（多设备同步用）",
+                   response_model=EventFeedResponse)
+async def event_feed(device_id: DeviceId,
+                     after: int = Query(0, ge=0),
+                     limit: int = Query(EVENT_PAGE_MAX, ge=1, le=EVENT_PAGE_MAX),
+                     ) -> dict[str, Any]:
+    """这个学习者的事件，序号大于 ``after`` 的那些。
+
+    **P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，
+    而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。
+
+    **序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是
+    ``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；
+    再造一个会得到第二个顺序，然后两个顺序说反话。
+    **服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。
+    
+    **拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在
+    那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:
+    按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，
+    那时它会以为自己的历史不存在。
+
+    **GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义
+    都该按读取来。
+    """
+    learner_id = auth.learner_for_device(device_id)
+    events = repository.events_after(learner_id, after, limit)
+    latest = repository.latest_event_sequence(learner_id)
+    # 一条都没有时回传你给的那个 after——这样客户端不用区分「空」和「到底了」。
+    through = events[-1]["sequence"] if events else after
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "events": events,
+        "through": through,
+        "latest": latest,
+        "more": through < latest,
+    }
 
 
 # --------------------------------------------------------------------------- #
