@@ -948,12 +948,54 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     其中 1.4b（Easy 只由你自己标、磕过就不认）与 3.4（封顶真的把评级压下来）都在改动范围内，都仍然成立。
     收尾查过：<code>running</code> 批次 0、探针残留 0、停在 <code>annotating</code> 的文章 0、无残留进程。</p>
 
+    <h3>③ 调度搬进 Core — 做完，向量全过</h3>
+    <p><code>client/Sources/ERCore/Scheduler.swift</code>（323 行）＋
+    <code>SchedulerVectorTests.swift</code>。CI 上 <b>65 项测试全过</b>，
+    其中三条是新的：评级映射 32 种组合、15 个排期场景逐个重放、间隔序列那一条。
+    <b>整数完全一致，双精度在 1e-6 内一致。</b></p>
+
+    <div class="callout">
+      <b>路上撞到第二件：两个现成的 Swift FSRS 包都不能用，而我第一次核错了东西。</b>
+      <br><br>
+      · <b>官方 <code>open-spaced-repetition/swift-fsrs</code></b>：算法版本对（FSRS-6）、
+      MIT、<b>零包依赖</b>、连 <code>StrictConcurrency=complete</code> 都已经开着——
+      我据此写进 §14 说「零依赖所以只要核它一个」。
+      <b>而它 <code>FSRSAlea.swift</code> 里 <code>import JavaScriptCore</code>，
+      Linux 上没有这个模块。</b> 而 <code>Package.swift</code> 开头就写着 Core 必须在
+      Windows、Linux、iOS 上都编得过，CI 的 L0 就在 ubuntu 上跑。
+      <br>· <b><code>4rays/SwiftFSRS</code></b>：MIT、零依赖、编得过，
+      <b>但只实现 FSRS-5</b>，服务端跑的是 6。
+      <br><br>
+      <b>教训是关于「核什么」的。</b> P5 那条规矩说「Core 的每个依赖都要单独核实
+      <b>能不能编</b>」，而我核的是「它有没有依赖」。<b>这是两个问题</b>，
+      而第一个问题的答案（没有）让我觉得第二个不用问了。
+      形状同坑 §2.3：别拿一个看起来相关的指标当权威证据。
+    </div>
+
+    <p><b>所以自己实现，照 <code>py-fsrs</code> 移植</b>（MIT，服务端用的就是它）。
+    <b>敢移植的前提是网已经建好了</b>——期望值出自服务端真实代码，公式错一项就红。
+    只实现服务端真正配的那条路径：两个步骤列表都空，状态机塌成一条直线，
+    <code>Relearning</code> 永远不出现。</p>
+    <p><b>两个会静默咬人的细节，都在移植时对齐了</b>：
+    ① 经过天数要按 <code>timedelta.days</code> 那样<b>向下取整到整天</b>，
+    直接 <code>/86400</code> 会差一点；
+    ② 间隔取整要用<b>四舍六入五成双</b>（Python 的 <code>round()</code>），
+    Swift 的 <code>rounded()</code> 是逢五进一——只在正好半天的边界上不同，
+    而那正是最难查的一类差。抖动没实现，置 true 会<b>抛错而不是悄悄不抖</b>。</p>
+    <p><b>补了两个向量场景盖住「同一天又答一次」那条公式</b>。
+    我们的规矩是「一天是一次复习」，正常流程走不到它——但公式两边都实现着，
+    不盖住就是留一个静默给错值的口子。其中「同一天答错」那条是唯一能让记忆强度
+    当场变小的路径（<code>again</code> 不受 1.0 下限约束），
+    实测 5.0 → 1.596818，和取 max 的那条区分得开。</p>
+
     <h3>下一步</h3>
     <div class="nots">
-      <div class="not"><i>·</i><span><b>Swift 那半的向量测试</b>
-        <span>把 <code>swift-fsrs</code> 加进 <code>Package.swift</code>，
-        写一个读这个 fixture 的测试，让 CI 告诉我们两份实现对不对得上。
-        <b>这一步之后才谈得上搬调度。</b></span></span></div>
+      <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
+        <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以从依赖里去掉了。
+        <b>但要等队列组成也搬完</b>——现在删掉，服务端的 <code>/reviews</code> 就先塌了。</span></span></div>
+      <div class="not"><i>·</i><span><b>事件仓库</b>
+        <span>五种事件的追加式日志 ＋ 重放出来的投影。这是后面所有东西的地基。
+        <b>U2 那个决定要改</b>，理由见下。</span></span></div>
       <div class="not"><i>·</i><span><b>评级映射已经是定稿的那一版</b>
         <span>Swift 那份要照新表实现，别照 P8 之前的行为——差别就在 <code>easy</code> 那三格。</span></span></div>
       <div class="not"><i>·</i><span><b><code>refactor</code> 分支已登记进 CI</b>
