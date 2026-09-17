@@ -1089,6 +1089,34 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <b>所以它和 §6 的同步工作一起做</b>，那时本来就要重新生成一次。
     </div>
 
+    <h3>⑦ 今天的队列也由投影组出来 — 做完，网抓到一个</h3>
+    <p><code>Projection.todayQueue(day:now:)</code> ＋ <code>progress(day:now:)</code>
+    ＋ 8 项测试。<b>两张卡上那两个数现在是重放算出来的</b>，不再读服务端快照里的
+    <code>progress.buckets_done</code>——这就是 §1 那个 0/13 的落点。
+    分桶逐条镜像服务端 <code>session.collect</code>：排期到点的进 <code>due</code>；
+    从没排过期而今天标的进 <code>today</code>；从没排过期而更早标的也进
+    <code>due</code>，它是欠着的。<b>只看 <code>reviewing</code> 这一档</b>，
+    而唯一会把条目挡在外面的规则是「还没到点」——一个标过的词永不消失，只会等。</p>
+    <p>有一条测试是<b>重放同一份日志两次、要求结果相同</b>：
+    让旧症状不可能再发生的性质是「它是纯函数」，不是「某一屏被补了一下」。</p>
+
+    <div class="callout">
+      <b>撞到第四件，而这次是测试抓到的，不是我想到的。</b>
+      <br><br>
+      一张卡答完之后拿到了两天后的到期时间，而我那版 <code>todayQueue</code>
+      每次都现算桶：现算的结果是「还没到点」，<b>于是那张卡从今天的名单上消失了，
+      「已复习」那个数也跟着丢</b>。89 项里红了 3 项。
+      <br><br>
+      <b>这是同一个症状从另一侧又长了一次</b>——P9 存在就是为了修「答完了数字不对」，
+      而我的实现自己造了一遍。
+      <br><br>
+      <b>服务端不现算。</b> 队列行是 <code>enqueue</code> 那一刻写好
+      <code>bucket</code> 与 <code>capped</code> 的，做完只打一个 <code>done_at</code>。
+      所以改成那一轮开始时定死、之后只读不算。补了一条守卫，
+      而且断言里明确要求「它确实已经排到将来了」——
+      <b>那个条件就是会让现算出错的条件，不钉住它，这条守卫哪天就变成空跑。</b>
+    </div>
+
     <h3>Web 学习页什么时候删：P10</h3>
     <p>2026-09-17 用户定：<b>这个 Phase 完成之后，放到 P10 删。</b>
     §11 那张表照旧成立（<code>reader.html</code> 719 行、<code>review.html</code> 549 行，
@@ -1100,9 +1128,9 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="nots">
       <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
         <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>今天的队列由投影组出来</b>
-        <span>到期的 ＋ 当天标的，桶、方向、权重、封顶。
-        这一步之后复习那几屏才能不依赖服务端的今日包。</span></span></div>
+      <div class="not"><i>·</i><span><b>复习那几屏改读投影</b>
+        <span>队列和那两个数已经算得出来，缺的是让 <code>ReviewModel</code> 读它
+        而不是读今日包里的 <code>progress</code>。</span></span></div>
       <div class="not"><i>·</i><span><b>双向同步与服务端序号</b>
         <span>§6 的三条细则。服务端要新增「收事件并发序号」与「拉某序号之后的事件」。</span></span></div>
       <div class="not"><i>·</i><span><b>进度报告落到服务端</b>
@@ -1117,12 +1145,12 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">5</div>
-        <div class="fig-key">做完的活（①–⑤）</div></div>
-      <div class="fig"><div class="fig-val">3</div>
+      <div class="fig"><div class="fig-val">7</div>
+        <div class="fig-key">做完的活（①–⑦）</div></div>
+      <div class="fig"><div class="fig-val">4</div>
         <div class="fig-key">路上撞到的、写进文档的教训</div></div>
-      <div class="fig"><div class="fig-val">76</div>
-        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 11）</div></div>
+      <div class="fig"><div class="fig-val">90</div>
+        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 25）</div></div>
       <div class="fig"><div class="fig-val">44</div>
         <div class="fig-key">verify_phase3 仍然全过</div></div>
     </div>
