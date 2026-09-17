@@ -848,6 +848,65 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     </div>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§16</span>
+      <h2>实施进度，与路上撞到的东西</h2>
+      <span class="sec-note">2026-09-17 起</span>
+    </div>
+    <p class="lede">方案 2026-09-17 定案（U2 定为系统 SQLite ＋ 薄封装、§4 四条铁律按草案、
+    分支 <code>refactor</code>）。按 §12「先搬网，再搬代码」推进。</p>
+
+    <h3>① 调度向量桥 — 做完</h3>
+    <p><code>scripts/export_scheduler_vectors.py</code> →
+    <code>client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json</code>。
+    这是删掉 <code>py-fsrs</code> 的前置条件：没有它，Swift 那份调度是「看着像对」。</p>
+    <p><b>现有 <code>export_review_vectors.py</code> 刻意不含调度</b>，它的理由写得很清楚——
+    「including them would tie these vectors to FSRS parameters that are free to change」。
+    <b>这个反驳靠「把设置一起记下来」解掉</b>：向量说的是「给定这组设置，这些输入产生这些输出」，
+    在控制台改了 retention 也仍然成立。<b>代价是 Swift 那边必须被喂同一组设置，不能用它自己的默认。</b></p>
+    <p>两半：<b>评级映射全枚举</b>（misses 0–3 × easy × revealed × capped ＝ 32 条，
+    这半是我们自己的规则，最容易搬错）；<b>排期 12 个场景</b>，每个都钉住一条有明文依据的东西。</p>
+    <p><b>间隔序列导出来是 2 → 11 → 46 → 163 → 180</b>——和「踩过的坑」§4.5 记的
+    「正确的是 2→11→46→163→180」一字不差，同时把 180 天封顶也钉住了。
+    这说明导出的是对的那一版，不是接线错的 8→66→180。</p>
+    <p><b>这个脚本不调 <code>create_app()</code></b>：<code>rating_for</code> 与 <code>review</code>
+    是纯函数，所以它碰不到坑 §4.6 那个形状（建 app → 定时任务循环起来 → 夜间备稿真的跑 →
+    脚本退出把它掐死在半路）。fuzz 关掉。<b>重新导出无 diff，验过了</b>——那是这个文件存在的全部意义。</p>
+
+    <div class="callout">
+      <b>撞到的第一件事：<code>rating_for</code> 里有一支死代码，而它盖住了一个真的洞。</b>
+      <br><br>
+      <code>scheduler.py:150</code> 先 <code>if easy and misses == 0: return EASY_RATING</code>
+      提前返回，所以下面那句 <code>if (revealed &gt; 0 or capped) and rating is EASY_RATING</code>
+      <b>永远到不了</b>——它的存在本身说明作者原本想让 Easy → Good → Hard 连着降。
+      <br><br>
+      <b>后果是可以顺手撞上的</b>：开提示看了答案 → 点「认识」→ 再点「太简单了」，
+      <b>拿到 8 天，而不是降级之后的 1 天</b>。而 <code>rating_for</code> 的文档写着
+      「Both only ever lower the grade」——<b>这句话对 Easy 不成立。</b>
+      向量全枚举把它当场照出来了：<code>misses=0 E R -</code> → <code>Easy</code>。
+      <br><br>
+      <b>向量先按真实行为钉住，没有顺手改。</b>改它是动一条已定的调度规则
+      （P7 那条「提示要付代价」到底该不该压过 Easy），按铁律要讨论了才算。
+      <b>两个选项</b>：① 认为提示的代价应当压过自称简单——把提前返回挪到两个上限之后，
+      死分支就活了；② 认为自称简单是学习者的判断、提示不该否决它——那就把那支死代码删掉，
+      并把文档那句「both only ever lower the grade」改准。<b>我倾向 ①</b>，
+      因为提示的代价本来就是为了拦住「看了答案还算自己会」，而「太简单了」正是最容易顺手点的那个出口。
+    </div>
+
+    <h3>下一步</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>Swift 那半的向量测试</b>
+        <span>把 <code>swift-fsrs</code> 加进 <code>Package.swift</code>，
+        写一个读这个 fixture 的测试，让 CI 告诉我们两份实现对不对得上。
+        <b>这一步之后才谈得上搬调度。</b></span></span></div>
+      <div class="not"><i>·</i><span><b><code>refactor</code> 分支已登记进 CI</b>
+        <span><code>client.yml</code> 与 <code>app.yml</code> 都加了。
+        首次推送两个工作流都跑了、都绿——<b>验过触发确实生效</b>，
+        不是假设（坑 §6.6：绿着的空跑比没有这个 job 更糟）。</span></span></div>
+    </div>
+  </section>
+
   <footer>
     <div>English Reader</div>
     <div>Phase 9 · 重构 · 方案讨论稿</div>
