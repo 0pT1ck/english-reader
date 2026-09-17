@@ -47,8 +47,12 @@ SENSE_TO_WORD = 2      # 看义想词
 #: of the 看义想词 ladder handed over the answer a level early.
 #:
 #: So ``revealed`` is now 0 or 1 — and as of the same date it is no longer only
-#: recorded: taking the hint caps the grade at Hard (``scheduler.rating_for``),
+#: recorded: taking the hint **costs a grade** (``scheduler.rating_for``),
 #: because a hint that costs nothing is a hint everyone takes first.
+#:
+#: 2026-09-17 订正: 这里原本写的是 "caps the grade at Hard"，而 scheduler 那边
+#: 写的是 "costs a grade"——两句话说的是两回事，只是在 ``Good`` 上结果相同所以
+#: 没人发现。**降一档才是这一条**；封顶是 ``capped`` 那一条（当天刚标的词）。
 MAX_REVEAL = 1
 
 

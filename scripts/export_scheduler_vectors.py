@@ -153,12 +153,20 @@ SCHEDULE_CASES: list[dict[str, Any]] = [
         "reviews": [{"misses": 0, "capped": True}],
     },
     {
-        "name": "自称简单 ＋ 开过提示：这一组的真实行为，先钉下来再讨论",
-        "pins": "rating_for 里 `if ... and rating is EASY_RATING` 那一支到不了——"
-                "easy 的分支提前 return 了。这条向量记录的是现在真的会发生什么，"
-                "不是应该发生什么。见导出脚本末尾打印的那一段。",
+        "name": "自称简单 ＋ 开过提示 → 降一档到 Good，不是 Hard，也不是白拿 Easy",
+        "pins": "用户 2026-09-17 定：「太简单了」是学习者的判断、提示不否决它，"
+                "但看了提示就降一档。这条向量正是那个决定的落点——"
+                "在它之前这一组会给 Easy（8 天），因为 easy 的分支提前 return 了。",
         "initial": None,
         "reviews": [{"misses": 0, "easy": True, "revealed": 1}],
+    },
+    {
+        "name": "自称简单 ＋ 当天刚标 → 封顶为 Hard，因为封顶不是降档",
+        "pins": "P7 §3 的原话是「当天这一次封顶为 Hard」。"
+                "两个上限语义不同，在 Good 上结果相同所以一直没露出来；"
+                "在 Easy 上一个给 Good、一个给 Hard。",
+        "initial": None,
+        "reviews": [{"misses": 0, "easy": True, "capped": True}],
     },
     {
         "name": "连续五次一次过：间隔一路拉长，并被 maximum_interval 封在 180 天",

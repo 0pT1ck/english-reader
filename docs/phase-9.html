@@ -896,13 +896,57 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <code>rating_for</code> 的文档写着「Both only ever lower the grade」——
       <b>这句话对 Easy 不成立。</b>
       <br><br>
-      <b>向量先按真实行为钉住，没有顺手改。</b>改它是动一条已定的调度规则
-      （P7 那条「提示要付代价」到底该不该压过 Easy），按铁律要讨论了才算。
-      <b>两个选项</b>：① 认为提示的代价应当压过自称简单——把提前返回挪到两个上限之后，
-      死分支就活了；② 认为自称简单是学习者的判断、提示不该否决它——那就把那支死代码删掉，
-      并把文档那句「both only ever lower the grade」改准。<b>我倾向 ①</b>，
-      因为提示的代价本来就是为了拦住「看了答案还算自己会」，而「太简单了」正是最容易顺手点的那个出口。
+      <b>向量先按真实行为钉住，没有顺手改</b>——改它是动一条已定的调度规则，按铁律要讨论过才算。
     </div>
+
+    <h3>② 两个上限本来是两条规则，代码把它们混成了一条 — 2026-09-17 定并改完</h3>
+    <div class="callout">
+      <b>用户的决定：「太简单了」是学习者的判断，提示不否决它</b>——
+      它藏在右上角的二级菜单里，点它的人知道自己在干什么，不存在误触；
+      <b>但看了提示就降一档。</b>
+      <br><br>
+      <b>这两句话合起来，推出的不是我给的任何一个选项</b>，而是第三种答案：
+      <code>Easy</code> ＋ 提示 ＝ <code>Good</code>。而那支死代码是
+      <code>Easy→Good</code> 紧跟 <code>Good→Hard</code> 两句顺着执行的，<b>降的是两档</b>。
+      <br><br>
+      顺着这条线查出了真正的病：<b>现在的代码把两种不同语义混成了一个
+      <code>revealed &gt; 0 or capped</code> 条件。</b>
+      <br>· <b>开过提示</b>——P7 原话「taking a hint <b>costs a grade</b>」＝<b>降一档</b>
+      <br>· <b>当天刚标</b>——P7 §3 原话「当天这一次<b>封顶为 Hard</b>」＝<b>封顶</b>，不是降档
+      <br>对 <code>Good</code> 两者结果相同（都得 <code>Hard</code>），所以混着也看不出来；
+      <b>对 <code>Easy</code> 就分家了</b>：降一档是 <code>Good</code>，封顶是 <code>Hard</code>。
+      两处注释也各写了一半——<code>session.py:50</code> 写的是 "caps the grade at Hard"，
+      <code>scheduler.py</code> 写的是 "costs a grade"，<b>两句话说的是两回事</b>。
+    </div>
+    <p><b>改法</b>：拆成两个具名的东西——<code>_one_grade_lower()</code>（降一档，
+    下限 <code>HINT_FLOOR = Hard</code>，因为提示不该把「答对了」变成「忘了」）
+    与 <code>_at_most()</code>（封顶，<code>CAPPED_CEILING = Hard</code>，封顶绝不抬高评级）。
+    <code>easy</code> 不再提前 <code>return</code>，而是作为起点参与这两步。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>misses</th><th>easy</th><th>提示</th><th>当天封顶</th><th>评级</th><th></th></tr>
+      <tr><td class="num">0</td><td>—</td><td>—</td><td>—</td><td>Good</td><td></td></tr>
+      <tr><td class="num">0</td><td>E</td><td>—</td><td>—</td><td class="ok">Easy</td>
+          <td>学习者的判断，没人否决</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>R</td><td>—</td><td class="wait">Good</td>
+          <td><b>降一档，不是降到 Hard</b>（变了）</td></tr>
+      <tr><td class="num">0</td><td>—</td><td>R</td><td>—</td><td>Hard</td><td>照旧</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>—</td><td>C</td><td class="wait">Hard</td>
+          <td><b>封顶</b>，按 P7 原话（变了）</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>R</td><td>C</td><td class="wait">Hard</td>
+          <td>先降一档再封顶（变了）</td></tr>
+      <tr><td class="num">1</td><td>E</td><td>—</td><td>—</td><td>Hard</td>
+          <td>磕过就不认，照旧</td></tr>
+      <tr><td class="num">≥2</td><td>任意</td><td>任意</td><td>任意</td><td>Again</td>
+          <td>提示有下限，压不到 Again 以下</td></tr>
+    </table>
+    </div>
+    <p><b>32 条里只有 3 条变了</b>，全在 <code>easy</code> 与两个上限的组合上，其余 29 条一字未动——
+    这正是想要的形状：动的是那个洞，没有顺手改别的。
+    <code>verify_phase3</code> 重跑 <b>44 项全过、0 失败</b>，
+    其中 1.4b（Easy 只由你自己标、磕过就不认）与 3.4（封顶真的把评级压下来）都在改动范围内，都仍然成立。
+    收尾查过：<code>running</code> 批次 0、探针残留 0、停在 <code>annotating</code> 的文章 0、无残留进程。</p>
 
     <h3>下一步</h3>
     <div class="nots">
@@ -910,6 +954,8 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <span>把 <code>swift-fsrs</code> 加进 <code>Package.swift</code>，
         写一个读这个 fixture 的测试，让 CI 告诉我们两份实现对不对得上。
         <b>这一步之后才谈得上搬调度。</b></span></span></div>
+      <div class="not"><i>·</i><span><b>评级映射已经是定稿的那一版</b>
+        <span>Swift 那份要照新表实现，别照 P8 之前的行为——差别就在 <code>easy</code> 那三格。</span></span></div>
       <div class="not"><i>·</i><span><b><code>refactor</code> 分支已登记进 CI</b>
         <span><code>client.yml</code> 与 <code>app.yml</code> 都加了。
         首次推送两个工作流都跑了、都绿——<b>验过触发确实生效</b>，
