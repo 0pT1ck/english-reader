@@ -79,8 +79,19 @@ final class ReviewModel {
     private(set) var step: Step = .asking
     private(set) var asked: Components.Schemas.SentenceCard?
     private(set) var hint: Hint?
-    /// 这道题开过提示没有。**开了就是成绩**——服务端据此把评级封顶到 Hard。
+    /// 这道题开过提示没有。**开了就是成绩**——服务端据此把评级降一档。
     private(set) var revealed = 0
+
+    /// 这一轮你说过「太简单了」没有。
+    ///
+    /// **它是学习者的判断，系统从不推断。** FSRS 把「我会了」和「这太简单」分开，
+    /// 而分开它们要的是「多快、多确定」这类度量，这个项目不收集；把每次干净通过都
+    /// 判成简单，正是当年间隔跑成 8→66→180 的原因。
+    ///
+    /// **放在 `···` 菜单里，不放在作答那一排按钮里**（2026-09-17 用户定）：
+    /// 它要的是「我确实是特意点它的」，而三个并排的按钮做不到这一点。
+    /// P7 决定 22 留了那个菜单、P8 填了一项，这是第二项。
+    private(set) var claimedEasy = false
 
     private let draw = ReviewDraw()
 
@@ -204,6 +215,7 @@ final class ReviewModel {
         )
         step = .asking
         revealed = 0
+        claimedEasy = false
         hint = nil
         asked = nil
         if let id = current, let card = cards[id], let state = states[id] {
@@ -272,6 +284,29 @@ final class ReviewModel {
         return false
     }
 
+    /// 点「太简单了」。
+    ///
+    /// **只在这一轮一次没错时才给点**：在磕过之后说「太简单」不是关于任何事情的
+    /// 断言，而 Core 与服务端都会当场把这个声明撤回（`ReviewItemState.applying`
+    /// 里那句 `&& next.misses == 0`）。一个点了会被静默撤回的菜单项，
+    /// 比一个点不动的菜单项难查得多——所以这里由 `canClaimEasy` 把它关掉。
+    func claimEasy() {
+        guard canClaimEasy else { return }
+        claimedEasy = true
+    }
+
+    /// 现在能不能说「太简单了」。
+    var canClaimEasy: Bool {
+        guard let id = current, let state = states[id] else { return false }
+        return state.misses == 0 && !claimedEasy
+    }
+
+    /// 这一轮已经磕过了，所以那一项是灰的——菜单上要说得出为什么。
+    var easyWithdrawn: Bool {
+        guard let id = current, let state = states[id] else { return false }
+        return state.misses > 0
+    }
+
     /// 「这个词我已经会了，别再考」（P8 §10 第 2 条）。
     ///
     /// P7 决定 22 把 `···` 菜单留成了空壳，代价写得很清楚：**词一旦标了，
@@ -299,11 +334,19 @@ final class ReviewModel {
         guard let id = current, let state = states[id], case .revealed(let passed) = step
         else { return }
 
-        let answer = ReviewAnswer(passed: passed, revealed: revealed)
+        let answer = ReviewAnswer(passed: passed, revealed: revealed, easy: claimedEasy)
         states[id] = state.applying(answer, weightDecay: weightDecay)
 
+        // **事件自带条目身份，不只带 `queue_id`**（P9，phase-9.html §16）。
+        // 那个号是服务端队列表的行号，而那张表每天重建、编号天天不一样——
+        // 日志里引一个只有别处才解释得了的标识符，就不是可重放的日志：
+        // 换台设备重放它，这条作答指不到任何词。`queue_id` 照旧带着（铁律 5，
+        // 只增不减），身份是新加的那几个字段。
+        let card = cards[id]
         app.record(.answered(queueId: id, passed: passed, revealed: revealed,
-                             sentenceId: asked?.id))
+                             sentenceId: asked?.id, easy: claimedEasy,
+                             itemType: card?.item_type, itemKey: card?.item_key,
+                             senseId: card?.sense_id))
 
         // 两张卡的数字跟着本地状态走，不等服务端回话——离线也要对。
         if states[id]?.done == true, let name = cards[id]?.bucket {

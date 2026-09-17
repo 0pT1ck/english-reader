@@ -77,9 +77,27 @@ extension OutboxEntry {
                               "sense_id": .int(senseId)])
     }
 
-    /// One review answer. `queueId` is today's queue row, **not a sense id**.
+    /// One review answer.
+    ///
+    /// **`queueId` is today's queue row, not a sense id** — and from P9 it is no
+    /// longer enough on its own, so the item's identity travels with it.
+    ///
+    /// The queue row is a number in a table on the server that is rebuilt every
+    /// morning, so last year's row 7 and this year's row 7 are different words.
+    /// That was fine while the server owned the ledger and the client only
+    /// posted to it. P9 makes the event log the device's first copy and derives
+    /// every state from replaying it — and **a log that refers to something only
+    /// another party can resolve is not a replayable log**: restore onto a new
+    /// device and every answer points at nothing.
+    ///
+    /// So `itemType` / `itemKey` / `senseId` are added, and `queueId` stays
+    /// (铁律 5 — add, never remove, and the server still keys on it today).
+    /// Same shape as 「内容 id 发出去就不许变」: no identifier in the log that
+    /// needs someone else to explain it.
     public static func answered(queueId: Int, passed: Bool, revealed: Int = 0,
-                                sentenceId: Int? = nil, easy: Bool = false) -> OutboxEntry {
+                                sentenceId: Int? = nil, easy: Bool = false,
+                                itemType: String? = nil, itemKey: String? = nil,
+                                senseId: Int? = nil) -> OutboxEntry {
         var payload: [String: JSONValue] = [
             "queue_id": .int(queueId),
             "passed": .bool(passed),
@@ -87,6 +105,9 @@ extension OutboxEntry {
             "easy": .bool(easy),
         ]
         if let sentenceId { payload["sentence_id"] = .int(sentenceId) }
+        if let itemType { payload["item_type"] = .string(itemType) }
+        if let itemKey { payload["item_key"] = .string(itemKey) }
+        if let senseId { payload["sense_id"] = .int(senseId) }
         return OutboxEntry(kind: .answer, payload: payload)
     }
 
