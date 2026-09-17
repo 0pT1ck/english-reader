@@ -222,12 +222,10 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
     item_key, sense_id = payload["item_key"], int(payload["sense_id"])
-    sense = senses.sense_by_id(sense_id) if hasattr(senses, "sense_by_id") else None
-    if sense is None:
-        row = get_connection("content").execute(
-            "SELECT headword, pos, concept_en, gloss_zh FROM senses WHERE id = ?", (sense_id,)
-        ).fetchone()
-        sense = dict(row) if row else None
+    # `sense_by_id` 2026-09-17 真的做出来了（P9 §8），所以那个 `hasattr` 的
+    # 预留可以撤了。它**退休的义项也找得到**——造例句这一路正是会遇到旧义项 id
+    # 的地方:词标记在两个月前，而义项集后来重建过。
+    sense = senses.sense_by_id(sense_id)
     if not sense:
         return jobs.ItemOutcome(result="义项不存在，跳过")
 

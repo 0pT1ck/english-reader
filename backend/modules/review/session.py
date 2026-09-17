@@ -445,10 +445,13 @@ def sense_of(sense_id: int) -> dict[str, Any] | None:
     """One sense, as a card shows it. Public: routes renders it too."""
     if not sense_id:
         return None
-    row = get_connection("content").execute(
-        "SELECT id, headword, ordinal, pos, concept_en, gloss_zh, exam_frequency"
-        " FROM senses WHERE id = ?", (sense_id,)
-    ).fetchone()
+    # **退休的义项也要找得到**（P9 §8）。一条两个月前的标记可能指着一个已经
+    # 退休的义项——「退休而不是删除」换来的正是这个性质:它仍然指得到一个
+    # 说得出话的义项，而不是指到空气，卡片因此不会突然变成一张空白。
+    # 界面上列义项的地方照旧只列现行的（那些走 `senses_of`）。
+    from backend.modules.senses import repository as senses_repo
+
+    row = senses_repo.sense_by_id(sense_id)
     if row is None:
         return None
     import json

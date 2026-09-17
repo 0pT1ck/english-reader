@@ -12,7 +12,99 @@ describing a different word.
 
 from __future__ import annotations
 
+import sqlite3
+from typing import Any
+
 from backend.core.db import Migration
+from backend.core.logging import get_logger
+
+log = get_logger("senses.schema")
+
+
+def _stable_sense_keys(conn: sqlite3.Connection) -> None:
+    """给义项一个稳定键，把「删了重插」换成「按键更新 ＋ 退休」。
+
+    **P9 §8。** 在这之前义项 id 是自增代理键而 ``store_senses`` 删了重插，
+    于是任何一次重建都会让 id 全变——而九万三千条语境标注指着那些 id。
+    键的理由与边界见 :mod:`backend.modules.senses.keys`。
+
+    **退休的行搬到另一张表，不是在原表里打标记。**
+    有二十处代码在读 ``senses``，要它们全都记得加一句「排除退休的」是不现实的，
+    而漏一处的后果是一个已经退休的义项出现在界面上——**静默的**。
+    搬出去之后，那二十处自然只看得见活的，一处都不用改；
+    只有按 id 反查的那两处（复习卡片、例句）要加一层回落，
+    而它们是数得出来的。
+
+    **`sense_key_map` 永不删除。** 13,741 行留着不费什么，而有了它，
+    一台离线设备揣着旧 id 回来也翻译得出来——这是多设备逼出来的要求，
+    不是可选项。
+    """
+    from backend.modules.senses import keys as sense_keys
+
+    conn.execute("ALTER TABLE senses ADD COLUMN sense_key TEXT")
+
+    # 退休表：和 senses 同形，外加退休时间。`CREATE TABLE ... AS SELECT` 拿到
+    # 列而不拿到约束，正合适——退休行不该受 UNIQUE(headword, ordinal) 约束，
+    # 同一个词退休过两条 #1 是完全正常的。
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS senses_retired AS"
+        " SELECT *, NULL AS retired_at, NULL AS retired_reason FROM senses WHERE 0"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_senses_retired_id ON senses_retired (id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_senses_retired_key ON senses_retired (sense_key)"
+    )
+
+    # 键的映射表。**永不删除**，所以它没有 DELETE 的路径，只有 INSERT。
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sense_key_map (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_key    TEXT    NOT NULL,
+            to_key      TEXT,               -- NULL ＝ 这个义项没有对应的新义项
+            decided_at  TEXT    NOT NULL,
+            reason      TEXT,
+            model       TEXT,
+            UNIQUE (from_key, to_key)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sense_key_map_from ON sense_key_map (from_key)"
+    )
+
+    # 回填。按词分组算，因为撞键的后缀是在一个词的范围内定的。
+    rows = conn.execute(
+        "SELECT id, headword, ordinal, concept_en FROM senses"
+        " ORDER BY headword, ordinal, id"
+    ).fetchall()
+    grouped: dict[str, list[Any]] = {}
+    for row in rows:
+        grouped.setdefault(row["headword"], []).append(row)
+
+    collisions = 0
+    for headword, senses in grouped.items():
+        assigned = sense_keys.assign_keys(
+            headword, [row["concept_en"] for row in senses]
+        )
+        for row, key in zip(senses, assigned):
+            if key.count(":") > 1:
+                collisions += 1
+            conn.execute(
+                "UPDATE senses SET sense_key = ? WHERE id = ?", (key, row["id"])
+            )
+
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_senses_key ON senses (sense_key)"
+    )
+    log.info(
+        "senses.keys.backfilled",
+        f"给 {len(rows)} 条义项算了稳定键，其中 {collisions} 条概念重复、加了后缀",
+        senses=len(rows), collisions=collisions,
+    )
+
 
 MIGRATIONS = [
     Migration(
@@ -138,5 +230,11 @@ MIGRATIONS = [
         -- Why the model excluded the senses it left out, in its own words.
         ALTER TABLE senses ADD COLUMN source TEXT;
         """,
+    ),
+    Migration(
+        version=4,
+        name="stable sense keys, a retirement table, and a permanent key map",
+        database="content",
+        apply=_stable_sense_keys,
     ),
 ]
