@@ -1182,6 +1182,33 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       否则标了一个词、待发显示 0，而它其实还没送出去。
     </div>
 
+    <h3>⑩ 「读完」事件带上词表 — 做完。客户端这一侧到此为止</h3>
+    <p><code>ERCore/Encounters.swift</code> ＋ 投影那一半改完。
+    词表在 Core 里算（<code>Encounters.met(in:)</code>），**逐条镜像服务端读完时那句
+    SQL**，载入文章时算一次，读完那一刻塞进事件。</p>
+    <p><b>两条只按 kind 过滤就会错的：</b>
+    <br>· <code>kind == "content"</code> <b>或 <code>is_target</code></b>——后半句不能省。
+    目标词可能落在一个被 spaCy 标成 PROPN 的 token 上（要的是 <code>latin</code>，
+    模型写了 <code>Latin</code>），而「它是这篇要教的词」是更强的信号。
+    服务端那段注释写着：<b>只按 kind 过滤，二十五个目标词里会静默丢一个。</b>
+    <br>· 按 <code>(headword, sense_id ?? 0)</code> 分组，<b>NULL 折成 0</b>。
+    这只在文章标注完时安全，而客户端拿到的只会是 <code>ready</code> 的。</p>
+    <div class="callout">
+      <b>重放这一半我原先写错了两条，这次照着服务端改对了。</b>
+      <br>① <b>加的是出现次数，不是加一</b>——服务端那句是 <code>COUNT(*) AS n</code>。
+      <br>② <b>读完不为没标过的词建记录</b>。服务端是
+      <code>if key in known: touch_state(...)</code>——遇见次数是挂在一条**已有**
+      记录上的计数，而记录是标记那一刻建的。少了这一条，一篇文章会为它的
+      每个实词造一行，<b>而那些词你并没有在学</b>。
+      <br><br>
+      <b>没有词表的事件就是没有。</b> 旧客户端发的 <code>article.finished</code>
+      不带它，重放那条只算「读完一篇」、不动任何遇见次数——<b>不去猜</b>。
+    </div>
+    <p><b>服务端那边一行没改，它照旧自己数。</b> 这不冲突:
+    <code>met</code> 是给**设备的重放**用的。而「服务端还在记遇见次数」这件事
+    本身就违反那条线（它是学习记录，不是内容）——那是 §11 模块劈开时要拆掉的，
+    不是这一步。</p>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1203,9 +1230,6 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="nots">
       <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
         <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>「读完」事件带上词表</b>
-        <span>§9 定的那条。现在 <code>article.finished</code> 不带 <code>met</code>，
-        所以投影里的遇见次数还是 0。</span></span></div>
       <div class="not"><i>·</i><span><b>双向同步与服务端序号</b>
         <span>§6 的三条细则。服务端要新增「收事件并发序号」与「拉某序号之后的事件」。</span></span></div>
       <div class="not"><i>·</i><span><b>进度报告落到服务端</b>
@@ -1222,12 +1246,12 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">9</div>
-        <div class="fig-key">做完的活（①–⑨）</div></div>
+      <div class="fig"><div class="fig-val">10</div>
+        <div class="fig-key">做完的活（①–⑩），客户端那一侧齐了</div></div>
       <div class="fig"><div class="fig-val">4</div>
         <div class="fig-key">路上撞到的、写进文档的教训</div></div>
-      <div class="fig"><div class="fig-val">93</div>
-        <div class="fig-key">CI 上的 Core 测试（原 65 ＋ 新 28）</div></div>
+      <div class="fig"><div class="fig-val">95<span>+</span></div>
+        <div class="fig-key">CI 上的 Core 测试（原 65 起）</div></div>
       <div class="fig"><div class="fig-val">44<span> / 40</span></div>
         <div class="fig-key">verify_phase3 与 phase4 仍然全过</div></div>
     </div>
