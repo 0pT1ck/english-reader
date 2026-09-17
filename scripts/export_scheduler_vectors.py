@@ -190,6 +190,33 @@ SCHEDULE_CASES: list[dict[str, Any]] = [
         "reviews": [{"misses": 0}],
     },
     {
+        "name": "同一天又答了一次：走短期那条公式",
+        "pins": "review_card 里 `days_since_last_review < 1` 那一支。"
+                "**我们的规矩是「一天是一次复习」，所以正常流程走不到这儿**——"
+                "但公式在两边都实现着，不盖住它就是留一个静默给错值的口子。",
+        "initial": {
+            "stability": 5.0, "difficulty": 5.0,
+            "fsrs_state": 2, "fsrs_step": None,
+            "due_at": "2026-01-06T00:00:00+00:00",
+            "last_review_at": "2026-01-01T00:00:00+00:00",
+            "reps": 2, "lapses": 0,
+        },
+        "reviews": [{"misses": 0, "after_days": 0}],
+    },
+    {
+        "name": "同一天又答一次但答错：短期那条对 again 不取 max",
+        "pins": "_short_term_stability 里那个 `if rating in (Hard, Good, Easy)` —— "
+                "again 不受 1.0 下限约束，所以它是唯一能让强度当场变小的路径。",
+        "initial": {
+            "stability": 5.0, "difficulty": 5.0,
+            "fsrs_state": 2, "fsrs_step": None,
+            "due_at": "2026-01-06T00:00:00+00:00",
+            "last_review_at": "2026-01-01T00:00:00+00:00",
+            "reps": 2, "lapses": 0,
+        },
+        "reviews": [{"misses": 2, "after_days": 0}],
+    },
+    {
         "name": "带着已有记忆状态的卡，隔 30 天再复习",
         "pins": "to_card / from_card 的往返：两边存的是同一组列",
         "initial": {
