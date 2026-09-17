@@ -47,19 +47,48 @@ struct ProjectionTests {
     @Test("读完只加遇见次数,一个词都不许进复习池")
     func finishingOnlyAddsEncounters() {
         let met: JSONValue = .array([
-            .object(["item_key": .string("municipal"), "sentence_id": .int(11)]),
-            .object(["item_key": .string("rigorous"), "sentence_id": .int(12)]),
+            .object(["item_key": .string("municipal"), "sense_id": .int(0), "n": .int(3)]),
+            .object(["item_key": .string("rigorous"), "sense_id": .int(0), "n": .int(1)]),
         ])
         let projection = Self.replay([
+            // 先标记，才有一条记录可以往上加——见下一条测试。
+            (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
             (.read, ["article_id": .int(480), "met": met], "2026-01-01T09:00:00+00:00"),
             (.read, ["article_id": .int(481), "met": met], "2026-01-02T09:00:00+00:00"),
         ])
-        #expect(projection.items[Self.word("municipal")]?.encounters == 2)
-        #expect(projection.items[Self.word("municipal")]?.pool == .new,
-                "读完不许改词池位置")
-        #expect(projection.items.values.allSatisfy { $0.pool == .new })
-        #expect(projection.items[Self.word("municipal")]?.introducedArticleId == 480,
-                "首次遇见记的是第一篇,不是最后一篇")
+        #expect(projection.items[Self.word("municipal")]?.encounters == 6,
+                "加的是出现次数(3)而不是加一，两篇共 6")
+        #expect(projection.items[Self.word("municipal")]?.pool == .reviewing,
+                "它是因为被标记才在复习池里，不是因为被读到")
+    }
+
+    /// 镜像服务端那句 `if key in known: touch_state(...)`：
+    /// **读完不为没标过的词建记录。** 少了这一条，一篇文章会为它的每个实词
+    /// 造一行，而那些词你并没有在学。
+    @Test("读完不为没标过的词建记录")
+    func finishingDoesNotInventRecords() {
+        let met: JSONValue = .array([
+            .object(["item_key": .string("never_marked"), "sense_id": .int(0), "n": .int(5)]),
+        ])
+        let projection = Self.replay([
+            (.read, ["article_id": .int(480), "met": met], "2026-01-01T09:00:00+00:00"),
+        ])
+        #expect(projection.items.isEmpty, "一行都不该建，实际 \(projection.items.count)")
+        #expect(projection.days["2026-01-01"]?.readArticles == 1, "但「读完一篇」要记上")
+    }
+
+    /// 旧客户端发的 `article.finished` 不带词表。
+    /// **那就是没有——不去猜。**
+    @Test("没有词表的读完事件只算一篇，不动任何遇见次数")
+    func aReadEventWithoutAWordListChangesNoCounts() {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
+             "2026-01-01T08:00:00+00:00"),
+            (.read, ["article_id": .int(480)], "2026-01-01T09:00:00+00:00"),
+        ])
+        #expect(projection.items[Self.word("municipal")]?.encounters == 0)
+        #expect(projection.days["2026-01-01"]?.readArticles == 1)
     }
 
     /// 跨 Phase 不变量:**进复习队列只有一条路——你自己标记。**
@@ -82,11 +111,14 @@ struct ProjectionTests {
     /// (它确实被遇见过)。
     @Test("撤销退回 new,而遇见次数和记忆状态都保留")
     func unmarkingKeepsWhatReallyHappened() throws {
-        let met: JSONValue = .array([.object(["item_key": .string("municipal")])])
+        // 先标记再读完:遇见次数是挂在一条已有记录上的计数（镜像 `touch_state`）。
+        let met: JSONValue = .array([
+            .object(["item_key": .string("municipal"), "sense_id": .int(0), "n": .int(1)]),
+        ])
         let projection = Self.replay([
-            (.read, ["article_id": .int(480), "met": met], "2026-01-01T09:00:00+00:00"),
             (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
-             "2026-01-01T09:10:00+00:00"),
+             "2026-01-01T09:00:00+00:00"),
+            (.read, ["article_id": .int(480), "met": met], "2026-01-01T09:10:00+00:00"),
             (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
              "2026-01-02T09:00:00+00:00"),
             (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
@@ -204,7 +236,9 @@ struct ProjectionTests {
 
     @Test("词池快照只含学过的,而且 new 一个都不带")
     func snapshotCarriesOnlyWhatIsBeingLearned() {
-        let met: JSONValue = .array([.object(["item_key": .string("seen_only")])])
+        let met: JSONValue = .array([
+            .object(["item_key": .string("seen_only"), "sense_id": .int(0), "n": .int(2)]),
+        ])
         let projection = Self.replay([
             (.read, ["article_id": .int(1), "met": met], "2026-01-01T09:00:00+00:00"),
             (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
@@ -290,7 +324,9 @@ struct ProjectionTests {
 
     @Test("new 与 graduated 都不进队列")
     func onlyReviewingItemsCome() {
-        let met: JSONValue = .array([.object(["item_key": .string("seen_only")])])
+        let met: JSONValue = .array([
+            .object(["item_key": .string("seen_only"), "sense_id": .int(0), "n": .int(1)]),
+        ])
         let projection = Self.replay([
             (.read, ["article_id": .int(1), "met": met], "2026-01-05T07:00:00+00:00"),
             (.marked, ["item_key": .string("dropped"), "kind": .string("unknown")],

@@ -235,7 +235,8 @@ func finish(_ id: Int) async throws {
     let article = try await engine.article(id)
     let sentences = article.sentences?.count ?? 0
     // 记账只在读完这一刻发生，而且只发生一次——服务端也会拒绝第二次。
-    try record(.articleFinished(id, sentenceSeq: max(0, sentences - 1)))
+    try record(.articleFinished(id, sentenceSeq: max(0, sentences - 1),
+                                met: Encounters.met(in: article)))
     print(Ink.green("读完 #\(id)")
         + Ink.dim("——遇见次数 +1，词池位置不动；标记过的才进复习队列"))
 }
@@ -554,7 +555,8 @@ func walk() async throws {
         print("\n\(Ink.bold("⑤ 标记一个生词"))：\(headword)（义项 \(senseId)）")
     }
 
-    try record(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1))
+    try record(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1,
+                                met: Encounters.met(in: first)))
     print("\n\(Ink.bold("⑥ 读完"))——记账只在这一刻发生")
 
     // ⑦⑧ 复习与拼写。**这一半原先不在 walk 里**——它走到读完就停了，于是状态机、

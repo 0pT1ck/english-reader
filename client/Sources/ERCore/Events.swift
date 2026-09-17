@@ -31,10 +31,21 @@ extension OutboxEntry {
     /// an encounter; opening an article, or having its words turn up in one you
     /// never read, changes nothing. The server refuses a second finish, so
     /// replaying this from the outbox is safe.
-    public static func articleFinished(_ articleId: Int, sentenceSeq: Int) -> OutboxEntry {
-        OutboxEntry(kind: .reading, eventType: "article.finished",
-                    payload: ["article_id": .int(articleId),
-                              "sentence_seq": .int(sentenceSeq)])
+    /// - Parameter met: **这篇里遇见了哪些词、各几次**（P9 §9）。
+    ///   带着走而不是让重放去查文章:重放因此不需要文章内容，
+    ///   而且更忠实——文章将来可能被重新分析过，而「我在那一句遇见过它」
+    ///   是一件历史事实。用 `Encounters.met(in:)` 算出来，别手搓。
+    ///   传空数组＝这条事件来自一个还不带词表的旧客户端；
+    ///   服务端照旧自己数，所以老路径不受影响（铁律 5）。
+    public static func articleFinished(_ articleId: Int, sentenceSeq: Int,
+                                       met: [Encounters.Met] = []) -> OutboxEntry {
+        var payload: [String: JSONValue] = [
+            "article_id": .int(articleId),
+            "sentence_seq": .int(sentenceSeq),
+        ]
+        if !met.isEmpty { payload["met"] = .array(met.map(\.wire)) }
+        return OutboxEntry(kind: .reading, eventType: "article.finished",
+                           payload: payload)
     }
 
     public static func wordTapped(_ headword: String, articleId: Int) -> OutboxEntry {

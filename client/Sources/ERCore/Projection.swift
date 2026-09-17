@@ -170,13 +170,14 @@ public struct Projection: Sendable, Equatable {
                 record.readArticles += 1
                 projection.days[day] = record
                 for met in Self.met(in: event.payload) {
-                    var item = projection.items[met.key] ?? Item()
-                    item.encounters += 1
-                    if item.introducedAt == nil {
-                        item.introducedAt = event.occurredAt
-                        item.introducedArticleId = met.articleId
-                        item.introducedSentenceId = met.sentenceId
-                    }
+                    // **只给已经有记录的条目加,不为没标过的词建行。**
+                    // 镜像服务端那句 `if key in known: touch_state(...)`——
+                    // 遇见记录是挂在一条已有记录上的计数，而记录是标记那一刻建的。
+                    // 少了这一条，一篇文章会为它的每个实词造一行,
+                    // 而那些词你并没有在学。
+                    guard var item = projection.items[met.key] else { continue }
+                    // **加的是出现次数,不是加一**——同服务端那句 `COUNT(*) AS n`。
+                    item.encounters += met.count
                     projection.items[met.key] = item
                 }
 
@@ -304,8 +305,7 @@ public struct Projection: Sendable, Equatable {
 
     struct Met {
         var key: Key
-        var articleId: Int?
-        var sentenceId: Int?
+        var count: Int
     }
 
     /// 「读完」事件自带的词表(§9)。
@@ -313,15 +313,17 @@ public struct Projection: Sendable, Equatable {
     /// **自带而不是事后从文章里推**,两个理由:重放不需要文章内容(不然换台设备
     /// 恢复要把读过的全下回来);而且更忠实——文章将来可能被重新分析过,
     /// 而「我在第 480 篇第 12 句遇见过它」是一件历史事实。
+    ///
+    /// 词表由 `Encounters.met(in:)` 算出来,它逐条镜像服务端那句 SQL。
+    /// **没有 `met` 的事件就是没有**:那是一条来自还不带词表的旧客户端的事件,
+    /// 重放它只算「读完一篇」,不动任何遇见次数——**而不是去猜**。
     static func met(in payload: [String: JSONValue]) -> [Met] {
         guard case .array(let list)? = payload["met"] else { return [] }
-        let articleId = int(payload["article_id"])
         return list.compactMap { entry in
             guard case .object(let fields) = entry, let key = key(from: fields) else {
                 return nil
             }
-            return Met(key: key, articleId: articleId,
-                       sentenceId: int(fields["sentence_id"]))
+            return Met(key: key, count: int(fields["n"]) ?? 1)
         }
     }
 
