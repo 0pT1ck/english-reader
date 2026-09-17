@@ -4,7 +4,10 @@ name: 客户端内核
 # 截图、XCUITest、TestFlight 全部属于下一个 Phase。
 on:
   push:
-    branches: [main, ios]
+    # `refactor` 是 P9 的分支（phase-9.html §14 U6）。**必须在这里登记**：
+    # 本机不装 Swift，`swift test` 只在 CI 上跑，而 CI 只看得到它被告知的分支——
+    # 不加这一行，整个 P9 期间 Core 一次都验不到，而且是静默的（坑 §6.6 那个形状）。
+    branches: [main, ios, refactor]
   pull_request:
   workflow_dispatch:
 
