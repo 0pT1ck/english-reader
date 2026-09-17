@@ -11,7 +11,11 @@ import Foundation
 /// The second reason is smaller and still worth having: a core with no network
 /// needs no network stub. Every test in this package runs against bytes.
 public struct HTTPRequest: Sendable, Equatable {
-    public enum Method: String, Sendable { case get = "GET", post = "POST" }
+    /// **加 case 不用动任何实现**:两个传输都用 `method.rawValue` 设方法。
+    /// `put` 是 P9 §7 加的——词池快照是**替换**，说对了语义之后重试天然安全。
+    public enum Method: String, Sendable {
+        case get = "GET", post = "POST", put = "PUT"
+    }
 
     public let method: Method
     /// Path and query, relative to the server's base. Never a full URL — the

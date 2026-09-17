@@ -172,6 +172,26 @@ final class AppModel {
         }
     }
 
+    /// 把词池快照报上去。
+    ///
+    /// **失败不作声，下一趟再来**——同发件箱那条纪律。快照是可重算的值，
+    /// 报晚一点的后果是生成那一轮可能把一个在学的词当生词，
+    /// 而那比「把界面卡在一个报不上去的请求上」轻得多。日志里要说，
+    /// 因为「服务端手上那份是什么时候的」只有这里查得到。
+    private func reportPool(_ engine: SyncEngine) async {
+        let entries = projection.poolSnapshot()
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        do {
+            let count = try await engine.reportPool(entries, reportedAt: stamp)
+            log?.write(.info, "progress.pool.reported", "报了词池快照",
+                       fields: ["entries": String(count)])
+        } catch {
+            log?.write(.warn, "progress.pool.report.failed", "词池快照没报上去",
+                       fields: ["entries": String(entries.count),
+                                "error": error.localizedDescription])
+        }
+    }
+
     /// 重放一次日志。记一条事件之后、以及启动时各一次。
     ///
     /// **算不了排期就不算，但照样重放。** 没有 `schedulerSettings` 时
@@ -282,6 +302,13 @@ final class AppModel {
                 log?.write(.info, "sync.pulled", "收下了别处做的事",
                            fields: ["adopted": String(adopted)])
                 refreshProjection()
+            }
+            // **词池变了才报**（P9 §7）。词池是事件的函数，事件没动它就没动——
+            // 所以只在这一趟真的推上去或拉下来了东西时报一次。
+            // 每次 drain 都报也不贵（实测 30 条），但那会让日志里
+            // 「什么时候变过」看不出来。
+            if report.landed > 0 || adopted > 0 {
+                await reportPool(engine)
             }
             lastSync = report
             refreshPendingCount()

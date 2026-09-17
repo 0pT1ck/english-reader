@@ -351,6 +351,46 @@ public actor SyncEngine {
             through: wire.through, more: wire.more)
     }
 
+    /// 把词池快照报上去（P9 §7）。
+    ///
+    /// **这就是那份「进度报告」本身**，不是从日志里推出来的副产品。用户那句话
+    /// 原话是「学习完把进度汇报给服务器，服务器根据进度继续生文」——
+    /// 服务端拿它做两件事:避开已经在学的词，以及保证每篇有一定数量的生词。
+    ///
+    /// **只报非 `new` 的。** 服务端要的是「哪些词你已经在学或学过」，
+    /// `new` 是补集——而词典里有 318,207 条，非 new 的实测 30 条。
+    ///
+    /// **PUT，因为它是替换。** 同一份报两遍和报一遍结果一样，所以重试天然安全。
+    @discardableResult
+    public func reportPool(_ entries: [Projection.PoolEntry],
+                           reportedAt: String) async throws -> Int {
+        struct Body: Encodable {
+            struct Entry: Encodable {
+                let item_type: String
+                let item_key: String
+                let sense_id: Int
+                let pool: String
+            }
+            let reported_at: String
+            let entries: [Entry]
+        }
+        let body = Body(
+            reported_at: reportedAt,
+            entries: entries.map {
+                Body.Entry(item_type: $0.itemType, item_key: $0.key,
+                           sense_id: $0.senseId, pool: $0.pool.rawValue)
+            })
+        let response = try await transport.send(HTTPRequest(
+            method: .put, path: "/v1/client/progress/pool",
+            body: try JSONEncoder.contract.encode(body)))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return entries.count
+    }
+
     public func library(shelf: String = "fresh", source: String? = nil)
         async throws -> Components.Schemas.LibraryResponse {
         var path = "/v1/client/library?shelf=\(shelf)"

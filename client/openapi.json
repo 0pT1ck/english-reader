@@ -6,6 +6,66 @@
     "description": "只含 /v1/client。由 scripts/export_contract.py 导出，不要手改。\n\n**只增不减**（架构铁律 5）：可以加字段，不能删字段或改字段含义。侧载安装的客户端更新滞后，手机上大概率长期跑着旧版本。\n\n**capabilities 区分「没数据」和「没实现」**：一个 null 字段本身是歧义的，`root_known: null` 可能是「这个词没有词根」，也可能是「水平估计还没做」，而客户端要把这两种画成不同的样子。\n\n**幂等键重复上报算正常，不算错误**：离线客户端会把拿不准的都重发一遍。\n\n**今日包不含真题**：真题走 /library?source=cet4|cet6|kaoyan。"
   },
   "paths": {
+    "/v1/client/progress/pool": {
+      "put": {
+        "tags": [
+          "client:progress"
+        ],
+        "summary": "上报词池快照",
+        "description": "整份替换这个学习者的词池快照。\n\n**PUT 而不是 POST**：它是替换，不是追加。语义上说对了，重试也就天然安全——\n同一份快照报两遍和报一遍结果一样。",
+        "operationId": "report_pool_v1_client_progress_pool_put",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PoolSnapshotIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoolSnapshotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/client/library": {
       "get": {
         "tags": [
@@ -2148,6 +2208,95 @@
         ],
         "title": "Phrase",
         "description": "A phrase is an item in its own right.\n\nMarking `account for` records nothing against `account`: not knowing the\nphrase says nothing about whether the word inside it is known, and letting\none mark stand for both would drop a word the reader understands perfectly\nwell into the review queue.\n\nThe span is sent; how to show it is the client's business — but 跨 Phase\n不变量 fixes one half of that: selection and marking happen to the phrase as\na whole, on every client."
+      },
+      "PoolEntryIn": {
+        "properties": {
+          "item_type": {
+            "type": "string",
+            "title": "Item Type",
+            "description": "word 或 phrase",
+            "default": "word"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "sense_id": {
+            "type": "integer",
+            "title": "Sense Id",
+            "description": "词组带 0——它是一个整体",
+            "default": 0
+          },
+          "pool": {
+            "type": "string",
+            "title": "Pool",
+            "description": "new | reviewing | graduated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_key",
+          "pool"
+        ],
+        "title": "PoolEntryIn"
+      },
+      "PoolSnapshotIn": {
+        "properties": {
+          "reported_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reported At",
+            "description": "设备上算出这份快照的时刻。**服务端不用它做判断**，只是存着——将来做「长期不上线」的退化策略时要有东西可依据"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/PoolEntryIn"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entries"
+        ],
+        "title": "PoolSnapshotIn",
+        "description": "整份词池。**只带非 `new` 的那些就够了**，但带全了也接受。\n\n服务端要的是「哪些词你已经在学或学过」，`new` 是补集。客户端只报非 new 的，\n省掉绝大部分条目——实测非 new 的有 30 条，而词典里有 318,207 条。"
+      },
+      "PoolSnapshotResponse": {
+        "properties": {
+          "stored": {
+            "type": "integer",
+            "title": "Stored",
+            "description": "收下了多少条"
+          },
+          "reviewing": {
+            "type": "integer",
+            "title": "Reviewing"
+          },
+          "graduated": {
+            "type": "integer",
+            "title": "Graduated"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stored",
+          "reviewing",
+          "graduated",
+          "received_at"
+        ],
+        "title": "PoolSnapshotResponse"
       },
       "Preparing": {
         "properties": {
