@@ -90,8 +90,16 @@ public struct Projection: Sendable, Equatable {
 
     /// 当天那一轮走到哪儿了。**只保留最近一天的**——跨天就是新的一轮
     /// (P3 决定 7:解锁每一轮重新挣)。
+    ///
+    /// **桶和封顶在这一轮开始时就定死,之后不再算。** 镜像服务端:队列行是
+    /// `enqueue` 那一刻定好 `bucket` 与 `capped` 的,做完只是打上 `done_at`。
+    /// 这一条是 2026-09-17 被测试逼出来的——原先每次都现算,而一轮做完之后
+    /// 条目有了排期,现算的结果就变成「还没到点」,**于是那张卡从今天的队列里
+    /// 消失了,「已复习」那个数也跟着丢**。而那正是这个 Phase 要修的症状本身。
     public struct Round: Sendable, Equatable {
         public var day: String
+        public var bucket: Bucket
+        public var capped: Bool
         public var state: ReviewItemState
     }
 
@@ -178,10 +186,18 @@ public struct Projection: Sendable, Equatable {
                 record.answered += 1
                 projection.days[day] = record
 
-                // 跨天了就是新的一轮。
-                var round = projection.rounds[key]?.day == day
-                    ? projection.rounds[key]!.state
-                    : ReviewItemState()
+                // 跨天了就是新的一轮。**新一轮开始时定桶与封顶**,
+                // 用的是这一刻的条目状态——之后它会因为有了排期而变。
+                let existing = projection.rounds[key]?.day == day
+                    ? projection.rounds[key]
+                    : nil
+                let before = projection.items[key] ?? Item()
+                let bucket = existing?.bucket
+                    ?? (before.memory == nil
+                        ? (before.lastMarkedDay == day ? Bucket.today : .due)
+                        : .due)
+                let capped = existing?.capped ?? before.capped(on: day)
+                var round = existing?.state ?? ReviewItemState()
                 guard round.acceptsAnswer else { break }
 
                 let answer = ReviewAnswer(
@@ -190,7 +206,8 @@ public struct Projection: Sendable, Equatable {
                     easy: Self.bool(event.payload["easy"]) ?? false
                 )
                 round = round.applying(answer, weightDecay: weightDecay)
-                projection.rounds[key] = Round(day: day, state: round)
+                projection.rounds[key] = Round(day: day, bucket: bucket,
+                                               capped: capped, state: round)
 
                 guard round.done else { break }
                 // 一轮走完,交给调度器。**评级看的是这一天失误了几次**,不是问了几次。
@@ -204,7 +221,9 @@ public struct Projection: Sendable, Equatable {
                     state: item.memory, misses: round.misses, now: at,
                     easy: round.easy,
                     revealed: Self.int(event.payload["revealed"]) ?? 0,
-                    capped: item.capped(on: day),
+                    // 用这一轮开始时定下的那个,不是现算的——现算的话
+                    // 在同一次调用里就已经不对了。
+                    capped: capped,
                     settings: settings
                 ) {
                     item.memory = outcome.state
@@ -363,6 +382,14 @@ extension Projection {
     public func todayQueue(day: String, now: Date) -> [QueueEntry] {
         var entries: [QueueEntry] = []
         for (key, item) in items where item.pool == .reviewing {
+            // **今天已经问过的，桶和封顶按那一轮开始时定的来。**
+            // 它答完之后会有一个未来的到期时间，而那不该让它从今天的名单上消失——
+            // 服务端那边它是一行带着 `done_at` 的队列行，照样在今天的名单里。
+            if let round = rounds[key], round.day == day {
+                entries.append(QueueEntry(key: key, bucket: round.bucket,
+                                          capped: round.capped, state: round.state))
+                continue
+            }
             let bucket: Bucket
             if let due = item.memory?.dueAt {
                 // 还没到点的不进来。**这是唯一一条会把条目挡在外面的规则**，
@@ -372,9 +399,9 @@ extension Projection {
             } else {
                 bucket = item.lastMarkedDay == day ? .today : .due
             }
-            let round = rounds[key]?.day == day ? rounds[key]!.state : ReviewItemState()
             entries.append(QueueEntry(key: key, bucket: bucket,
-                                      capped: item.capped(on: day), state: round))
+                                      capped: item.capped(on: day),
+                                      state: ReviewItemState()))
         }
         // 稳定的顺序，抽题才复现得出来（抽的随机数由调用方注入）。
         return entries.sorted {

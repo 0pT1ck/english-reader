@@ -362,4 +362,27 @@ struct ProjectionTests {
                 "解锁每一轮重新挣（P3 决定 7），昨天挣到的不带到今天")
         #expect(queue.first?.state.asks == 0)
     }
+
+    /// **这一条是被上面那条逼出来的守卫。** 一张卡答完之后有了未来的到期时间，
+    /// 而它不该因此从今天的名单上消失——服务端那边它是一行带着 `done_at`
+    /// 的队列行，照样在名单里。桶和封顶在入队那一刻就定死。
+    @Test("答完的卡留在今天的名单上，不因为有了排期而消失")
+    func aFinishedCardStaysOnTodaysList() throws {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("municipal"), "kind": .string("fuzzy")],
+             "2026-01-05T08:00:00+00:00"),
+            (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
+             "2026-01-05T09:00:00+00:00"),
+            (.answered, ["item_key": .string("municipal"), "passed": .bool(true)],
+             "2026-01-05T09:01:00+00:00"),
+        ])
+        let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
+        #expect(queue.count == 1, "答完了也还在名单上，实际 \(queue.count) 条")
+        let entry = try #require(queue.first)
+        #expect(entry.state.done == true)
+        #expect(entry.bucket == .today, "桶是入队那一刻定的，不是现算的")
+        #expect(entry.capped == true, "封顶也是那一刻定的")
+        #expect(projection.items[Self.word("municipal")]?.memory?.dueAt != nil,
+                "它确实已经排到将来了——这正是会让现算出错的那个条件")
+    }
 }
