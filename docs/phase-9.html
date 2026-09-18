@@ -1330,6 +1330,49 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <b>§11 模块劈开 → §12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>。
     §10 从「中间那一步」挪到「倒数第二步」，而它要的前提正是 §12 给的。</p>
 
+    <h3>⑯ 把 key 转回 r5s — <b>而这一下把网补全了</b>（2026-09-18）</h3>
+    <p>用户定的：把阿里云那把 gemini 的 key 转回 r5s，<b>原有那几把一律不要了</b>。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>做了什么</th><th>结果</th></tr>
+      <tr><td>转 key</td><td><code>api_keys</code> 从 6 个条目变成 1 个（只剩 <code>gemini</code>）。
+        指纹与长度与阿里云那把完全一致。<b>全程没有把 key 打印出来</b>——
+        从 ssh 直接管道进本地脚本，只报长度与 sha256 前八位</td></tr>
+      <tr><td>删掉的</td><td>中转站那五个共用的条目（<code>1</code>／<code>dsflash</code>／
+        <code>mimo</code>／<code>judge</code>／<code>dsflash2</code>，402）与 <code>shuai</code>
+        （余额 ¥0.035，403）。<b>提供商的行留着但 <code>enabled=0</code></b>——
+        行留着是为了哪天充值改得回去，而让一个没有 key 的提供商显示成「启用」
+        是在让控制台说假话</td></tr>
+      <tr><td>配置</td><td><code>gen_provider</code> ＋ 十个 <code>llm_provider_*</code>
+        全指向 <code>gemini</code>，它也是默认提供商</td></tr>
+      <tr><td>实测</td><td class="ok">调通，<b>4.7 秒</b>，回了 <code>ready</code></td></tr>
+    </table>
+    </div>
+    <p><b>两件我没照抄阿里云那份，都有理由：</b>
+    <br>① <b>思考开关保持 <code>off</code>（十个全是）</b>。阿里云那份是 <code>default</code>，
+    而 <code>verify_phase4</code> A5.2 守的是「写文章那处必须是关的」——照抄会让它天天报红；
+    而那个网关本来就忽略这个参数，关着零成本。
+    <br>② <b>r5s 的夜间备稿仍然是 <code>false</code></b>。两台各自在 04:00 生成会让
+    <code>content.db</code> 静默分叉。**现在两台都有 key 了，这条比以前更要紧**:
+    从前是「r5s 没法生成」，现在是「r5s 不去生成」。</p>
+
+    <div class="callout">
+      <b>而这一下把 ⑮ 那个理由拆掉了:网现在是全的。</b>
+      <br><br>
+      r5s 调通模型之后，那一串 CLAUDE.md 标着「不是回归，别去查代码」的连锁当天就断了:
+      卡在 <code>annotating</code> 的那篇治好了（走 <code>daily._resume_unfinished</code>，
+      <b>治文章不治任务</b>），被 §4.6 掐死的判词组任务补跑完了。
+      <br><br>
+      <b>全套重跑，206 项自动检查、零失败:</b>
+      P0 32／P1b 28／P1c 15／<b>P2 47</b>／P3 44／<b>P4 40</b>，
+      外加 CI 上 Core 的 95 项。收尾干净:0 个 running 批次、0 篇非 ready、
+      0 条待判词组、无残留进程。
+      <br><br>
+      <b>所以 §10 的前提到了。</b> ⑮ 里写的顺序不用改（§11 → §12 → §10 → 删 Web 页），
+      但那条「网不全所以不敢搬 20 张表」的理由已经不成立——
+      现在不敢搬的理由只剩「§12 还没搬完」，而那是顺序问题，不是安全问题。
+    </div>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1369,8 +1412,8 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
       <div class="fig"><div class="fig-val">95<span>+</span></div>
         <div class="fig-key">CI 上的 Core 测试（原 65 起）</div></div>
-      <div class="fig"><div class="fig-val">44<span> / 40</span></div>
-        <div class="fig-key">verify_phase3 与 phase4 仍然全过</div></div>
+      <div class="fig"><div class="fig-val">206</div>
+        <div class="fig-key">全套自动验收，<b>零失败</b>（2026-09-18 重跑）</div></div>
     </div>
   </section>
 
