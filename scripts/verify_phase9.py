@@ -365,6 +365,31 @@ def main() -> int:
               f"{len(declared)} 条声明逐条核对过"
               if not missing else "、".join(missing))
 
+        # **会合点里不许有夹具。** 2026-09-18 真机上栽的，而且这一条是
+        # §6 双向同步自己带出来的:在那之前验收脚本灌进 `client_events` 的
+        # `word.marked` 只是不整洁（词池里多几个探针词，控制台看得见）；
+        # 有了拉取端点之后，**每台设备都会把它们拉下来重放进投影**——
+        # 手机上于是出现一批你从没标过的词，而两边都不会报错。
+        # 实测那次:776 条事件里 240 条是夹具。
+        #
+        # **这是守卫，不是清理器**。清理归制造它的那个脚本
+        # （`verify_phase2.clean_probe_events`，前后各清一次）；这里只负责
+        # 「谁又漏了一条就当场看见」——包括一次性探针留下的，那些没有主人。
+        PULLED = ("word.marked", "word.unmarked", "article.finished",
+                  "review.answered", "review.spelled")
+        FIXTURE_SHAPES = ("v2-%", "k-%", "repro%", "%probe%", "verify%", "rv-%", "p4probe-%")
+        conn_events = get_connection("events")
+        strays = conn_events.execute(
+            f"SELECT idem_key, type FROM client_events"
+            f" WHERE type IN ({','.join('?' * len(PULLED))})"
+            f"   AND ({' OR '.join(['idem_key LIKE ?'] * len(FIXTURE_SHAPES))})"
+            f" ORDER BY id LIMIT 8", (*PULLED, *FIXTURE_SHAPES)).fetchall()
+        check("8.5", "会合点里没有夹具形状的事件——它们会被每台设备当成真历史收下",
+              not strays,
+              "只有真客户端产生的事实才在里面，设备拉下来的就是学习记录"
+              if not strays
+              else "、".join(f"{r[0]}({r[1]})" for r in strays) + " …")
+
         check("8.4", "备份范围正好是补不回来的那两个",
               set(BACKED_UP) == {"events", "content"},
               f"{sorted(BACKED_UP)}——ops 丢了只是重新配对，"

@@ -263,3 +263,80 @@ struct SyncTests {
         #expect(text.contains("\"sense_id\":42"))
     }
 }
+
+// MARK: - 分片与并发（2026-09-18 真机上栽的两条）
+
+/// 一个照收照答的服务端：对每个 `idem_key` 都回 `landed`，
+/// **但拒收超过 `limit` 条的一批**——真的服务端就是这么做的（`max_length=500`）。
+actor CountingTransport: Transport {
+    let limit: Int
+    private(set) var batchSizes: [Int] = []
+    private(set) var rejected = 0
+
+    init(limit: Int) { self.limit = limit }
+
+    func send(_ request: HTTPRequest) async throws -> HTTPResponse {
+        struct Envelope: Decodable { let idem_key: String }
+        struct Body: Decodable {
+            let events: [Envelope]?
+            let answers: [Envelope]?
+            let spellings: [Envelope]?
+            var all: [Envelope] { events ?? answers ?? spellings ?? [] }
+        }
+        guard let data = request.body,
+              let body = try? JSONDecoder().decode(Body.self, from: data) else {
+            return HTTPResponse(status: 200, body: Data("{\"results\":[]}".utf8))
+        }
+        batchSizes.append(body.all.count)
+        if body.all.count > limit {
+            rejected += 1
+            // 真服务端回的正是 422，而 422 不是「离线」。
+            return HTTPResponse(status: 422, body: Data("{\"detail\":\"too_long\"}".utf8))
+        }
+        let items = body.all.map { "{\"idem_key\":\"\($0.idem_key)\",\"status\":\"landed\"}" }
+        return HTTPResponse(status: 200,
+                            body: Data("{\"results\":[\(items.joined(separator: ","))]}".utf8))
+    }
+
+    func sizes() -> [Int] { batchSizes }
+    func rejectedCount() -> Int { rejected }
+}
+
+extension SyncTests {
+    /// **这一条是那次「一直转圈而且非常卡」的回归测试。**
+    ///
+    /// 真机上攒到 534 条待发，而三个端点都写着 `max_length=500`——
+    /// 整批发出去每次都是 422，422 不是 `.offline` 所以抛出去整趟同步就断，
+    /// 队列从此只会变长，而每次回到前台都重试一遍几秒的请求。
+    @Test("待发比服务端上限还多时，分片发完，而不是整批被拒")
+    func uploadsInSlicesBelowTheServerLimit() async throws {
+        let transport = CountingTransport(limit: 500)
+        let root = SyncTests.temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let events = try EventLog(directory: root.appendingPathComponent("events"))
+        for i in 0..<534 {
+            try events.append(kind: .marked,
+                              payload: ["item_key": .string("w\(i)"), "sense_id": .number(1)],
+                              idemKey: "mark-\(i)")
+        }
+        let engine = SyncEngine(
+            transport: transport,
+            outbox: try Outbox(directory: root.appendingPathComponent("outbox")),
+            events: events,
+            articles: try ArticleCache(directory: root.appendingPathComponent("articles")),
+            day: try DayCache(directory: root.appendingPathComponent("day")),
+            sentences: try DayCache(directory: root.appendingPathComponent("sentences")))
+
+        let report = try await engine.drain()
+
+        #expect(await transport.rejectedCount() == 0,
+                "一片都不许超过上限——超了就是那次 422 又回来了")
+        let sizes = await transport.sizes()
+        #expect(sizes.allSatisfy { $0 <= 500 }, "实际发出去的片：\(sizes)")
+        #expect(sizes.count >= 3, "534 条按 200 一片，至少三片，实际 \(sizes.count) 片")
+        #expect(report.landed == 534, "全都要送到，不是只送头一片")
+        #expect(try events.unreported(kinds: LoggedEvent.sendableKinds).isEmpty,
+                "送到了就该记下来，否则下一趟又从头发一遍")
+    }
+}

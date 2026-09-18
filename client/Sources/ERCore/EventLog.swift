@@ -333,9 +333,18 @@ public final class EventLog: @unchecked Sendable {
     ///
     /// 落盘之后**立刻标成已上报**:它本来就来自服务端，再推回去是白跑一趟。
     /// 这也是为什么日志从不回头改——「报过没有」是游标那个小文件的事。
+    ///
+    /// **同一个幂等键只收一次，而这一层的去重不靠调用方**（2026-09-18 加）。
+    /// `pull()` 原本在开头取一次「已知幂等键」的快照来跳过重复的，
+    /// 而快照是会过期的:两趟同步并发时各拿一份，于是同一批事件进了日志两遍
+    /// （真机上 399 条变 798 条）。**把这条判断放在写入的那一侧**，
+    /// 并发也就只能写进一次——`known` 那份快照现在只是省一次读盘，不再是正确性的依据。
+    ///
+    /// 返回 nil ＝ 这条已经在日志里了，什么都没做。
     @discardableResult
     public func appendPulled(kind: LoggedEvent.Kind, payload: [String: JSONValue],
-                             idemKey: String, occurredAt: String) throws -> LoggedEvent {
+                             idemKey: String, occurredAt: String) throws -> LoggedEvent? {
+        guard !(try knownIdemKeys().contains(idemKey)) else { return nil }
         let event = try append(kind: kind, payload: payload,
                                idemKey: idemKey, occurredAt: occurredAt)
         try markReported([event.localSequence])

@@ -134,6 +134,18 @@ public struct SyncReport: Sendable, Equatable {
 }
 
 public actor SyncEngine {
+    /// 一次上报最多带多少条。
+    ///
+    /// **比服务端的上限小，而不是等于它。** 三个批量端点都写着
+    /// `max_length=500`；取 200 的余量是为了「同一个数字在两处各写一遍」这件事
+    /// 本来就会漂——两边相等的话，服务端哪天调小一点，客户端立刻整批被拒，
+    /// 而那个拒绝长得像「包有问题」。
+    ///
+    /// 契约里没有这个数。**这是它该被质疑的地方**:服务端的上限应该由
+    /// `/v1/client/me` 下发，客户端照着分片，那样两边就不会各记一份。
+    /// 记进主文档 §M，这个 Phase 不动契约。
+    static let uploadBatchSize = 200
+
     private let transport: any Transport
     private let outbox: Outbox
     private let events: EventLog?
@@ -312,9 +324,12 @@ public actor SyncEngine {
                 guard !known.contains(item.idemKey) else { continue }
                 // 遥测（打开文章、读到哪、点了哪个词）不进日志——它们不改变状态。
                 guard let kind = LoggedEvent.kind(forWireType: item.type) else { continue }
-                try events.appendPulled(kind: kind, payload: item.payload,
-                                        idemKey: item.idemKey,
-                                        occurredAt: item.occurredAt ?? "")
+                // `known` 只是省一次读盘;**真正把住重复的是 `appendPulled` 自己**
+                // （它按幂等键判，所以并发也只写得进一次）。返回 nil ＝ 已经有了。
+                guard try events.appendPulled(kind: kind, payload: item.payload,
+                                              idemKey: item.idemKey,
+                                              occurredAt: item.occurredAt ?? "") != nil
+                else { continue }
                 known.insert(item.idemKey)
                 adopted += 1
             }
@@ -534,31 +549,47 @@ public actor SyncEngine {
 
         var landed: [Int] = []
         for kind in [OutboxEntry.Kind.reading, .answer, .spelling] {
-            let batch = pending.compactMap { event -> (LoggedEvent, OutboxEntry)? in
+            let queued = pending.compactMap { event -> (LoggedEvent, OutboxEntry)? in
                 guard let envelope = event.envelope, envelope.kind == kind else {
                     return nil
                 }
                 return (event, envelope)
             }
-            guard !batch.isEmpty else { continue }
-            do {
-                let verdicts = try await post(kind, batch.map(\.1))
-                for (event, envelope) in batch {
-                    switch verdicts[envelope.idemKey] {
-                    case .landed: report.landed += 1; landed.append(event.localSequence)
-                    case .duplicate: report.duplicates += 1
-                        landed.append(event.localSequence)
-                    case .rejected: report.rejected += 1
-                    case nil:
-                        // 服务端没提这一条。**沉默不等于同意**——留着下次再发。
-                        break
+            guard !queued.isEmpty else { continue }
+
+            var offline = false
+            // **分片，而且片大小小于服务端的上限。** 2026-09-18 真机上栽的:
+            // 攒到 534 条之后整批发出去，而三个端点都写着 `max_length=500`——
+            // 于是每一次都是 422，而 422 不是 `.offline`，抛出去整趟同步就断。
+            // **队列从此只会变长**，而每次回到前台都重试一遍几秒的请求，
+            // 表现就是「一直转圈而且非常卡」。
+            //
+            // 这里不是「把上限调大」:一个没有上限的批总有一天会撞上某个上限
+            // （请求体大小、网关超时、内存）。分片是那个上限存在时唯一正确的形状。
+            for slice in stride(from: 0, to: queued.count, by: Self.uploadBatchSize) {
+                let batch = Array(queued[slice..<min(slice + Self.uploadBatchSize,
+                                                     queued.count)])
+                do {
+                    let verdicts = try await post(kind, batch.map(\.1))
+                    for (event, envelope) in batch {
+                        switch verdicts[envelope.idemKey] {
+                        case .landed: report.landed += 1; landed.append(event.localSequence)
+                        case .duplicate: report.duplicates += 1
+                            landed.append(event.localSequence)
+                        case .rejected: report.rejected += 1
+                        case nil:
+                            // 服务端没提这一条。**沉默不等于同意**——留着下次再发。
+                            break
+                        }
                     }
+                } catch let error as TransportError {
+                    guard case .offline = error else { throw error }
+                    report.offline = true
+                    offline = true
+                    break
                 }
-            } catch let error as TransportError {
-                guard case .offline = error else { throw error }
-                report.offline = true
-                break
             }
+            if offline { break }
         }
         if !landed.isEmpty { try events.markReported(landed) }
         return report

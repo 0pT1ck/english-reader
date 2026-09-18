@@ -307,10 +307,36 @@ final class AppModel {
         return damaged.count
     }
 
+    /// 正在跑的那一趟同步。**并发进来的调用等它，不另起一趟。**
+    private var inFlightDrain: Task<SyncReport?, Never>?
+
     /// 把攒着的事件发出去。**界面上失败不作声**——发件箱的全部意义就是失败了
     /// 可以再来；但日志里要说，那是「我标的东西传上去了没有」唯一查得到的地方。
+    ///
+    /// **单飞:同一时刻只有一趟**（2026-09-18 真机上栽的）。
+    /// 这个类是 `@MainActor`，而 **MainActor 不防重入**——`await` 一让出去，
+    /// 第二个调用就从头跑起来了。而调用方有七处:启动的 `.task`、
+    /// `scenePhase == .active`、阅读屏、复习屏、拼写屏、设置屏、开发者选项。
+    /// 启动那一下 `.task` 和 `.active` 几乎同时到，于是两趟并发。
+    ///
+    /// 后果不是「多打一次请求」:两趟 `pull()` 各自在开头取一次「已知幂等键」的
+    /// 快照，于是**同一批事件被写进日志两遍**（真机上 399 条变 798 条），
+    /// 而两边的 `markReported` 各读各写游标、互相覆盖，那 798 条大半又算成
+    /// 「还没上报」。日志里每一行都是双份，那正是认出这件事的地方。
+    ///
+    /// **等它而不是丢掉它**:`await app.drain()` 的含义是「一趟同步完成了」，
+    /// 直接返回 nil 会让调用方以为同步过了而其实没有。
     @discardableResult
     func drain() async -> SyncReport? {
+        if let running = inFlightDrain { return await running.value }
+        let task = Task { await performDrain() }
+        inFlightDrain = task
+        let report = await task.value
+        inFlightDrain = nil
+        return report
+    }
+
+    private func performDrain() async -> SyncReport? {
         guard let engine else { return nil }
         let before = pendingEvents
         do {

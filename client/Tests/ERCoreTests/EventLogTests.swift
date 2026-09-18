@@ -188,6 +188,32 @@ struct EventLogTests {
         #expect(try log.knownIdemKeys().contains("from-other-device"))
     }
 
+    /// **2026-09-18 真机上栽的**：两趟同步并发，各自在开头取一份「已知幂等键」的
+    /// 快照，于是同一批事件被写进日志两遍（399 条变 798 条），而两边的
+    /// `markReported` 互相覆盖，那 798 条大半又算成「还没上报」——
+    /// 接着整批推回服务端，撞上批量上限，每次 422。
+    ///
+    /// 去重因此挪到了写入的那一侧：**调用方手里的快照会过期，写入的那一刻不会。**
+    @Test("同一个幂等键拉两次只收一次，而且不靠调用方去记")
+    func pullingTheSameKeyTwiceAdoptsItOnce() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = try EventLog(directory: directory)
+
+        let first = try log.appendPulled(kind: .marked,
+                                         payload: ["item_key": .string("theirs")],
+                                         idemKey: "same-key", occurredAt: "")
+        let second = try log.appendPulled(kind: .marked,
+                                          payload: ["item_key": .string("theirs")],
+                                          idemKey: "same-key", occurredAt: "")
+
+        #expect(first != nil, "第一次要收下")
+        #expect(second == nil, "第二次什么都不做，并且说出来")
+        #expect(try log.load().events.count == 1, "日志里只有一条")
+        #expect(try log.unreported().isEmpty,
+                "拉来的一条都不该再推回去——这正是那 798 条的来路")
+    }
+
     @Test("线上那个 type 到 kind 的映射只有一份，遥测映射成 nil")
     func wireTypesMapToKinds() {
         let cases: [(String, LoggedEvent.Kind?)] = [

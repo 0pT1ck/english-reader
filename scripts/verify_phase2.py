@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import json
 import sqlite3
 import statistics
 import sys
@@ -92,8 +93,54 @@ def _fresh_device(name: str) -> str:
     return auth.create_device(name)
 
 
+#: 这个脚本往会合点灌过的那几种幂等键。**前后各清一次**（坑 §4.1）。
+PROBE_KEYS = ("v2-open-%", "v2-mark-%", "v2-prog-%", "v2-ph-mark-%", "v2-ph-unmark-%")
+
+
+def clean_probe_events() -> int:
+    """把这个脚本灌进会合点的事件，连它们派生出来的标记一起删掉。
+
+    **2026-09-18 加，而在那之前它们一直躺在库里。** 这个脚本会往
+    `/v1/client/events` 真的上报 `word.marked` / `word.unmarked`——
+    P9 之前那只是不整洁（词池里多几个探针词，控制台看得见）；
+    **P9 §6 做了双向同步之后，它变成了一条污染通道**:
+    每台设备都会把这些事件拉下来、重放进自己的投影，
+    于是手机上出现一批你从没标过的词。2026-09-18 真机上就是这样——
+    776 条事件里有 240 条是夹具，而手机把它们当成真的学习历史收下了。
+
+    **正确的做法是验收用自己的 learner**，那样它产生的事实根本不会流到本人的
+    设备上（`/events` 是按 learner 过滤的）。但那要先有多用户，记进主文档 §M。
+    在那之前，这个函数是唯一的保护，所以它跑在开头也跑在结尾——
+    中断的上一轮不会污染下一轮，而这一轮也不会留给下一台设备。
+    """
+    events = get_connection("events")
+    removed = 0
+    for pattern in PROBE_KEYS:
+        rows = events.execute(
+            "SELECT idem_key, type, payload FROM client_events WHERE idem_key LIKE ?",
+            (pattern,)).fetchall()
+        for row in rows:
+            # 派生出来的那一笔也要走。标记留着的话，词池里那个探针词就还在，
+            # 而它下一次照样会随今日包出现在手机上。
+            try:
+                payload = json.loads(row["payload"] or "{}")
+            except (TypeError, ValueError):
+                payload = {}
+            key = str(payload.get("item_key") or payload.get("headword") or "").lower()
+            if key:
+                events.execute(
+                    "DELETE FROM study_marks WHERE learner_id = 1 AND item_key = ?", (key,))
+                events.execute(
+                    "DELETE FROM study_states WHERE learner_id = 1 AND item_key = ?", (key,))
+        removed += events.execute(
+            "DELETE FROM client_events WHERE idem_key LIKE ?", (pattern,)).rowcount
+    events.commit()
+    return removed
+
+
 def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
     with trace():
+        clean_probe_events()
         client = TestClient(app)
         token = _fresh_device("verify-phase2")
         head = {"Authorization": "Bearer " + token}
@@ -680,6 +727,20 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         check("8.2", "参数一律配置化",
               wanted <= specs,
               "、".join(sorted(wanted)))
+
+        # **清理放在最后一步**（「后台任务与等待」那条）。这里还要多一句:
+        # 清完之后断言真的清干净了——**一个说不清自己清没清的清理等于没清**，
+        # 而这一次的代价是「别人手机上多出一批没标过的词」。
+        removed = clean_probe_events()
+        leftover = get_connection("events").execute(
+            "SELECT COUNT(*) FROM client_events WHERE " +
+            " OR ".join(["idem_key LIKE ?"] * len(PROBE_KEYS)), PROBE_KEYS
+        ).fetchone()[0]
+        check("6.10", "灌进会合点的探针事件全部清掉了",
+              leftover == 0,
+              f"删了 {removed} 条。**它们不清掉会被每台设备拉下来当成真的学习历史**——"
+              "2026-09-18 真机上就这么中过一次（776 条里 240 条是夹具）"
+              if leftover == 0 else f"还剩 {leftover} 条没清掉")
 
         # --- 人工 ---------------------------------------------------------- #
         print("\n需要人工确认")
