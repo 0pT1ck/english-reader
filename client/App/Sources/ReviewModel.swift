@@ -29,7 +29,10 @@ final class ReviewModel {
     }
 
     private(set) var phase: Phase = .loading
-    private(set) var days: [Components.Schemas.CalendarDay] = []
+    /// 七天打卡条。**类型是 Core 的，不是契约的**（P9 §11）:
+    /// 日历现在由重放算出来，服务端那个端点和它的契约类型一起删了，
+    /// 再往一个不存在的形状里搬一次只是多一层翻译。
+    private(set) var days: [ReviewCalendar.Day] = []
     private(set) var streak: Int = 0
 
     /// 两张卡片的数字。
@@ -174,10 +177,7 @@ final class ReviewModel {
         // 也就是学习记录。现在它和那两个数同源，所以**答完一题当场变色**，
         // 而不是等下一次联网。
         if let calendar = app.calendar(days: 7) {
-            days = calendar.days.map {
-                Components.Schemas.CalendarDay(
-                    day: $0.day, status: $0.status.rawValue, is_today: $0.isToday)
-            }
+            days = calendar.days
             streak = calendar.streak
         }
         todayTotal = today.total(.today)

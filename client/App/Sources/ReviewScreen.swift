@@ -101,21 +101,24 @@ struct ReviewScreen: View {
 
 /// 七天打卡条。
 ///
-/// **颜色是服务端算的，这里只上色。**「那天算不算完成」是一条规则
-/// （架构铁律 1），而且它有个容易想错的地方：**系统没派活的日子不该判成你失败**，
-/// 所以那种日子回的是 partial 而不是 missed。
+/// **颜色是 `ReviewCalendar` 算的，这里只上色。**「那天算不算完成」是一条规则，
+/// 而它有个容易想错的地方：**系统没派活的日子不该判成你失败**，
+/// 所以那种日子是 partial 而不是 missed。
+///
+/// P9 之前这条规则在服务端（`/reviews/calendar`），现在在设备上——
+/// 同一条规则，换了执行的地方，所以答完一题当场变色而不是等下一次联网。
 private struct CalendarStrip: View {
-    let days: [Components.Schemas.CalendarDay]
+    let days: [ReviewCalendar.Day]
 
     var body: some View {
         HStack(spacing: 0) {
             ForEach(days, id: \.day) { day in
                 VStack(spacing: 6) {
                     Text(number(day.day))
-                        .font(day.is_today ? .headline : .body)
-                        .foregroundStyle(day.is_today ? Color.white : .primary)
+                        .font(day.isToday ? .headline : .body)
+                        .foregroundStyle(day.isToday ? Color.white : .primary)
                         .frame(width: 34, height: 34)
-                        .background(day.is_today ? Color.primary : .clear, in: .circle)
+                        .background(day.isToday ? Color.primary : .clear, in: .circle)
                     Circle()
                         .fill(colour(day))
                         .frame(width: 6, height: 6)
@@ -132,12 +135,12 @@ private struct CalendarStrip: View {
             ? String(iso.suffix(1)) : String(iso.suffix(2))
     }
 
-    private func colour(_ day: Components.Schemas.CalendarDay) -> Color {
+    private func colour(_ day: ReviewCalendar.Day) -> Color {
         switch day.status {
-        case "complete": .green
-        case "partial": .gray
-        case "missed": .red
-        default: .clear          // unknown：那天没开过 App，重建不出来
+        case .complete: .green
+        case .partial: .gray
+        case .missed: .red
+        case .unknown: .clear    // 那天没开过 App，重放不出来
         }
     }
 }

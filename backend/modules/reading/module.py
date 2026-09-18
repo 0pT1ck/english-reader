@@ -125,20 +125,6 @@ runtime_config.register(
         group="reading",
         order=60,
     ),
-    runtime_config.ConfigSpec(
-        key="reading_web_token",
-        default="",
-        value_type="str",
-        title="Web 阅读页的设备令牌",
-        description=(
-            "开发期 Web 阅读页自用的客户端令牌，首次打开时自动签发。"
-            "它让这个页面走真正的 /v1/client 接口，而不是借管理会话抄近路——"
-            "客户端契约正是 P2 要验证的东西。"
-        ),
-        group="reading",
-        order=90,
-        secret=True,
-    ),
 )
 
 

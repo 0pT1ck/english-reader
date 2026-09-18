@@ -358,6 +358,19 @@ async def admin_missing_senses(limit: int = Query(200, ge=1, le=1000)) -> dict[s
     }
 
 
+@admin_router.get("/reading/articles/{article_id}", summary="一篇文章的全部内容（诊断用）")
+async def admin_article(article_id: int) -> dict[str, Any]:
+    """**2026-09-18 加（P9 §11）:Web 阅读页删掉之后，文章库那页要有地方可点。**
+
+    和客户端那个端点同一个函数，但走管理凭证、不带学习者——
+    **标记那一层是空的**，因为这里不是学习的地方，只是看一眼文章有没有做好:
+    分句对不对、token 有没有标注、释义齐不齐。
+
+    看得见而改不了，正是架构铁律 8 说的诊断通道。
+    """
+    return service.article(learner_id=0, article_id=article_id)
+
+
 @admin_router.delete("/reading/articles/{article_id}", summary="删除一篇文章")
 async def admin_delete_article(article_id: int) -> dict[str, Any]:
     return {"deleted": repository.delete_article(article_id)}
@@ -412,23 +425,18 @@ async def admin_calibration() -> dict[str, Any]:
 # Pages
 # --------------------------------------------------------------------------- #
 
-WEB_READER_DEVICE = "web-reader"
-
-
-def _web_reader_token() -> str:
-    """A device token for the development reading page.
-
-    The page could have used the admin session it is already served under, but
-    then it would not be exercising the client contract at all — and the client
-    contract is the thing P2 exists to get right. So it registers itself as a
-    device like any other and talks to ``/v1/client`` over a bearer token.
-    """
-    token = runtime_config.get("reading_web_token")
-    if token:
-        return str(token)
-    issued = auth.create_device(WEB_READER_DEVICE)
-    runtime_config.set("reading_web_token", issued)
-    return issued
+# Web 阅读页没有了（P9 §11，这个 Phase 的最后一步）。
+#
+# **理由比「省 719 行」强:`ercli` 已经是第二个客户端了**，它和 App 共用同一份
+# Core。新架构下 Web 页要能学习，就得在 JS 里再实现一遍学习引擎——投影、排期、
+# 当天那一轮的状态机——而那正是 §2 那条线禁止的事。`ercli` 天然合规:
+# 它是客户端，它做学习的事，它走同一份 Core。
+#
+# 跟着走的还有 `reading_web_token`:那个令牌存在的理由是「让这个页面走真正的
+# /v1/client 接口，而不是借管理会话抄近路」。没有页面就没有那个理由了。
+#
+# **文章库那一页留着**（架构铁律 8:控制台是诊断通道，长期存在），
+# 只是它的「打开」按钮不再指向一个会改学习状态的页面。
 
 
 @pages_router.get("/admin/reading", response_class=HTMLResponse)
@@ -445,19 +453,3 @@ async def reading_page(request: Request) -> Response:
         sortable=difficulty.SORTABLE,
         sources=repository.SOURCE_LABELS,
     )
-
-
-@pages_router.get("/admin/reader", response_class=HTMLResponse)
-async def reader_index(request: Request) -> Response:
-    if (redirect := require_page_auth(request)) is not None:
-        return redirect
-    return render(request, "reader.html", token=_web_reader_token(), article_id=0,
-                  progress_seconds=int(runtime_config.get("progress_report_seconds")))
-
-
-@pages_router.get("/admin/reader/{article_id}", response_class=HTMLResponse)
-async def reader_page(request: Request, article_id: int) -> Response:
-    if (redirect := require_page_auth(request)) is not None:
-        return redirect
-    return render(request, "reader.html", token=_web_reader_token(), article_id=article_id,
-                  progress_seconds=int(runtime_config.get("progress_report_seconds")))

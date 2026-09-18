@@ -1690,20 +1690,160 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <br>倒过来做任何一步，中间都会出现一段既没有网、也没有旧入口的时间。
     </div>
 
-    <h3>下一步</h3>
+    <h3>㉔ §10 数据库重切 — 做完。<b>而它真正难的地方不是搬表</b></h3>
+    <p>⑮ 里已经查清楚了两件事：168 处调用不用改（未限定表名会在 attach 的库里解析），
+    而迁移记录是每个库一张、21 条、10 个模块。<b>做下来，难的确实是后者，
+    但还多出一件当时没看见的。</b></p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>库</th><th>装什么</th><th class="num">大小</th><th>丢了会怎样</th></tr>
+      <tr><td><code>content.db</code></td><td>原有的义项／词族／词缀，
+        <b>＋文章、句子、token、词组、复习例句、草稿</b></td>
+        <td class="num">54 MB</td><td class="wait">花钱重做一遍</td></tr>
+      <tr><td><code>events.db</code></td><td>上报的事件、词池快照、决策日志、
+        标记与进度存档</td><td class="num">0.5 MB</td>
+        <td class="wait"><b>补不回来</b></td></tr>
+      <tr><td><code>ops.db</code></td><td>设备令牌、设置、任务表、LLM 任务日志</td>
+        <td class="num">5.8 MB</td><td class="none">重新配对加重填几个值</td></tr>
+      <tr><td><code>learning.db</code></td><td><b>空了</b></td>
+        <td class="num">12 KB</td><td class="none">留着不删——旁边那三个就是它的去向</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+      <b>这张表本身就是这件事的全部理由：真正补不回来的只有 0.5 MB，
+      而拆开之前那份 42 MB 的文件对备份说的是同一句话。</b>
+      备份规则因此一直在替四种不同的东西打包票，而其中三种根本不需要。
+    </div>
+
+    <h4>搬家怎么做的</h4>
+    <p><code>backend/core/resplit.py</code>，**排在迁移框架之前**跑。
+    它不重跑迁移，而是<b>从 <code>sqlite_master</code> 抄原样的 <code>CREATE</code> 语句</b>
+    到新文件——这样一路 <code>ALTER</code> 加上去的每一列都跟着过来，
+    不用谁去记得有哪些。重跑迁移只会产出<b>一份</b> schema，抄过来产出的是<b>那一份</b>。</p>
+    <p><b>幂等、可续。</b>每张表都先在新家逐行核对行数，核对过了才删旧的——
+    所以中断只会剩下两份，不会剩下零份；再跑一遍就把剩下的做完。
+    已经切过的装机上它什么也不做。</p>
+
+    <div class="callout">
+      <b>没看见的那一件：两个外键跟不过来，而留着它们不是失效，是报错。</b>
+      <br><br>
+      <code>reading_progress.article_id → reading_articles</code> 和
+      <code>review_history.sentence_id → review_sentences</code>——
+      两端现在各在一个文件里，而 <b>SQLite 不跨文件追外键</b>：
+      开着 <code>PRAGMA foreign_keys = ON</code> 的时候，插入会去<b>本文件</b>找父表，
+      找不到就直接失败。
+      <br><br>
+      所以那两句 <code>REFERENCES</code> 在搬运时从存下来的建表语句里删掉了，
+      新装机的那条迁移里也删掉了。<b>真正失去的是级联</b>：
+      删一篇文章不再顺手删掉「读过它」的记录，删一个句子不再删掉答过它的那一笔。
+      <b>而这一半反而是对的</b>——孤儿记录仍然是记录，被删掉的不是。
+    </div>
+
+    <div class="callout">
+      <b>第二件没看见的：「连接不 attach 自己」把一批限定名变成了错的。</b>
+      <br><br>
+      每条连接现在挂着其余四个库，但<b>不挂自己</b>（同一个文件挂两次是拿到两个答案的办法）。
+      于是 <code>content.senses</code> 这种写法在 <code>content</code> 连接上就成了
+      <code>no such table</code>——而这种写法从 P0 起就散在各处，当年全是从 learning 连接发出的。
+      <br><br>
+      改法不是逐处换库名，是<b>一律去掉限定名</b>：表名在五个文件里全局唯一，
+      未限定的名字于是解析到唯一有它的那个文件，读写都一样。
+      <b>而「全局唯一」这条前提现在有守卫</b>（<code>verify_phase9</code> 8.2）——
+      哪天两个文件里出现同名表，未限定的那个名字会静默解析到先挂的那个，
+      读到的是另一张表的数据，没有任何东西会报错。
+    </div>
+
+    <h4>先在副本上整跑一遍，再动真的</h4>
+    <p>「一个探针永远不碰真的数据库」那条是 2026-09-17 花了 22 条标注学来的。
+    这次照办：<code>VACUUM INTO</code> 一份副本、在副本上重切、
+    <b>在副本上把七套验收整跑一遍</b>，全绿之后才动 <code>data/</code>。
+    真跑那次先备份 <code>learning.db</code> 与 <code>content.db</code>，
+    重切自己还会再备一份。两次结果一致。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>脚本</th><th class="num">结果</th><th>改了什么</th></tr>
+      <tr><td><code>verify_phase0</code></td><td class="num">32 / 0</td>
+        <td>7.1 改成<b>逐库</b>数迁移记录；探针库与备份前缀换成 <code>events</code></td></tr>
+      <tr><td><code>verify_phase1b</code></td><td class="num">28 / 0</td>
+        <td>1.2 备份范围断言改成 <code>{events, content}</code>；
+          1.3 改成「每条连接都挂着其余四个」</td></tr>
+      <tr><td><code>verify_phase1c</code></td><td class="num">15 / 0</td><td>连接改名</td></tr>
+      <tr><td><code>verify_phase2</code></td><td class="num">47 / 0</td>
+        <td>7.15 问 <code>sqlite_master</code> 要问对文件</td></tr>
+      <tr><td><code>verify_phase3</code></td><td class="num">30 / 0</td>
+        <td>8.1 改成逐张表问它该在的那个库</td></tr>
+      <tr><td><code>verify_phase4</code></td><td class="num">40 / 0</td><td>连接改名</td></tr>
+      <tr><td><code>verify_phase9</code></td><td class="num"><b>37 / 0</b></td>
+        <td><b>新增 8.1–8.4</b>：拆完了没有、表名有没有撞、
+          <b>每条迁移的记录在不在它声明的那个库里</b>、备份范围对不对</td></tr>
+    </table>
+    </div>
+    <p><b>8.3 是这一节最值钱的一条。</b>它拿代码里每一条
+    <code>Migration(database=…)</code> 的声明去逐条核对库里的记录——
+    <b>记录漏在旧文件里，那个模块的全部迁移会在新库上重跑一遍</b>，
+    而 <code>CREATE TABLE IF NOT EXISTS</code> 挺得住、<code>ALTER TABLE ADD COLUMN</code> 挺不住。
+    这条错是启动时才发作的，而且发作在别人的机器上。</p>
+
+    <h3>㉕ 删 Web 学习页 — <b>这个 Phase 的最后一步，做完了</b></h3>
+    <p><code>reader.html</code> 719 行、<code>review.html</code> 549 行，连同两个页面令牌、
+    四个页面路由一起删。<code>review_words.html</code> 按计划改成「看上报的快照」（㉒）。</p>
+    <div class="callout">
+      <b>顺序确实是对的，而且当场兑现了一次。</b>
+      ⑮ 定的收尾顺序是「先搬网，再拆旧入口」。真到这一步时，
+      <code>verify_phase2</code> 的人工项 M1 和 <code>verify_phase4</code> 的 C 节
+      都还指着那个页面——<b>M1 指着 <code>/admin/reader</code>，
+      而 C 节整段借的是 Web 阅读页那把令牌</b>。
+      网先搬完，这两处才有地方可指:M1 改成「在手机或 ercli 上读一篇」，
+      C 节改成<b>自己签一把令牌</b>——顺带把它从「碰巧有数据」里摘出来了，
+      因为那个页面要是一次都没打开过，那一节原本会整段静默落空。
+    </div>
+    <p>文章库那一页的「打开」按钮改成「查看」，指向新增的
+    <code>GET /v1/admin/reading/articles/{id}</code>——和客户端那个同一个函数，
+    但走管理凭证、不带学习者，<b>标记那一层是空的</b>。
+    看得见而改不了，正是架构铁律 10 说的诊断通道。</p>
+    <div class="callout">
+      <b>删的过程里自己栽了一次，值得记。</b>
+      用脚本切掉配置项那一段时切多了，
+      <b>把 <code>reading/module.py</code> 的 <code>MODULE = Module(...)</code> 整个带走了</b>。
+      结果是<b>整个 reading 模块一条路由都没挂上</b>——而启动日志照旧打印「模块 reading 已挂载」
+      （那行是上一次运行留在滚动里的），<code>app.routes</code> 也看不出来
+      （FastAPI 包着 include 进来的 router）。
+      <br><br>
+      <b>认出来靠的是数端点个数：58 个，而正常是 77 个。</b>
+      验收网会抓到它（<code>verify_phase2</code> 全程在打 <code>/v1/client/articles</code>），
+      但我是在跑验收之前先手点了一下才发现的。
+      <b>教训是老的那条：脚本化的删除要断言删完之后剩下什么，不能只断言删掉了什么。</b>
+    </div>
+
+    <h3>下一步：<b>代码这边做完了，剩下的是人要做的</b></h3>
+    <p>§4 到 §12 全部落地，①–㉕ 都有记录，七套自动验收共 <b>229 项零失败</b>。
+    CLAUDE.md 的架构铁律与跨 Phase 不变量已照 §4／§15 重写。剩下三件：</p>
     <div class="nots">
-      <div class="not"><i>·</i><span><b>服务端契约收下那几个身份字段</b>
-        <span>客户端已经在发了。跟 §6 一起做，因为那时要重新生成一次 Swift 契约。</span></span></div>
-      <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
-        <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
-        <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
-      <div class="not"><i>·</i><span><b>§11 的后半，比预想的大</b>
-        <span>① 把 <code>ercli</code> 也搬到 <code>ReviewDay</code> ＋ 句子池上
-        （它现在还跑在服务端那份实现上，8 处）；② 打卡日历也搬到投影
-        （那也是学习记录）；③ 然后才能删服务端的队列／会话／调度；
-        ④ 并把 <code>verify_phase3</code> 那 25 项重指到 Core。</span></span></div>
-      <div class="not"><i>·</i><span><b>§12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>
-        <span>这三步是这个 Phase 的收尾，顺序不能倒——理由见 ⑮。</span></span></div>
+      <div class="not"><i>·</i><span><b>阿里云那台要重建镜像</b>
+        <span><b>手机连的是它，而它跑的还是旧镜像。</b>不重建的话手机上看到的
+        仍然是旧服务端——`git pull`（要挂代理，直连 GnuTLS 报错）＋
+        <code>/root/build-er.sh</code> ＋ 重启容器。
+        <b>判断标准别靠记忆</b>：<code>docker exec english-reader grep -c resplit
+        /app/backend/core/db.py</code>，答案是 0 就是没上去。
+        它那份 <code>learning.db</code> 会在启动时自己拆——重切是幂等的，
+        而且拆之前会自己备份一次。</span></span></div>
+      <div class="not"><i>·</i><span><b>人工验收</b>
+        <span>铁律说每个 Phase 由用户实际跑一遍。这个 Phase 该验的是
+        <b>§1 那个症状没有了</b>：复习完返回主界面，13/13 就是 13/13，
+        刷新不变、不转圈、断网照样对。外加 <code>verify_phase2</code> M1
+        （在手机或 <code>ercli</code> 上真读完一篇）。</span></span></div>
+      <div class="not"><i>·</i><span><b>推一次 TestFlight</b>
+        <span>客户端这一侧改动很大（投影、排期、日历、句子池全在设备上算），
+        而模拟器和 CI 验得了「编得过、装得上、起得来」，验不了拇指。</span></span></div>
+    </div>
+    <div class="callout">
+      <b>没做、也不该在这个 Phase 做的：</b>数据大清洗（§13 明确排除，
+      P9 只把稳定键和映射表做出来让它以后不再贵）、长期不上线的退化策略
+      （§7 那个时间戳字段留着了）、账号与多用户。
+      <b>还有一件是这个 Phase 制造出来的欠账</b>：架构铁律 5「内容 id 一旦发出去就不许变」
+      现在是一条<b>规矩，还不是一个实现</b>——重新分析仍然是原地重建 token。
+      义项那一半 §8 做掉了，token 那一半没有，记进主文档 §M。
     </div>
 
     <h3>已经花掉的与已经拿到的</h3>

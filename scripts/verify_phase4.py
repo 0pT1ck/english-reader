@@ -321,10 +321,16 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- C. 今日包与离线闭环 ------------------------------------------- #
         print("\nC. 今日包与离线闭环")
 
-        token = conn.execute(
-            "SELECT value FROM settings WHERE key = 'reading_web_token'"
-        ).fetchone()
-        headers = {"Authorization": f"Bearer {token['value']}"} if token else {}
+        # **自己签一把令牌，不借 Web 阅读页那把**（P9 §11 把那个页面和它的令牌
+        # 一起删了）。顺带把这条也从「碰巧有数据」里摘出来:原先如果那个页面
+        # 一次都没被打开过，这一节就整段拿不到令牌而静默地全部落空。
+        from backend.core import auth as core_auth  # noqa: PLC0415 - 只这一处要
+        conn.execute(
+            "UPDATE devices SET revoked_at = ?"
+            " WHERE name = 'verify.p4' AND revoked_at IS NULL",
+            (now.isoformat(timespec="seconds"),))
+        conn.commit()
+        headers = {"Authorization": f"Bearer {core_auth.create_device('verify.p4')}"}
 
         with TestClient(app) as http:
             check("C0.1", "客户端接口要令牌",
