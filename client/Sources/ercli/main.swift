@@ -20,12 +20,25 @@ import ERCore
 /// Three jobs, from the plan: walk a day for acceptance, walk one with the
 /// network deliberately gone, and compare what the client computed against what
 /// the server says while online.
+///
+/// **第三件 2026-09-18 退役**（P9 §11）:对拍要服务端算一遍，而那条线正是要
+/// 拿掉的东西。它抓的两种失败已经不存在或者换人守了——理由写在 `spell()` 上方。
 
 // MARK: - Setup
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 
 func flag(_ name: String) -> Bool { arguments.contains("--\(name)") }
+
+/// 一句人话的失败。
+///
+/// **和 `TransportError` 分开**:那个说的是「网或服务端怎么了」，
+/// 这个说的是「这台机器现在做不了这件事」——比如服务端还是旧镜像、没下发排期参数。
+/// 两者混成一个的话，「你该去重建镜像」会显示成一句 HTTP 错误。
+struct CLIError: Error, CustomStringConvertible {
+    let description: String
+    init(_ description: String) { self.description = description }
+}
 
 func value(_ name: String) -> String? {
     guard let index = arguments.firstIndex(of: "--\(name)"),
@@ -91,7 +104,6 @@ func usage() {
       --state <目录>    本地数据放哪，默认 ./.ercli
       --offline         \(Ink.bold("不连服务器"))，只用缓存——验离线那一半
       --no-color        不上色
-      --compare         在线作答时把客户端算的和服务端回的对一遍
       --answers 1,3,2   脚本喂作答，让 walk 能无人值守地把复习也走完
     """)
 }
@@ -146,9 +158,21 @@ func showDay() async throws {
         // 加餐已于 2026-09-12 取消——往期本身就是加餐。字段还在是因为铁律 5 不删字段。
         print(Ink.dim("  （没有加餐。想再读就翻往期：ercli day --shelf archive）"))
     }
-    let reviews = package.reviews
-    let open = reviews.items.filter { !$0.done }.count
-    print(Ink.bold("复习") + Ink.dim("  \(open) 条待做 / 共 \(reviews.items.count) 条"))
+    // **复习那几个数由重放算出来**（P9 §11），不读今日包的 `reviews` 那半——
+    // 那是服务端上次收到上报时的样子。没有排期参数就说出来，不显示一个编的数。
+    if let settings = package.schedulerSettings {
+        let day = try replayDay(weightDecay: package.settings.weight_decay,
+                                settings: settings,
+                                pool: engine.cachedSentences())
+        print(Ink.bold("复习")
+            + Ink.dim("  \(day.entries.filter { !$0.state.done }.count) 条待做"
+                + " / 共 \(day.entries.count) 条"))
+        if day.awaitingContent > 0 {
+            print(Ink.yellow("  还有 \(day.awaitingContent) 个词等着句子备好"))
+        }
+    } else {
+        print(Ink.yellow("复习  服务端没下发排期参数（旧镜像），算不出来"))
+    }
     if !package.excludesExamPapers {
         print(Ink.yellow("  服务端说今日包含真题了？契约变了，客户端要跟着改"))
     } else {
@@ -304,71 +328,113 @@ func showCache() throws {
 
 // MARK: - Review
 
+/// 今天这一份复习，**由 Core 拼出来**。
+///
+/// **P9 §11:内容来自服务端，状态来自重放。** 在这之前这个函数读的是今日包的
+/// `reviews` 那半——队列、方向、权重、进度全是服务端算的。那条线把它们分开了:
+/// 句子来自 `/v1/client/sentences`（不分池），而状态由这台机器重放自己的事件日志
+/// 算出来。拼装在 `ReviewDay.assemble`，和手机上那一屏共用同一份。
+func reviewDay() async throws -> ReviewDay {
+    // 今日包只为那几个服务端参数（排期参数、权重衰减）。
+    let package = try await engine.fetchDay()
+    guard let settings = package.schedulerSettings else {
+        throw CLIError("服务端没下发排期参数——那台还是旧镜像，先重建它")
+    }
+    // **先推后拉、再报快照，句子池才是对的那一批**:那个端点的依据正是那份快照。
+    try await engine.drain()
+    let projection = Projection.replay(
+        try events.load(),
+        weightDecay: package.settings.weight_decay,
+        settings: settings)
+    try await engine.reportPool(projection.poolSnapshot(),
+                                reportedAt: ISO8601DateFormatter().string(from: Date()))
+    return ReviewDay.assemble(pool: try await engine.fetchSentences(),
+                              projection: projection,
+                              day: localToday(), now: Date())
+}
+
+/// 重放一次，拿到最新的那一份。**答完一题就调它**——数字是算出来的，不是加出来的。
+func replayDay(weightDecay: Double,
+               settings: ReviewScheduler.Settings,
+               pool: Components.Schemas.SentencePoolResponse?) throws -> ReviewDay {
+    ReviewDay.assemble(
+        pool: pool,
+        projection: Projection.replay(try events.load(),
+                                      weightDecay: weightDecay, settings: settings),
+        day: localToday(), now: Date())
+}
+
+func localToday() -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    return formatter.string(from: Date())
+}
+
 func review() async throws {
     let package = try await engine.fetchDay()
-    let day = package.reviews
-    var states: [Int: ReviewItemState] = [:]
-    var cards: [Int: Components.Schemas.ReviewItem] = [:]
-    for item in day.items {
-        cards[item.queue_id] = item
-        states[item.queue_id] = ReviewItemState(
-            direction: ReviewDirection(rawValue: item.direction) ?? .wordToSense,
-            asks: item.asks, misses: item.misses, weight: item.weight, done: item.done)
+    guard let settings = package.schedulerSettings else {
+        throw CLIError("服务端没下发排期参数——那台还是旧镜像，先重建它")
     }
+    let decay = package.settings.weight_decay
+    try await engine.drain()
+    var projection = Projection.replay(try events.load(),
+                                       weightDecay: decay, settings: settings)
+    try await engine.reportPool(projection.poolSnapshot(),
+                                reportedAt: ISO8601DateFormatter().string(from: Date()))
+    let pool = try await engine.fetchSentences()
+    var day = ReviewDay.assemble(pool: pool, projection: projection,
+                                 day: localToday(), now: Date())
 
     let draw = ReviewDraw()
     var generator = SystemRandomNumberGenerator()
-    var asked = 0
-    let compare = flag("compare")
-    var disagreements = 0
+    var askedCount = 0
 
-    print(Ink.bold("今天的复习") + Ink.dim("  \(states.values.filter { !$0.done }.count) 条"))
+    print(Ink.bold("今天的复习")
+        + Ink.dim("  \(day.entries.filter { !$0.state.done }.count) 条"))
+    if day.awaitingContent > 0 {
+        // **平时是 0。** 非零是真实情形:离线标了个词，句子池还没取下来。
+        print(Ink.yellow("  还有 \(day.awaitingContent) 个词等着句子备好"))
+    }
+    if day.poolReportedAt == nil {
+        print(Ink.yellow("  服务端还没收到过词池快照——那不是「你没在学任何词」"))
+    }
 
-    while let queueId = draw.pick(
-        from: Array(states.keys).sorted(),
-        weight: { states[$0]!.weight },
-        isOpen: { !states[$0]!.done },
+    while let entry = draw.pick(
+        from: day.entries,
+        weight: { $0.state.weight },
+        isOpen: { !$0.state.done },
         random: Double.random(in: 0..<1, using: &generator)
     ) {
-        guard let card = cards[queueId], let state = states[queueId] else { break }
-        asked += 1
-        let asked = askedSentence(card, state.direction)
+        askedCount += 1
+        let card = entry.item
+        let sentence = askedSentence(card, entry.state.direction)
         print(Ink.dim(String(repeating: "─", count: 50)))
-        print(Ink.dim("⟨\(queueId)⟩ ") + question(card, asked, state.direction))
+        print(Ink.dim("⟨\(entry.key.key)#\(entry.key.senseId)⟩ ")
+            + question(card, sentence, entry.state.direction))
 
-        let answer = promptAnswer(card, asked, state.direction)
-        let next = state.applying(answer, weightDecay: day.weight_decay)
-        states[queueId] = next
+        let answer = promptAnswer(card, sentence, entry.state.direction)
+        // **事件自带身份，队列号恒为 0**:那个号是服务端那张表的行号、每天重建，
+        // 而队列现在是这台机器自己组的——再引它就不是可重放的日志了。
+        try record(.answered(queueId: 0, passed: answer.passed,
+                             revealed: answer.revealed,
+                             sentenceId: sentence?.id, easy: answer.easy,
+                             itemType: entry.key.itemType, itemKey: entry.key.key,
+                             senseId: entry.key.senseId))
 
-        try record(.answered(queueId: queueId, passed: answer.passed,
-                                    revealed: answer.revealed,
-                                    sentenceId: asked?.id, easy: answer.easy))
-
-        // 在线对拍（决定 14）。它抓的是向量抓不到的那一类：状态机算得对，
-        // 但上报时接错了线——传错排队号，或者把作答顺序发拧了。
-        if compare, !flag("offline") {
-            if let server = try? await reportOne(queueId: queueId, answer: answer) {
-                let ours = (next.direction.rawValue, next.asks, next.misses, next.done)
-                let theirs = (server.direction, server.asks, server.misses, server.done)
-                if ours != theirs {
-                    disagreements += 1
-                    print(Ink.red("  对拍不一致：客户端 \(ours)，服务端 \(theirs)"))
-                } else {
-                    print(Ink.dim("  对拍一致"))
-                }
-            }
-        }
-        print(next.done ? Ink.green("  这条过了") : Ink.dim("  方向 \(next.direction.rawValue)，"
-            + "问过 \(next.asks) 次，权重 \(String(format: "%.4f", next.weight))"))
+        // **落盘之后重放，不自己改状态。** 上一版在这里 `states[queueId] = next`，
+        // 那是「同一份状态有两处在写」——而这个 Phase 的全部内容就是把那种情况消掉。
+        day = try replayDay(weightDecay: decay, settings: settings, pool: pool)
+        let now = day.entries.first { $0.key == entry.key }?.state
+        print(now?.done == true
+            ? Ink.green("  这条过了")
+            : Ink.dim("  方向 \(now?.direction.rawValue ?? 1)，"
+                + "问过 \(now?.asks ?? 0) 次，"
+                + "权重 \(String(format: "%.4f", now?.weight ?? 1))"))
     }
 
-    print(Ink.green("今天的复习做完了") + Ink.dim("，一共问了 \(asked) 次"))
-    if compare {
-        print(disagreements == 0
-            ? Ink.green("对拍全程一致")
-            : Ink.red("对拍有 \(disagreements) 处不一致——客户端那份镜像要改"))
-    }
-    if day.spelling_enabled {
+    print(Ink.green("今天的复习做完了") + Ink.dim("，一共问了 \(askedCount) 次"))
+    if day.spellingAvailable {
         print(Ink.dim("可以做拼写强化了：ercli spell"))
     }
 }
@@ -453,47 +519,41 @@ func promptAnswer(_ card: Components.Schemas.ReviewItem,
     }
 }
 
-struct ServerAnswerState {
-    let direction: Int
-    let asks: Int
-    let misses: Int
-    let done: Bool
-}
-
-/// Report one answer on its own and read back what the server made of it. Only
-/// used by `--compare`: the normal path queues answers and reports them in a
-/// batch, which is what an offline client does.
-func reportOne(queueId: Int, answer: ReviewAnswer) async throws -> ServerAnswerState? {
-    let body = try JSONEncoder().encode([
-        "queue_id": JSONValue.int(queueId),
-        "passed": .bool(answer.passed),
-        "revealed": .int(answer.revealed),
-        "easy": .bool(answer.easy),
-    ])
-    let response = try await transport.send(
-        HTTPRequest(method: .post, path: "/v1/client/reviews/answer", body: body))
-    guard response.isOK else { return nil }
-    let decoded = try JSONDecoder().decode(
-        Components.Schemas.AnswerResponse.self, from: response.body)
-    // The server does not echo the direction, so derive it the way it does:
-    // done items are finished, everything else went back to or stayed at one of
-    // the two directions the payload already describes.
-    return ServerAnswerState(
-        direction: decoded.done ? 2 : (decoded.misses > answer.revealed ? 1 : 2),
-        asks: decoded.asks, misses: decoded.misses, done: decoded.done)
-}
+// **`--compare`（在线对拍，P5 决定 14）2026-09-18 退役，连 `reportOne` 一起。**
+//
+// 它是 P5 三道防线之一，所以退役要说清楚理由——而理由是**它抓的两种失败已经
+// 不存在或者换人守了**。它的原注释写的是「状态机算得对，但上报时接错了线——
+// 传错排队号，或者把作答顺序发拧了」:
+//
+// * **传错排队号**:这种失败在结构上消失了——**没有排队号了**（P9 §11）。
+//   事件带的是条目身份，而身份错了不会「对上另一个词」，是指不到任何词。
+// * **作答顺序发拧**:`SyncTests` 的 `answersAreSentInTheOrderTheyWereMade`
+//   守着它，而那是在 CI 上每次都跑的。
+//
+// 而它本身也**不可能继续存在**:对拍要服务端算一遍，而那条线正是要拿掉的东西
+// （§11）。留着一个「拿服务端的答案当基准」的模式，等于把要删的实现变成依赖。
+//
+// **代价照实记下来**:P5 §17 说过三道防线共有盲区，现在只剩两道
+// （服务端导出的向量、真实响应样本）。而那两道守的仍然是「客户端和服务端是否一致」
+// ——如果对契约本身的理解就错了，它们一条都不会响。
 
 func spell() async throws {
     let package = try await engine.fetchDay()
-    // 一个词多个义项只拼一次。
-    var seen = Set<String>()
-    let words = package.reviews.items.map(\.item_key).filter { seen.insert($0).inserted }
+    guard let settings = package.schedulerSettings else {
+        throw CLIError("服务端没下发排期参数——那台还是旧镜像，先重建它")
+    }
+    // 要拼哪些词由 Core 算（`ReviewDay.spellingWords()`）:一个词多个义项只拼一次。
+    let day = try replayDay(weightDecay: package.settings.weight_decay,
+                            settings: settings,
+                            pool: try await engine.fetchSentences())
+    let words = day.spellingWords()
     guard !words.isEmpty else { print(Ink.dim("今天没有要拼的词")); return }
 
     print(Ink.bold("拼写强化") + Ink.dim("  \(words.count) 个词。拼错不影响复习安排，只记一笔。"))
-    for word in words {
-        if let sense = package.reviews.items.first(where: { $0.item_key == word })?.sense {
-            print(Ink.dim("  提示：") + (sense.concept_en ?? "—"))
+    for entry in words {
+        let word = entry.key
+        if !entry.gloss.isEmpty {
+            print(Ink.dim("  提示：") + entry.gloss)
         }
         print("  > ", terminator: "")
         let typed = readAnswer("")
@@ -520,8 +580,8 @@ func walk() async throws {
     let renderer = ArticleRenderer(first)
     let display = renderer.display
 
-    print("\n\(Ink.bold("① 拉今日包"))：\(package.articles.count) 篇，"
-        + "复习 \(package.reviews.items.count) 条")
+    print("\n\(Ink.bold("① 拉今日包"))：\(package.articles.count) 篇"
+        + Ink.dim("（复习那一份单独取:/v1/client/sentences）"))
     print("\(Ink.bold("② 打开 #\(id)"))：\(first.article.title)")
     print("   \(display.tokens.count) 个 token，"
         + "目标词 \(display.tokens.filter { $0.role == .target }.count)，"
@@ -561,7 +621,22 @@ func walk() async throws {
 
     // ⑦⑧ 复习与拼写。**这一半原先不在 walk 里**——它走到读完就停了，于是状态机、
     // 提示分级、作答上报这条链只有单元测试见过。一天不是读完就结束的。
-    try await walkReview(package.reviews)
+    // 复习那一份由 Core 拼出来（P9 §11）:内容来自句子池，状态来自重放。
+    if let settings = package.schedulerSettings {
+        let decay = package.settings.weight_decay
+        try await engine.drain()
+        let projection = Projection.replay(try events.load(),
+                                           weightDecay: decay, settings: settings)
+        try await engine.reportPool(
+            projection.poolSnapshot(),
+            reportedAt: ISO8601DateFormatter().string(from: Date()))
+        let pool = try await engine.fetchSentences()
+        let day = ReviewDay.assemble(pool: pool, projection: projection,
+                                     day: localToday(), now: Date())
+        try await walkReview(day, weightDecay: decay, settings: settings, pool: pool)
+    } else {
+        print(Ink.yellow("\n⑦ 复习：服务端没下发排期参数（旧镜像），跳过这一段"))
+    }
 
     print("\n\(Ink.bold("⑨ 发件箱"))：\(outbox.count) 条待报")
     let report = try await engine.drain()
@@ -581,52 +656,48 @@ func walk() async throws {
 /// Bounded on purpose: `walk` runs unattended, and an item that keeps being
 /// answered wrong would otherwise loop forever. Stopping early is honest — the
 /// point is to prove the path works, not to finish someone's day for them.
-func walkReview(_ day: Components.Schemas.ReviewDayResponse) async throws {
-    let open = day.items.filter { !$0.done }
-    guard !open.isEmpty else {
+func walkReview(_ day: ReviewDay, weightDecay: Double,
+                settings: ReviewScheduler.Settings,
+                pool: Components.Schemas.SentencePoolResponse?) async throws {
+    var day = day
+    guard day.entries.contains(where: { !$0.state.done }) else {
         print("\n\(Ink.bold("⑦ 复习"))：今天没有到期的，跳过")
         return
     }
 
-    print("\n\(Ink.bold("⑦ 复习"))：\(open.count) 条待做"
+    print("\n\(Ink.bold("⑦ 复习"))：\(day.entries.filter { !$0.state.done }.count) 条待做"
         + Ink.dim(scriptedInput.isEmpty ? "（手动作答）" : "（脚本作答）"))
 
-    var states: [Int: ReviewItemState] = [:]
-    for item in open {
-        states[item.queue_id] = ReviewItemState(
-            direction: ReviewDirection(rawValue: item.direction) ?? .wordToSense,
-            asks: item.asks, misses: item.misses, weight: item.weight, done: item.done)
-    }
-    let cards = Dictionary(uniqueKeysWithValues: open.map { ($0.queue_id, $0) })
     let draw = ReviewDraw()
     var generator = SystemRandomNumberGenerator()
     var asked = 0
     let budget = scriptedInput.isEmpty ? 2 : 40
 
-    while asked < budget, let queueId = draw.pick(
-        from: states.keys.sorted(),
-        weight: { states[$0]!.weight },
-        isOpen: { !states[$0]!.done },
+    while asked < budget, let entry = draw.pick(
+        from: day.entries,
+        weight: { $0.state.weight },
+        isOpen: { !$0.state.done },
         random: Double.random(in: 0..<1, using: &generator)
     ) {
-        guard let card = cards[queueId], let state = states[queueId] else { break }
         asked += 1
-        let sentence = askedSentence(card, state.direction)
-        print(Ink.dim("  ⟨\(queueId)⟩ ") + question(card, sentence, state.direction))
-        let answer = promptAnswer(card, sentence, state.direction)
-        states[queueId] = state.applying(answer, weightDecay: day.weight_decay)
-        try record(.answered(queueId: queueId, passed: answer.passed,
-                                    revealed: answer.revealed,
-                                    sentenceId: sentence?.id, easy: answer.easy))
+        let sentence = askedSentence(entry.item, entry.state.direction)
+        print(Ink.dim("  ⟨\(entry.key.key)#\(entry.key.senseId)⟩ ")
+            + question(entry.item, sentence, entry.state.direction))
+        let answer = promptAnswer(entry.item, sentence, entry.state.direction)
+        try record(.answered(queueId: 0, passed: answer.passed,
+                             revealed: answer.revealed,
+                             sentenceId: sentence?.id, easy: answer.easy,
+                             itemType: entry.key.itemType, itemKey: entry.key.key,
+                             senseId: entry.key.senseId))
+        // 落盘之后重放。**不自己改状态**——那是「同一份状态有两处在写」。
+        day = try replayDay(weightDecay: weightDecay, settings: settings, pool: pool)
     }
 
-    let done = states.values.filter { $0.done }.count
-    print("   问了 \(asked) 次，过了 \(done) 条，还剩 \(states.count - done) 条")
+    let done = day.entries.filter { $0.state.done }.count
+    print("   问了 \(asked) 次，过了 \(done) 条，还剩 \(day.entries.count - done) 条")
 
     // 拼写：当天复习走完之后的强化选项。**拼错不影响调度，只单独记一笔。**
-    guard day.spelling_enabled else { return }
-    var seen = Set<String>()
-    let words = open.map { $0.item_key }.filter { seen.insert($0).inserted }.prefix(2)
+    let words = day.spellingWords().prefix(2).map(\.key)
     guard !words.isEmpty else { return }
 
     print("\n\(Ink.bold("⑧ 拼写"))：\(words.count) 个词")
