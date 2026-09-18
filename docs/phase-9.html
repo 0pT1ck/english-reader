@@ -1299,6 +1299,37 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       「先搬网再搬代码」那条纪律为什么值。
     </div>
 
+    <h3>⑮ §10 数据库重切：查清楚了，<b>但没有执行，而且是有理由的</b></h3>
+    <p>两件事先查明白了，一件是好消息，一件不是。</p>
+    <p><b>好消息:168 处调用不用改。</b> 实测 SQLite 的**未限定表名会在 attach 的库里解析**，
+    读和写都是（写也真的落进那个文件）。而 <code>learning</code> 这条连接本来就
+    attach 着 <code>dictionary</code> 与 <code>content</code>。所以把表挪到别的文件之后，
+    <code>SELECT … FROM reading_articles</code> 照旧解析得到——
+    <b>物理重切不必动那 168 处 <code>get_connection("learning")</code>。</b></p>
+    <div class="callout">
+      <b>不是好消息的那件:迁移记录也在 <code>learning.db</code> 里，21 条、10 个模块。</b>
+      <br><br>
+      <code>schema_migrations</code> 是**每个库一张**，而每条迁移自己声明
+      <code>database="learning"</code>。所以搬表要同时做三件事:把表挪过去、
+      把那个模块的迁移记录也挪过去、把所有 <code>database=</code> 改成新家。
+      <b>漏一条，那个模块的全部迁移会在新库上重跑一遍</b>——
+      而 <code>CREATE TABLE IF NOT EXISTS</code> 重跑无害，
+      <code>ALTER TABLE ADD COLUMN</code> 和那几个可调用的迁移
+      （比如 <code>_merge_study_tables</code>）重跑会失败或者把数据弄坏。
+      <br><br>
+      <b>也就是说 §10 是一次「20 张表、21 条迁移、3 个文件，每一处都要对」的手术，
+      而它动的是 93,063 条标注和全部学习记录。</b>
+    </div>
+    <p><b>所以这个 Phase 的顺序要改一下:§11、§12 先做，§10 放到它们之后。</b>
+    理由是 §12 那条纪律本身——「先搬网，再搬代码」。而现在**网是不全的**:
+    中转站 402、gemini 的 key 只在阿里云，所以标注这一路调不通，
+    <code>verify_phase2</code> 与 <code>verify_phase4</code> 有几项因此报红
+    （CLAUDE.md 早就写着那几条「不是回归，别去查代码」）。
+    <b>在一个知道自己不全的网底下搬 20 张表，正是那条纪律要拦的事。</b></p>
+    <p>改完之后这个 Phase 的收尾顺序是:
+    <b>§11 模块劈开 → §12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>。
+    §10 从「中间那一步」挪到「倒数第二步」，而它要的前提正是 §12 给的。</p>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1323,10 +1354,11 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
         <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
         <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
-      <div class="not"><i>·</i><span><b>数据库重切、模块劈开</b>
-        <span>§10、§11，都还没动。</span></span></div>
-      <div class="not"><i>·</i><span><b>§12 验收网搬家，然后才删 Web 学习页</b>
-        <span>这两步是这个 Phase 的最后两步，顺序不能倒。</span></span></div>
+      <div class="not"><i>·</i><span><b>§11 模块劈开</b>
+        <span>下一件。把学习记录从 reading／review 里拆出去，
+        服务端只留内容生产。</span></span></div>
+      <div class="not"><i>·</i><span><b>§12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>
+        <span>这三步是这个 Phase 的收尾，顺序不能倒——理由见 ⑮。</span></span></div>
     </div>
 
     <h3>已经花掉的与已经拿到的</h3>
