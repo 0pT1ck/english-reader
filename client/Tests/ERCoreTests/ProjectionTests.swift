@@ -421,4 +421,47 @@ struct ProjectionTests {
         #expect(projection.items[Self.word("municipal")]?.memory?.dueAt != nil,
                 "它确实已经排到将来了——这正是会让现算出错的那个条件")
     }
+
+    /// 镜像服务端 `session.collect` 那句 `item_type = 'word'`。
+    ///
+    /// **复习有意跳过词组**（`verify_phase3` 2.2 守的是「它是被有意跳过的，
+    /// 不是碰巧没查到」），而 P6 定的界面初版也不认词组。
+    /// 少了这一条，标过的词组会占着「共」那个数却永远问不出来——
+    /// 句子池是按词与义项建的，词组拿不到句子，于是 13/13 永远到不了。
+    @Test("标过的词组进词池，但不进复习队列")
+    func phrasesStayOutOfTheQueue() {
+        let projection = Self.replay([
+            (.marked, ["item_key": .string("account for"),
+                       "item_type": .string("phrase"), "kind": .string("unknown")],
+             "2026-01-05T08:00:00+00:00"),
+            (.marked, ["item_key": .string("municipal"), "kind": .string("unknown")],
+             "2026-01-05T08:01:00+00:00"),
+        ])
+        let phrase = Projection.Key(itemType: "phrase", key: "account for")
+        #expect(projection.items[phrase]?.pool == .reviewing,
+                "词组照旧进词池——标记就是标记")
+        #expect(projection.poolSnapshot().contains { $0.itemType == "phrase" },
+                "也照旧上报给服务端:生文要避开它")
+
+        let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
+        #expect(queue.count == 1, "队列里只该有那个词，实际 \(queue.count) 条")
+        #expect(queue.first?.key.itemType == "word")
+        #expect(projection.progress(day: "2026-01-05", now: Self.now).total(.today) == 1,
+                "词组不许占着「共」那个数")
+    }
+
+    /// `verify_phase3` 1.6 在服务端守的是「记忆状态存进库再取出来还是同一张卡」。
+    /// 搬到客户端之后，「库」是事件日志，而记忆状态是算出来的——
+    /// 所以这里守的是它**编码往返**不掉东西:投影要把它交给下一次重放，
+    /// 而下一次重放是从头算的。
+    @Test("记忆状态编码往返不掉东西")
+    func memoryStateSurvivesEncoding() throws {
+        let state = ReviewScheduler.MemoryState(
+            stability: 12.3456789, difficulty: 6.5, dueAt: Self.now,
+            lastReviewAt: Self.now.addingTimeInterval(-86_400),
+            reps: 4, lapses: 1, fsrsState: 2)
+        let data = try JSONEncoder().encode(state)
+        let back = try JSONDecoder().decode(ReviewScheduler.MemoryState.self, from: data)
+        #expect(back == state)
+    }
 }

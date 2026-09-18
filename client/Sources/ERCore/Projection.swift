@@ -383,7 +383,17 @@ extension Projection {
     ///   - now: 判到期用的时刻。传进来而不是读时钟，这样排期能被测。
     public func todayQueue(day: String, now: Date) -> [QueueEntry] {
         var entries: [QueueEntry] = []
-        for (key, item) in items where item.pool == .reviewing {
+        // **只取词，不取词组。** 镜像服务端 `session.collect` 那句
+        // `study_states WHERE item_type = 'word'`——复习有意跳过词组
+        // （`verify_phase3` 2.2 守的就是「它是被有意跳过的，不是碰巧没查到」），
+        // 而 P6 定的界面初版也不认词组。
+        //
+        // **少了这一句，标过的词组会被拉进复习队列**，而那一屏没有能问它的题:
+        // 句子池是按词与义项建的，词组拿不到句子，于是它会占着「共」那个数
+        // 却永远问不出来——13/13 因此永远到不了。2026-09-18 对照
+        // `verify_phase3` 2.2 时发现的，那时这一句还没有。
+        for (key, item) in items
+        where item.pool == .reviewing && key.itemType == "word" {
             // **今天已经问过的，桶和封顶按那一轮开始时定的来。**
             // 它答完之后会有一个未来的到期时间，而那不该让它从今天的名单上消失——
             // 服务端那边它是一行带着 `done_at` 的队列行，照样在今天的名单里。
