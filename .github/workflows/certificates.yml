@@ -1,0 +1,79 @@
+name: 签名证书清点
+
+# **只接手动触发，理由同 testflight.yml。**
+#
+# 仓库是公开的，而同一个仓库里提的 PR 拿得到 secret——这条 workflow 用的正是
+# 朋友的开发者密钥。接 `pull_request` 就等于任何人提个 PR 就能吊销他的证书。
+#
+# 而且它比推构建更危险：推构建最多浪费一次 runner，这个会**改他账号上的东西**。
+# 所以默认只清点，吊销要同时给 `revoke`（具体 id）和 `apply`。
+on:
+  workflow_dispatch:
+    inputs:
+      revoke:
+        description: 要吊销的证书 id，逗号分隔。留空＝只清点
+        required: false
+        default: ""
+      apply:
+        description: 真的吊销（不勾就只说要动哪几张）
+        type: boolean
+        required: false
+        default: false
+
+  # 只为让 GitHub 认得这条 workflow（同 testflight.yml 那段注释）。
+  # 下面那个 `if` 保证 push 触发时什么都不做。
+  push:
+    branches: [refactor]
+    paths: ['.github/workflows/certificates.yml']
+
+concurrency:
+  group: asc-certificates
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    name: 清点（必要时吊销）
+    if: github.event_name == 'workflow_dispatch'
+    # Linux 就够了——这一步只是 HTTPS 调 App Store Connect，不编译任何东西。
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install --quiet 'pyjwt[crypto]'
+
+      - name: 清点
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          REVOKE: ${{ github.event.inputs.revoke }}
+          APPLY: ${{ github.event.inputs.apply }}
+        run: |
+          set -euo pipefail
+          # 密钥解成 PEM 之后只放在环境变量里传给脚本，**不落盘**——
+          # 落了盘就得记着擦，而这一步不需要文件。
+          ASC_KEY_PEM=$(echo "$ASC_KEY_P8" | base64 --decode)
+          echo "$ASC_KEY_PEM" | head -1 | grep -q "BEGIN PRIVATE KEY" \
+            || { echo "::error::解出来的不是一个 .p8——ASC_KEY_P8 是不是没 base64？"; exit 1; }
+          export ASC_KEY_PEM
+
+          args=()
+          [ -n "$REVOKE" ] && args+=(--revoke "$REVOKE")
+          [ "$APPLY" = "true" ] && args+=(--apply)
+          python scripts/asc_certificates.py "${args[@]}" | tee "$RUNNER_TEMP/out.txt"
+
+      - name: 写进摘要
+        if: always()
+        run: |
+          {
+            echo '## 签名证书'
+            echo ''
+            echo '```'
+            cat "$RUNNER_TEMP/out.txt" 2>/dev/null || echo '（没有输出）'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
