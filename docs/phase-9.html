@@ -306,7 +306,7 @@
     <div class="sec-head">
       <span class="sec-mark">§4</span>
       <h2>新的铁律</h2>
-      <span class="sec-note">拟定</span>
+      <span class="sec-note">已定并落地 · 2026-09-18 已写进 CLAUDE.md</span>
     </div>
     <p class="lede">每条都附「它替掉了什么」和「怎么验」。
     <b>一条规矩没有验法，就只是一句愿望</b>——这是 P8 §8 动铁律 4 那次学到的。</p>
@@ -422,7 +422,7 @@
     <div class="sec-head">
       <span class="sec-mark">§6</span>
       <h2>多设备：事件日志成为主干</h2>
-      <span class="sec-note">已定 ③，三条细则拟定</span>
+      <span class="sec-note">已定 ③，三条细则已定并落地（§16 ⑪）</span>
     </div>
     <p class="lede">状态是事件日志的纯函数。两台设备各自重放，得出同一个状态——
     <b>所以不需要合并算法</b>。Anki 撞到真冲突时要弹窗让人选「上传还是下载」，我们不用。</p>
@@ -499,7 +499,7 @@
     <div class="sec-head">
       <span class="sec-mark">§8</span>
       <h2>义项换稳定键，和那次数据大清洗的关系</h2>
-      <span class="sec-note">拟定</span>
+      <span class="sec-note">已做完 · §16 ⑬（13,741 条已回填）</span>
     </div>
     <p class="lede">讨论里一度以为「先清洗、后重构」更安全。
     <b>数完真实数据之后这个理由站不住</b>，但顺着它查出了一件更该做的事。</p>
@@ -609,7 +609,7 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="sec-head">
       <span class="sec-mark">§10</span>
       <h2>数据库重切</h2>
-      <span class="sec-note">拟定</span>
+      <span class="sec-note">已做完 · §16 ㉔（两台机器都切完了）</span>
     </div>
     <div class="table-scroll">
     <table>
@@ -753,15 +753,26 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <div class="sec-head">
       <span class="sec-mark">§14</span>
       <h2>动手前先验的未知数</h2>
-      <span class="sec-note">待办</span>
+      <span class="sec-note">六项全部验完 · <b>U1 的结论被实施推翻了，见下</b></span>
     </div>
     <p class="lede">照 <a href="./phase-5.html">P5</a> §16 那次的规矩：这些先验出结果，再定案。
     <b>它们会改变方案，不是方案的注脚。</b></p>
 
     <div class="checks">
-      <div class="check"><span class="check-n">U1 ✓</span><span class="check-what">
-        <b>Swift 有能用的 FSRS，用官方那个，不自己写</b>
-        <span>2026-09-17 查清。<code>open-spaced-repetition/swift-fsrs</code>——
+      <div class="check"><span class="check-n">U1 ✗</span><span class="check-what">
+        <b>「Swift 有能用的 FSRS，用官方那个，不自己写」——<span style="color:var(--stop)">这个结论错了</span></b>
+        <span><b>2026-09-17 一动手就被推翻，详见 §16 ②。</b>
+        <code>swift-fsrs</code> <code>import JavaScriptCore</code>，<b>在 Linux 上编不出来</b>——
+        而 CI 的 Core 测试跑在 Linux 上。另一个候选 <code>4rays/SwiftFSRS</code> 只到 FSRS-5、
+        19 个参数，而我们钉的是 21 个的 FSRS-6。
+        <b>所以是自己从 <code>py-fsrs</code> 移植的</b>（<code>ERCore/Scheduler.swift</code>，
+        323 行，靠 <code>scripts/fsrs_reference.py</code> 导出的向量对拍）。
+        <br><b>而下面这段照错的地方正是这条 Phase 最该记住的一点</b>:
+        P5 那条规矩写的是「每个依赖都要单独核实<b>能不能编</b>」，
+        而我核的是「它<b>有没有</b>依赖」——<b>两个不同的问题，我把后者当成了前者的答案</b>。
+        「零外部依赖」这句话是真的，它照样编不出来。</span>
+        <span><b>以下原文照录</b>（不删，理由同上）:<br>
+        2026-09-17 查清。<code>open-spaced-repetition/swift-fsrs</code>——
         和 <code>py-fsrs</code> <b>同一个组织</b>，<b>MIT 许可</b>（坑 §2.3 那条警告是「同组织下许可不一」，
         这个核过了：LICENSE 第一行就是 MIT，不是 AGPL）。
         <br><b>四件正好对上我们的前提：</b>
