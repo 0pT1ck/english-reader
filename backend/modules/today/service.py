@@ -91,12 +91,22 @@ def package(learner_id: int) -> dict[str, Any]:
     articles = [reading.article(learner_id, row["id"]) for row in main]
     extra_articles = [reading.article(learner_id, row["id"]) for row in extras]
 
-    reviews = review.day_payload(learner_id)
+    # **P9:不再组装复习那一份。** 它由设备自己算——句子来自
+    # `/v1/client/sentences`，状态来自它重放自己的事件日志。
+    #
+    # **这不只是省一段 JSON。** `day_payload` 会 `ensure()`，而那会**建会话、
+    # 入队**——也就是每一次 `/today` 请求都在写学习状态，而那正是那条线禁止的事
+    # （`phase-9.html` §2、§11）。所以要紧的不是少发了什么，是少写了什么。
+    #
+    # 「今天是哪天」还要，日历那一档和缓存有效性都按它切。
+    day = review.today_key(learner_id)
 
     log_decision(
         "today.assembled",
         f"今日包：{len(articles)} 篇正课、{len(extra_articles)} 篇加餐、"
-        f"{len(reviews.get('items') or [])} 条复习",
+        # 复习那一份不再由这里组装（P9），所以也不再报它的条数——
+        # 报一个自己没算的数就是在编。
+        f"当天 {day}",
         inputs={
             "learner_id": learner_id,
             "wanted": limit,
@@ -112,13 +122,9 @@ def package(learner_id: int) -> dict[str, Any]:
     return {
         "learner": auth.learner_profile(learner_id),
         "capabilities": reading.capabilities(),
-        "day": reviews.get("day"),
+        "day": day,
         "articles": articles,
         "extra_articles": extra_articles,
-        # Review keeps its own shape, whole and unaltered: this is the same
-        # object /v1/client/reviews returns, so a client that already speaks it
-        # needs no second parser.
-        "reviews": reviews,
         "settings": {
             "fresh_days": int(runtime_config.get("reading_fresh_days")),
             "weight_decay": float(runtime_config.get("review_weight_decay")),

@@ -69,8 +69,13 @@ class TodayResponse(BaseModel):
         "往列表下面翻就有。字段留着不删是因为铁律 5 只增不减；"
         "把 today_extra_count 改回非零就能恢复",
     )
-    reviews: ReviewDayResponse = Field(
-        description="跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里"
+    reviews: ReviewDayResponse | None = Field(
+        default=None,
+        description="**P9 起不再下发。** 复习那一份由设备自己算（句子来自 "
+        "`/v1/client/sentences`，状态来自它重放自己的事件日志）。"
+        "字段留着不删——铁律 5 只增不减，而老客户端还在读它；"
+        "但服务端组装它意味着**每次请求都要建会话、入队**，"
+        "也就是服务端在写学习状态，而那正是那条线禁止的事",
     )
     settings: TodaySettings
     excludes_exam_papers: bool = Field(

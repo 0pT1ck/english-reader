@@ -25,7 +25,10 @@ public struct DayPackage: Sendable {
     }
 
     public var articles: [Components.Schemas.ArticleResponse] { decoded.articles }
-    public var reviews: Components.Schemas.ReviewDayResponse { decoded.reviews }
+    /// 复习那一份。**P9 起服务端不再下发它**——复习由设备自己算
+    /// （句子来自 `/v1/client/sentences`，状态来自重放）。
+    /// 留着这个访问器是为了老服务端:它照旧下发，而读它不伤人。
+    public var reviews: Components.Schemas.ReviewDayResponse? { decoded.reviews }
 
     /// **今日包 ≠ 今天能读的全部。** The server says so in the payload rather
     /// than only in the documentation, because a client that assumed otherwise
@@ -77,7 +80,7 @@ public struct DayPackage: Sendable {
     /// 这份包是哪一天的。缓存要不要用，全看它——**昨天的包不是「旧一点」，
     /// 是错的**：题目做完了、日期变了，照着它渲染会让人对着一份不存在的
     /// 队列答题。
-    public var day: String? { decoded.day ?? decoded.reviews.day }
+    public var day: String? { decoded.day ?? decoded.reviews?.day }
 
     /// 顶层回显的学习者。客户端据此认出「这是别人的缓存」，
     /// 而设置页拿它显示名字——**它是服务端给的值，不是自己编的**。

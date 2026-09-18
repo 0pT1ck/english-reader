@@ -333,6 +333,20 @@ def spelling_words(learner_id: int, now: datetime | None = None) -> list[dict[st
     return out
 
 
+def today_key(learner_id: int = 1) -> str:
+    '''今天是哪天，按**模拟时钟**（P3 决定 5）。
+
+    **只回一个日期，不碰任何学习状态。** 在这之前今日包是从 `day_payload` 里
+    顺手拿到这个值的，而那个函数会 `ensure()`——也就是建会话、入队。
+    于是每一次 `/today` 请求都在写学习状态，而那正是 P9 那条线禁止的事。
+
+    时钟要用模拟的那个:往前拨 `offset_days` 去测排期，日历那一档和缓存有效性
+    都得跟着动，否则测出来的不是 App 会显示的东西。
+    '''
+    del learner_id  # 目前所有学习者共用一个时钟，留着参数是为了将来分开
+    return repository.today(clock.now())
+
+
 def day_payload(learner_id: int, *, now: datetime | None = None) -> dict[str, Any]:
     """Everything today's review needs, in one response.
 
