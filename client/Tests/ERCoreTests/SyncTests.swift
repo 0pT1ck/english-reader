@@ -293,7 +293,11 @@ actor CountingTransport: Transport {
             // 真服务端回的正是 422，而 422 不是「离线」。
             return HTTPResponse(status: 422, body: Data("{\"detail\":\"too_long\"}".utf8))
         }
-        let items = body.all.map { "{\"idem_key\":\"\($0.idem_key)\",\"status\":\"landed\"}" }
+        // **服务端说的是 `accepted`，不是 `landed`。** 第一版这个假服务端写的是
+        // `landed`，于是每一条都被解析成「被拒」——而当时那条测试只断言了
+        // `landed == 534`，分不出「没发出去」和「发出去被拒了」。
+        // 所以下面补了 `rejected == 0`:一个分不出两种情况的断言等于没有断言（坑 §6.7）。
+        let items = body.all.map { "{\"idem_key\":\"\($0.idem_key)\",\"status\":\"accepted\"}" }
         return HTTPResponse(status: 200,
                             body: Data("{\"results\":[\(items.joined(separator: ","))]}".utf8))
     }
@@ -336,6 +340,7 @@ extension SyncTests {
         #expect(sizes.allSatisfy { $0 <= 500 }, "实际发出去的片：\(sizes)")
         #expect(sizes.count >= 3, "534 条按 200 一片，至少三片，实际 \(sizes.count) 片")
         #expect(report.landed == 534, "全都要送到，不是只送头一片")
+        #expect(report.rejected == 0, "一条都不该被拒——被拒和没发出去是两件事")
         #expect(try events.unreported(kinds: LoggedEvent.sendableKinds).isEmpty,
                 "送到了就该记下来，否则下一趟又从头发一遍")
     }
