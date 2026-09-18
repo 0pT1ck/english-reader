@@ -31,6 +31,7 @@ struct ProjectionTests {
         return EventLogLoad(events: list, damaged: 0, tornTail: false)
     }
 
+    /// 别的测试文件也用它（`SentencePoolTests`），所以不是 private。
     static func replay(_ events: [(LoggedEvent.Kind, [String: JSONValue], String)])
         -> Projection {
         Projection.replay(log(events), weightDecay: 0.5, settings: settings)
