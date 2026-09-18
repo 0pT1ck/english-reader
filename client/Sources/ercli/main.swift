@@ -161,9 +161,10 @@ func showDay() async throws {
     // **复习那几个数由重放算出来**（P9 §11），不读今日包的 `reviews` 那半——
     // 那是服务端上次收到上报时的样子。没有排期参数就说出来，不显示一个编的数。
     if let settings = package.schedulerSettings {
+        // `SyncEngine` 是 actor，所以盘上那份要 await 着取。
         let day = try replayDay(weightDecay: package.settings.weight_decay,
                                 settings: settings,
-                                pool: engine.cachedSentences())
+                                pool: await engine.cachedSentences())
         print(Ink.bold("复习")
             + Ink.dim("  \(day.entries.filter { !$0.state.done }.count) 条待做"
                 + " / 共 \(day.entries.count) 条"))
