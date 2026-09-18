@@ -1507,6 +1507,31 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     （复制粘贴留下的，Pydantic 只用第二个所以一直没人发现），
     以及视图模型里那份 <code>weightDecay</code>——规则搬走之后没人读它了。</p>
 
+    <h3>㉑ 拼装搬进 Core — 做完。<b>而这一步是被一个没算到的依赖逼出来的</b></h3>
+    <div class="callout">
+      <b>删服务端那套实现之前查了一遍谁还在用它，查出 <code>ercli</code>。</b>
+      <br><br>
+      命令行客户端<b>在 8 处读今日包的 <code>reviews</code> 那半</b>，
+      并且往 <code>/reviews/answer</code> 发作答——它整套复习都跑在服务端那份实现上。
+      而 <code>ercli</code> 正是文档里说的「第二客户端」，是 Web 阅读页删掉之后
+      <code>verify_phase2</code> M1 的落点。
+      <br><br>
+      <b>所以服务端那套不能先删</b>:得先把 <code>ercli</code> 也搬过来。
+      这是原来的估算里没有的一块——§11 的后半因此比预想的大。
+    </div>
+    <p><b>而这件事同时说明拼装不该待在视图模型里</b>:两个宿主都要它，
+    而 P5 那条纪律说得很清楚——同一条规则写两遍就会漂，而漂了不报错。
+    所以新建 <code>ERCore/ReviewDay.swift</code>:给它句子池、投影、哪一天，
+    它把三份东西对到一起。</p>
+    <p><b>它自己不决定任何规则:</b>桶与封顶来自
+    <code>Projection.todayQueue</code>（镜像服务端 <code>collect</code>）、
+    分池来自 <code>SentencePool</code>（镜像 <code>split_pools</code>）、
+    当天那一轮的状态机是 <code>ReviewItemState</code>（有服务端导出的向量校验）。
+    <b>这里做的只是把三份东西对到一起。</b></p>
+    <p>视图模型因此薄了一大截:它只留住取回来的那份句子池、调一次 <code>assemble</code>、
+    读四个数。<code>SpellingWord</code> 跟着搬进 Core——拼写那一轮现在在那边算，
+    而留在 App 层的类型 Core 引用不到。</p>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1531,17 +1556,19 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <div class="not"><i>·</i><span><b>删掉服务端那份调度</b>
         <span>向量已经证明两边算得一样，<code>py-fsrs</code> 可以去掉了。
         <b>但要等队列组成也搬完</b>——现在删，服务端的 <code>/reviews</code> 先塌。</span></span></div>
-      <div class="not"><i>·</i><span><b>§11 模块劈开</b>
-        <span>下一件。把学习记录从 reading／review 里拆出去，
-        服务端只留内容生产。</span></span></div>
+      <div class="not"><i>·</i><span><b>§11 的后半，比预想的大</b>
+        <span>① 把 <code>ercli</code> 也搬到 <code>ReviewDay</code> ＋ 句子池上
+        （它现在还跑在服务端那份实现上，8 处）；② 打卡日历也搬到投影
+        （那也是学习记录）；③ 然后才能删服务端的队列／会话／调度；
+        ④ 并把 <code>verify_phase3</code> 那 25 项重指到 Core。</span></span></div>
       <div class="not"><i>·</i><span><b>§12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>
         <span>这三步是这个 Phase 的收尾，顺序不能倒——理由见 ⑮。</span></span></div>
     </div>
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">20</div>
-        <div class="fig-key">做完的活（①–⑳）</div></div>
+      <div class="fig"><div class="fig-val">21</div>
+        <div class="fig-key">做完的活（①–㉑）</div></div>
       <div class="fig"><div class="fig-val">5<span> ＋1 次事故</span></div>
         <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
       <div class="fig"><div class="fig-val">95<span>+</span></div>
