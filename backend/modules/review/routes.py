@@ -25,11 +25,13 @@ from backend.modules.reading import repository as reading_repository
 from backend.modules.review import (
     calendar, clock, repository, scheduler, sentences, session, translate,
 )
+from backend.modules.progress import module as progress_module
 from backend.modules.review.contract import (
     AnswerResponse,
     AnswersResponse,
     CalendarResponse,
     ReviewDayResponse,
+    SentencePoolResponse,
     SpellingResponse,
     SpellingsResponse,
 )
@@ -70,6 +72,65 @@ class AnswerIn(BaseModel):
     #: "That was trivial." Only honoured on a round with no misses — the server
     #: checks, so a client cannot talk its way into a longer interval.
     easy: bool = False
+
+
+@client_router.get("/sentences", summary="在学的那些词的句子（不分池）",
+                   response_model=SentencePoolResponse)
+async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
+    '''你在学的每个词，连它的全部句子——**服务端不分池**。
+
+    **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
+
+    **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    是「服务端还不知道」。
+
+    **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    而句子池本来也是按词与义项建的——词组拿不到句子。
+
+    **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
+    但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    '''
+    learner_id = auth.learner_for_device(device_id)
+    status = progress_module.snapshot_status(learner_id)
+    rows = get_connection("learning").execute(
+        "SELECT item_key, sense_id FROM learner_pool"
+        " WHERE learner_id = ? AND item_type = 'word' AND pool != 'new'"
+        " ORDER BY item_key, sense_id",
+        (learner_id,),
+    ).fetchall()
+
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item_key, sense_id = str(row["item_key"]), int(row["sense_id"])
+        items.append({
+            "item_type": "word",
+            "item_key": item_key,
+            "sense_id": sense_id,
+            "word": session.word_of(item_key),
+            "sense": session.sense_of(sense_id),
+            # **不分池。** `_rows` 是那张表的原样读取，而 `split_pools` 是
+            # 它上面那层判断——搬走的正是那一层。
+            "sentences": [sentences.as_card(s)
+                          for s in sentences._rows(item_key, sense_id)],
+        })
+
+    log.info(
+        "review.sentences.served",
+        f"下发了 {len(items)} 个在学词的句子池",
+        learner_id=learner_id, items=len(items),
+        reported_at=status.get("reported_at"),
+    )
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "reported_at": status.get("reported_at"),
+        "items": items,
+    }
 
 
 @client_router.get("/reviews/calendar", summary="打卡日历与连续天数",

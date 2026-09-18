@@ -136,13 +136,48 @@ class ReviewItem(BaseModel):
         default=None,
         description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
     )
-    word: WordCard | None = Field(
-        default=None,
-        description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
-    )
     sense: SenseCard | None = None
     questions: list[SentenceCard] = Field(description="用来出题的句子，你没读到过的")
     hints: list[SentenceCard] = Field(description="提示用的句子，当初读到它的那一句")
+
+
+class StudyItemSentences(BaseModel):
+    '''一个在学的词，连它的句子——**不分池**。
+
+    **P9 §11。** 分池（哪句当考题、哪句当提示）依赖「你读完过哪些文章、
+    见过哪些句子」，那是学习记录；而造句子要钱、要模型，是内容生产。
+    那条线把两件事分开了，所以这里原样全给，由客户端分（`ERCore/SentencePool`）。
+
+    **和 `ReviewItem` 的差别正是那条线**：这里没有 `queue_id`、`bucket`、
+    `direction`、`asks`、`weight`、`done`——那些全是学习状态，现在由设备重放算出来。
+    '''
+
+    item_type: str
+    item_key: str
+    sense_id: int
+    word: WordCard | None = None
+    sense: SenseCard | None = None
+    sentences: list[SentenceCard] = Field(
+        description="这个词（这个义项）的全部句子，**没有分池**。"
+        "`source` 与 `sentence_id`／`article_id` 够客户端自己分"
+    )
+
+
+class SentencePoolResponse(BaseModel):
+    '''在学的那些词的句子。
+
+    **依据是你上报的词池快照**（§7），不是服务端自己推的——
+    服务端对学习记录只有两种关系:生文需要的那一小撮信号，和它不解释的存档。
+    这里用的是前者，而它连解释都不算:直接用。
+    '''
+
+    learner: Learner
+    reported_at: str | None = Field(
+        default=None,
+        description="那份快照是什么时候的。**为空表示这台设备还没报过**——"
+        "那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」",
+    )
+    items: list[StudyItemSentences]
 
 
 class ReviewSession(BaseModel):
