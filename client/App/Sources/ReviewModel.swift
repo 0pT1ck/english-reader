@@ -95,7 +95,22 @@ final class ReviewModel {
 
     // MARK: 载入
 
+    /// 正在载入。**`needsLoad` 靠不住，所以另立一个**（2026-09-19）。
+    ///
+    /// `needsLoad` 读的是 `phase == .loading`，而 `phase` 要到第一个 `await`
+    /// 之后才变——于是 `.task` 和 `.onAppear` 两个入口的检查**都会通过**，
+    /// 两趟 `load()` 并发跑起来:两次 `fetchDay()`、两次句子池。
+    /// 09-17 的日志里那些成对的 `/v1/client/today` 超时就是它。
+    ///
+    /// 两个入口都留着（那是 P7 真机上逼出来的:`.task` 会在切走时被取消，
+    /// 而取消之后没有东西再叫它）。**要护的是「同时只跑一趟」，不是「只有一个入口」。**
+    private var loading = false
+
     func load(_ app: AppModel) async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+
         guard let engine = app.engine else {
             phase = .failed("连接还没建好，先到设置里填地址和令牌")
             return
@@ -124,9 +139,27 @@ final class ReviewModel {
             app.adopt(package)
             // 拼写这个功能开没开是服务端的配置，随今日包下发（P8 §7）。
             spellingEnabled = package.settings.spelling_enabled
-            // **顺序有意义**：先把事件推上去、把词池快照报上去，句子池才是对的那一批
-            // ——那个端点的依据正是那份快照（§7）。`drain()` 两件事都做。
-            await app.drain()
+
+            // **顺序仍然有意义，但屏幕不再等它**（2026-09-19 真机之后改）。
+            //
+            // 原文是「先把事件推上去、把词池快照报上去，句子池才是对的那一批」——
+            // 那个理由今天照样成立。**错的是让屏幕等在上面**:
+            // `drain()` 要走网络，而它失败的时候要走好几秒，
+            // 于是「切一下选项卡」变成「等一趟正在失败的同步」，屏幕上一直转圈。
+            //
+            // 所以:有待发才等（那时句子池确实可能不对），没有就直接取。
+            // **常态是 0 条**，也就是常态下这一格立刻就亮。
+            if app.pendingEvents > 0 {
+                await app.drain()
+            } else {
+                // 没有待发也还是要报一次快照／拉一次别处做的事，
+                // 只是不占着屏幕——它回来之后 `sync` 会再刷一遍数。
+                Task { [weak app] in
+                    guard let app else { return }
+                    await app.drain()
+                    sync(app)
+                }
+            }
             pool = try await engine.fetchSentences()
             sync(app)
             phase = .ready

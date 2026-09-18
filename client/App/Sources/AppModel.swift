@@ -210,12 +210,20 @@ final class AppModel {
     /// **算不了排期就不算，但照样重放。** 没有 `schedulerSettings` 时
     /// 记忆状态那一半是空的，而词池、遇见次数、当天那一轮照样对——
     /// 半个投影比一个用猜来的参数算出来的完整投影有用得多。
+    /// 上一次重放用的那份日志。**日历复用它**——同一份东西读两遍是白读，
+    /// 而它在 799 条的时候就已经看得出来了。
+    ///
+    /// 它总是新的:唯一往日志里写东西的路径（`record()`、`pull()`、重置）
+    /// 写完都会调 `refreshProjection()`。
+    private var lastLoad: EventLogLoad?
+
     func refreshProjection() {
         guard let events else { return }
         guard let load = try? events.load() else {
             log?.write(.error, "projection.unreadable", "日志读不出来")
             return
         }
+        lastLoad = load
         projection = Projection.replay(
             load, weightDecay: weightDecay,
             settings: schedulerSettings ?? Self.unusableSettings
@@ -261,8 +269,16 @@ final class AppModel {
     /// **一次前向重放、在日界处求值**，所以它不贵；但它比那两个数贵
     /// （要回看 400 天算连续），所以只在 `sync` 里算一次，不做成计算属性。
     func calendar(days span: Int = 7) -> (days: [ReviewCalendar.Day], streak: Int)? {
-        guard let settings = schedulerSettings, let events,
-              let load = try? events.load() else { return nil }
+        guard let settings = schedulerSettings else { return nil }
+        // **复用重放时那一份，不再自己读一遍盘**（2026-09-19）。
+        //
+        // 原本这里自己 `events.load()`——于是进一次复习屏要把日志整份读两遍、
+        // 解码两遍（一遍给投影、一遍给日历），而 `record()` 每记一条事件就触发
+        // 一次投影刷新。真机上 799 条的时候，切一下选项卡就卡得看得出来。
+        //
+        // **这和 P8 §18 那个「越用越慢」是同一个形状的第三次**:
+        // 贵的东西被放在了「每次都会走」的路上。
+        guard let load = lastLoad ?? (try? events?.load()) else { return nil }
         return ReviewCalendar.build(load, weightDecay: weightDecay,
                                     settings: settings,
                                     today: ReviewCalendar.key(of: Date()),
