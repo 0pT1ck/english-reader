@@ -2949,10 +2949,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/TodayResponse/extra_articles`.
             public var extra_articles: [Components.Schemas.ArticleResponse]
-            /// 跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里
+            /// **P9 起不再下发。** 复习那一份由设备自己算（句子来自 `/v1/client/sentences`，状态来自它重放自己的事件日志）。字段留着不删——铁律 5 只增不减，而老客户端还在读它；但服务端组装它意味着**每次请求都要建会话、入队**，也就是服务端在写学习状态，而那正是那条线禁止的事
             ///
             /// - Remark: Generated from `#/components/schemas/TodayResponse/reviews`.
-            public var reviews: Components.Schemas.ReviewDayResponse
+            public var reviews: Components.Schemas.ReviewDayResponse?
             /// - Remark: Generated from `#/components/schemas/TodayResponse/settings`.
             public var settings: Components.Schemas.TodaySettings
             /// **今日包 ≠ 今天能读的全部。**真题走自己的入口 /library?source=cet4|cet6|kaoyan。写在响应里而不只是写在文档里——一个以为这就是全部的客户端会静默地藏起 452 篇真题
@@ -2967,7 +2967,7 @@ extension Components {
             ///   - day: 复习那一天的日期
             ///   - articles: 今天的正课。**正好 3 篇**，由配置项 today_article_count 决定
             ///   - extra_articles: **永远是空的。**加餐已于 2026-09-12 取消——往期本身就是加餐，往列表下面翻就有。字段留着不删是因为铁律 5 只增不减；把 today_extra_count 改回非零就能恢复
-            ///   - reviews: 跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里
+            ///   - reviews: **P9 起不再下发。** 复习那一份由设备自己算（句子来自 `/v1/client/sentences`，状态来自它重放自己的事件日志）。字段留着不删——铁律 5 只增不减，而老客户端还在读它；但服务端组装它意味着**每次请求都要建会话、入队**，也就是服务端在写学习状态，而那正是那条线禁止的事
             ///   - settings:
             ///   - excludes_exam_papers: **今日包 ≠ 今天能读的全部。**真题走自己的入口 /library?source=cet4|cet6|kaoyan。写在响应里而不只是写在文档里——一个以为这就是全部的客户端会静默地藏起 452 篇真题
             public init(
@@ -2976,7 +2976,7 @@ extension Components {
                 day: Swift.String? = nil,
                 articles: [Components.Schemas.ArticleResponse],
                 extra_articles: [Components.Schemas.ArticleResponse],
-                reviews: Components.Schemas.ReviewDayResponse,
+                reviews: Components.Schemas.ReviewDayResponse? = nil,
                 settings: Components.Schemas.TodaySettings,
                 excludes_exam_papers: Swift.Bool
             ) {
