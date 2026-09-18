@@ -60,7 +60,24 @@ class AnswerIn(BaseModel):
         "每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍",
     )
     passed: bool
-    revealed: int = Field(default=0, ge=0, le=session.MAX_REVEAL)
+    revealed: int = Field(
+        default=0, ge=0,
+        description="开了几级提示。**入站不设上限**，理由见下——"
+        "服务端在解释它的时候 clamp 到 `MAX_REVEAL`",
+    )
+    # **上限 2026-09-19 从这里去掉了，而它是一次真的事故。**
+    #
+    # 原本写的是 `le=session.MAX_REVEAL`。而 P7 在 2026-09-13 把三级提示压成
+    # 一级，`MAX_REVEAL` 从 3 变成 1——**于是服务端把自己的存档变成了自己
+    # 收不下的东西**：`client_events` 里有 2 条 P7 之前记下的 `revealed=2`。
+    #
+    # 在 P9 之前没人会把老事件重新发上来，所以它一直没发作。§6 做了双向同步
+    # 之后，设备把这些事件拉下来又推回来，那 2 条就让整批 118 条永远进不来
+    # （422，而且是 pydantic 在 handler 之前拒的，逐条裁决那套完全没机会跑）。
+    #
+    # **教训不是「上限写错了」，是「入站字段的取值范围不许收紧」**——
+    # 那等于事后宣布一批已经收下的事实为非法，而铁律 5 说的「不能改字段含义」
+    # 正是这件事。上限属于**解释**这一侧:`grade` 那边照旧按 `MAX_REVEAL` 封顶。
     sentence_id: int | None = None
     #: "That was trivial." Only honoured on a round with no misses — the server
     #: checks, so a client cannot talk its way into a longer interval.
@@ -139,6 +156,35 @@ class SpellingIn(BaseModel):
     typed: str
 
 
+class AnswerItem(AnswerIn):
+    idem_key: str = Field(min_length=8, max_length=128, description="客户端生成的幂等键")
+    occurred_at: str | None = Field(default=None, description="客户端时钟，可能不准")
+
+
+class UnusableItem(BaseModel):
+    """一条验不过去的补报。**留着它，好让它有资格被逐条拒绝。**
+
+    这个类型存在的理由是一次事故（2026-09-19）。这个端点的契约写的是
+    「a failure in the middle stops nothing — the one that failed is reported
+    with its key so the client can decide」，而 **pydantic 的校验发生在
+    handler 之前**——一条字段越界就让整批 500 条一起 422，
+    逐条裁决那套设计完全没机会跑。**注释描述的是意图，实现从来没跟上**
+    （坑 §7.1 的同一个形状，而那段注释是我自己刚写下的）。
+
+    实际发作的样子:设备把老事件拉下来又推回去，其中 2 条是 P7 之前记的
+    `revealed=2`，于是那 118 条作答**永远**进不来，手机一直转圈。
+
+    所以列表的元素类型是「一条作答 **或** 一条验不过去的东西」。
+    后者只需要认得出是哪一条（`idem_key`），好把 `failed` 连同理由回给客户端;
+    认不出的话连拒绝都没法逐条拒绝，那就只能整批砸掉，也就回到了原点。
+    """
+
+    model_config = {"extra": "allow"}
+
+    idem_key: str | None = Field(
+        default=None, description="能认出是哪一条就够了，其余字段不做要求")
+
+
 class AnswersIn(BaseModel):
     """A batch of answers that happened while the device was on its own.
 
@@ -147,17 +193,14 @@ class AnswersIn(BaseModel):
     ten minutes ago on a train. Same reasoning, same field name and same table
     as the reading events — one event store, not two (see ``client_events``,
     whose own comment anticipated this phase).
+
+    **元素是个联合类型，那是有意的**（2026-09-19）:见 :class:`UnusableItem`。
+    一条坏的只挡住自己，不挡它后面的——那是这个端点从第一天就承诺的事，
+    而在这之前它做不到。
     """
 
-    answers: list["AnswerItem"] = Field(default_factory=list, max_length=500)
-
-
-class AnswerItem(AnswerIn):
-    idem_key: str = Field(min_length=8, max_length=128, description="客户端生成的幂等键")
-    occurred_at: str | None = Field(default=None, description="客户端时钟，可能不准")
-
-
-AnswersIn.model_rebuild()
+    answers: list[AnswerItem | UnusableItem] = Field(
+        default_factory=list, max_length=500)
 
 
 @client_router.post("/reviews/answers", summary="批量上报作答（离线补报用）",
@@ -190,6 +233,24 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
     results: list[dict[str, Any]] = []
 
     for item in body.answers:
+        # **验不过去的那一条:逐条拒绝，带着理由。**
+        # 在 2026-09-19 之前这里到不了——pydantic 在 handler 之前就把整批砸掉了，
+        # 而这个端点的契约承诺的恰恰是「一条坏的只挡住自己」。
+        if isinstance(item, UnusableItem):
+            failed += 1
+            reason = "这一条的字段验不过去，其余照常收下"
+            results.append({"idem_key": item.idem_key or "?", "status": "failed",
+                            "reason": reason})
+            log.warning(
+                "review.answer.unusable",
+                f"补报里有一条验不过去:{item.idem_key or '没有幂等键'}",
+                idem_key=item.idem_key,
+                # **原样记下来**，因为「哪个字段不对」只有这里看得到，
+                # 而客户端拿到的只有「这一条没收」。
+                fields=sorted(item.model_dump().keys()),
+            )
+            continue
+
         payload = item.model_dump()
         record = reading_repository.record_event(
             item.idem_key, device_id, learner_id, "review.answered",
@@ -282,7 +343,15 @@ class SpellingItem(SpellingIn):
 
 
 class SpellingsIn(BaseModel):
-    spellings: list[SpellingItem] = Field(default_factory=list, max_length=500)
+    """**元素同样是联合类型**，理由见 :class:`UnusableItem`。
+
+    这一路还没出过事，而形状和作答那一路一模一样:一条字段验不过去就整批 422，
+    而这个端点的契约写的也是「the same per-item verdict as the answers batch」。
+    **等它出事再改，就是等一次「手机一直转圈」**——那一次已经付过了。
+    """
+
+    spellings: list[SpellingItem | UnusableItem] = Field(
+        default_factory=list, max_length=500)
 
 
 @client_router.post("/reviews/spellings", summary="批量上报拼写（离线补报用）",
@@ -312,6 +381,15 @@ async def report_spellings(device_id: DeviceId, body: SpellingsIn) -> dict[str, 
     results: list[dict[str, Any]] = []
 
     for item in body.spellings:
+        if isinstance(item, UnusableItem):
+            failed += 1
+            results.append({"idem_key": item.idem_key or "?", "status": "failed",
+                            "reason": "这一条的字段验不过去，其余照常收下"})
+            log.warning("review.spelling.unusable",
+                        f"补报里有一条拼写验不过去:{item.idem_key or '没有幂等键'}",
+                        idem_key=item.idem_key)
+            continue
+
         record = reading_repository.record_event(
             item.idem_key, device_id, learner_id, "review.spelled",
             item.model_dump(), item.occurred_at,

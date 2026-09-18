@@ -426,6 +426,39 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
             bad = http.post("/v1/client/reviews/answers", headers=headers, json={
                 "answers": [{"idem_key": f"p4probe-{uuid.uuid4().hex}",
                              "queue_id": 999999, "passed": True}]}).json()
+            # **这一条 2026-09-19 加，因为它塌过，而且塌得很贵。**
+            #
+            # 这个端点的契约从第一天就写着「a failure in the middle stops
+            # nothing」，而 **pydantic 的校验发生在 handler 之前**——
+            # 一条字段验不过去就整批 422，逐条裁决那套完全没机会跑。
+            # 真机上的样子:P7 把提示从三级压成一级（`MAX_REVEAL` 3 → 1），
+            # 而存档里有 2 条更早记下的 `revealed=2`；设备把它们拉下来又推回去，
+            # **那 118 条作答从此永远进不来**，手机一直转圈。
+            #
+            # 所以这里同时验两件事，缺一件都说明不了问题:
+            # ① 一条真的坏的（缺 `passed`）只挡住自己；
+            # ② **一个历史上合法、现在超出上限的值照样收得下**——
+            #    入站字段的取值范围不许收紧，那等于事后宣布已收下的事实为非法。
+            historical = f"p4probe-{uuid.uuid4().hex}"
+            mixed = http.post("/v1/client/reviews/answers", headers=headers, json={
+                "answers": [
+                    {"idem_key": f"p4probe-{uuid.uuid4().hex}", "queue_id": 0,
+                     "item_type": "word", "item_key": "__p4probe__", "sense_id": 0,
+                     "passed": True, "revealed": 0},
+                    {"idem_key": historical, "queue_id": 0,
+                     "item_type": "word", "item_key": "__p4probe__", "sense_id": 0,
+                     "passed": True, "revealed": 3},          # P7 之前的合法值
+                    {"idem_key": f"p4probe-{uuid.uuid4().hex}", "queue_id": 0,
+                     "item_type": "word", "item_key": "__p4probe__"},  # 缺 passed
+                ]}).json()
+            verdicts = {r["idem_key"]: r["status"] for r in mixed.get("results", [])}
+            check("C3.3", "一条验不过去的只挡住自己，而历史上的旧值照样收得下",
+                  mixed.get("accepted") == 2 and mixed.get("failed") == 1
+                  and verdicts.get(historical) == "accepted",
+                  f"接受 {mixed.get('accepted')}、失败 {mixed.get('failed')}——"
+                  "`revealed=3` 是 P7 之前的合法值，收紧入站范围"
+                  "等于把自己的存档变成自己收不下的东西（真机上卡了一天）")
+
             check("C3.2", "一条坏的不拖垮整批",
                   bad.get("failed") == 1 and bad.get("accepted") == 0,
                   "没有身份的那一条报 failed 并说明理由，其余照常——"

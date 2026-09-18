@@ -69,8 +69,29 @@ class ClientEvent(BaseModel):
     occurred_at: str | None = Field(default=None, description="客户端时钟，可能不准")
 
 
+class UnusableEvent(BaseModel):
+    """一条验不过去的上报。**留着它，好让它有资格被逐条拒绝。**
+
+    2026-09-19 加，起因是复习作答那一路的同一个形状（见
+    `review/routes.py` 的 `UnusableItem`）:这个端点回的是**逐条**裁决
+    （`EventBatchResponse` 的注释写着「What matters to the client is the
+    per-item verdict」），而 pydantic 的校验发生在 handler 之前——
+    一条字段验不过去就让整批 500 条一起 422，逐条那套完全没机会跑。
+
+    这一路实际发作过一次，形状还不一样:客户端一批发 534 条而这里写着
+    `max_length=500`，于是**每次都是 422，队列只会变长**（手机卡了一天）。
+    那一次是客户端改成分片修的；**而「一条坏的不许拖垮整批」是这一侧的事**。
+    """
+
+    model_config = {"extra": "allow"}
+
+    idem_key: str | None = Field(
+        default=None, description="能认出是哪一条就够了，其余字段不做要求")
+
+
 class EventBatch(BaseModel):
-    events: list[ClientEvent] = Field(default_factory=list, max_length=500)
+    events: list[ClientEvent | UnusableEvent] = Field(
+        default_factory=list, max_length=500)
 
 
 # **Why `response_model=` and not a return annotation.** The service layer
