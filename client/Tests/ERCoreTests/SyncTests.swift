@@ -317,7 +317,7 @@ extension SyncTests {
         let events = try EventLog(directory: root.appendingPathComponent("events"))
         for i in 0..<534 {
             try events.append(kind: .marked,
-                              payload: ["item_key": .string("w\(i)"), "sense_id": .number(1)],
+                              payload: ["item_key": .string("w\(i)"), "sense_id": .int(1)],
                               idemKey: "mark-\(i)")
         }
         let engine = SyncEngine(
