@@ -1464,6 +1464,49 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     而且它守的是「生成器警告然后跳过」那个具体的失败——
     2026-09-12 有 70 个字段那样没的，而构建是绿的。</p>
 
+    <h3>⑳ 复习那几屏改读新的内容端点 — 做完（§11 的前半）</h3>
+    <p>新端点 <code>GET /v1/client/sentences</code>:你在学的每个词，
+    连它的<b>全部句子——服务端不分池</b>。加上 <code>ERCore/SentencePool</code> 那三条规则，
+    复习那几屏的内容来源从「今日包的复习那半」换成了它。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>那个端点给什么</th><th>不给什么</th></tr>
+      <tr><td>句子（未分池）、义项、词条</td>
+          <td><b>队列号、桶、方向、问过几次、权重、做完没有、进度</b>——
+          全是学习状态，现在由重放算出来</td></tr>
+    </table>
+    </div>
+    <p><b>依据是设备上报的词池快照</b>（§7），不是服务端自己推的。
+    所以还没报过快照的设备拿到空列表，而响应里 <code>reported_at</code> 为空
+    正是在说「服务端还不知道」——<b>那和「你没在学任何词」是两件事</b>。
+    实测:没报过 → 0 条；报了 3 个词 → 3 条，每条 15–16 句，
+    <b><code>sentence_id</code> 恰好只出现在语料句上</b>（生成的句子不出自任何文章，
+    而那正是第三条分池规则要的输入）。</p>
+    <p><b>题目是现拼的</b>:内容来自服务端，状态来自投影，分池用本机读过什么。
+    拼在 <code>sync()</code> 里而不是在那个计算属性里——分池要投影，
+    而计算属性拿不到 app，那样就得把 app 存进视图模型。
+    <b>这么做的好处是 <code>HintLadder</code>、会话屏、向量测试一行都不用改</b>:
+    它们吃的还是同一个 <code>ReviewItem</code>，只是那个值现在是拼出来的。</p>
+    <div class="callout">
+      <b><code>queue_id</code> 现在恒为 0，而那不是没清干净的占位符。</b>
+      它是服务端那张表的行号、每天重建，而队列现在是设备自己组的——
+      再引它就不是可重放的日志了（§16 ⑥ 那条教训）。
+      <br><br>
+      所以服务端那个作答端点学会了<b>「0 ＋ 身份」那一支:只把事件记下来，
+      不再算一遍</b>。事件已经由 <code>record_event</code> 存进
+      <code>client_events</code>，而那正是多设备的会合点——<b>两边各算一遍才是
+      真会分家的做法</b>。带真队列号的旧那一支留着不动（Web 复习页和老客户端要它，
+      铁律 5 只增不减），它随那两样一起走。
+    </div>
+    <p><b>载入顺序有意义</b>:先推事件、报词池快照，再取句子池——
+    那个端点的依据正是那份快照。今日包照旧要取，但<b>只为那几个服务端参数</b>
+    （排期参数、权重衰减）。而<b>只有今日包对日期敏感</b>:昨天的包不是「旧一点」，
+    是错的；句子池没有这个问题——它是「你在学哪些词」的函数，
+    不是「今天是哪天」的函数。</p>
+    <p>顺带清掉两处死代码:<code>ReviewItem</code> 上<b>声明了两遍的 <code>word</code> 字段</b>
+    （复制粘贴留下的，Pydantic 只用第二个所以一直没人发现），
+    以及视图模型里那份 <code>weightDecay</code>——规则搬走之后没人读它了。</p>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1497,8 +1540,8 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
 
     <h3>已经花掉的与已经拿到的</h3>
     <div class="figures">
-      <div class="fig"><div class="fig-val">19</div>
-        <div class="fig-key">做完的活（①–⑲）</div></div>
+      <div class="fig"><div class="fig-val">20</div>
+        <div class="fig-key">做完的活（①–⑳）</div></div>
       <div class="fig"><div class="fig-val">5<span> ＋1 次事故</span></div>
         <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
       <div class="fig"><div class="fig-val">95<span>+</span></div>
