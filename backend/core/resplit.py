@@ -268,6 +268,11 @@ def run() -> dict[str, Any] | None:
                      table=table, database=home, rows=source_rows)
 
         records = _move_migration_records(conn)
+        # 腾出来的页要真的还给文件系统。不 VACUUM 的话 learning.db 还是 43 MB，
+        # **而「空了」这件事是靠肉眼看的**——一个和原来一样大的文件旁边放着三个
+        # 新文件，读起来像是拆到一半。
+        conn.execute("DETACH DATABASE legacy")
+        conn.execute("VACUUM")
     finally:
         conn.close()
 

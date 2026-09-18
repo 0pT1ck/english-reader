@@ -635,7 +635,11 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7d. 学习记录合表 ---------------------------------------------- #
         print("\n7d. 学习记录合表")
 
-        renamed = {r["name"] for r in conn.execute(
+        # **`sqlite_master` 是每个文件一张**（P9 §10 把库拆成了五个），
+        # 所以问「这张表在不在」必须问对文件——问错的那次会答「不在」，
+        # 而这一条正好是在验「不在」，于是错误地通过或错误地报红都很容易。
+        # 学习记录那几张在 events.db。
+        renamed = {r["name"] for r in get_connection("events").execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
         check("7.15", "word_marks / sense_states 已并成 study_marks / study_states",
               {"study_marks", "study_states"} <= renamed

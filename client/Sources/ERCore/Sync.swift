@@ -270,24 +270,12 @@ public actor SyncEngine {
             Components.Schemas.MeResponse.self, from: response.body)
     }
 
-    /// The check-in calendar and the streak.
-    ///
-    /// Its own endpoint rather than fields on the day package, because
-    /// 跨 Phase 不变量 only allows obvious shapes to be reserved in place and a
-    /// list of days is not one. No offline fallback: a calendar that silently
-    /// shows stale days is worse than one that says it could not load.
-    public func calendar(days: Int = 7)
-        async throws -> Components.Schemas.CalendarResponse {
-        let response = try await transport.send(
-            HTTPRequest(method: .get, path: "/v1/client/reviews/calendar?days=\(days)"))
-        guard response.isOK else {
-            throw TransportError.server(
-                status: response.status,
-                body: String(decoding: response.body.prefix(400), as: UTF8.self))
-        }
-        return try JSONDecoder().decode(
-            Components.Schemas.CalendarResponse.self, from: response.body)
-    }
+    // `calendar(days:)` 没有了（P9 §11）。打卡日历是学习记录的一个函数，
+    // 而学习记录在设备上——`ReviewCalendar.build` 一次前向重放就把它算出来了，
+    // 不用问服务端，也就不会在飞机上变成一片空白。
+    //
+    // 服务端那个端点同时删掉了:它每答完一天都要重新扫一遍队列与历史，
+    // 而那正是「服务端跟着拇指改学习状态」的另一种写法。
 
     /// 从会合点把别的设备做的事拉下来。
     ///
