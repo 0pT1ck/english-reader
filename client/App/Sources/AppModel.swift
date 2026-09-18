@@ -61,6 +61,13 @@ final class AppModel {
     /// 的唯一出口，而这个 Phase 没有别的地方能回答这个问题。
     private(set) var pendingEvents: Int = 0
 
+    /// 日志里一共多少条。**和待发数是两件事**：这一个是「这台设备知道的全部事实」，
+    /// 那一个是「其中还没送出去的」。开发者选项要两个并排看——重拉之后
+    /// 总数应该变（它是从会合点重新拉的），而待发数本来就该是 0。
+    ///
+    /// 按需刷新（`refreshEventCount()`），**不跟着待发数走**——理由在那个方法上。
+    private(set) var eventCount: Int = 0
+
     /// 读不出来的事件文件有几条。**平时是 0**，非零意味着有一次标记既发不出去
     /// 也读不回来——那时待发数会永远卡着不动，而没有这个数的话，没人知道为什么。
     private(set) var damagedEvents: Int = 0
@@ -262,6 +269,51 @@ final class AppModel {
                                     span: span)
     }
 
+    /// 重置结果，给开发者选项那一屏显示。
+    enum LocalLogReset: Equatable {
+        /// 成功：丢掉了多少条、重新拉回来多少条。
+        case done(discarded: Int, adopted: Int)
+        /// **拒绝**：本地还有没上报的事实，丢掉它们就真的没了。
+        case refusedPending(Int)
+        case failed(String)
+    }
+
+    /// 把本地日志整份丢掉，从会合点重新拉一次。
+    ///
+    /// **为什么需要这个动作**（2026-09-18 加，开发者选项里）:日志从不回头改——
+    /// 那是它的设计。而那天验收夹具经由拉取端点流进了设备的日志，
+    /// 服务端清干净之后设备手里那份仍然是脏的。既然不许改，就得能整份丢掉重来。
+    ///
+    /// **先推，再看，才敢丢。** 设备是学习记录的第一副本，会合点只是会合点——
+    /// 所以这个动作只在「本地没有任何还没上报的事实」时才无损。
+    /// 推完还有待发就**拒绝并说出数目**，不给「要不要强制」那个选项:
+    /// 一个能把自己的学习记录删掉的按钮，不该由一次点击决定。
+    ///
+    /// 放在开发者选项而不是设置里，同那一页其余五样的判据:它是开发期的工具，
+    /// 而且它的后果需要看得懂日志的人来判断。
+    func resetLocalLog() async -> LocalLogReset {
+        guard let engine, let events else { return .failed("连接还没建好") }
+        _ = await drain()
+        do {
+            let pending = try events.unreported(kinds: LoggedEvent.sendableKinds)
+            guard pending.isEmpty else { return .refusedPending(pending.count) }
+
+            let discarded = try events.load().events.count
+            try events.reset()
+            let adopted = try await engine.pull()
+            refreshProjection()
+            refreshPendingCount()
+            log?.write(.warn, "events.log.reset", "本地日志整份重拉了",
+                       fields: ["discarded": String(discarded),
+                                "adopted": String(adopted)])
+            return .done(discarded: discarded, adopted: adopted)
+        } catch {
+            log?.write(.error, "events.log.reset.failed", "重拉没成功",
+                       fields: ["error": String(describing: error)])
+            return .failed(error.localizedDescription)
+        }
+    }
+
     /// 待发条数。**只数文件，不读文件。**
     ///
     /// 2026-09-16 修：这里一度顺手调了 `outbox.pending()` 去数损坏条目，
@@ -279,6 +331,17 @@ final class AppModel {
             unsent = pending.count
         }
         pendingEvents = (outbox?.count ?? 0) + unsent
+    }
+
+    /// 日志里一共多少条。**贵，所以只在有人要看的时候算**——它要把日志整个
+    /// 读一遍解一遍。
+    ///
+    /// **不许塞进 `refreshPendingCount()`**:那个方法每记一条事件就被调一次
+    /// （`record()` 里），而 2026-09-16 真机上「越用越慢」正是这么来的——
+    /// 当时是往里塞了 `outbox.pending()`，它会读并解码发件箱里的每一个文件。
+    /// 2026-09-18 我又往同一处塞了一次 `events.load()`，写下来免得有第三次。
+    func refreshEventCount() {
+        eventCount = (try? events?.load().events.count) ?? 0
     }
 
     /// 读不出来的事件文件有几条。**贵，所以只在有人要看的时候算**——

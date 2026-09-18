@@ -351,6 +351,28 @@ public final class EventLog: @unchecked Sendable {
         return event
     }
 
+    /// 把这台设备的日志清空，好让它从会合点整份重新拉一次。
+    ///
+    /// **会合点是学习记录的会合点，不是它的来源**——设备才是第一副本。
+    /// 所以清空本地日志是有损的动作，而它只在一种情况下无损:
+    /// **本地没有任何还没上报的事实**，那时会合点是本地的超集。
+    /// 判断那件事不在这里做（这里只管文件），在调用方——
+    /// 它得先推一次、确认 `unreported` 是空的，见 `AppModel.resetLocalLog()`。
+    ///
+    /// **为什么需要它。** 2026-09-18 真机上，验收夹具经由 §6 的拉取端点流进了
+    /// 设备的日志——服务端清干净之后，设备手里那份仍然是脏的，而日志从不回头改
+    /// （那是它的设计，不是缺陷）。既然不许改，那就得能整份丢掉重来。
+    ///
+    /// 游标一起清:留着它的话下一次拉取会从旧的 `pulledThrough` 往后取，
+    /// 而前面那些再也拉不回来了。
+    public func reset() throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try Data().write(to: file, options: .atomic)
+        try? fileManager.removeItem(at: cursorFile)
+        nextSequence = 0
+    }
+
     /// 记下这一批报掉了。
     public func markReported(_ sequences: [Int]) throws {
         var cursor = cursor()

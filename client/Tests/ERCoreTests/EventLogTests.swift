@@ -214,6 +214,32 @@ struct EventLogTests {
                 "拉来的一条都不该再推回去——这正是那 798 条的来路")
     }
 
+    /// 开发者选项里那个「丢掉本地日志重新拉」靠它（2026-09-18 加）。
+    /// **游标必须一起清**:留着的话下一次拉取从旧的 `pulledThrough` 往后取，
+    /// 而前面那些再也拉不回来——那比脏日志更糟，是一份缺了一段的日志。
+    @Test("重置把日志和游标一起清掉，序号从头开始")
+    func resetClearsBothTheLogAndTheCursor() throws {
+        let directory = Self.temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let log = try EventLog(directory: directory)
+
+        try log.append(kind: .marked, payload: ["item_key": .string("a")])
+        try log.appendPulled(kind: .marked, payload: ["item_key": .string("b")],
+                             idemKey: "theirs", occurredAt: "")
+        var cursor = log.cursor()
+        cursor.pulledThrough = 4200
+        try log.setCursor(cursor)
+
+        try log.reset()
+
+        #expect(try log.load().events.isEmpty, "日志空了")
+        #expect(log.cursor().pulledThrough == 0,
+                "游标也归零——否则前面那一段再也拉不回来")
+        #expect(try log.knownIdemKeys().isEmpty)
+        let fresh = try log.append(kind: .marked, payload: ["item_key": .string("c")])
+        #expect(fresh.localSequence == 0, "序号从头开始")
+    }
+
     @Test("线上那个 type 到 kind 的映射只有一份，遥测映射成 nil")
     func wireTypesMapToKinds() {
         let cases: [(String, LoggedEvent.Kind?)] = [
