@@ -106,6 +106,23 @@ public struct Projection: Sendable, Equatable {
     public var items: [Key: Item] = [:]
     public var rounds: [Key: Round] = [:]
     public var days: [String: Day] = [:]
+
+    /// 读完过的文章。**考句池与提示池的划分要它**（见 ``SentencePool``）。
+    public var finishedArticles: Set<Int> = []
+
+    /// 确定见过的句子，一条一条。
+    ///
+    /// **它补的是「读完文章」这个代理指标的缺口**，而那个缺口在最普通的情形里就出现:
+    /// 你是**在读的时候**标记的，所以标记所在那一句肯定见过——**而文章可能几小时后
+    /// 才读完，也可能永远不读完**。不管的话那一句算「没见过」，可以被抽成考题:
+    /// 于是你被五分钟前刚读过的那一句考了，看着像道容易题，落下来是一个虚高的评级，
+    /// **而没有任何东西会报告它**。
+    ///
+    /// 服务端那边是两个来源（`study_marks.sentence_id` 与
+    /// `study_states.introduced_sentence_id`）。在日志这边它们合成一个:
+    /// 标记事件带着 `sentence_id`，而日志只增不减——撤销标记也不会让它消失，
+    /// 那正是服务端留 `introduced_sentence_id` 想要的性质。
+    public var seenSentences: Set<Int> = []
     /// 重放时读不出来的事件数。**平时是 0。**
     public var damagedEvents = 0
     /// 重放到哪个本地序号(含)。-1 ＝ 一条都没有。
@@ -146,6 +163,11 @@ public struct Projection: Sendable, Equatable {
                     item.introducedArticleId = Self.int(event.payload["article_id"])
                     item.introducedSentenceId = Self.int(event.payload["sentence_id"])
                 }
+                // 标记所在那一句肯定见过。**撤销标记不会让它消失**——
+                // 日志只增不减，而那正是服务端留 `introduced_sentence_id` 的用意。
+                if let sentence = Self.int(event.payload["sentence_id"]) {
+                    projection.seenSentences.insert(sentence)
+                }
                 projection.items[key] = item
 
             case .unmarked:
@@ -169,6 +191,9 @@ public struct Projection: Sendable, Equatable {
                 var record = projection.days[day] ?? Day()
                 record.readArticles += 1
                 projection.days[day] = record
+                if let article = Self.int(event.payload["article_id"]) {
+                    projection.finishedArticles.insert(article)
+                }
                 for met in Self.met(in: event.payload) {
                     // **只给已经有记录的条目加,不为没标过的词建行。**
                     // 镜像服务端那句 `if key in known: touch_state(...)`——

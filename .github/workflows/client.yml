@@ -143,6 +143,61 @@ jobs:
             exit 1
           fi
 
+  regenerate:
+    name: L0 · 契约真的重新生成一遍
+    # **本机不装 Swift，所以契约类型在本机生成不出来**（「开发场地」那条决定的代价）。
+    # 在 P9 之前这没关系:契约不常改。而 P9 一路上已经为它绕了两次
+    # （排期参数、事件流都改成从原始字节解），下一步还要改契约——
+    # 所以这一层在这里:**CI 会生成，而且生成完和提交的比一比**。
+    #
+    # 这同时把下面那个 `contract` job 从「抽查四个字段」升成了「逐字节一致」。
+    # 抽查放着不删:它读得懂、跑得快，而且它守的是「生成器警告然后跳过」
+    # 那个具体的失败（坑:2026-09-12 有 70 个字段那样没的，构建还是绿的）。
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 选定 Xcode
+        run: |
+          set -euo pipefail
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$APP"
+          swift --version
+
+      # 生成器是从源码 `swift run` 的，构建它要几分钟——缓存它，
+      # 否则每次推送都付一遍。
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tooling
+          key: openapi-generator-${{ runner.os }}-v1
+
+      - name: 重新生成，并和提交的比
+        run: |
+          set -euo pipefail
+          python scripts/generate_swift_types.py
+          if ! git diff --quiet -- client/Sources/ERContract; then
+            echo "::error::生成物和 client/openapi.json 对不上。"
+            echo "::error::**这不是要你手改生成物**——把本次运行的 regenerated 产物下载下来提交。"
+            git diff --stat -- client/Sources/ERContract
+            exit 1
+          fi
+          echo "逐字节一致"
+
+      # **失败时也要传。** 本机生成不出来，所以这个产物是唯一的取得方式；
+      # 只在成功时传等于「对不上的时候你什么也拿不到」。
+      - name: 把生成物传出来
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-contract
+          path: client/Sources/ERContract
+          if-no-files-found: error
+
   contract:
     name: L0 · 契约没有漂
     runs-on: ubuntu-latest

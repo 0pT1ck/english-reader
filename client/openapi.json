@@ -2860,6 +2860,18 @@
             "title": "Source",
             "description": "generated 生成的 / corpus 语料里的"
           },
+          "sentence_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentence Id",
+            "description": "这一句在文章里的那个 id（`reading_sentences.id`）。**P9 加的**:考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，而它手上「见过」的那个集合是按这个 id 记的（标记事件带着它）。**和上面那个 `id` 不是一回事**——那个是句子池自己的行号。生成的句子没有它（它们不出自任何文章）"
+          },
           "article_id": {
             "anyOf": [
               {

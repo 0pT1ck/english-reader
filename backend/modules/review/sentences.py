@@ -320,6 +320,10 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
         "surface": row["surface"],
         "first_letter": (row["surface"] or "?")[:1],
         "source": row["source"],
+        # **P9 加的**：考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，
+        # 而它那个「见过」的集合是按文章里的句子 id 记的（标记事件带着它）。
+        # 和上面那个 `id` 不是一回事——那个是句子池自己的行号。
+        "sentence_id": row["sentence_id"],
         # Lets a hint say where it came from ("——文章a"), and lets a future
         # version jump back into the article. Null for generated sentences,
         # which are never hints anyway.
