@@ -191,4 +191,25 @@ jobs:
           # 时间戳会让每次导出都不同，那样这份文件就没人会去 diff 了。
           assert "generated_at" not in doc, "向量里不该有生成时间"
           print(f"{len(cases)} 个场景")
+
+          # 排期向量（P9 新建）。**它是删掉服务端 py-fsrs 的前置条件**，
+          # 所以它不在的时候不能悄悄放过——那会让「两边算得一样」变成一句没人验过的话。
+          sched = json.loads(pathlib.Path(
+              "client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json").read_text(encoding="utf-8"))
+          grades = sched["ratings"]["cases"]
+          assert len(grades) == 32, f"评级映射该是全枚举 32 条，实际 {len(grades)}"
+          schedules = sched["schedules"]["cases"]
+          names = " ".join(c["name"] for c in schedules)
+          for needed in ("180", "封顶", "提示", "自称简单", "短期"):
+              assert needed in names, f"排期向量里少了「{needed}」那个场景"
+          # 参数必须是**实际生效的那一组**，不是「空表示用默认」——
+          # 两个包自带的默认不是同一组数，各取自己的就会跑出不同的间隔，
+          # 而两边都在按自己的文档正常工作、没有东西会报错。
+          params = sched["settings"]["parameters"]
+          assert len(params) == 21, f"该是 FSRS-6 的 21 个参数，实际 {len(params)}"
+          assert sched["settings"]["enable_fuzzing"] is False, "向量必须关着抖动导出"
+          seq = [round(s["interval_days"]) for c in schedules
+                 if len(c["reviews"]) == 5 for s in c["expected"]]
+          assert seq == [2, 11, 46, 163, 180], f"间隔序列变成了 {seq}"
+          print(f"排期向量 {len(grades)} 条评级 + {len(schedules)} 个场景")
           PY
