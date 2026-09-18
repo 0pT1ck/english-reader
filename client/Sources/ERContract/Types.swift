@@ -206,6 +206,11 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/client/today`.
     /// - Remark: Generated from `#/paths//v1/client/today/get(today_v1_client_today_get)`.
     func today_v1_client_today_get(_ input: Operations.today_v1_client_today_get.Input) async throws -> Operations.today_v1_client_today_get.Output
+    /// 这把令牌是谁的（测试连接用）
+    ///
+    /// - Remark: HTTP `GET /v1/client/me`.
+    /// - Remark: Generated from `#/paths//v1/client/me/get(me_v1_client_me_get)`.
+    func me_v1_client_me_get(_ input: Operations.me_v1_client_me_get.Input) async throws -> Operations.me_v1_client_me_get.Output
 }
 
 /// Convenience overloads for operation inputs.
@@ -490,6 +495,13 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/client/today/get(today_v1_client_today_get)`.
     public func today_v1_client_today_get(headers: Operations.today_v1_client_today_get.Input.Headers = .init()) async throws -> Operations.today_v1_client_today_get.Output {
         try await today_v1_client_today_get(Operations.today_v1_client_today_get.Input(headers: headers))
+    }
+    /// 这把令牌是谁的（测试连接用）
+    ///
+    /// - Remark: HTTP `GET /v1/client/me`.
+    /// - Remark: Generated from `#/paths//v1/client/me/get(me_v1_client_me_get)`.
+    public func me_v1_client_me_get(headers: Operations.me_v1_client_me_get.Input.Headers = .init()) async throws -> Operations.me_v1_client_me_get.Output {
+        try await me_v1_client_me_get(Operations.me_v1_client_me_get.Input(headers: headers))
     }
 }
 

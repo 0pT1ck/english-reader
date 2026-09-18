@@ -14,8 +14,10 @@ extension Components {
     public enum Schemas {
         /// - Remark: Generated from `#/components/schemas/AnswerIn`.
         public struct AnswerIn: Codable, Hashable, Sendable {
+            /// 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswerIn/queue_id`.
-            public var queue_id: Swift.Int
+            public var queue_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerIn/passed`.
             public var passed: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/AnswerIn/revealed`.
@@ -24,26 +26,47 @@ extension Components {
             public var sentence_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerIn/easy`.
             public var easy: Swift.Bool?
+            /// word / phrase。**P9 加的**:见 item_key
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerIn/item_type`.
+            public var item_type: Swift.String?
+            /// 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerIn/item_key`.
+            public var item_key: Swift.String?
+            /// 义项 id。词组恒为 0
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerIn/sense_id`.
+            public var sense_id: Swift.Int?
             /// Creates a new `AnswerIn`.
             ///
             /// - Parameters:
-            ///   - queue_id:
+            ///   - queue_id: 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
             ///   - passed:
             ///   - revealed:
             ///   - sentence_id:
             ///   - easy:
+            ///   - item_type: word / phrase。**P9 加的**:见 item_key
+            ///   - item_key: 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///   - sense_id: 义项 id。词组恒为 0
             public init(
-                queue_id: Swift.Int,
+                queue_id: Swift.Int? = nil,
                 passed: Swift.Bool,
                 revealed: Swift.Int? = nil,
                 sentence_id: Swift.Int? = nil,
-                easy: Swift.Bool? = nil
+                easy: Swift.Bool? = nil,
+                item_type: Swift.String? = nil,
+                item_key: Swift.String? = nil,
+                sense_id: Swift.Int? = nil
             ) {
                 self.queue_id = queue_id
                 self.passed = passed
                 self.revealed = revealed
                 self.sentence_id = sentence_id
                 self.easy = easy
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
             }
             public enum CodingKeys: String, CodingKey {
                 case queue_id
@@ -51,12 +74,17 @@ extension Components {
                 case revealed
                 case sentence_id
                 case easy
+                case item_type
+                case item_key
+                case sense_id
             }
         }
         /// - Remark: Generated from `#/components/schemas/AnswerItem`.
         public struct AnswerItem: Codable, Hashable, Sendable {
+            /// 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/queue_id`.
-            public var queue_id: Swift.Int
+            public var queue_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/passed`.
             public var passed: Swift.Bool
             /// - Remark: Generated from `#/components/schemas/AnswerItem/revealed`.
@@ -65,6 +93,18 @@ extension Components {
             public var sentence_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/easy`.
             public var easy: Swift.Bool?
+            /// word / phrase。**P9 加的**:见 item_key
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/item_type`.
+            public var item_type: Swift.String?
+            /// 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/item_key`.
+            public var item_key: Swift.String?
+            /// 义项 id。词组恒为 0
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/sense_id`.
+            public var sense_id: Swift.Int?
             /// 客户端生成的幂等键
             ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/idem_key`.
@@ -76,19 +116,25 @@ extension Components {
             /// Creates a new `AnswerItem`.
             ///
             /// - Parameters:
-            ///   - queue_id:
+            ///   - queue_id: 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
             ///   - passed:
             ///   - revealed:
             ///   - sentence_id:
             ///   - easy:
+            ///   - item_type: word / phrase。**P9 加的**:见 item_key
+            ///   - item_key: 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///   - sense_id: 义项 id。词组恒为 0
             ///   - idem_key: 客户端生成的幂等键
             ///   - occurred_at: 客户端时钟，可能不准
             public init(
-                queue_id: Swift.Int,
+                queue_id: Swift.Int? = nil,
                 passed: Swift.Bool,
                 revealed: Swift.Int? = nil,
                 sentence_id: Swift.Int? = nil,
                 easy: Swift.Bool? = nil,
+                item_type: Swift.String? = nil,
+                item_key: Swift.String? = nil,
+                sense_id: Swift.Int? = nil,
                 idem_key: Swift.String,
                 occurred_at: Swift.String? = nil
             ) {
@@ -97,6 +143,9 @@ extension Components {
                 self.revealed = revealed
                 self.sentence_id = sentence_id
                 self.easy = easy
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
                 self.idem_key = idem_key
                 self.occurred_at = occurred_at
             }
@@ -106,6 +155,9 @@ extension Components {
                 case revealed
                 case sentence_id
                 case easy
+                case item_type
+                case item_key
+                case sense_id
                 case idem_key
                 case occurred_at
             }
@@ -1545,6 +1597,38 @@ extension Components {
                 case payload
                 case occurred_at
                 case received_at
+            }
+        }
+        /// 这把令牌是谁的，以及哪些留好的位置真的有值了。
+        ///
+        /// **测试连接用的就是它。** 在这之前那个探针打的是日历那个端点
+        /// （「最轻的一个」），而日历 P9 搬到了设备上——探针因此需要一个真正最轻的:
+        /// 不读学习记录、不组装任何东西、不下发一个字节的内容。
+        ///
+        /// **它同时回答了探针真正关心的两件事**:令牌认不认（401 还是 200），
+        /// 以及对面是谁（换过令牌之后名字对不对）。
+        ///
+        /// - Remark: Generated from `#/components/schemas/MeResponse`.
+        public struct MeResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MeResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// - Remark: Generated from `#/components/schemas/MeResponse/capabilities`.
+            public var capabilities: Components.Schemas.Capabilities
+            /// Creates a new `MeResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - capabilities:
+            public init(
+                learner: Components.Schemas.Learner,
+                capabilities: Components.Schemas.Capabilities
+            ) {
+                self.learner = learner
+                self.capabilities = capabilities
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case capabilities
             }
         }
         /// A phrase is an item in its own right.
