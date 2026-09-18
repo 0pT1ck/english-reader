@@ -20,6 +20,7 @@ struct ProjectionTests {
         enableFuzz: false
     )
 
+    /// 别的测试文件也用它（`ReviewCalendarTests`），所以不是 private。
     static func log(_ events: [(LoggedEvent.Kind, [String: JSONValue], String)])
         -> EventLogLoad {
         var list: [LoggedEvent] = []
