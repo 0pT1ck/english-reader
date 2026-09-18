@@ -83,7 +83,7 @@ def _fresh_device(name: str) -> str:
     So the old ones go first. Revoking rather than deleting keeps the audit
     trail: the row says a token existed and when it stopped working.
     """
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "UPDATE devices SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), name),
@@ -176,8 +176,8 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               f"{len(with_sense)} 个词标到了具体义项，"
               f"{sum(1 for t in tokens if t['sense_id'] == 0)} 个词没有义项集（退回词条级）")
 
-        bad = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses s ON s.id = t.sense_id"
+        bad = get_connection("content").execute(
+            "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN senses s ON s.id = t.sense_id"
             " WHERE t.sense_id > 0 AND (s.id IS NULL OR s.headword != t.headword)"
         ).fetchone()[0]
         check("2.3", "没有一条标注指向别的词的义项",
@@ -216,7 +216,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
 
         # The measurement error this project already made twice. `the` carries
         # only zk/gk, so "lacks the cet4 tag" would call it out of syllabus.
-        the_beyond = get_connection("learning").execute(
+        the_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE headword IN ('the','make','people')"
             " AND beyond = 1"
         ).fetchone()[0]
@@ -231,7 +231,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # `labor` carries only `ky`; `judgement` is CET-4 and `judgment` carries
         # nothing at all. This is the known-answer sample for that — it went
         # unchecked for a phase and `labor` read as out of syllabus 41 times.
-        spelling_beyond = get_connection("learning").execute(
+        spelling_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
             " ('labor','center','judgment','organisation','neighbor','theater','honor')"
         ).fetchone()[0]
@@ -248,7 +248,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # before the fix: 3,005 of 8,401 flags in the corpus, 35.8%. These are
         # the known-answer sample — every one is a word no reader would call
         # out of CET-6, and each covers a different one of the four checks.
-        derived_beyond = get_connection("learning").execute(
+        derived_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
             " ('quickly','fully','entirely','effectively','cultural','educational',"
             "  'teeth','phenomena','curricula','data','planning','nationality')"
@@ -361,7 +361,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               first["accepted"] == 3 and again["accepted"] == 0 and again["duplicates"] == 3,
               f"首次 {first['accepted']} 条，重放 {again['duplicates']} 条判为重复")
 
-        raw = get_connection("learning").execute(
+        raw = get_connection("events").execute(
             "SELECT COUNT(*) FROM client_events WHERE idem_key LIKE ?", (f"v2-%-{stamp}",)
         ).fetchone()[0]
         check("6.2", "原始事件另存一层，可重放",
@@ -380,14 +380,14 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7. 读完才记账 ------------------------------------------------ #
         print("\n7. 读完才记账")
 
-        unread = get_connection("learning").execute(
+        unread = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_articles WHERE read_at IS NULL"
         ).fetchone()[0]
         # Words the learner marked by hand are legitimately tracked from the
         # moment they marked them, whether or not they went on to finish the
         # article — so they are excluded here. What must never appear is a word
         # that got into the ledger purely by an article being *ingested*.
-        leaked = get_connection("learning").execute(
+        leaked = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states s"
             " WHERE s.introduced_article_id IN"
             "   (SELECT id FROM reading_articles WHERE read_at IS NULL)"
@@ -400,13 +400,13 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               f"{unread} 篇未读，没有一个词被误记为已学"
               if leaked == 0 else f"{leaked} 个词被未读文章误记为已学")
 
-        draft = get_connection("learning").execute(
+        draft = get_connection("content").execute(
             "SELECT id FROM generation_drafts WHERE model = 'gpt-5.5'"
             " AND target_words != '' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if draft:
             gen_id = ingest.ingest_draft(int(draft["id"]))
-            targets = get_connection("learning").execute(
+            targets = get_connection("content").execute(
                 "SELECT COUNT(DISTINCT headword) FROM reading_tokens"
                 " WHERE article_id = ? AND is_target = 1", (gen_id,)
             ).fetchone()[0]
@@ -423,7 +423,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         else:
             check("7.2", "生成文章的目标词被标出来", False, "没有带目标词的 gpt-5.5 草稿")
 
-        unmarked = get_connection("learning").execute(
+        unmarked = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states s WHERE s.pool = 'reviewing'"
             " AND NOT EXISTS (SELECT 1 FROM study_marks m"
             "   WHERE m.learner_id = s.learner_id AND m.item_type = s.item_type"
@@ -440,7 +440,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # matters is the half that was always the point: **P2's own pipeline
         # must not touch them.** Ingest analysing an article may not give a word
         # a due date any more than it may put one in the review pool.
-        scheduled_but_unread = get_connection("learning").execute(
+        scheduled_but_unread = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states WHERE due_at IS NOT NULL AND reps = 0"
         ).fetchone()[0]
         check("7.5", "入库与阅读都不碰调度字段",
@@ -452,17 +452,17 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7b. 义项集变动后的引用完整性 ---------------------------------- #
 
         dangling = {
-            "标注": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses c"
+            "标注": get_connection("content").execute(
+                "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN senses c"
                 " ON c.id = t.sense_id WHERE t.sense_id > 0 AND c.id IS NULL"
             ).fetchone()[0],
-            "标记": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM study_marks w LEFT JOIN content.senses c"
+            "标记": get_connection("events").execute(
+                "SELECT COUNT(*) FROM study_marks w LEFT JOIN senses c"
                 " ON c.id = w.sense_id WHERE w.item_type = 'word' AND w.sense_id > 0"
                 " AND c.id IS NULL"
             ).fetchone()[0],
-            "掌握状态": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM study_states s LEFT JOIN content.senses c"
+            "掌握状态": get_connection("events").execute(
+                "SELECT COUNT(*) FROM study_states s LEFT JOIN senses c"
                 " ON c.id = s.sense_id WHERE s.item_type = 'word' AND s.sense_id > 0"
                 " AND c.id IS NULL"
             ).fetchone()[0],
@@ -478,7 +478,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
 
         from backend.modules.reading import phrases as phrase_module
 
-        conn = get_connection("learning")
+        conn = get_connection("content")
         pstats = phrase_module.stats()
         article_count = len(repository.list_articles(shelf="all", limit=10000))
 
@@ -541,7 +541,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # be able to fail before passing means anything.
         select_phrase = (
             "SELECT p.article_id, p.phrase, p.start_seq, p.end_seq FROM reading_phrases p"
-            " JOIN dict.phrases d ON d.phrase = p.phrase"
+            " JOIN phrases d ON d.phrase = p.phrase"
             " WHERE p.verdict = 1 AND d.translation IS NOT NULL{extra}"
             " ORDER BY p.article_id LIMIT 1"
         )

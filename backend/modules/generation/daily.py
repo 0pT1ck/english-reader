@@ -95,7 +95,7 @@ def words_in_progress() -> set[str]:
         "generation.pool.snapshot_missing",
         "还没有任何设备报过词池快照，这一轮按 study_states 里的旧派生值排除",
     )
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT DISTINCT item_key FROM study_states"
         " WHERE item_type = 'word' AND pool != 'new'"
     ).fetchall()
@@ -109,7 +109,7 @@ def stock() -> int:
     library, not a supply — they were not written to teach anything and they
     never run out.
     """
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT COUNT(*) AS n FROM reading_articles"
         " WHERE source = 'generated' AND status = 'ready' AND read_at IS NULL"
     ).fetchone()
@@ -150,7 +150,7 @@ def _resume_unfinished() -> list[int]:
     # Flip jobs whose process died into a state that can be picked up again.
     jobs.recover_interrupted()
 
-    stuck = get_connection("learning").execute(
+    stuck = get_connection("content").execute(
         "SELECT id, status FROM reading_articles"
         " WHERE source = 'generated' AND status != 'ready' ORDER BY id"
     ).fetchall()

@@ -46,7 +46,7 @@ def choose_articles(learner_id: int, *, limit: int, extra: int) -> list[dict[str
     articles now; the "tomorrow's due words" character they used to have went
     with E2 (归档 §G).
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT id, title, source, word_count, sentence_count, prepared_at,"
         " difficulty, difficulty_score"
         " FROM reading_articles"

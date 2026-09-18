@@ -325,7 +325,7 @@ def ingest_draft(draft_id: int) -> int:
     """
     from backend.core.db import get_connection
 
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT id, title, body, target_words, topic, summary_zh"
         " FROM generation_drafts WHERE id = ?",
         (draft_id,),

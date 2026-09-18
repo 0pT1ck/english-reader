@@ -45,7 +45,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="learner pool snapshot",
-        database="learning",
+        database="events",
         apply="""
         CREATE TABLE IF NOT EXISTS learner_pool (
             learner_id  INTEGER NOT NULL DEFAULT 1,
@@ -126,7 +126,7 @@ def replace_snapshot(learner_id: int, device_id: int | None,
     撤销标记让条目退回 `new`，而 `new` 不在上报范围内，所以它在新快照里
     「不出现」，逐条 upsert 读不出这个意思。
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     rows = [
         (learner_id, e.item_type, e.item_key, int(e.sense_id), e.pool)
         for e in snapshot.entries
@@ -190,13 +190,13 @@ def words_in_progress(learner_id: int = 1) -> set[str] | None:
     当成生词再教一遍——**而那是静默的**，只表现为「这篇怎么全是我标过的词」。
     调用方据此决定回落还是报警。
     """
-    row = get_connection("learning").execute(
+    row = get_connection("events").execute(
         "SELECT COUNT(*) AS n FROM learner_pool_reports WHERE learner_id = ?",
         (learner_id,),
     ).fetchone()
     if not row or not int(row["n"] or 0):
         return None
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT DISTINCT item_key FROM learner_pool"
         " WHERE learner_id = ? AND item_type = 'word' AND pool != 'new'",
         (learner_id,),
@@ -206,7 +206,7 @@ def words_in_progress(learner_id: int = 1) -> set[str] | None:
 
 def snapshot_status(learner_id: int = 1) -> dict[str, Any]:
     """管理台那一行:报过没有、什么时候、多少条。"""
-    conn = get_connection("learning")
+    conn = get_connection("events")
     report = conn.execute(
         "SELECT * FROM learner_pool_reports WHERE learner_id = ?", (learner_id,)
     ).fetchone()

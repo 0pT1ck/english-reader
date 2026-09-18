@@ -94,7 +94,7 @@ def _fresh_device(name: str) -> str:
     So the old ones go first. Revoking rather than deleting keeps the audit
     trail: the row says a token existed and when it stopped working.
     """
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "UPDATE devices SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), name),
@@ -105,7 +105,7 @@ def _fresh_device(name: str) -> str:
 
 def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
     with trace():
-        conn = get_connection("learning")
+        conn = get_connection("events")
         now = datetime.now(timezone.utc)
         rng = random.Random(20260909)
 
@@ -355,13 +355,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 8. 模块自包含 ---------------------------------------------------- #
         print("\n8. 模块自包含")
 
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'review%'"
-            " OR name = 'spelling_attempts'")}
-        check("8.1", "复习模块自带表、两套接口、管理页与配置",
-              tables >= {"review_sentences", "review_sessions", "review_queue",
-                         "review_history", "spelling_attempts"},
-              "、".join(sorted(tables)))
+        # **2026-09-18 改写（P9 §10）:这几张表不再同处一个文件。**
+        # 句子是内容（模型写的，花了钱），会话／队列／历史／拼写是记录——
+        # 拆库正是按「丢了会怎样」分的，所以这条也得逐个库问，
+        # 而不是在一个 `sqlite_master` 里数个数。**问错文件会静默漏掉一张。**
+        homes = {"review_sentences": "content", "review_sessions": "events",
+                 "review_queue": "events", "review_history": "events",
+                 "spelling_attempts": "events"}
+        misplaced = [
+            t for t, db in homes.items()
+            if not get_connection(db).execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+                (t,)).fetchone()
+        ]
+        check("8.1", "复习模块自带表、两套接口、管理页与配置，且每张都在该在的库里",
+              not misplaced,
+              "句子在 content.db，会话／队列／历史／拼写在 events.db"
+              if not misplaced else f"找不到：{'、'.join(misplaced)}")
         keys = [k for k in ("review_pool_target", "review_weight_decay", "review_spelling",
                             "review_gen_provider", "fsrs_parameters",
                             "fsrs_desired_retention", "fsrs_fuzz")

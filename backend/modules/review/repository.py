@@ -61,7 +61,7 @@ def seen_sentence_ids(learner_id: int) -> set[int]:
     each mark happened, and ``study_states.introduced_sentence_id`` remembers
     the first encounter even after a mark is withdrawn.
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     ids = {
         int(r[0]) for r in conn.execute(
             "SELECT DISTINCT sentence_id FROM study_marks"
@@ -82,7 +82,7 @@ def finished_article_ids(learner_id: int) -> set[int]:
     article you finished carries the memory of reading it, so it is a hint; one
     from an article you have not read is fair game as a question.
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT article_id FROM reading_progress"
         " WHERE learner_id = ? AND finished_at IS NOT NULL",
         (learner_id,),
@@ -97,7 +97,7 @@ def finished_article_ids(learner_id: int) -> set[int]:
 def record_spelling(learner_id: int, session_id: int | None, item_key: str,
                     expected: str, typed: str, correct: bool) -> None:
     """Write only. Nothing in P3 reads this table — see the schema docstring."""
-    conn = get_connection("learning")
+    conn = get_connection("events")
     conn.execute(
         "INSERT INTO spelling_attempts (learner_id, session_id, item_key, expected,"
         " typed, correct, created_at) VALUES (?,?,?,?,?,?,?)",
@@ -137,7 +137,7 @@ def overview(learner_id: int, *, limit: int = 500) -> list[dict[str, Any]]:
     Architecture rule 8 puts this on the console rather than in a learning UI:
     the console is the diagnostic channel, and it outlived the web reader.
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     rows = conn.execute(
         """
         SELECT s.learner_id, s.item_type, s.item_key, s.sense_id,
@@ -181,7 +181,7 @@ def overview(learner_id: int, *, limit: int = 500) -> list[dict[str, Any]]:
 
 
 def sentences_of(item_type: str, item_key: str, sense_id: int) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT r.*, a.title AS article_title, a.source AS article_source"
         "  FROM review_sentences r"
         "  LEFT JOIN reading_articles a ON a.id = r.article_id"

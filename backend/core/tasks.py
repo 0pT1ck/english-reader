@@ -60,7 +60,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="scheduled task state",
-        database="learning",
+        database="ops",
         apply="""
         CREATE TABLE IF NOT EXISTS task_runs (
             name             TEXT    PRIMARY KEY,
@@ -231,7 +231,7 @@ def _parse(value: str | None) -> datetime | None:
 
 
 def state_of(name: str) -> dict[str, Any] | None:
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT * FROM task_runs WHERE name = ?", (name,)
     ).fetchone()
     return dict(row) if row else None
@@ -255,7 +255,7 @@ def _ensure_row(name: str, schedule: str, now: datetime) -> dict[str, Any]:
     if existing and existing.get("next_due_at"):
         return existing
 
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     upcoming = _iso(next_due(schedule, now))
     if existing:
         conn.execute(
@@ -352,7 +352,7 @@ def run_now(name: str) -> dict[str, Any]:
             return {"name": name, "status": "running", "note": "已经在跑了，这次跳过"}
         _running.add(name)
 
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     started = _now()
     try:
         schedule = str(runtime_config.get(schedule_key(name)))

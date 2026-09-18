@@ -146,8 +146,8 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
                 members = set(archive.namelist())
         except zipfile.BadZipFile:
             members = set()
-        check("4.7", "备份可下载且含 learning + content",
-              r.status_code == 200 and {"learning.db", "content.db"} <= members,
+        check("4.7", "备份可下载且含 events + content",
+              r.status_code == 200 and {"events.db", "content.db"} <= members,
               f"{len(r.content) / 1024:.0f} KB · {', '.join(sorted(members)) or '不是压缩包'}")
 
         r = client.post("/v1/admin/restore", headers=headers,
@@ -183,25 +183,30 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one piece
 
         # --- 7. migrations ------------------------------------------------- #
         print("\n7. 迁移机制")
-        rows = get_connection("learning").execute(
-            "SELECT module, version, name FROM schema_migrations ORDER BY module, version"
-        ).fetchall()
-        check("7.1", "迁移已记录版本", len(rows) >= 4,
-              f"learning.db 中 {len(rows)} 条：{sorted({r['module'] for r in rows})}")
+        # **`schema_migrations` 是每个文件一张**，所以这里必须逐个库数，
+        # 不能只看一个——P9 §10 把表拆进三个文件时，最难的一半正是这个:
+        # 迁移记录漏搬一条，那个模块的全部迁移会在新库上重跑一遍。
+        counts = {}
+        for db in ("content", "events", "ops"):
+            counts[db] = get_connection(db).execute(
+                "SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
+        check("7.1", "迁移已记录版本，且三个库各自有自己的账",
+              sum(counts.values()) >= 4 and all(counts.values()),
+              "、".join(f"{k} {v} 条" for k, v in counts.items()))
 
-        probe = Migration(version=99, name="verification probe", database="learning",
+        probe = Migration(version=99, name="verification probe", database="events",
                           apply="CREATE TABLE IF NOT EXISTS _verify_probe (x INTEGER)")
         applied = run_migrations("verify.probe", [probe])
         again = run_migrations("verify.probe", [probe])
         check("7.2", "迁移只应用一次", len(applied) == 1 and len(again) == 0)
 
-        backups = sorted(settings.backup_dir.glob("learning-*.db"))
-        check("7.3", "改动 learning.db 前自动备份", len(backups) > 0,
+        backups = sorted(settings.backup_dir.glob("events-*.db"))
+        check("7.3", "改动 events.db 前自动备份", len(backups) > 0,
               f"{len(backups)} 个备份文件")
-        get_connection("learning").execute("DROP TABLE IF EXISTS _verify_probe")
-        get_connection("learning").execute(
+        get_connection("events").execute("DROP TABLE IF EXISTS _verify_probe")
+        get_connection("events").execute(
             "DELETE FROM schema_migrations WHERE module = 'verify.probe'")
-        get_connection("learning").commit()
+        get_connection("events").commit()
 
         # --- 9. traceability ----------------------------------------------- #
         print("\n9. 错误可追溯")

@@ -45,7 +45,7 @@ def note(number: str, title: str, detail: str) -> None:
 def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
     with trace():
         content = get_connection("content")
-        learning = get_connection("learning")
+        drafts = get_connection("content")
 
         # --- 1. 义项集补全 --------------------------------------------- #
         print("\n1. 义项集")
@@ -134,7 +134,7 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
               bool(str(runtime_config.get("gen_provider")).strip()),
               f"gen_provider = {runtime_config.get('gen_provider') or '（空，用默认）'}")
 
-        api_drafts = learning.execute(
+        api_drafts = drafts.execute(
             "SELECT COUNT(*) n FROM generation_drafts WHERE note = 'api'").fetchone()["n"]
         check("5.3", "已有通过 API 生成的文章", api_drafts > 0, f"{api_drafts} 篇")
 
@@ -170,16 +170,16 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
         # 并**把用的是哪一版印出来**：回落是合理的，隐瞒不是。
         from backend.modules.generation import prompts
 
-        writer = learning.execute(
+        writer = drafts.execute(
             "SELECT prompt_version, model FROM generation_drafts"
             " WHERE prompt_version = ? ORDER BY id DESC LIMIT 1",
             (prompts.PROMPT_VERSION,)).fetchone()
         if writer is None:
-            writer = learning.execute(
+            writer = drafts.execute(
                 "SELECT prompt_version, model FROM generation_drafts"
                 " WHERE prompt_version IS NOT NULL AND prompt_version <> ''"
                 " ORDER BY id DESC LIMIT 1").fetchone()
-        rows = learning.execute(
+        rows = drafts.execute(
             "SELECT body, target_words FROM generation_drafts"
             " WHERE prompt_version = ? AND model = ? ORDER BY id DESC LIMIT 8",
             (writer["prompt_version"] if writer else "",

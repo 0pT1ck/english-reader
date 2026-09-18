@@ -315,7 +315,7 @@ async def admin_settle_phrases() -> dict[str, Any]:
 
 @admin_router.get("/reading/phrases", summary="词组识别概览")
 async def admin_phrases(limit: int = Query(40, ge=1, le=500)) -> dict[str, Any]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT phrase, verdict, COUNT(*) AS n FROM reading_phrases"
         " WHERE verdict IS NOT NULL GROUP BY phrase, verdict ORDER BY n DESC LIMIT ?",
         (limit * 4,),

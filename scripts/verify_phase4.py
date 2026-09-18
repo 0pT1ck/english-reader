@@ -88,7 +88,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
     # 这份清单会故意制造错误（任务抛异常、周期写坏），而 ERROR 是会推到手机的。
     # 跑一次验收推两条假警报，正是 notifications 自己那句「狼来了的通道会被忽略」。
     with notifications.muted(), trace():
-        conn = get_connection("learning")
+        conn = get_connection("ops")
         cleanup(conn)
         now = datetime.now(timezone.utc)
 

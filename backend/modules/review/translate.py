@@ -90,7 +90,7 @@ def _pending(limit: int | None = None) -> list[dict[str, Any]]:
     if limit:
         sql += " LIMIT ?"
         params = (limit,)
-    rows = get_connection("learning").execute(sql, params).fetchall()
+    rows = get_connection("content").execute(sql, params).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -155,7 +155,7 @@ def _split_marks(reply: str) -> tuple[str, int | None, int | None]:
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
     ids = [int(i) for i in payload.get("ids", [])]
-    conn = get_connection("learning")
+    conn = get_connection("content")
     placeholders = ",".join("?" * len(ids))
     rows = [dict(r) for r in conn.execute(  # noqa: S608 - count-built placeholders
         f"SELECT id, text, surface FROM review_sentences"
@@ -247,7 +247,7 @@ WORKER = jobs.Worker(
 # --------------------------------------------------------------------------- #
 
 def pending_count() -> int:
-    return int(get_connection("learning").execute(
+    return int(get_connection("content").execute(
         "SELECT COUNT(*) FROM review_sentences WHERE text_zh IS NULL"
     ).fetchone()[0])
 
@@ -270,7 +270,7 @@ def translate_one(sentence_id: int, *, provider_id: str | None = None) -> dict[s
     """Translate a single sentence synchronously — for spot-checking quality."""
     from backend.modules.llm import providers
 
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT id, text, surface FROM review_sentences WHERE id = ?", (sentence_id,)
     ).fetchone()
     if row is None:

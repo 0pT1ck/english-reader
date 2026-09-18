@@ -557,88 +557,6 @@ public struct Client: APIProtocol {
             }
         )
     }
-    /// 今天要复习的全部内容
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    public func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output {
-        try await client.send(
-            input: input,
-            forOperation: Operations.reviews_v1_client_reviews_get.id,
-            serializer: { input in
-                let path = try converter.renderedPath(
-                    template: "/v1/client/reviews",
-                    parameters: []
-                )
-                var request: HTTPTypes.HTTPRequest = .init(
-                    soar_path: path,
-                    method: .get
-                )
-                suppressMutabilityWarning(&request)
-                converter.setAcceptHeader(
-                    in: &request.headerFields,
-                    contentTypes: input.headers.accept
-                )
-                return (request, nil)
-            },
-            deserializer: { response, responseBody in
-                switch response.status.code {
-                case 200:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_v1_client_reviews_get.Output.Ok.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.ReviewDayResponse.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .ok(.init(body: body))
-                case 422:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_v1_client_reviews_get.Output.UnprocessableContent.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.HTTPValidationError.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .unprocessableContent(.init(body: body))
-                default:
-                    return .undocumented(
-                        statusCode: response.status.code,
-                        .init(
-                            headerFields: response.headerFields,
-                            body: responseBody
-                        )
-                    )
-                }
-            }
-        )
-    }
     /// 在学的那些词的句子（不分池）
     ///
     /// 你在学的每个词，连它的全部句子——**服务端不分池**。
@@ -657,8 +575,8 @@ public struct Client: APIProtocol {
     /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
     /// 而句子池本来也是按词与义项建的——词组拿不到句子。
     ///
-    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
-    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
     ///
     /// - Remark: HTTP `GET /v1/client/sentences`.
     /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
@@ -740,193 +658,6 @@ public struct Client: APIProtocol {
             }
         )
     }
-    /// 打卡日历与连续天数
-    ///
-    /// The last ``days`` days and the streak.
-    ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    public func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
-        try await client.send(
-            input: input,
-            forOperation: Operations.reviews_calendar_v1_client_reviews_calendar_get.id,
-            serializer: { input in
-                let path = try converter.renderedPath(
-                    template: "/v1/client/reviews/calendar",
-                    parameters: []
-                )
-                var request: HTTPTypes.HTTPRequest = .init(
-                    soar_path: path,
-                    method: .get
-                )
-                suppressMutabilityWarning(&request)
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "days",
-                    value: input.query.days
-                )
-                converter.setAcceptHeader(
-                    in: &request.headerFields,
-                    contentTypes: input.headers.accept
-                )
-                return (request, nil)
-            },
-            deserializer: { response, responseBody in
-                switch response.status.code {
-                case 200:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.Ok.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.CalendarResponse.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .ok(.init(body: body))
-                case 422:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.UnprocessableContent.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.HTTPValidationError.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .unprocessableContent(.init(body: body))
-                default:
-                    return .undocumented(
-                        statusCode: response.status.code,
-                        .init(
-                            headerFields: response.headerFields,
-                            body: responseBody
-                        )
-                    )
-                }
-            }
-        )
-    }
-    /// 上报一次作答
-    ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    public func report_answer_v1_client_reviews_answer_post(_ input: Operations.report_answer_v1_client_reviews_answer_post.Input) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output {
-        try await client.send(
-            input: input,
-            forOperation: Operations.report_answer_v1_client_reviews_answer_post.id,
-            serializer: { input in
-                let path = try converter.renderedPath(
-                    template: "/v1/client/reviews/answer",
-                    parameters: []
-                )
-                var request: HTTPTypes.HTTPRequest = .init(
-                    soar_path: path,
-                    method: .post
-                )
-                suppressMutabilityWarning(&request)
-                converter.setAcceptHeader(
-                    in: &request.headerFields,
-                    contentTypes: input.headers.accept
-                )
-                let body: OpenAPIRuntime.HTTPBody?
-                switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
-                        value,
-                        headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
-                    )
-                }
-                return (request, body)
-            },
-            deserializer: { response, responseBody in
-                switch response.status.code {
-                case 200:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.report_answer_v1_client_reviews_answer_post.Output.Ok.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.AnswerResponse.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .ok(.init(body: body))
-                case 422:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.report_answer_v1_client_reviews_answer_post.Output.UnprocessableContent.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.HTTPValidationError.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .unprocessableContent(.init(body: body))
-                default:
-                    return .undocumented(
-                        statusCode: response.status.code,
-                        .init(
-                            headerFields: response.headerFields,
-                            body: responseBody
-                        )
-                    )
-                }
-            }
-        )
-    }
     /// 批量上报作答（离线补报用）
     ///
     /// Replay a day's answers in order, skipping anything already recorded.
@@ -944,8 +675,12 @@ public struct Client: APIProtocol {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.

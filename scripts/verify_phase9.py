@@ -304,6 +304,72 @@ def main() -> int:
               and "unusableSettings" in app_model,
               "宁可缺一半，也不要一半是编的")
 
+        # --- 8. 数据库重切（§10） ---------------------------------------- #
+        section("8. 数据库重切：每张表一个家，每条迁移记录跟着它")
+
+        from backend.core import resplit
+        from backend.core.db import ALIASES, BACKED_UP, get_connection
+
+        left = resplit.pending()
+        check("8.1", "learning.db 已经拆完，一张表都不剩",
+              not left,
+              "它装的东西对「丢了会怎样」这个问题有三个不同的答案，"
+              "所以备份规则对整个文件只能说谎"
+              if not left else f"还剩：{'、'.join(left)}")
+
+        # **这一条守的是整套未限定表名的前提。**
+        # 二十张表能在文件之间搬而不动那 168 处查询，靠的就是「表名全局唯一」——
+        # 一旦两个文件里出现同名表，未限定的那个名字会静默地解析到先挂的那个，
+        # 而读到的是另一张表的数据。没有任何东西会报错。
+        seen: dict[str, list[str]] = {}
+        for db in ALIASES:
+            for row in get_connection(db).execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                    " AND name NOT LIKE 'sqlite_%' AND name != 'schema_migrations'"):
+                seen.setdefault(str(row[0]), []).append(db)
+        clashes = {t: dbs for t, dbs in seen.items() if len(dbs) > 1}
+        check("8.2", "没有一张表名同时出现在两个库里",
+              not clashes,
+              f"{len(seen)} 张表，横跨 {len(ALIASES)} 个文件，名字互不相同"
+              if not clashes else f"撞名：{clashes}")
+
+        # **迁移记录必须和声明对得上，逐条。**
+        # 记录漏在旧文件里，那个模块的全部迁移会在新库上重跑一遍——
+        # `CREATE TABLE IF NOT EXISTS` 挺得住，`ALTER TABLE ADD COLUMN` 挺不住。
+        from backend.core.registry import installed_modules
+        from backend.core import auth as core_auth, logging as core_logging
+        from backend.core import runtime_config as core_config, tasks as core_tasks
+
+        declared: dict[tuple[str, int], str] = {}
+        for module_name, migrations in (
+            ("core.auth", core_auth.MIGRATIONS),
+            ("core.config", core_config.MIGRATIONS),
+            ("core.logging", core_logging.MIGRATIONS),
+            ("core.tasks", core_tasks.MIGRATIONS),
+            *((m.name, m.migrations) for m in installed_modules().values()),
+        ):
+            for migration in migrations or ():
+                declared[(module_name, migration.version)] = migration.database
+
+        missing = []
+        for (module_name, version), database in sorted(declared.items()):
+            if database == "logs":
+                continue
+            row = get_connection(database).execute(
+                "SELECT 1 FROM schema_migrations WHERE module = ? AND version = ?",
+                (module_name, version)).fetchone()
+            if row is None:
+                missing.append(f"{module_name} v{version} 不在 {database}.db")
+        check("8.3", "每条迁移的记录都在它声明的那个库里",
+              not missing,
+              f"{len(declared)} 条声明逐条核对过"
+              if not missing else "、".join(missing))
+
+        check("8.4", "备份范围正好是补不回来的那两个",
+              set(BACKED_UP) == {"events", "content"},
+              f"{sorted(BACKED_UP)}——ops 丢了只是重新配对，"
+              "而拆开之前它和学习记录同在一个文件里，备份因此对整个文件说谎")
+
     print("\n" + "=" * 62)
     print(f"自动检查：{len(passed)} 项通过，{len(failed)} 项失败")
     if failed:

@@ -47,7 +47,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="example observation log",
-        database="learning",
+        database="ops",
         apply="""
         CREATE TABLE IF NOT EXISTS example_observations (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -87,7 +87,7 @@ def on_app_started(event: Event) -> None:
     Note what is *not* happening: nothing in the startup path knows this module
     exists. Adding this behaviour required no change to ``main.py``.
     """
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "INSERT INTO example_observations (observed, note) VALUES (?, ?)",
         (
@@ -115,7 +115,7 @@ pages_router = APIRouter()
 
 @admin_router.get("/example/observations", summary="示例模块的观察记录")
 async def observations() -> dict[str, Any]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT id, observed, note FROM example_observations ORDER BY id DESC LIMIT 100"
     ).fetchall()
     return {"count": len(rows), "observations": [dict(r) for r in rows]}

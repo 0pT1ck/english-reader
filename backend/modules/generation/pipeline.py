@@ -196,7 +196,7 @@ def write_one(
     )
     failures, notes = verdict(report)
 
-    conn = get_connection("learning")
+    conn = get_connection("content")
     cursor = conn.execute(
         "INSERT INTO generation_drafts (title, body, model, scheme, prompt_version,"
         " word_set, topic, summary_zh, target_words, prompt, report, created_at, note)"

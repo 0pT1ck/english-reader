@@ -111,7 +111,7 @@ async def submit_draft(payload: DraftIn) -> dict[str, Any]:
         exam=str(runtime_config.get("gen_learn_tier")),
     )
 
-    conn = get_connection("learning")
+    conn = get_connection("content")
     cursor = conn.execute(
         "INSERT INTO generation_drafts (title, body, model, scheme, prompt_version,"
         " word_set, target_words, prompt, report, created_at, note)"
@@ -152,7 +152,7 @@ async def submit_draft(payload: DraftIn) -> dict[str, Any]:
 
 @admin_router.get("/generation/drafts", summary="列出草稿")
 async def list_drafts(limit: Annotated[int, Query(ge=1, le=500)] = 100) -> dict[str, Any]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT id, title, model, scheme, word_set, created_at, note,"
         " length(body) AS chars, report FROM generation_drafts"
         " ORDER BY id DESC LIMIT ?",
@@ -172,7 +172,7 @@ async def list_drafts(limit: Annotated[int, Query(ge=1, le=500)] = 100) -> dict[
 
 @admin_router.get("/generation/drafts/{draft_id}", summary="草稿详情")
 async def get_draft(draft_id: int) -> dict[str, Any]:
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT * FROM generation_drafts WHERE id = ?", (draft_id,)
     ).fetchone()
     if row is None:
@@ -189,7 +189,7 @@ async def get_draft(draft_id: int) -> dict[str, Any]:
 
 @admin_router.delete("/generation/drafts/{draft_id}", summary="删除草稿")
 async def delete_draft(draft_id: int) -> dict[str, Any]:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     cursor = conn.execute("DELETE FROM generation_drafts WHERE id = ?", (draft_id,))
     conn.commit()
     return {"deleted": bool(cursor.rowcount)}
@@ -201,7 +201,7 @@ async def comparison() -> dict[str, Any]:
 
     Averages only; the blind test supplies the judgement these numbers cannot.
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT model, scheme, report FROM generation_drafts WHERE report IS NOT NULL"
     ).fetchall()
 

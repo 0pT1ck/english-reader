@@ -54,7 +54,7 @@ def create_article(source: str, source_ref: str, title: str, body: str, *,
     must never be ingested twice, because the learner may already have marks
     pointing at the first copy.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     existing = conn.execute(
         "SELECT id FROM reading_articles WHERE source = ? AND source_ref = ?",
         (source, source_ref),
@@ -73,7 +73,7 @@ def create_article(source: str, source_ref: str, title: str, body: str, *,
 
 
 def set_status(article_id: int, status: str, detail: str | None = None) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     conn.execute(
         "UPDATE reading_articles SET status = ?, status_detail = ? WHERE id = ?",
         (status, detail, article_id),
@@ -82,7 +82,7 @@ def set_status(article_id: int, status: str, detail: str | None = None) -> None:
 
 
 def store_difficulty(article_id: int, measures: dict[str, Any]) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     conn.execute(
         "UPDATE reading_articles SET difficulty = ?, difficulty_score = ?,"
         " word_count = ?, sentence_count = ? WHERE id = ?",
@@ -98,7 +98,7 @@ def store_difficulty(article_id: int, measures: dict[str, Any]) -> None:
 
 
 def article_row(article_id: int) -> dict[str, Any]:
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT * FROM reading_articles WHERE id = ?", (article_id,)
     ).fetchone()
     if row is None:
@@ -170,7 +170,7 @@ def list_articles(
     # 第二个条件管的是已经学出师的词：它们标记还留着，但不该再算「待学」。
     #
     # **真题恒为 0**，因为它们的 target_count 本来就是 0——真题不为教任何词而写。
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT a.*, p.percent, p.sentence_seq,"
         " (SELECT COUNT(DISTINCT t.headword) FROM reading_tokens t"
         "  WHERE t.article_id = a.id AND t.is_target = 1) AS target_count,"
@@ -212,7 +212,7 @@ def _sort_key(item: dict[str, Any], sort: str) -> Any:
 
 
 def pending_articles(limit: int = 50) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT id, source, source_ref, title, status, status_detail FROM reading_articles"
         " WHERE status NOT IN ('ready') ORDER BY id DESC LIMIT ?",
         (limit,),
@@ -221,7 +221,7 @@ def pending_articles(limit: int = 50) -> list[dict[str, Any]]:
 
 
 def ingested_refs(source: str) -> set[str]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT source_ref FROM reading_articles WHERE source = ?", (source,)
     ).fetchall()
     return {r["source_ref"] for r in rows}
@@ -248,7 +248,7 @@ def recount_exam_frequency() -> dict[str, int]:
     that word. Roughly 4.5% of the annotations are affected. Re-running this
     after a phrase scan is what corrects the count.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     counts = conn.execute(
         "SELECT t.sense_id, COUNT(*) AS n FROM reading_tokens t"
         " JOIN reading_articles a ON a.id = t.article_id"
@@ -256,9 +256,9 @@ def recount_exam_frequency() -> dict[str, int]:
         " GROUP BY t.sense_id"
     ).fetchall()
 
-    conn.execute("UPDATE content.senses SET exam_frequency = 0, is_exam_key = 0")
+    conn.execute("UPDATE senses SET exam_frequency = 0, is_exam_key = 0")
     conn.executemany(
-        "UPDATE content.senses SET exam_frequency = ? WHERE id = ?",
+        "UPDATE senses SET exam_frequency = ? WHERE id = ?",
         [(int(r["n"]), int(r["sense_id"])) for r in counts],
     )
     conn.commit()
@@ -279,7 +279,7 @@ def recount_exam_frequency() -> dict[str, int]:
     # occurrences: facts, side by side, with the reader drawing the conclusion.
     # The column stays declared and empty per architecture rule 5.
     scored = int(conn.execute(
-        "SELECT COUNT(*) FROM content.senses WHERE exam_frequency > 0").fetchone()[0])
+        "SELECT COUNT(*) FROM senses WHERE exam_frequency > 0").fetchone()[0])
     excluded = int(conn.execute(
         "SELECT COUNT(*) FROM reading_tokens t JOIN reading_articles a ON a.id = t.article_id"
         " WHERE a.source != 'generated' AND t.sense_id > 0 AND t.in_phrase = 1"
@@ -299,7 +299,7 @@ def recount_exam_frequency() -> dict[str, int]:
 
 def scores_by_source() -> dict[str, list[float]]:
     """Composite scores grouped by exam, for the calibration check."""
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT source, difficulty_score FROM reading_articles"
         " WHERE difficulty_score IS NOT NULL"
     ).fetchall()
@@ -310,7 +310,7 @@ def scores_by_source() -> dict[str, list[float]]:
 
 
 def delete_article(article_id: int) -> bool:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     cursor = conn.execute("DELETE FROM reading_articles WHERE id = ?", (article_id,))
     conn.commit()
     return bool(cursor.rowcount)
@@ -328,7 +328,7 @@ def store_sentences(article_id: int, sentences: list[dict[str, Any]],
     All or nothing: a half-stored article would look ingested while missing
     tokens, and the tap panel would silently show nothing for those words.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     conn.execute("DELETE FROM reading_sentences WHERE article_id = ?", (article_id,))
     conn.execute("DELETE FROM reading_tokens WHERE article_id = ?", (article_id,))
 
@@ -358,14 +358,14 @@ def store_sentences(article_id: int, sentences: list[dict[str, Any]],
 
 
 def sentences_of(article_id: int) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT * FROM reading_sentences WHERE article_id = ? ORDER BY seq", (article_id,)
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 def tokens_of(article_id: int) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT * FROM reading_tokens WHERE article_id = ? ORDER BY seq", (article_id,)
     ).fetchall()
     return [dict(r) for r in rows]
@@ -378,7 +378,7 @@ def unannotated_tokens(article_id: int) -> list[dict[str, Any]]:
     word has no sense set". Keeping those apart is what makes a retry ask only
     for what is actually missing.
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT t.*, s.text AS sentence_text, s.seq AS sentence_seq"
         " FROM reading_tokens t JOIN reading_sentences s ON s.id = t.sentence_id"
         " WHERE t.article_id = ? AND t.kind = 'content' AND t.sense_id IS NULL"
@@ -406,7 +406,7 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
     Runs scoped to one word from the event handler, or over everything as a
     repair tool. Idempotent.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     scope = " AND {alias}.{column} = ?"
     args: list[Any] = [headword] if headword else []
 
@@ -416,13 +416,13 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
     affected_articles = [
         row["article_id"] for row in conn.execute(
             "SELECT DISTINCT t.article_id FROM reading_tokens t"
-            " LEFT JOIN content.senses c ON c.id = t.sense_id"
+            " LEFT JOIN senses c ON c.id = t.sense_id"
             f" WHERE t.sense_id > 0 AND c.id IS NULL{where('t', 'headword')}", args
         ).fetchall()
     ]
     tokens = conn.execute(
         "UPDATE reading_tokens SET sense_id = NULL, sense_ordinal = NULL"
-        " WHERE sense_id > 0 AND sense_id NOT IN (SELECT id FROM content.senses)"
+        " WHERE sense_id > 0 AND sense_id NOT IN (SELECT id FROM senses)"
         + (" AND headword = ?" if headword else ""), args
     ).rowcount
 
@@ -431,7 +431,7 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
     marks = 0
     for row in conn.execute(
         "SELECT w.id, w.learner_id, w.item_key, w.kind FROM study_marks w"
-        " LEFT JOIN content.senses c ON c.id = w.sense_id"
+        " LEFT JOIN senses c ON c.id = w.sense_id"
         f" WHERE w.item_type = 'word' AND w.sense_id > 0 AND c.id IS NULL{where('w')}", args
     ).fetchall():
         conn.execute(
@@ -441,7 +441,7 @@ def repair_dangling_senses(headword: str | None = None) -> dict[str, Any]:
 
     states = 0
     for row in conn.execute(
-        "SELECT s.* FROM study_states s LEFT JOIN content.senses c ON c.id = s.sense_id"
+        "SELECT s.* FROM study_states s LEFT JOIN senses c ON c.id = s.sense_id"
         f" WHERE s.item_type = 'word' AND s.sense_id > 0 AND c.id IS NULL{where('s')}", args
     ).fetchall():
         existing = conn.execute(
@@ -485,7 +485,7 @@ def reset_declined(article_id: int) -> int:
     Used by the console's re-annotate action: once a missing sense has been
     added to the sense set, the word deserves another go.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     cursor = conn.execute(
         "UPDATE reading_tokens SET sense_id = NULL WHERE article_id = ? AND sense_id = -1",
         (article_id,),
@@ -507,7 +507,7 @@ def declined_tokens(limit: int = 200) -> list[dict[str, Any]]:
     ever cover them. They were never gaps in a sense set — they were phrases the
     annotator had no way to see. What is left is the real shortfall.
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT t.headword, t.surface, t.article_id, s.text AS sentence,"
         " a.title, a.source FROM reading_tokens t"
         " JOIN reading_sentences s ON s.id = t.sentence_id"
@@ -519,7 +519,7 @@ def declined_tokens(limit: int = 200) -> list[dict[str, Any]]:
 
 
 def set_token_sense(token_id: int, sense_id: int, ordinal: int | None) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     conn.execute(
         "UPDATE reading_tokens SET sense_id = ?, sense_ordinal = ? WHERE id = ?",
         (sense_id, ordinal, token_id),
@@ -527,12 +527,12 @@ def set_token_sense(token_id: int, sense_id: int, ordinal: int | None) -> None:
 
 
 def commit() -> None:
-    get_connection("learning").commit()
+    get_connection("content").commit()
 
 
 def annotation_progress(article_id: int) -> tuple[int, int]:
     """(annotated, total) content tokens."""
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT COUNT(*) AS total, SUM(CASE WHEN sense_id IS NOT NULL THEN 1 ELSE 0 END)"
         " AS done FROM reading_tokens WHERE article_id = ? AND kind = 'content'",
         (article_id,),
@@ -555,7 +555,7 @@ def set_mark(learner_id: int, item_key: str, sense_id: int, kind: str, *,
              sentence_id: int | None = None, token_id: int | None = None) -> None:
     if kind not in MARK_KINDS or item_type not in ITEM_TYPES:
         return
-    conn = get_connection("learning")
+    conn = get_connection("events")
     # An item is either unknown or fuzzy, never both: marking it one clears the
     # other, otherwise "I worked it out" would sit alongside "I don't know it".
     other = "fuzzy" if kind == "unknown" else "unknown"
@@ -575,7 +575,7 @@ def set_mark(learner_id: int, item_key: str, sense_id: int, kind: str, *,
 
 def clear_mark(learner_id: int, item_key: str, sense_id: int, kind: str | None = None,
                *, item_type: str = "word") -> None:
-    conn = get_connection("learning")
+    conn = get_connection("events")
     sql = ("DELETE FROM study_marks WHERE learner_id = ? AND item_type = ?"
            " AND item_key = ? AND sense_id = ?")
     params: list[Any] = [learner_id, item_type, item_key, sense_id]
@@ -598,7 +598,7 @@ def marks_for(learner_id: int, keys: set[str], *,
     if not keys:
         return {}
     placeholders = ",".join("?" * len(keys))
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         f"SELECT item_key, sense_id, kind FROM study_marks"  # noqa: S608 - count-built
         f" WHERE learner_id = ? AND item_type = ? AND item_key IN ({placeholders})",
         [learner_id, item_type, *keys],
@@ -621,7 +621,7 @@ def touch_state(learner_id: int, item_key: str, sense_id: int, *,
     item was first met, which is what the review card's original sentence comes
     from.
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     conn.execute(
         "INSERT OR IGNORE INTO study_states (learner_id, item_type, item_key, sense_id,"
         " updated_at) VALUES (?,?,?,?,?)",
@@ -658,7 +658,7 @@ def demote_if_unmarked(learner_id: int, item_key: str, sense_id: int, *,
     which is precisely the state the acceptance check for that invariant looks
     for, and it would be there because of an undo rather than a bug.
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     still = conn.execute(
         "SELECT 1 FROM study_marks WHERE learner_id = ? AND item_type = ?"
         " AND item_key = ? AND sense_id = ?",
@@ -680,7 +680,7 @@ def states_for(learner_id: int, keys: set[str], *,
     if not keys:
         return {}
     placeholders = ",".join("?" * len(keys))
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         f"SELECT * FROM study_states WHERE learner_id = ?"  # noqa: S608 - count-built
         f" AND item_type = ? AND item_key IN ({placeholders})",
         [learner_id, item_type, *keys],
@@ -689,7 +689,7 @@ def states_for(learner_id: int, keys: set[str], *,
 
 
 def state_counts(learner_id: int = 1) -> dict[str, int]:
-    conn = get_connection("learning")
+    conn = get_connection("events")
     rows = conn.execute(
         "SELECT pool, COUNT(*) AS n FROM study_states WHERE learner_id = ? GROUP BY pool",
         (learner_id,),
@@ -714,7 +714,7 @@ def state_counts(learner_id: int = 1) -> dict[str, int]:
 
 def save_progress(learner_id: int, article_id: int, sentence_seq: int, percent: float,
                   finished: bool = False) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("events")
     conn.execute(
         "INSERT INTO reading_progress (learner_id, article_id, sentence_seq, percent,"
         " finished_at, updated_at) VALUES (?,?,?,?,?,?)"
@@ -743,7 +743,7 @@ def progress_of(learner_id: int, article_id: int) -> dict[str, Any]:
     in particular contradicts the invariant that identity is derived from the
     device token rather than carried around in payloads.
     """
-    row = get_connection("learning").execute(
+    row = get_connection("events").execute(
         "SELECT sentence_seq, percent, finished_at FROM reading_progress"
         " WHERE learner_id = ? AND article_id = ?",
         (learner_id, article_id),
@@ -752,7 +752,7 @@ def progress_of(learner_id: int, article_id: int) -> dict[str, Any]:
 
 
 def mark_article_read(article_id: int) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     conn.execute(
         "UPDATE reading_articles SET read_at = COALESCE(read_at, ?) WHERE id = ?",
         (_now(), article_id),
@@ -807,7 +807,7 @@ def record_event(idem_key: str, device_id: int, learner_id: int, event_type: str
     ``EVENT_STALE_MINUTES`` — before that it may be a request still in flight,
     and taking it over would be the double-apply this paragraph is about.
     """
-    conn = get_connection("learning")
+    conn = get_connection("events")
     try:
         cursor = conn.execute(
             "INSERT INTO client_events (idem_key, device_id, learner_id, type, payload,"
@@ -876,7 +876,7 @@ def events_after(learner_id: int, after: int, limit: int) -> list[dict[str, Any]
     **payload 原样返回，不解释。** 服务端对学习记录只有两种关系:生文需要的
     那一小撮信号，和它不解释的存档（`phase-9.html` §2）。这是后者。
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT id, idem_key, type, payload, occurred_at, received_at"
         " FROM client_events WHERE learner_id = ? AND id > ?"
         " ORDER BY id LIMIT ?",
@@ -908,7 +908,7 @@ def events_after(learner_id: int, after: int, limit: int) -> list[dict[str, Any]
 
 def latest_event_sequence(learner_id: int) -> int:
     """这个学习者最大的那个序号。0 ＝ 一条都没有。"""
-    row = get_connection("learning").execute(
+    row = get_connection("events").execute(
         "SELECT COALESCE(MAX(id), 0) AS n FROM client_events WHERE learner_id = ?",
         (learner_id,),
     ).fetchone()
@@ -916,7 +916,7 @@ def latest_event_sequence(learner_id: int) -> int:
 
 
 def finish_event(event_id: int, error: str | None = None) -> None:
-    conn = get_connection("learning")
+    conn = get_connection("events")
     conn.execute(
         "UPDATE client_events SET processed_at = ?, error = ? WHERE id = ?",
         (_now(), error, event_id),
@@ -925,7 +925,7 @@ def finish_event(event_id: int, error: str | None = None) -> None:
 
 
 def recent_events(limit: int = 100) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT * FROM client_events ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
     out = []
@@ -937,7 +937,7 @@ def recent_events(limit: int = 100) -> list[dict[str, Any]]:
 
 
 def stats() -> dict[str, Any]:
-    conn = get_connection("learning")
+    conn = get_connection("content")
 
     def count(sql: str, *params: Any) -> int:
         return int(conn.execute(sql, params).fetchone()[0])

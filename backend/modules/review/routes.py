@@ -99,7 +99,7 @@ async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
     '''
     learner_id = auth.learner_for_device(device_id)
     status = progress_module.snapshot_status(learner_id)
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT item_key, sense_id FROM learner_pool"
         " WHERE learner_id = ? AND item_type = 'word' AND pool != 'new'"
         " ORDER BY item_key, sense_id",
@@ -386,7 +386,7 @@ async def admin_translate(payload: dict[str, Any] | None = None) -> dict[str, An
 
 @admin_router.get("/review/sentences/translate", summary="还有多少句子没配中文")
 async def admin_translate_status() -> dict[str, Any]:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     total = int(conn.execute("SELECT COUNT(*) FROM review_sentences").fetchone()[0])
     done = int(conn.execute(
         "SELECT COUNT(*) FROM review_sentences WHERE text_zh IS NOT NULL").fetchone()[0])
@@ -409,7 +409,7 @@ async def admin_pool(learner_id: int = Query(1), limit: int = Query(200, ge=1, l
     """
     target = int(runtime_config.get("review_pool_target"))
     status = progress_module.snapshot_status(learner_id)
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         """
         SELECT p.item_key, p.sense_id,
                (SELECT COUNT(*) FROM review_sentences r
@@ -515,7 +515,7 @@ async def admin_word_sentences(item_key: str, sense_id: int = Query(0),
 
 @admin_router.get("/review/history", summary="复习历史")
 async def admin_history(limit: int = Query(100, ge=1, le=1000)) -> dict[str, Any]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         "SELECT * FROM review_history ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
     return {"history": [dict(r) for r in rows]}

@@ -161,7 +161,10 @@ public enum ReviewCalendar {
         return calendar
     }
 
-    static func key(of date: Date) -> String {
+    /// 一个 `Date` 落在哪一天。**公开的**:宿主要用它把「今天」说给 `build`，
+    /// 而那个日期必须和重放里用的那一套（`TimeZone.current`）是同一套——
+    /// 各算各的就会在午夜前后差出一天，而没有东西会报错。
+    public static func key(of date: Date) -> String {
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d",
                       parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)

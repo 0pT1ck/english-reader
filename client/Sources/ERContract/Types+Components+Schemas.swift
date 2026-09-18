@@ -12,73 +12,6 @@ public import struct Foundation.Date
 extension Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     public enum Schemas {
-        /// - Remark: Generated from `#/components/schemas/AnswerIn`.
-        public struct AnswerIn: Codable, Hashable, Sendable {
-            /// 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/queue_id`.
-            public var queue_id: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/passed`.
-            public var passed: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/revealed`.
-            public var revealed: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/sentence_id`.
-            public var sentence_id: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/easy`.
-            public var easy: Swift.Bool?
-            /// word / phrase。**P9 加的**:见 item_key
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/item_type`.
-            public var item_type: Swift.String?
-            /// 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/item_key`.
-            public var item_key: Swift.String?
-            /// 义项 id。词组恒为 0
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/sense_id`.
-            public var sense_id: Swift.Int?
-            /// Creates a new `AnswerIn`.
-            ///
-            /// - Parameters:
-            ///   - queue_id: 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
-            ///   - passed:
-            ///   - revealed:
-            ///   - sentence_id:
-            ///   - easy:
-            ///   - item_type: word / phrase。**P9 加的**:见 item_key
-            ///   - item_key: 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
-            ///   - sense_id: 义项 id。词组恒为 0
-            public init(
-                queue_id: Swift.Int? = nil,
-                passed: Swift.Bool,
-                revealed: Swift.Int? = nil,
-                sentence_id: Swift.Int? = nil,
-                easy: Swift.Bool? = nil,
-                item_type: Swift.String? = nil,
-                item_key: Swift.String? = nil,
-                sense_id: Swift.Int? = nil
-            ) {
-                self.queue_id = queue_id
-                self.passed = passed
-                self.revealed = revealed
-                self.sentence_id = sentence_id
-                self.easy = easy
-                self.item_type = item_type
-                self.item_key = item_key
-                self.sense_id = sense_id
-            }
-            public enum CodingKeys: String, CodingKey {
-                case queue_id
-                case passed
-                case revealed
-                case sentence_id
-                case easy
-                case item_type
-                case item_key
-                case sense_id
-            }
-        }
         /// - Remark: Generated from `#/components/schemas/AnswerItem`.
         public struct AnswerItem: Codable, Hashable, Sendable {
             /// 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
@@ -211,59 +144,6 @@ extension Components {
                 case settled
             }
         }
-        /// - Remark: Generated from `#/components/schemas/AnswerResponse`.
-        public struct AnswerResponse: Codable, Hashable, Sendable {
-            /// 这个条目今天过了——两个方向都答对了
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/done`.
-            public var done: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/asks`.
-            public var asks: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/misses`.
-            public var misses: Swift.Int
-            /// 「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/easy`.
-            public var easy: Swift.Bool
-            /// 过了才有。没过是 null
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/settled`.
-            public var settled: Components.Schemas.Settlement?
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/progress`.
-            public var progress: Components.Schemas.ReviewProgress
-            /// Creates a new `AnswerResponse`.
-            ///
-            /// - Parameters:
-            ///   - done: 这个条目今天过了——两个方向都答对了
-            ///   - asks:
-            ///   - misses:
-            ///   - easy: 「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算
-            ///   - settled: 过了才有。没过是 null
-            ///   - progress:
-            public init(
-                done: Swift.Bool,
-                asks: Swift.Int,
-                misses: Swift.Int,
-                easy: Swift.Bool,
-                settled: Components.Schemas.Settlement? = nil,
-                progress: Components.Schemas.ReviewProgress
-            ) {
-                self.done = done
-                self.asks = asks
-                self.misses = misses
-                self.easy = easy
-                self.settled = settled
-                self.progress = progress
-            }
-            public enum CodingKeys: String, CodingKey {
-                case done
-                case asks
-                case misses
-                case easy
-                case settled
-                case progress
-            }
-        }
         /// - Remark: Generated from `#/components/schemas/AnswerResult`.
         public struct AnswerResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/AnswerResult/idem_key`.
@@ -346,8 +226,10 @@ extension Components {
             public var failed: Swift.Int
             /// - Remark: Generated from `#/components/schemas/AnswersResponse/results`.
             public var results: [Components.Schemas.AnswerResult]
+            /// **P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswersResponse/progress`.
-            public var progress: Components.Schemas.ReviewProgress
+            public var progress: Components.Schemas.ReviewProgress?
             /// Creates a new `AnswersResponse`.
             ///
             /// - Parameters:
@@ -355,13 +237,13 @@ extension Components {
             ///   - duplicates:
             ///   - failed:
             ///   - results:
-            ///   - progress:
+            ///   - progress: **P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」
             public init(
                 accepted: Swift.Int,
                 duplicates: Swift.Int,
                 failed: Swift.Int,
                 results: [Components.Schemas.AnswerResult],
-                progress: Components.Schemas.ReviewProgress
+                progress: Components.Schemas.ReviewProgress? = nil
             ) {
                 self.accepted = accepted
                 self.duplicates = duplicates
@@ -621,68 +503,6 @@ extension Components {
                 case phrases
                 case glossary
                 case progress
-            }
-        }
-        /// - Remark: Generated from `#/components/schemas/CalendarDay`.
-        public struct CalendarDay: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/day`.
-            public var day: Swift.String
-            /// complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
-            ///
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/status`.
-            public var status: Swift.String
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/is_today`.
-            public var is_today: Swift.Bool
-            /// Creates a new `CalendarDay`.
-            ///
-            /// - Parameters:
-            ///   - day:
-            ///   - status: complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
-            ///   - is_today:
-            public init(
-                day: Swift.String,
-                status: Swift.String,
-                is_today: Swift.Bool
-            ) {
-                self.day = day
-                self.status = status
-                self.is_today = is_today
-            }
-            public enum CodingKeys: String, CodingKey {
-                case day
-                case status
-                case is_today
-            }
-        }
-        /// - Remark: Generated from `#/components/schemas/CalendarResponse`.
-        public struct CalendarResponse: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/learner`.
-            public var learner: Components.Schemas.Learner
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/days`.
-            public var days: [Components.Schemas.CalendarDay]
-            /// 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
-            ///
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/streak`.
-            public var streak: Swift.Int
-            /// Creates a new `CalendarResponse`.
-            ///
-            /// - Parameters:
-            ///   - learner:
-            ///   - days:
-            ///   - streak: 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
-            public init(
-                learner: Components.Schemas.Learner,
-                days: [Components.Schemas.CalendarDay],
-                streak: Swift.Int
-            ) {
-                self.learner = learner
-                self.days = days
-                self.streak = streak
-            }
-            public enum CodingKeys: String, CodingKey {
-                case learner
-                case days
-                case streak
             }
         }
         /// Which reserved slots actually carry values yet.

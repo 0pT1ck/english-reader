@@ -98,16 +98,25 @@ class Settings(BaseSettings):
 
     # --- derived paths -------------------------------------------------------
     #
-    # Four separate SQLite files, not one. They are split by the only question
+    # Five separate SQLite files, not one. They are split by the only question
     # that matters operationally — *what happens if this file is lost?*
     #
     #   dictionary.db  re-import it            (hundreds of MB, rebuildable)
     #   logs.db        shrug                   (disposable by design)
+    #   ops.db         re-pair and re-configure (annoying, not a loss)
     #   content.db     pay for it again        (LLM-generated, must be backed up)
-    #   learning.db    unrecoverable           (must be backed up)
+    #   events.db      unrecoverable           (must be backed up)
     #
-    # Keeping the two rebuildable ones out of the backup is what makes a backup
-    # a small file that can be mailed around rather than a multi-hundred-MB dump.
+    # Keeping the three cheap ones out of the backup is what makes a backup a
+    # small file that can be mailed around rather than a multi-hundred-MB dump.
+    #
+    # **2026-09-18 (P9 §10): `learning.db` was split into the last three.**
+    # It had grown into "everything that is not a dictionary" — articles,
+    # tokens, device tokens, settings, the task schedule, the LLM job log and
+    # the learning record, all in one file, all answering that question
+    # differently. The backup rule could therefore only be honest about the
+    # whole file, and the whole file is 43 MB of which the part that is really
+    # unrecoverable is under one. See `docs/phase-9.html` §10.
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -133,23 +142,52 @@ class Settings(BaseSettings):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def learning_db(self) -> Path:
-        """Everything that would hurt to lose: study state, articles, decisions.
+    def events_db(self) -> Path:
+        """The learning record, as the server holds it.
 
-        This is what the admin console's backup button downloads.
+        **2026-09-18 (P9 §10): this is the half of ``learning.db`` worth keeping.**
+        The device is the first copy of the learning record now; this file is
+        where several devices meet and what survives losing one. It holds the
+        uploaded events, the pool snapshot, the decision log, and the derived
+        tables the server keeps from replaying those events.
+
+        Backed up, and the admin console's backup button downloads it.
         """
-        return self.data_dir / "learning.db"
+        return self.data_dir / "events.db"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def ops_db(self) -> Path:
+        """How this installation is set up and what it has been doing.
+
+        Device tokens, runtime settings, the task schedule, the LLM job log.
+        **Not backed up on purpose**: losing it costs a re-pairing and a few
+        settings, and keeping it out is what makes a backup small enough to mail.
+        """
+        return self.data_dir / "ops.db"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def logs_db(self) -> Path:
         """Technical logs. Rotated and disposable.
 
-        Decision logs do *not* live here — they go to learning.db, because
+        Decision logs do *not* live here — they go to events.db, because
         'why did the system pick this article three months ago' has long-term
         value while 'which HTTP requests happened' does not.
         """
         return self.data_dir / "logs.db"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def legacy_learning_db(self) -> Path:
+        """The file the three above were carved out of (P9 §10).
+
+        Only :mod:`backend.core.resplit` reads it, and only to empty it. It is
+        not deleted once emptied: an empty file next to the new three is a
+        readable "this already happened", and deleting a database nobody asked
+        to delete is not a thing this project does on its own.
+        """
+        return self.data_dir / "learning.db"
 
     @computed_field  # type: ignore[prop-decorator]
     @property

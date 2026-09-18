@@ -75,11 +75,6 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/client/events`.
     /// - Remark: Generated from `#/paths//v1/client/events/post(report_events_v1_client_events_post)`.
     func report_events_v1_client_events_post(_ input: Operations.report_events_v1_client_events_post.Input) async throws -> Operations.report_events_v1_client_events_post.Output
-    /// 今天要复习的全部内容
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output
     /// 在学的那些词的句子（不分池）
     ///
     /// 你在学的每个词，连它的全部句子——**服务端不分池**。
@@ -98,29 +93,12 @@ public protocol APIProtocol: Sendable {
     /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
     /// 而句子池本来也是按词与义项建的——词组拿不到句子。
     ///
-    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
-    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
     ///
     /// - Remark: HTTP `GET /v1/client/sentences`.
     /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
     func sentence_pool_v1_client_sentences_get(_ input: Operations.sentence_pool_v1_client_sentences_get.Input) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output
-    /// 打卡日历与连续天数
-    ///
-    /// The last ``days`` days and the streak.
-    ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output
-    /// 上报一次作答
-    ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    func report_answer_v1_client_reviews_answer_post(_ input: Operations.report_answer_v1_client_reviews_answer_post.Input) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output
     /// 批量上报作答（离线补报用）
     ///
     /// Replay a day's answers in order, skipping anything already recorded.
@@ -138,8 +116,12 @@ public protocol APIProtocol: Sendable {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.
@@ -319,13 +301,6 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// 今天要复习的全部内容
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    public func reviews_v1_client_reviews_get(headers: Operations.reviews_v1_client_reviews_get.Input.Headers = .init()) async throws -> Operations.reviews_v1_client_reviews_get.Output {
-        try await reviews_v1_client_reviews_get(Operations.reviews_v1_client_reviews_get.Input(headers: headers))
-    }
     /// 在学的那些词的句子（不分池）
     ///
     /// 你在学的每个词，连它的全部句子——**服务端不分池**。
@@ -344,46 +319,13 @@ extension APIProtocol {
     /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
     /// 而句子池本来也是按词与义项建的——词组拿不到句子。
     ///
-    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
-    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
     ///
     /// - Remark: HTTP `GET /v1/client/sentences`.
     /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
     public func sentence_pool_v1_client_sentences_get(headers: Operations.sentence_pool_v1_client_sentences_get.Input.Headers = .init()) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output {
         try await sentence_pool_v1_client_sentences_get(Operations.sentence_pool_v1_client_sentences_get.Input(headers: headers))
-    }
-    /// 打卡日历与连续天数
-    ///
-    /// The last ``days`` days and the streak.
-    ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    public func reviews_calendar_v1_client_reviews_calendar_get(
-        query: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Query = .init(),
-        headers: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Headers = .init()
-    ) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
-        try await reviews_calendar_v1_client_reviews_calendar_get(Operations.reviews_calendar_v1_client_reviews_calendar_get.Input(
-            query: query,
-            headers: headers
-        ))
-    }
-    /// 上报一次作答
-    ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    public func report_answer_v1_client_reviews_answer_post(
-        headers: Operations.report_answer_v1_client_reviews_answer_post.Input.Headers = .init(),
-        body: Operations.report_answer_v1_client_reviews_answer_post.Input.Body
-    ) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output {
-        try await report_answer_v1_client_reviews_answer_post(Operations.report_answer_v1_client_reviews_answer_post.Input(
-            headers: headers,
-            body: body
-        ))
     }
     /// 批量上报作答（离线补报用）
     ///
@@ -402,8 +344,12 @@ extension APIProtocol {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.

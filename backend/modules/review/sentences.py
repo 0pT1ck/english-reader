@@ -63,7 +63,7 @@ def harvest(item_key: str, sense_id: int, *, limit: int = 20) -> int:
     this meaning, so nothing has to be inferred. Tokens flagged ``in_phrase``
     are skipped — their sense annotation describes a word that was never there.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     rows = conn.execute(
         """
         SELECT t.surface, t.char_start, t.char_end, t.article_id,
@@ -197,7 +197,7 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         # 造句子是工厂的活，而「哪些词在学」是学习记录——服务端不推它，用设备
         # 报上来的那个值。存档那一份（`study_states.pool`）现在只由标记事件维护，
         # 拿它来排生成会给已经毕业的词继续造句，而给真正在学的词漏掉。
-        rows = get_connection("learning").execute(
+        rows = get_connection("events").execute(
             """
             SELECT p.item_key, p.sense_id FROM learner_pool p
              WHERE p.learner_id = ? AND p.item_type = 'word' AND p.pool = 'reviewing'
@@ -213,7 +213,7 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     units = []
     for item_key, sense_id in pairs:
         harvest(item_key, sense_id)          # free sentences first, then ask for the rest
-        have = get_connection("learning").execute(
+        have = get_connection("content").execute(
             "SELECT COUNT(*) FROM review_sentences WHERE item_key=? AND sense_id=?"
             " AND source='generated'",
             (item_key, sense_id),
@@ -249,7 +249,7 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         temperature=0.8,
     )
 
-    conn = get_connection("learning")
+    conn = get_connection("content")
     kept = rejected = 0
     reasons: list[str] = []
     for line in split_lines(completion.text):
@@ -348,7 +348,7 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
 def _rows(item_key: str, sense_id: int) -> list[dict[str, Any]]:
     # The title rides along so a hint can say where it came from. It is a join
     # rather than a column: the article may be renamed, and a copy would drift.
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT r.*, a.title AS article_title FROM review_sentences r"
         "  LEFT JOIN reading_articles a ON a.id = r.article_id"
         " WHERE r.item_key = ? AND r.sense_id = ? ORDER BY r.id",
@@ -413,7 +413,7 @@ def pick_hint(item_key: str, sense_id: int, *, finished: set[int],
 
 
 def pool_size(item_key: str, sense_id: int) -> int:
-    return get_connection("learning").execute(
+    return get_connection("content").execute(
         "SELECT COUNT(*) FROM review_sentences WHERE item_key = ? AND sense_id = ?",
         (item_key, sense_id),
     ).fetchone()[0]
