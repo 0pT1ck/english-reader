@@ -39,38 +39,22 @@ final class ReviewModel {
     private(set) var dueDone = 0
 
 
-    /// 今天要问的，由**投影**组出来（P9）。桶、方向、权重、封顶都在里面。
+    /// 今天这一份复习，**由 Core 拼出来**（`ReviewDay.assemble`）。
     ///
     /// **在这之前这几个数来自服务端快照里的 `progress.buckets_done`**，而那是
     /// 它上次收到上报时的样子——于是复习完一池子、回主界面一刷新就变回 0/13，
     /// 刷几次才回来。病根不是哪一行写错了，是「我做了多少」有两个来源而旧的那个赢
     /// （`phase-9.html` §1）。现在只有一个来源。
-    private(set) var entries: [Projection.QueueEntry] = []
-
-    /// 题目的内容：句子、义项、整个词。**这半仍然是服务端的**——
-    /// 那条线说服务端只管生文，而句子正是生出来的东西（`phase-9.html` §2）。
     ///
-    /// **P9 §11 起来自 `/v1/client/sentences`，不再来自今日包的复习那半。**
-    /// 那个端点只给内容:没有队列号、没有桶、没有方向、没有权重、没有进度——
-    /// 那些全是学习状态，现在由重放算出来。而**句子不分池**:哪句当考题、
-    /// 哪句当提示取决于你读完过什么，那是学习记录，由 `SentencePool` 在这边分。
-    private var content: [Projection.Key: Components.Schemas.StudyItemSentences] = [:]
+    /// **拼装在 Core 而不在这里**:命令行客户端也要同一份，
+    /// 而同一条规则写两遍就会漂、漂了不报错（P5 那条纪律）。
+    private(set) var today = ReviewDay()
 
     /// 服务端手上那份词池快照是什么时候的。nil ＝ 它还没收到过。
-    ///
-    /// **那和「你没在学任何词」是两件事**，所以它要单独记着:
-    /// 空列表 ＋ 这个为 nil，说的是「先联网报一次再说」。
-    private(set) var poolReportedAt: String?
+    var poolReportedAt: String? { today.poolReportedAt }
 
-    /// 现拼出来的题目。内容来自服务端，状态来自投影，分池用本机读过什么。
-    private var assembled: [Projection.Key: Components.Schemas.ReviewItem] = [:]
-
-    /// 投影说该问、而今日包里还没有它的句子，有几个。
-    ///
-    /// **平时是 0。** 非零的情形是真实的:你离线标了个词，包还没重新取下来。
-    /// 那个词没有丢（投影里它在），只是还问不了。**要显示出来**——
-    /// 否则「今天 12 个」和「今天 13 个」的差别没人解释得了。
-    private(set) var awaitingContent = 0
+    /// 投影说该问、而句子池里还没有它，有几个。**平时是 0。**
+    var awaitingContent: Int { today.awaitingContent }
 
     /// 拼写这一轮开没开（P3 决定 13）。两个标志位是两件事：
     /// `spellingEnabled` 是「这个功能开着」，`spellingAvailable` 是
@@ -79,28 +63,8 @@ final class ReviewModel {
     private(set) var spellingEnabled = false
     private(set) var spellingAvailable = false
 
-    /// 今天要拼的词。**一个词多个义项只拼一次**——照命令行客户端那套，
-    /// 拼的是词形，跟义项无关。
-    var spellingWords: [SpellingWord] {
-        var seen = Set<String>()
-        return content.values
-            // 按词排，不按队列号——队列号已经没有了（P9 §11）。
-            .sorted { ($0.item_key, $0.sense_id) < ($1.item_key, $1.sense_id) }
-            .filter { seen.insert($0.item_key).inserted }
-            .map { SpellingWord(key: $0.item_key,
-                                phonetic: $0.word?.phonetic,
-                                gloss: Self.gloss(of: $0)) }
-    }
-
-    /// 提示给中文，不给英文概念——**拼写考的是「听到／想到这个意思，写得出这个词」**，
-    /// 而英文概念里常常就含着这个词的同根词。
-    private static func gloss(of item: Components.Schemas.StudyItemSentences) -> String {
-        if let list = item.sense?.gloss_zh?.value1, !list.isEmpty {
-            return list.joined(separator: "，")
-        }
-        if let single = item.sense?.gloss_zh?.value2 { return single }
-        return item.word?.translation ?? ""
-    }
+    /// 今天要拼的词。算在 Core 里（`ReviewDay.spellingWords()`）。
+    var spellingWords: [SpellingWord] { today.spellingWords() }
 
     /// 正在做哪一个池子。nil＝在主界面。
     private(set) var bucket: Projection.Bucket?
@@ -147,7 +111,7 @@ final class ReviewModel {
             spellingEnabled = cached.settings.spelling_enabled
         }
         if let cachedPool = await engine.cachedSentences() {
-            apply(cachedPool)
+            pool = cachedPool
             sync(app)
             phase = .ready
         }
@@ -160,7 +124,7 @@ final class ReviewModel {
             // **顺序有意义**：先把事件推上去、把词池快照报上去，句子池才是对的那一批
             // ——那个端点的依据正是那份快照（§7）。`drain()` 两件事都做。
             await app.drain()
-            apply(try await engine.fetchSentences())
+            pool = try await engine.fetchSentences()
             sync(app)
             phase = .ready
             // 日历单独一条请求，拿不到不影响复习本身。
@@ -202,72 +166,19 @@ final class ReviewModel {
         return formatter.string(from: Date())
     }
 
-    /// 从句子池那个响应里取**内容**。
-    ///
-    /// **一个数都不从服务端取。** 那个端点只给句子、义项、词条——
-    /// 没有队列号、没有桶、没有方向、没有权重、没有进度。
-    /// 那些全是学习状态，现在由重放算出来（`phase-9.html` §11）。
-    private func apply(_ pool: Components.Schemas.SentencePoolResponse) {
-        content.removeAll()
-        poolReportedAt = pool.reported_at
-        for item in pool.items {
-            content[Projection.Key(itemType: item.item_type,
-                                   key: item.item_key,
-                                   senseId: item.sense_id)] = item
-        }
-    }
+    /// 句子池那一份，原样存着。**内容归服务端，状态归重放**——
+    /// 对到一起的活在 Core 的 `ReviewDay` 里。
+    private var pool: Components.Schemas.SentencePoolResponse?
 
-    /// 把投影里今天那一份读过来，并把题目拼出来。**记完一条事件就调它。**
-    ///
-    /// 只把**有句子的**放进 `entries`：没有句子的问不了，而把它算进「共」
-    /// 会让 13/13 永远到不了。它们的数目单独报（``awaitingContent``）。
+    /// 把内容与投影对到一起。**记完一条事件就调它。**
     private func sync(_ app: AppModel) {
-        let day = Self.localToday
-        let now = Date()
-        let all = app.projection.todayQueue(day: day, now: now)
-
-        // 题目现拼:内容来自服务端，状态来自投影，分池用本机读过什么。
-        // **拼在这里而不是在 `card` 那个计算属性里**，因为分池要投影，
-        // 而那个属性拿不到 app——那样就得把 app 存进模型，而它是个视图模型。
-        assembled.removeAll()
-        var askable: [Projection.QueueEntry] = []
-        for entry in all {
-            guard let item = content[entry.key] else { continue }
-            let split = SentencePool.split(item.sentences,
-                                           finished: app.projection.finishedArticles,
-                                           seen: app.projection.seenSentences)
-            assembled[entry.key] = Components.Schemas.ReviewItem(
-                // **0 不是占位错误，是有意的。** 队列号是服务端那张表的行号、
-                // 每天重建，而队列现在是设备自己组的:再引它就不是可重放的日志了。
-                // 服务端那个端点认得 0 ＋ 身份（P9 §11）。
-                queue_id: 0,
-                item_type: entry.key.itemType,
-                item_key: entry.key.key,
-                sense_id: entry.key.senseId,
-                bucket: entry.bucket.rawValue,
-                direction: entry.state.direction.rawValue,
-                asks: entry.state.asks,
-                misses: entry.state.misses,
-                weight: entry.state.weight,
-                done: entry.state.done,
-                word: item.word,
-                sense: item.sense,
-                questions: split.questions,
-                hints: split.hints)
-            askable.append(entry)
-        }
-        entries = askable
-        awaitingContent = all.count - askable.count
-
-        todayTotal = entries.count { $0.bucket == .today }
-        todayDone = entries.count { $0.bucket == .today && $0.state.done }
-        dueTotal = entries.count { $0.bucket == .due }
-        dueDone = entries.count { $0.bucket == .due && $0.state.done }
-
-        // 拼写那一轮：当天该复习的全部走完之后才为真（P3 决定 13）。
-        // **这个判断也搬下来了**——它本来读的是服务端 `progress.spelling_available`，
-        // 而那个字段和那两个数一样，是上次上报时的样子。
-        spellingAvailable = !entries.isEmpty && entries.allSatisfy { $0.state.done }
+        today = ReviewDay.assemble(pool: pool, projection: app.projection,
+                                   day: Self.localToday, now: Date())
+        todayTotal = today.total(.today)
+        todayDone = today.done(.today)
+        dueTotal = today.total(.due)
+        dueDone = today.done(.due)
+        spellingAvailable = today.spellingAvailable
     }
 
     private func describe(_ error: TransportError) -> String {
@@ -295,9 +206,9 @@ final class ReviewModel {
     /// 抽下一题。**只从这个池子里抽**，权重和衰减率都来自服务端。
     private func next() {
         guard let name = bucket else { return }
-        let pool = entries.filter { $0.bucket == name }
+        let open = today.entries.filter { $0.bucket == name }
         current = draw.pick(
-            from: pool,
+            from: open,
             weight: { $0.state.weight },
             isOpen: { !$0.state.done },
             random: Double.random(in: 0..<1)
@@ -313,20 +224,18 @@ final class ReviewModel {
     }
 
     /// 队列里那一条。
-    private func entry(of key: Projection.Key?) -> Projection.QueueEntry? {
+    private func entry(of key: Projection.Key?) -> ReviewDay.Entry? {
         guard let key else { return nil }
-        return entries.first { $0.key == key }
+        return today.entries.first { $0.key == key }
     }
 
-    var card: Components.Schemas.ReviewItem? { current.flatMap { assembled[$0] } }
+    var card: Components.Schemas.ReviewItem? { entry(of: current)?.item }
     /// 这道题用的那一句，揭晓时还要拿它补另一面。
     var askedCard: Components.Schemas.SentenceCard? { asked }
 
     /// **两个池子都做完了。**决定 20 只在这时候才显示「今天的所有复习」那一屏——
     /// 只做完一张卡就这么说是句假话，那时直接回主界面，反馈是那张卡变绿。
-    var allDone: Bool {
-        !entries.isEmpty && entries.allSatisfy { $0.state.done }
-    }
+    var allDone: Bool { today.allDone }
     var direction: ReviewDirection { entry(of: current)?.state.direction ?? .wordToSense }
 
     /// 题面那一句（方向 2 是整句中文）。
@@ -412,7 +321,7 @@ final class ReviewModel {
     /// **当场从今天的池子里拿掉，不等服务端回话**：离线也要对，而这条事件
     /// 带着幂等键，重复上报算正常。
     func dismissCurrent(_ app: AppModel) {
-        guard let key = current, let card else { return }
+        guard let card else { return }
         app.record(.unmarked(card.item_key, senseId: card.sense_id,
                              itemType: card.item_type))
         app.log?.write(.info, "review.dismissed", "把一个词移出了复习",
@@ -420,7 +329,6 @@ final class ReviewModel {
         // **不用手动把它从名单上拿掉。** 撤销标记让它退回 `new`，
         // 而投影只收 `reviewing` 那一档——重放一次它自己就不在了。
         // 「不计进已复习」也因此自动成立:它没被复习，是被拿走了。
-        content.removeValue(forKey: key)
         sync(app)
         next()
     }
@@ -452,12 +360,4 @@ final class ReviewModel {
         sync(app)
         next()
     }
-}
-
-/// 拼写那一轮要的三样：词、音标、中文。
-struct SpellingWord: Identifiable, Equatable {
-    let key: String
-    let phonetic: String?
-    let gloss: String
-    var id: String { key }
 }
