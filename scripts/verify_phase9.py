@@ -374,7 +374,7 @@ def main() -> int:
     print(f"自动检查：{len(passed)} 项通过，{len(failed)} 项失败")
     if failed:
         print("  失败：" + "、".join(failed))
-    print("\n另一半在 CI 上：`client.yml` 的 `swift test`（95 项以上）。")
+    print("\n另一半在 CI 上：`client.yml` 的 `swift test`（2026-09-18 实测 112 项 / 13 个套件）。")
     print("r5s 上编不出 Core（没有 Swift 工具链），这是「开发场地」那条决定的代价。")
     return 1 if failed else 0
 
