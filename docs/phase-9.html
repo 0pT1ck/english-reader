@@ -715,10 +715,10 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     </table>
     </div>
 
-    <p><b>杠杆是 <code>ercli</code>。</b>命令行客户端和 App 共用同一份 Core，
-    所以 Python 验收可以照旧存在，只是驱动对象从「后端 HTTP」换成「ercli」。
-    这样那三条不变量守卫（入库绝不写 <code>study_states</code>、
-    进队列只有你自己标记、撤销退回 <code>new</code>）不用重写成 Swift，换个驱动就行。</p>
+    <p><b>原本写的是「杠杆是 <code>ercli</code>」，2026-09-18 改正了</b>——
+    r5s 上不装 Swift，<code>ercli</code> 在这台机器上编不出来也跑不了。
+    实际的分工见 §16 ⑰:<b>一半在 CI 的 <code>swift test</code>，一半在
+    <code>verify_phase9.py</code></b>。</p>
 
     <div class="callout">
       <b>顺序上必须守住一条</b>：<b>先搬网，再搬代码。</b>
@@ -1373,6 +1373,57 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       现在不敢搬的理由只剩「§12 还没搬完」，而那是顺序问题，不是安全问题。
     </div>
 
+    <h3>⑰ 这个 Phase 自己的验收脚本 — 做完，<b>并且改正了 §12 的计划</b></h3>
+    <p><code>scripts/verify_phase9.py</code>，<b>33 项，零失败</b>。七节:那条线归谁、
+    五种事件、屏幕上没有一个数字等网络、向量与样本、稳定键与映射表、双向同步、
+    排期参数从服务端来。</p>
+    <p><b>这个 Phase 不加功能，所以验的不是「它能做什么」，而是「东西在哪一侧」。</b>
+    绝大多数检查是<b>读源码断言某件事不在某一侧</b>——而那正是这种重构唯一验得动的东西。
+    也因此它<b>只读不写、连探针都不用种</b>:「东西在哪一侧」是关于代码的事实，
+    不是关于数据的。</p>
+
+    <div class="callout">
+      <b>§12 的计划要改一处:杠杆不是 <code>ercli</code>，是 <code>swift test</code>。</b>
+      <br><br>
+      原计划写的是「Python 验收照旧存在，只是驱动对象从后端 HTTP 换成 ercli」。
+      <b>而 r5s 上不装 Swift</b>——那是「开发场地」那条决定的代价，
+      <code>ercli</code> 在这台机器上编不出来也跑不了。
+      <br><br>
+      所以网只能是<b>一半在本地、一半在 CI</b>:搬进 Core 的规则由
+      <code>swift test</code> 守（95 项以上），而 <code>verify_phase9.py</code> 守的是
+      <b>「向量与样本确实覆盖了那几条规则」＋「服务端不再实现它们」</b>。
+      两件事合起来才是完整的网。<b>这不是退让</b>——反过来说，
+      规则的正确性由能编 Swift 的那台机器负责，而「东西搬对了没有」
+      由看得见两边源码的这台负责，分工比原计划清楚。
+      <br><br>
+      <code>client.yml</code> 的向量断言也扩到了排期那一套:
+      32 条评级必须是全枚举、五个有明文依据的场景名必须在、
+      参数必须是实际生效的 21 个、抖动必须是关的、
+      间隔序列必须还是 <code>2→11→46→163→180</code>。
+    </div>
+
+    <div class="callout">
+      <b>而这个脚本的第一版四条红的，全是断言自己写错了——坑 §1.2 的原形。</b>
+      <br><br>
+      查「代码还读不读 <code>buckets_done</code>」，查到的是**注释里**那句
+      「在这之前这几个数来自 <code>progress.buckets_done</code>」；
+      查「还有没有手动 <code>todayDone += 1</code>」，查到的是注释里那句
+      「上一版在这里手动 <code>todayDone += 1</code>」；
+      查有没有写死 19 个参数，查到的是 <code>w[19]</code> ——<b>一个真的数组下标</b>；
+      还有一条要求场景名里有「太简单」，而名字写的是「<b>自称</b>简单」。
+      <br><br>
+      <b>四条都红着，而它们指向的东西一点问题都没有。</b>
+      再走一步就是去改根本没错的代码——这正是坑 §1.2 那句
+      「一个错误的度量比没有度量更危险」。
+      <b>而这个项目的注释写得越详细，「注释里提到某个名字」就越不能当成
+      「代码里用着它」。</b>
+      <br><br>
+      改法:先剥注释再扫（<code>code_only()</code>），参数个数改成**断言那个常量本身**。
+      然后按坑 §4.3 做了<b>阴性 ＋ 阳性对照</b>——
+      种一个真的违规进副本会红，只在注释里提到不会红。
+      <b>只在已知好的样本上报零，不等于它有效。</b>
+    </div>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
@@ -1412,8 +1463,8 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
       <div class="fig"><div class="fig-val">95<span>+</span></div>
         <div class="fig-key">CI 上的 Core 测试（原 65 起）</div></div>
-      <div class="fig"><div class="fig-val">206</div>
-        <div class="fig-key">全套自动验收，<b>零失败</b>（2026-09-18 重跑）</div></div>
+      <div class="fig"><div class="fig-val">239</div>
+        <div class="fig-key">全套自动验收（206 ＋ P9 自己那 33），<b>零失败</b></div></div>
     </div>
   </section>
 
