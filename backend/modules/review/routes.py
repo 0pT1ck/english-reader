@@ -65,13 +65,26 @@ async def reviews(device_id: DeviceId) -> dict[str, Any]:
 
 
 class AnswerIn(BaseModel):
-    queue_id: int
+    queue_id: int = Field(
+        default=0,
+        description="今天这一轮的排队号。**不是义项 id。**"
+        "**P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、"
+        "每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍",
+    )
     passed: bool
     revealed: int = Field(default=0, ge=0, le=session.MAX_REVEAL)
     sentence_id: int | None = None
     #: "That was trivial." Only honoured on a round with no misses — the server
     #: checks, so a client cannot talk its way into a longer interval.
     easy: bool = False
+    item_type: str | None = Field(
+        default=None, description="word / phrase。**P9 加的**:见 item_key")
+    item_key: str | None = Field(
+        default=None,
+        description="被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的"
+        "标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了",
+    )
+    sense_id: int | None = Field(default=None, description="义项 id。词组恒为 0")
 
 
 @client_router.get("/sentences", summary="在学的那些词的句子（不分池）",
@@ -221,6 +234,24 @@ async def report_answers(device_id: DeviceId, body: AnswersIn) -> dict[str, Any]
         if record is None:
             duplicates += 1
             results.append({"idem_key": item.idem_key, "status": "duplicate"})
+            continue
+
+        # **按身份来的作答:只存下来，不解释**（P9 §11）。
+        #
+        # 那条线说学习状态由设备算。设备从 P9 起自己组队列、自己排期，
+        # 所以它发来的作答**没有队列号**——那个号是服务端这张表的行号，
+        # 每天重建，日志里引它就不是可重放的日志了（§16 ⑥）。
+        #
+        # 所以这一支什么都不算，只把事件记下来:它已经由 `record_event` 存进
+        # `client_events`，而那正是多设备的会合点。**服务端不再重复算一遍**——
+        # 算了也没人看，而两边各算一遍才是真会分家的做法。
+        #
+        # 旧那一支（带真队列号的）留着不动:Web 复习页和老客户端要它，
+        # 而铁律 5 只增不减。它随那两样一起走（P10）。
+        if not item.queue_id and item.item_key:
+            reading_repository.finish_event(record.id)
+            accepted += 1
+            results.append({"idem_key": item.idem_key, "status": "accepted"})
             continue
         # `record.retry` means the earlier attempt never took effect. Answering
         # is not idempotent the way the reading events are — `asks` climbs, and

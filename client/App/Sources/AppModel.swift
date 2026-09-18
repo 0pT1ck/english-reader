@@ -23,6 +23,9 @@ final class AppModel {
     private(set) var library: LibraryStore?
     private(set) var cache: ArticleCache?
     private(set) var dayCache: DayCache?
+    /// 句子池的缓存（P9 §11）。**和今日包各自一个目录**——
+    /// 两份内容不该互相覆盖，而 `DayCache` 实际上就是「一个文件 ＋ 一个版本号」。
+    private(set) var sentenceCache: DayCache?
     private(set) var engine: SyncEngine?
 
     /// 事件日志（P9）。**设备上学习记录的第一副本**，屏幕上的每个数都由重放它算出来。
@@ -96,6 +99,8 @@ final class AppModel {
             events = try EventLog(directory: root.appendingPathComponent("events"))
             cache = try ArticleCache(directory: root.appendingPathComponent("articles"))
             dayCache = try DayCache(directory: root.appendingPathComponent("day"))
+            sentenceCache = try DayCache(
+                directory: root.appendingPathComponent("sentences"))
             library = LibraryStore(directory: root.appendingPathComponent("library"))
             // 三天轮转在 init 里就发生（`FileLog` 自己 prune），所以这一行
             // 同时是「启动时清过期日志」那条决定的落点。
@@ -124,14 +129,15 @@ final class AppModel {
     /// 换了地址或令牌就换一条传输。引擎是 actor，里面握着 transport，
     /// 所以换传输就是换引擎——没有「改一半」的中间状态。
     func rebuildEngine() {
-        guard let outbox, let cache, let dayCache,
+        guard let outbox, let cache, let dayCache, let sentenceCache,
               let url = connection.url, !connection.token.isEmpty else {
             engine = nil
             return
         }
         engine = SyncEngine(
             transport: IOSTransport(baseURL: url, token: connection.token, log: log),
-            outbox: outbox, events: events, articles: cache, day: dayCache
+            outbox: outbox, events: events, articles: cache, day: dayCache,
+            sentences: sentenceCache
         )
     }
 

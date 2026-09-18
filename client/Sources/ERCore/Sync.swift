@@ -136,18 +136,27 @@ public actor SyncEngine {
     private let events: EventLog?
     private let articles: ArticleCache
     private let day: DayCache
+    /// 句子池的缓存。
+    ///
+    /// **复用 `DayCache` 而不是照抄一份**:那个类实际上是「一个文件 ＋ 一个版本号」，
+    /// 名字窄了而形状正合适。各自一个目录，所以两份内容不会互相覆盖。
+    private let sentences: DayCache
 
     /// - Parameter events: 事件日志。**P9 起它才是那五种事件的来源**；
     ///   发件箱退化成「遥测那几条的队列」。传 nil 是为了让老的调用点
     ///   （和只测传输的测试）还编得过，那时行为和 P9 之前一样。
+    /// - Parameter sentences: 句子池的缓存。传 nil 就和 `day` 共用一个目录下的
+    ///   另一个文件——**只为让老的调用点还编得过**，正经用法是给它自己的目录。
     public init(transport: any Transport, outbox: Outbox,
                 events: EventLog? = nil,
-                articles: ArticleCache, day: DayCache) {
+                articles: ArticleCache, day: DayCache,
+                sentences: DayCache? = nil) {
         self.transport = transport
         self.outbox = outbox
         self.events = events
         self.articles = articles
         self.day = day
+        self.sentences = sentences ?? day
     }
 
     // MARK: Fetching
@@ -389,6 +398,44 @@ public actor SyncEngine {
                 body: String(decoding: response.body.prefix(400), as: UTF8.self))
         }
         return entries.count
+    }
+
+    /// 在学的那些词的句子——**服务端不分池**（P9 §11）。
+    ///
+    /// **依据是设备上报的词池快照**，所以调用顺序有意义:`drain()` 先推事件、
+    /// 再报快照，然后这里取下来的才是对的那一批。没报过快照会拿到空列表，
+    /// 而响应里 `reported_at` 为空正是在说「服务端还不知道」——
+    /// 那和「你没在学任何词」是两件事。
+    ///
+    /// **取回来整份存盘。** 句子是内容，而内容要能离线用（架构铁律 2）：
+    /// 这一份和今日包一样，是「拿一次、用一天」的东西。
+    public func fetchSentences() async throws -> Components.Schemas.SentencePoolResponse {
+        do {
+            let response = try await transport.send(
+                HTTPRequest(method: .get, path: "/v1/client/sentences"))
+            guard response.isOK else {
+                throw TransportError.server(
+                    status: response.status,
+                    body: String(decoding: response.body.prefix(400), as: UTF8.self))
+            }
+            let decoded = try JSONDecoder().decode(
+                Components.Schemas.SentencePoolResponse.self, from: response.body)
+            try sentences.store(response.body)
+            return decoded
+        } catch let error as TransportError {
+            // 离线就用盘上那份。**这正是存它的理由**——
+            // 而拿不到又没有缓存时照实抛错，不装作「你没在学任何词」。
+            guard case .offline = error, let cached = sentences.load() else { throw error }
+            return try JSONDecoder().decode(
+                Components.Schemas.SentencePoolResponse.self, from: cached)
+        }
+    }
+
+    /// 盘上那份，不碰网络。同 ``cachedDay``:先点亮屏幕，再在后面刷新。
+    public func cachedSentences() -> Components.Schemas.SentencePoolResponse? {
+        guard let data = sentences.load() else { return nil }
+        return try? JSONDecoder().decode(
+            Components.Schemas.SentencePoolResponse.self, from: data)
     }
 
     public func library(shelf: String = "fresh", source: String? = nil)

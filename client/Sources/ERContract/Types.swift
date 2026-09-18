@@ -80,6 +80,30 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/client/reviews`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
     func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output
+    /// 在学的那些词的句子（不分池）
+    ///
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
+    ///
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
+    ///
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
+    ///
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
+    ///
+    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
+    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    func sentence_pool_v1_client_sentences_get(_ input: Operations.sentence_pool_v1_client_sentences_get.Input) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output
     /// 打卡日历与连续天数
     ///
     /// The last ``days`` days and the streak.
@@ -296,6 +320,32 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
     public func reviews_v1_client_reviews_get(headers: Operations.reviews_v1_client_reviews_get.Input.Headers = .init()) async throws -> Operations.reviews_v1_client_reviews_get.Output {
         try await reviews_v1_client_reviews_get(Operations.reviews_v1_client_reviews_get.Input(headers: headers))
+    }
+    /// 在学的那些词的句子（不分池）
+    ///
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
+    ///
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
+    ///
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
+    ///
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
+    ///
+    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
+    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    public func sentence_pool_v1_client_sentences_get(headers: Operations.sentence_pool_v1_client_sentences_get.Input.Headers = .init()) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output {
+        try await sentence_pool_v1_client_sentences_get(Operations.sentence_pool_v1_client_sentences_get.Input(headers: headers))
     }
     /// 打卡日历与连续天数
     ///

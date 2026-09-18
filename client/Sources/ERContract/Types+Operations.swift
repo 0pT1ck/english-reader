@@ -1124,6 +1124,186 @@ public enum Operations {
             }
         }
     }
+    /// 在学的那些词的句子（不分池）
+    ///
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
+    ///
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
+    ///
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
+    ///
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
+    ///
+    /// **和 `/reviews` 的关系**:那个端点现在还在（老客户端要它，铁律 5），
+    /// 但它带着队列、方向、权重、进度——全是学习状态。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    public enum sentence_pool_v1_client_sentences_get {
+        public static let id: Swift.String = "sentence_pool_v1_client_sentences_get"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/v1/client/sentences/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.sentence_pool_v1_client_sentences_get.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.sentence_pool_v1_client_sentences_get.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.sentence_pool_v1_client_sentences_get.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.sentence_pool_v1_client_sentences_get.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/client/sentences/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/client/sentences/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.SentencePoolResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.SentencePoolResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.sentence_pool_v1_client_sentences_get.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.sentence_pool_v1_client_sentences_get.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful Response
+            ///
+            /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.sentence_pool_v1_client_sentences_get.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.sentence_pool_v1_client_sentences_get.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct UnprocessableContent: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/v1/client/sentences/GET/responses/422/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/v1/client/sentences/GET/responses/422/content/application\/json`.
+                    case json(Components.Schemas.HTTPValidationError)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.HTTPValidationError {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.sentence_pool_v1_client_sentences_get.Output.UnprocessableContent.Body
+                /// Creates a new `UnprocessableContent`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.sentence_pool_v1_client_sentences_get.Output.UnprocessableContent.Body) {
+                    self.body = body
+                }
+            }
+            /// Validation Error
+            ///
+            /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)/responses/422`.
+            ///
+            /// HTTP response code: `422 unprocessableContent`.
+            case unprocessableContent(Operations.sentence_pool_v1_client_sentences_get.Output.UnprocessableContent)
+            /// The associated value of the enum case if `self` is `.unprocessableContent`.
+            ///
+            /// - Throws: An error if `self` is not `.unprocessableContent`.
+            /// - SeeAlso: `.unprocessableContent`.
+            public var unprocessableContent: Operations.sentence_pool_v1_client_sentences_get.Output.UnprocessableContent {
+                get throws {
+                    switch self {
+                    case let .unprocessableContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "unprocessableContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// 打卡日历与连续天数
     ///
     /// The last ``days`` days and the streak.

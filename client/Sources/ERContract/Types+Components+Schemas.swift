@@ -2519,6 +2519,43 @@ extension Components {
                 case zh_end
             }
         }
+        /// 在学的那些词的句子。
+        ///
+        /// **依据是你上报的词池快照**（§7），不是服务端自己推的——
+        /// 服务端对学习记录只有两种关系:生文需要的那一小撮信号，和它不解释的存档。
+        /// 这里用的是前者，而它连解释都不算:直接用。
+        ///
+        /// - Remark: Generated from `#/components/schemas/SentencePoolResponse`.
+        public struct SentencePoolResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// 那份快照是什么时候的。**为空表示这台设备还没报过**——那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/reported_at`.
+            public var reported_at: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/items`.
+            public var items: [Components.Schemas.StudyItemSentences]
+            /// Creates a new `SentencePoolResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - reported_at: 那份快照是什么时候的。**为空表示这台设备还没报过**——那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」
+            ///   - items:
+            public init(
+                learner: Components.Schemas.Learner,
+                reported_at: Swift.String? = nil,
+                items: [Components.Schemas.StudyItemSentences]
+            ) {
+                self.learner = learner
+                self.reported_at = reported_at
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case reported_at
+                case items
+            }
+        }
         /// What the scheduler decided when an item left the pool.
         ///
         /// Stored as well as returned, so an algorithm change can be replayed against
@@ -2745,6 +2782,64 @@ extension Components {
                 case duplicates
                 case failed
                 case results
+            }
+        }
+        /// 一个在学的词，连它的句子——**不分池**。
+        ///
+        /// **P9 §11。** 分池（哪句当考题、哪句当提示）依赖「你读完过哪些文章、
+        /// 见过哪些句子」，那是学习记录；而造句子要钱、要模型，是内容生产。
+        /// 那条线把两件事分开了，所以这里原样全给，由客户端分（`ERCore/SentencePool`）。
+        ///
+        /// **和 `ReviewItem` 的差别正是那条线**：这里没有 `queue_id`、`bucket`、
+        /// `direction`、`asks`、`weight`、`done`——那些全是学习状态，现在由设备重放算出来。
+        ///
+        /// - Remark: Generated from `#/components/schemas/StudyItemSentences`.
+        public struct StudyItemSentences: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/item_type`.
+            public var item_type: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/item_key`.
+            public var item_key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sense_id`.
+            public var sense_id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/word`.
+            public var word: Components.Schemas.WordCard?
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sense`.
+            public var sense: Components.Schemas.SenseCard?
+            /// 这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分
+            ///
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sentences`.
+            public var sentences: [Components.Schemas.SentenceCard]
+            /// Creates a new `StudyItemSentences`.
+            ///
+            /// - Parameters:
+            ///   - item_type:
+            ///   - item_key:
+            ///   - sense_id:
+            ///   - word:
+            ///   - sense:
+            ///   - sentences: 这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分
+            public init(
+                item_type: Swift.String,
+                item_key: Swift.String,
+                sense_id: Swift.Int,
+                word: Components.Schemas.WordCard? = nil,
+                sense: Components.Schemas.SenseCard? = nil,
+                sentences: [Components.Schemas.SentenceCard]
+            ) {
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
+                self.word = word
+                self.sense = sense
+                self.sentences = sentences
+            }
+            public enum CodingKeys: String, CodingKey {
+                case item_type
+                case item_key
+                case sense_id
+                case word
+                case sense
+                case sentences
             }
         }
         /// 当天的文章与复习，一次拿全。
