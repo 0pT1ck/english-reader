@@ -192,13 +192,18 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     if wanted:
         pairs = [(str(w["item_key"]), int(w["sense_id"])) for w in wanted]
     else:
+        # **照上报的词池快照挑，不照服务端那份存档**（P9 §7）。
+        #
+        # 造句子是工厂的活，而「哪些词在学」是学习记录——服务端不推它，用设备
+        # 报上来的那个值。存档那一份（`study_states.pool`）现在只由标记事件维护，
+        # 拿它来排生成会给已经毕业的词继续造句，而给真正在学的词漏掉。
         rows = get_connection("learning").execute(
             """
-            SELECT s.item_key, s.sense_id FROM study_states s
-             WHERE s.learner_id = ? AND s.item_type = 'word' AND s.pool = 'reviewing'
-               AND s.sense_id > 0
+            SELECT p.item_key, p.sense_id FROM learner_pool p
+             WHERE p.learner_id = ? AND p.item_type = 'word' AND p.pool = 'reviewing'
+               AND p.sense_id > 0
                AND (SELECT COUNT(*) FROM review_sentences r
-                     WHERE r.item_key = s.item_key AND r.sense_id = s.sense_id) < ?
+                     WHERE r.item_key = p.item_key AND r.sense_id = p.sense_id) < ?
              LIMIT ?
             """,
             (int(params.get("learner_id", 1)), target, int(params.get("limit", 200))),

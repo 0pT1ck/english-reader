@@ -1,6 +1,6 @@
 {
   "note": "由 scripts/export_scheduler_vectors.py 从服务端真实代码导出，不要手改。重新导出之后不应有 diff——有 diff 就说明调度规则或 FSRS 版本变了。",
-  "source": "backend/modules/review/scheduler.py::rating_for / review",
+  "source": "scripts/fsrs_reference.py::rating_for / review（2026-09-18 从 backend 移出来的参照实现，见那个文件的头部）",
   "covers": "两半：评级映射（我们自己的规则，全枚举）与排期结果（FSRS 的，钉住有明文依据的那些场景）。P9 把调度搬进客户端之后，服务端不再需要 py-fsrs，这个文件是那一步的网。",
   "tolerance": {
     "exact": [
@@ -47,7 +47,7 @@
       0.0658,
       0.1542
     ],
-    "parameters_configured": false
+    "parameters_configured": true
   },
   "ratings": {
     "note": "全枚举：misses 0-3 × easy × revealed 0-1 × capped。两个上限都只降级，绝不把失误变成通过。",
@@ -316,7 +316,7 @@
     "cases": [
       {
         "name": "全新卡一次过：关掉 learning steps 之后落在两天外，不是十分钟外",
-        "pins": "scheduler.py 模块注释：with the steps off, a card leaves Learning on its first review and lands two days out rather than ten minutes out",
+        "pins": "参照实现的模块注释：with the steps off, a card leaves Learning on its first review and lands two days out rather than ten minutes out",
         "initial": null,
         "reviews": [
           {

@@ -1,4 +1,21 @@
-"""When does this item come back — the only place that decides it.
+"""FSRS 的参照实现——**只给导向量用，不在服务端跑**。
+
+**2026-09-18 从 `backend/modules/review/scheduler.py` 移到这里**（P9 §11）。
+排期搬到了客户端，所以服务端不再需要它；而**删掉它是另一回事，那件事不该做**：
+
+向量（`client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json`）的权威性
+**全部来自「它出自另一份独立实现」**。删掉这份实现，Swift 那边就成了自证的——
+而「两份都错得一样」正是这个项目一直担心的失败，P5 §17 专门写过它。
+所以它留着，但**移出运行的那棵树**：服务端（跑着的那个应用）没有学习逻辑，
+仓库里有一份参照实现，而它唯一的消费者是 `export_scheduler_vectors.py`。
+
+由此 `pyproject.toml` 里的 `fsrs` 依赖也留着。要守的那条断言因此不是
+「仓库不依赖 py-fsrs」，而是**「`backend/` 底下没有任何模块 import 它」**
+——那才是有意义的那一条（`verify_phase3` 1.10）。
+
+以下是原文，一字未改。
+
+When does this item come back — the only place that decides it.
 
 调度 scheduling / 记忆状态 memory state / 评分 grade
 

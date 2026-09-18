@@ -388,50 +388,61 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                   decision is not None and decision["kind"] == "today.assembled",
                   "「今天为什么是这三篇」将来答得上来")
 
-            review_payload = http.get("/v1/client/reviews", headers=headers)
-            open_items = [i for i in (review_payload.json().get("items") or [])
-                          if not i.get("done")] if review_payload.status_code == 200 else []
-            if open_items:
-                key = f"p4probe-{uuid.uuid4().hex}"
-                batch = {"answers": [{
-                    "idem_key": key, "queue_id": open_items[0]["queue_id"],
-                    "passed": True, "revealed": 0,
-                    "occurred_at": now.isoformat(timespec="seconds"),
-                }]}
-                first = http.post("/v1/client/reviews/answers",
-                                  headers=headers, json=batch).json()
-                again = http.post("/v1/client/reviews/answers",
-                                  headers=headers, json=batch).json()
-                check("C3.1", "离线补报的作答收得下",
-                      first.get("accepted") == 1, f"接受 {first.get('accepted')} 条")
-                check("C4.1", "同一条补两次不重复计分",
-                      again.get("duplicates") == 1 and again.get("accepted") == 0,
-                      "幂等键的唯一索引把住的，不是先查后插")
-                stored = conn.execute(
-                    "SELECT COUNT(*) AS n FROM client_events WHERE idem_key = ?",
-                    (key,)).fetchone()["n"]
-                check("C4.2", "事件只存了一行", stored == 1,
-                      "复习作答进的是阅读那张 client_events，一套事件存储不是两套")
+            # **自己种探针，不靠「今天碰巧有未做完的复习」**（坑 §4.1）。
+            #
+            # 这两项原先要先 `GET /v1/client/reviews` 拿一条真的队列行，于是
+            # 当天复习做完之后它们就报「跑不了这一项」——2026-09-12 记过一次
+            # （坑 §4.4c）。P9 把那个端点删了，正好把这条欠账一起还掉:
+            # **作答现在按身份上报**（item_type/item_key/sense_id，queue_id 恒 0），
+            # 而身份是凭空造得出来的，不需要服务端先有一行。
+            key = f"p4probe-{uuid.uuid4().hex}"
+            batch = {"answers": [{
+                "idem_key": key, "queue_id": 0,
+                "item_type": "word", "item_key": "__p4probe__", "sense_id": 0,
+                "passed": True, "revealed": 0,
+                "occurred_at": now.isoformat(timespec="seconds"),
+            }]}
+            first = http.post("/v1/client/reviews/answers",
+                              headers=headers, json=batch).json()
+            again = http.post("/v1/client/reviews/answers",
+                              headers=headers, json=batch).json()
+            check("C3.1", "离线补报的作答收得下",
+                  first.get("accepted") == 1, f"接受 {first.get('accepted')} 条")
+            check("C4.1", "同一条补两次不重复计分",
+                  again.get("duplicates") == 1 and again.get("accepted") == 0,
+                  "幂等键的唯一索引把住的，不是先查后插")
+            stored = conn.execute(
+                "SELECT COUNT(*) AS n FROM client_events WHERE idem_key = ?",
+                (key,)).fetchone()["n"]
+            check("C4.2", "事件只存了一行", stored == 1,
+                  "复习作答进的是阅读那张 client_events，一套事件存储不是两套")
 
-                bad = http.post("/v1/client/reviews/answers", headers=headers, json={
-                    "answers": [{"idem_key": f"p4probe-{uuid.uuid4().hex}",
-                                 "queue_id": 999999, "passed": True}]}).json()
-                check("C3.2", "一条坏的不拖垮整批",
-                      bad.get("failed") == 1,
-                      "补报里混进一条应用不了的，其余照常")
-            else:
-                note("C3.1", "离线补报", "当天没有未完成的复习条目，跑不了这一项")
-                note("C4.1", "幂等", "同上")
+            bad = http.post("/v1/client/reviews/answers", headers=headers, json={
+                "answers": [{"idem_key": f"p4probe-{uuid.uuid4().hex}",
+                             "queue_id": 999999, "passed": True}]}).json()
+            check("C3.2", "一条坏的不拖垮整批",
+                  bad.get("failed") == 1 and bad.get("accepted") == 0,
+                  "没有身份的那一条报 failed 并说明理由，其余照常——"
+                  "「没人认得这条」必须说出来，不能静默丢掉（坑 §6.6）")
 
-            # Asserted against the OpenAPI document rather than the route
-            # objects: that document *is* the contract 铁律 5 talks about, and
-            # this FastAPI wraps included routers so `app.routes` never shows
-            # the nested paths at all.
+            # **这一条 2026-09-18 改过，原文守的是「单条那个原样还在」。**
+            #
+            # P9 §11 有意删掉了 `POST /v1/client/reviews/answer`:它是这条路上
+            # 最后一处「服务端跟着用户的拇指改学习状态」，而这个 Phase 的整件事
+            # 就是把那件事搬到设备上。**铁律 5 的放宽只在状态/同步那半边、只此一次**，
+            # 它唯一的调用方（Web 复习页）在同一个 Phase 一起删了。
+            #
+            # 所以这里改成守始终成立的那一半（坑 §8 那条规矩）:批量那个端点在，
+            # 而且**它认得没有队列号的身份作答**——那才是新的那一半，删掉这条守卫
+            # 会让「补报还能不能用」没人管。
             contract = set(app.openapi().get("paths", {}))
-            check("C5.1", "批量是新增端点，单条那个原样还在",
-                  {"/v1/client/reviews/answer", "/v1/client/reviews/answers",
-                   "/v1/client/today"} <= contract,
-                  "只增不减：装着旧客户端的手机不受影响（铁律 5）")
+            answer_item = app.openapi()["components"]["schemas"]["AnswerItem"]["properties"]
+            check("C5.1", "批量端点在，且认得不带队列号的身份作答",
+                  {"/v1/client/reviews/answers", "/v1/client/today"} <= contract
+                  and {"item_type", "item_key", "sense_id"} <= set(answer_item)
+                  and answer_item["queue_id"].get("default") == 0,
+                  "单条那个在 P9 §11 有意删了（铁律 5 只在状态/同步这半边放宽一次）；"
+                  "身份是可重放的，队列行号不是")
 
         # --- D. 不变量回归 ------------------------------------------------- #
         print("\nD. 不变量")
@@ -469,11 +480,16 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
 
         # --- 人工 ---------------------------------------------------------- #
         print("\n需要人工确认")
-        note("M1", "在真浏览器里断网走完一天",
-             "队列的逻辑已经用假 DOM 重放验过（断网作答不丢、重连补报、"
-             "重复补报不重复计分），机器能验的部分到此为止。"
-             "剩下真需要人的只有一件：打开 /admin/review，把后端停掉，"
-             "继续答到做完，再启动后端——看队列是不是自己清空了")
+        # **2026-09-18 改写（P9 §11/§12）。** 原文说「打开 /admin/review」，
+        # 而那个页面在 P9 删了——复习整条链现在只在手机上。断网这件事本身
+        # 也换了形状:队列不再从服务端拿，设备重放自己的日志就把它算出来了，
+        # 所以「断网还能不能答」已经不是那个问题，「重连之后两边对不对得上」
+        # 才是。机器验得了前半（C3/C4 自己种探针补报），验不了后半。
+        note("M1", "断网走完一天，再连回来看两边对不对得上",
+             "补报这半边已经自动验过（收得下、补两次不重复计分、"
+             "坏的那条报 failed 不拖垮整批）。剩下真需要人的是手机上那一遍："
+             "开飞行模式，把当天复习答完，关掉再打开 App 看进度还在不在，"
+             "然后连上网——看事件是不是自己补了上去，且没有多算一遍")
         note("M2", "早上打开就有三篇",
              "调度循环会不会自己触发已由 A2.4 自动验过。"
              "这一条验的是剩下那半——四点跑完之后，文章是不是真的能读、"

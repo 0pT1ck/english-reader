@@ -139,10 +139,13 @@ def main() -> int:
               "buckets_done" not in code_only(review_model),
               "包里那个数是服务端上次收到上报时的样子——读它就是把那个 0/13 请回来")
 
+        review_day = read(CLIENT / "Sources/ERCore/ReviewDay.swift")
         check("3.2", "两张卡的数字由重放算出来",
-              "app.projection.todayQueue(" in review_model
-              and "entries.count {" in review_model,
-              "只有一个来源，所以「刷新一下变回 0」在结构上不可能")
+              "ReviewDay.assemble(pool:" in review_model
+              and "projection.todayQueue(day: day, now: now)" in review_day,
+              "只有一个来源，所以「刷新一下变回 0」在结构上不可能。"
+              "**拼装在 Core**（`ReviewDay`），因为命令行客户端也要同一份——"
+              "同一条规则写两遍就会漂，而漂了不报错")
 
         check("3.3", "作答之后不手动加数，而是重放",
               "todayDone += 1" not in code_only(review_model)
@@ -278,9 +281,13 @@ def main() -> int:
               "排期搬到设备上之后，设备必须知道服务端配的是什么")
 
         today_service = read(BACKEND / "modules/today/service.py")
-        check("7.2", "下发的是实际生效的参数向量，不是「空表示用默认」",
-              "review_scheduler.scheduler(fuzz=False).parameters" in today_service,
-              "配置项默认是空的，意思是「用包自带的」——而两个包自带的不是同一组")
+        review_config = read(BACKEND / "modules/review/module.py")
+        check("7.2", "参数是配置里真正的一组数，不是「留空 ＝ 用包自带的」",
+              'runtime_config.get("fsrs_parameters")' in today_service
+              and "default=[\n            0.212" in review_config,
+              "「留空」这个约定本来就危险:两个包自带的**不是同一组数**，"
+              "各取自己的就会跑出不同的间隔，而两边都不会报错。"
+              "参数本来就是配置，现在它长得像配置")
 
         scheduler_swift = read(CLIENT / "Sources/ERCore/Scheduler.swift")
         check("7.3", "客户端没有本地默认参数，参数个数不对就抛错",

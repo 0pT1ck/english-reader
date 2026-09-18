@@ -48,6 +48,8 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+# 参照实现就在这个目录下。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 OUT = ROOT / "client" / "Tests" / "ERCoreTests" / "Fixtures" / "scheduler-vectors.json"
 
@@ -79,7 +81,7 @@ REVEALED = (0, 1)
 
 
 def grade_cases() -> list[dict[str, Any]]:
-    from backend.modules.review import scheduler as sched
+    import fsrs_reference as sched
 
     cases = []
     for misses in MISSES:
@@ -110,7 +112,7 @@ def grade_cases() -> list[dict[str, Any]]:
 SCHEDULE_CASES: list[dict[str, Any]] = [
     {
         "name": "全新卡一次过：关掉 learning steps 之后落在两天外，不是十分钟外",
-        "pins": "scheduler.py 模块注释：with the steps off, a card leaves Learning "
+        "pins": "参照实现的模块注释：with the steps off, a card leaves Learning "
                 "on its first review and lands two days out rather than ten minutes out",
         "initial": None,
         "reviews": [{"misses": 0}],
@@ -232,7 +234,7 @@ SCHEDULE_CASES: list[dict[str, Any]] = [
 
 
 def schedule_cases(settings: dict[str, Any]) -> list[dict[str, Any]]:
-    from backend.modules.review import scheduler as sched
+    import fsrs_reference as sched
 
     out = []
     for case in SCHEDULE_CASES:
@@ -285,7 +287,7 @@ def main() -> int:
     from backend.core import runtime_config
     import backend.modules.review.module  # noqa: F401  registers the fsrs_* specs
 
-    from backend.modules.review import scheduler as sched
+    import fsrs_reference as sched
 
     # Built once here only to read the effective parameters back out of it —
     # the cases below each build their own through `review()`, which is what
@@ -323,7 +325,8 @@ def main() -> int:
     document = {
         "note": "由 scripts/export_scheduler_vectors.py 从服务端真实代码导出，不要手改。"
                 "重新导出之后不应有 diff——有 diff 就说明调度规则或 FSRS 版本变了。",
-        "source": "backend/modules/review/scheduler.py::rating_for / review",
+        "source": "scripts/fsrs_reference.py::rating_for / review"
+                  "（2026-09-18 从 backend 移出来的参照实现，见那个文件的头部）",
         "covers": "两半：评级映射（我们自己的规则，全枚举）与排期结果（FSRS 的，"
                   "钉住有明文依据的那些场景）。P9 把调度搬进客户端之后，"
                   "服务端不再需要 py-fsrs，这个文件是那一步的网。",

@@ -1532,6 +1532,147 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     读四个数。<code>SpellingWord</code> 跟着搬进 Core——拼写那一轮现在在那边算，
     而留在 App 层的类型 Core 引用不到。</p>
 
+    <h3>㉒ §11 的后半与 §12 的验收网，<b>在同一步里做完</b></h3>
+    <p><b>它们分不开。</b> 删掉一条规则、又要把守着它的验收项重新指向别处——
+    这两件事之间没有一个「网还是完整的」的中间状态。所以是一次改完的。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>删掉的</th><th>为什么它必须走</th></tr>
+      <tr><td><code>GET /reviews</code>、<code>GET /reviews/calendar</code>、
+        <code>POST /reviews/answer</code></td>
+        <td>队列、日历、单条作答——全是跟着拇指改学习状态</td></tr>
+      <tr><td><code>session.answer</code> / <code>settle</code> / <code>progress</code>
+        / <code>spelling_words</code>（约 280 行）</td>
+        <td>当天那一轮的状态机与结算。<code>session.py</code> 从 480 行剩到 136 行</td></tr>
+      <tr><td><code>repository</code> 的整个写半边</td>
+        <td>会话、入队、改队列行、记作答、存记忆状态——没有一个还有调用方</td></tr>
+      <tr><td>批量补报里带队列号的那一支</td>
+        <td><b>它已经在调一个不存在的函数了</b>——见下</td></tr>
+      <tr><td><code>on_word_unmarked</code> 订阅</td>
+        <td>它做的是「撤回标记就把今天那道题收掉」，而今天那道题不在服务端了</td></tr>
+      <tr><td><code>calendar.py</code>、<code>templates/review.html</code>、
+        管理台的出题预览与页面令牌</td><td>Web 复习页整条链</td></tr>
+      <tr><td><code>backend/…/scheduler.py</code></td>
+        <td><b>没删，搬到 <code>scripts/fsrs_reference.py</code></b>——向量要有独立来源</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>删到一半发现一个已经坏掉的分支，而没有任何东西在报错。</b>
+      <br><br>
+      批量补报 <code>POST /reviews/answers</code> 有两支：带身份的（P9 加的，只存不算）
+      和带队列号的（老路，调 <code>session.answer</code>）。而
+      <code>session.answer</code> 在前一步就删掉了——那一支于是在调一个不存在的函数，
+      <code>AttributeError</code> 被外面那个「一条坏的不拖垮整批」的
+      <code>except Exception</code> 接住，报成这一条 <code>failed</code>。
+      <br><br>
+      <b>验收项 C3.2「一条坏的不拖垮整批」照样是绿的</b>，因为它只断言
+      <code>failed == 1</code>。它验的是「坏的那条被挡住了」，而挡住它的
+      理由从「这个队列号不存在」悄悄换成了「这个函数不存在」——
+      <b>分不出两种情况的断言等于没有断言</b>（坑 §6.7），这次是自己撞上的。
+      <br><br>
+      改法是两边都改：那一支删掉，没有身份的补报<b>报 failed 并说明理由</b>
+      （「没人认得这条」必须说出来，不能静默丢掉）；C3.2 同时断言
+      <code>accepted == 0</code>。
+    </div>
+
+    <h4>服务端还剩下什么，以及一处必须补的时序</h4>
+    <p>删完之后 review 模块在服务端只剩三件事：<b>造句子</b>（工厂）、
+    <b>查词与义项</b>（内容）、<b>存档</b>（收下事件，不解释）。
+    而「该给哪些词造句子」原先读的是 <code>study_states.pool</code>——
+    那是服务端自己那份存档，从 P9 起它只由标记事件维护，<b>不是「在学」的权威答案</b>。
+    权威答案是设备上报的词池快照（§7），所以造句子那一路改读 <code>learner_pool</code>。</p>
+    <div class="callout">
+      <b>改完立刻撞上一个时序问题，而它是静默的。</b>
+      <br><br>
+      决定 23 说句子要在<b>读完那一刻</b>补上，不能等夜里——当天标的词当天就要复习，
+      而那一轮需要一句你没见过的。原先靠订阅 <code>article.finished</code> 实现。
+      <br><br>
+      但客户端的同步顺序是<b>先推事件、再报快照</b>（先推后拉那条决定的连带结果）。
+      于是「读完」事件到达时，快照里<b>还没有今天新标的那些词</b>——
+      补句子就会正好漏掉它们。不报错，第二天才发现那个词没题可出。
+      <br><br>
+      <b>所以真正的信号是「词池报上来了」，不是「读完了」。</b>
+      新增 <code>progress.pool.reported</code> 事件，review 订阅它
+      （架构铁律 6：订阅，不改别人的流程）。读完那条订阅留着不删——两条都便宜
+      （池子满了 <code>start_for</code> 直接回 <code>None</code>），
+      而留着它，将来换个顺序的客户端也照样对。
+    </div>
+
+    <h4>管理台那两页：<b>少显示，而不是显示旧的</b></h4>
+    <p>词表页原先有「上次评级 / 记忆强度 / 难度 / 轮次·失误 / 下次复习」五列，
+    <b>它们自重构那天起一次都没被写过</b>。留着的话页面看上去信息齐全，
+    报的却是一个冻结在某一天的数——「踩过的坑」§8 里那一整类。所以五列全撤。</p>
+    <p>换上来的是服务端确实知道的：标记、出处、句子池深度，
+    以及<b>设备报的词池与服务端存档并排两列</b>。
+    并排是有意的：<b>两列对不上正是「这台设备有一阵没同步了」的唯一可见信号</b>，
+    合成一列就看不见了。「设备还没报过」也不写成「还没标」——那是两件事。
+    句子池覆盖页（<code>/review/pool</code>）同样改读快照，并把
+    <code>reported</code> 一起回出来：<b>没报过时是空的，而空不等于「都够了」</b>。</p>
+
+    <h4>验收网搬完之后的数</h4>
+    <div class="table-scroll">
+    <table>
+      <tr><th>脚本</th><th>改动</th><th class="num">结果</th></tr>
+      <tr><td><code>verify_phase3</code></td>
+        <td>1–4 节换成迁移断言 1.1–1.10（向量在不在、服务端还实不实现），
+          6.x 重指 <code>/sentences</code> 与 <code>/me</code></td>
+        <td class="num">30 通过 0 失败 1 待人工</td></tr>
+      <tr><td><code>verify_phase4</code></td>
+        <td>C5.1 改成守新的那一半；C3.1／C4.1 <b>改成自己种探针</b></td>
+        <td class="num">40 通过 0 失败 2 待人工</td></tr>
+      <tr><td><code>verify_phase9</code></td>
+        <td>3.2 与 7.2 的断言改成读代码而不是读注释</td>
+        <td class="num">33 通过 0 失败</td></tr>
+      <tr><td><code>verify_phase0</code> / <code>1b</code> / <code>1c</code> / <code>2</code></td>
+        <td>没动</td><td class="num">32 / 28 / 15 / 47，全过</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+      <b>C5.1 这一条按「到期的断言」那条规矩办</b>（CLAUDE.md：改成守始终成立的那一半，
+      没删守卫，也不再天天报假警）。它原本守<b>「单条那个原样还在」</b>——
+      而单条那个正是这一步有意删掉的。
+      <br><br>
+      <b>铁律 5 的放宽只在状态／同步这半边，只此一次</b>，
+      而它唯一的调用方（Web 复习页）在同一个 Phase 一起删了。
+      改后守的是新的那一半：批量端点在，<b>而且它认得没有队列号的身份作答</b>
+      （断言 <code>item_type</code>／<code>item_key</code>／<code>sense_id</code>
+      在契约里、<code>queue_id</code> 默认 0）。
+      <br><br>
+      <b>C3.1／C4.1 顺手还掉了一笔旧账。</b> 它们原先要先 <code>GET /reviews</code>
+      拿一条真的队列行，于是当天复习做完之后就报「跑不了这一项」——2026-09-12 记在
+      坑 §4.4c 里的那次。身份是凭空造得出来的，不需要服务端先有一行，
+      所以这两项从「待人工」变回自动，<b>而且不再依赖「今天碰巧有数据」</b>（坑 §4.1）。
+      <br><br>
+      <code>verify_phase4</code> 的人工项 M1 一并改写：原文写着「打开
+      <code>/admin/review</code>」，而那个页面没了。新的 M1 是手机上那一遍——
+      飞行模式答完、重开 App 看进度还在不在、再连网看事件补没补上去。
+    </div>
+
+    <h3>㉓ 复习向量的来源也搬了家，<b>而搬的过程里露出一处漂了五天的常数</b></h3>
+    <p><code>review-vectors.json</code> 的全部意义是：客户端那份状态机<b>不是拿自己校自己</b>。
+    它原先由 <code>session.answer</code> 在一张真的队列行上跑出来——而那个函数刚被删掉。
+    <b>直接删掉导出脚本，就等于把那份向量悄悄变成「客户端某天的输出记录」</b>，
+    测试照样绿，而它验的东西已经没了。</p>
+    <p>所以照 <code>fsrs_reference.py</code> 的办法办：规则<b>逐行抄进</b>
+    <code>scripts/review_reference.py</code>——纯函数，不碰数据库、不看时钟、不读配置，
+    <code>backend/</code> 下没有任何东西 import 它。导出脚本改调它。</p>
+    <div class="callout">
+      <b>十个场景的期望值一个字节都没变</b>——这本身就是那次转写忠实的证据。
+      变的只有头部两行和<b>一个常数</b>：<code>max_reveal</code> 3 → 1。
+      <br><br>
+      <b>那是 P7 在 2026-09-13 改的</b>（三级提示压成一级），
+      而这份向量从那天起<b>就没有人重新导出过</b>，一直写着 3。
+      <code>verify_phase5</code> 的 D1.2「重新导出之后没有 diff」正是为这件事写的守卫，
+      <b>它没红是因为没人跑它</b>——r5s 上跑 <code>verify_phase5</code> 会先卡在
+      A1.1「找不到 swift」上，而看到两条红之后就不容易注意到里面还夹着这一条。
+      <br><br>
+      <b>教训不是「该跑验收」，是「一个只在别处报红的守卫等于没有守卫」。</b>
+      这条现在由 CI 的 <code>client.yml</code> 一起跑（那里有 Swift 工具链，
+      也就没有 A1.1 那两条噪音）。
+    </div>
+
     <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
     <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
     同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变

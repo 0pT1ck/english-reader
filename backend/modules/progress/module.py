@@ -20,7 +20,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from backend.core import auth
+from backend.core import auth, events
 from backend.core.db import Migration, get_connection
 from backend.core.logging import get_logger
 from backend.core.registry import Module
@@ -153,6 +153,20 @@ def replace_snapshot(learner_id: int, device_id: int | None,
         raise
 
     counts = {p: sum(1 for r in rows if r[4] == p) for p in POOLS}
+    # **「在学的词变了」是补句子池的信号**（架构铁律 6:订阅，不改别人的流程）。
+    #
+    # 这一条是 P9 逼出来的:决定 23 说句子要在读完那一刻就补上，而不是等夜里——
+    # 当天标的词当天就要复习，那一轮需要一句你没见过的。读完那一刻补，靠的是
+    # `article.finished`;但从 P9 起「哪些词在学」是设备报上来的，而客户端的顺序是
+    # **先推事件、再报快照**。读完事件到的时候快照里还没有今天新标的那些词，
+    # 补句子就会漏掉它们——而那是静默的:第二天你会发现那个词没题可出。
+    #
+    # 所以真正的信号是这一条，不是读完。读完那条订阅留着不删:两条都便宜
+    # （池子满了 `start_for` 直接回 None），而留着它，先报快照后推事件的客户端
+    # 也照样对。
+    events.emit("progress.pool.reported", learner_id=learner_id,
+                device_id=device_id, entries=len(rows),
+                reviewing=counts["reviewing"])
     log.info(
         "progress.pool.reported",
         f"收到词池快照：{len(rows)} 条（在学 {counts['reviewing']}、"

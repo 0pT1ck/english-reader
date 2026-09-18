@@ -66,10 +66,11 @@ def scheduler_settings() -> dict[str, Any]:
     by default, meaning "whatever the package ships with", and the two packages
     do not ship with the same thing.
     """
-    from backend.modules.review import scheduler as review_scheduler
-
     return {
-        "fsrs_parameters": list(review_scheduler.scheduler(fuzz=False).parameters),
+        # **直接读配置**。服务端不再有 FSRS 的实现可以去问「生效的是哪一组」——
+        # 那个实现搬到了 `scripts/fsrs_reference.py`，只给导向量用（P9 §11）。
+        # 配置项现在有真正的默认值，所以「读配置」和「生效的那一组」是同一件事。
+        "fsrs_parameters": list(runtime_config.get("fsrs_parameters") or []),
         "fsrs_desired_retention": float(runtime_config.get("fsrs_desired_retention")),
         "fsrs_maximum_interval": int(runtime_config.get("fsrs_maximum_interval")),
         "fsrs_fuzz": bool(runtime_config.get("fsrs_fuzz")),

@@ -2,19 +2,24 @@
 
 双向 both directions / 提示分级 graded hints / 结算 settlement / 权重 weight
 
-**The offline shape is the whole point of `/reviews`.** Every card ships with
-its sentences and its hint already attached, so a client can work through the
-day without another request (架构前提 2). That is why these models are large:
-the size is the feature.
+**The offline shape is the whole point.** Every card ships with its sentences
+already attached, so a client can work through the day without another request
+(架构前提 2). That is why these models are large: the size is the feature.
 
-**What the client is allowed to compute.** 架构前提 1 says client-side business
-logic is forbidden, and the offline requirement makes one exception unavoidable
-— the draw and the state transitions have to exist on the device or the day
-cannot be finished without a network. The rule the client follows is: mirror
-the few transitions written into this contract, never invent one, and let the
-server overwrite the result when the answers are reported. `weight_decay` is in
-the payload for exactly this reason: the *rules* come from the server, and what
-the client does is pick from a bag.
+**2026-09-17 (P9): which of them are still served.** `SentencePoolResponse` is,
+and it carries content only. The `/reviews` family — `ReviewDayResponse`,
+`ReviewItem`, `ReviewProgress` — is **no longer returned by any live endpoint**:
+those models describe today's queue, and the queue is learning state, which now
+lives on the device (`phase-9.html` §11). They stay in the file because
+`ReviewDayResponse` is still the declared shape of `TodayResponse.reviews`, a
+field 铁律 5 keeps rather than deletes, and because the day the client sends
+back what it computed, these are the names it uses.
+
+**What the client computes.** 架构前提 1 said no business logic on the client;
+P9 redrew that line rather than bending it. The server generates and delivers,
+the device learns — so the draw, the transitions and the intervals are all the
+device's now, and this contract's job is to hand it content and the few tuning
+numbers (`weight_decay`, the `fsrs_*` settings in 今日包) it must not invent.
 
 Read the note at the top of `core/contract.py` before changing anything here.
 """
@@ -309,7 +314,12 @@ class AnswersResponse(BaseModel):
     duplicates: int
     failed: int
     results: list[AnswerResult]
-    progress: ReviewProgress
+    progress: ReviewProgress | None = Field(
+        default=None,
+        description="**P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，"
+        "而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。"
+        "字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」",
+    )
 
 
 class SpellingResponse(BaseModel):
