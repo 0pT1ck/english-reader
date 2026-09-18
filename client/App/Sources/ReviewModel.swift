@@ -127,11 +127,6 @@ final class ReviewModel {
             pool = try await engine.fetchSentences()
             sync(app)
             phase = .ready
-            // 日历单独一条请求，拿不到不影响复习本身。
-            if let calendar = try? await engine.calendar(days: 7) {
-                days = calendar.days
-                streak = calendar.streak
-            }
         } catch is CancellationError {
             // **取消不是故障。**`IOSTransport` 早就把它和「离线」分开了，
             // 注释写的是「用户划走了一屏就取消一次请求」——而这里原本把它
@@ -174,6 +169,17 @@ final class ReviewModel {
     private func sync(_ app: AppModel) {
         today = ReviewDay.assemble(pool: pool, projection: app.projection,
                                    day: Self.localToday, now: Date())
+        // **日历也由重放算出来**（P9 §11）。在这之前它是单独一条请求
+        // （`/reviews/calendar`），而那条路读的是服务端的会话与队列——
+        // 也就是学习记录。现在它和那两个数同源，所以**答完一题当场变色**，
+        // 而不是等下一次联网。
+        if let calendar = app.calendar(days: 7) {
+            days = calendar.days.map {
+                Components.Schemas.CalendarDay(
+                    day: $0.day, status: $0.status.rawValue, is_today: $0.isToday)
+            }
+            streak = calendar.streak
+        }
         todayTotal = today.total(.today)
         todayDone = today.done(.today)
         dueTotal = today.total(.due)

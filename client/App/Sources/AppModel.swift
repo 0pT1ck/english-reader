@@ -246,6 +246,22 @@ final class AppModel {
     /// 排期算不算得出来。界面据此决定要不要说话。
     var canSchedule: Bool { schedulerSettings != nil }
 
+    /// 打卡日历与连续天数，**由重放算出来**（P9 §11）。
+    ///
+    /// nil ＝ 服务端还没下发排期参数，那时算不出「那天该做多少」——
+    /// 而一个编出来的日历比没有日历糟得多:它会把没做的日子画成绿的。
+    ///
+    /// **一次前向重放、在日界处求值**，所以它不贵；但它比那两个数贵
+    /// （要回看 400 天算连续），所以只在 `sync` 里算一次，不做成计算属性。
+    func calendar(days span: Int = 7) -> (days: [ReviewCalendar.Day], streak: Int)? {
+        guard let settings = schedulerSettings, let events,
+              let load = try? events.load() else { return nil }
+        return ReviewCalendar.build(load, weightDecay: weightDecay,
+                                    settings: settings,
+                                    today: ReviewCalendar.key(of: Date()),
+                                    span: span)
+    }
+
     /// 待发条数。**只数文件，不读文件。**
     ///
     /// 2026-09-16 修：这里一度顺手调了 `outbox.pending()` 去数损坏条目，

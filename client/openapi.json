@@ -815,6 +815,55 @@
           }
         }
       }
+    },
+    "/v1/client/me": {
+      "get": {
+        "tags": [
+          "client:today"
+        ],
+        "summary": "这把令牌是谁的（测试连接用）",
+        "operationId": "me_v1_client_me_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -823,7 +872,9 @@
         "properties": {
           "queue_id": {
             "type": "integer",
-            "title": "Queue Id"
+            "title": "Queue Id",
+            "description": "今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍",
+            "default": 0
           },
           "passed": {
             "type": "boolean",
@@ -851,11 +902,46 @@
             "type": "boolean",
             "title": "Easy",
             "default": false
+          },
+          "item_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Type",
+            "description": "word / phrase。**P9 加的**:见 item_key"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key",
+            "description": "被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了"
+          },
+          "sense_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sense Id",
+            "description": "义项 id。词组恒为 0"
           }
         },
         "type": "object",
         "required": [
-          "queue_id",
           "passed"
         ],
         "title": "AnswerIn"
@@ -864,7 +950,9 @@
         "properties": {
           "queue_id": {
             "type": "integer",
-            "title": "Queue Id"
+            "title": "Queue Id",
+            "description": "今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍",
+            "default": 0
           },
           "passed": {
             "type": "boolean",
@@ -892,6 +980,42 @@
             "type": "boolean",
             "title": "Easy",
             "default": false
+          },
+          "item_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Type",
+            "description": "word / phrase。**P9 加的**:见 item_key"
+          },
+          "item_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Key",
+            "description": "被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了"
+          },
+          "sense_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sense Id",
+            "description": "义项 id。词组恒为 0"
           },
           "idem_key": {
             "type": "string",
@@ -915,7 +1039,6 @@
         },
         "type": "object",
         "required": [
-          "queue_id",
           "passed",
           "idem_key"
         ],
@@ -2184,6 +2307,23 @@
         ],
         "title": "LoggedEventOut",
         "description": "事件日志里的一条，原样下发。\n\n**这是多设备的会合点**（P9 §6）。一台设备把它的事件推上来，另一台按序号\n拉下去，两边各自重放同一份日志，得出同一个状态——所以不需要合并算法。\n\n**`sequence` 是服务端收到即分配的全序号**，而 `occurred_at` 是设备时钟、\n可能是错的。**两个用途分开**:排序用序号，判「当天」用设备时钟。\n合用一个数就会在两台手机时间不同步时排出一个谁都没经历过的顺序。"
+      },
+      "MeResponse": {
+        "properties": {
+          "learner": {
+            "$ref": "#/components/schemas/Learner"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/Capabilities"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner",
+          "capabilities"
+        ],
+        "title": "MeResponse",
+        "description": "这把令牌是谁的，以及哪些留好的位置真的有值了。\n\n**测试连接用的就是它。** 在这之前那个探针打的是日历那个端点\n（「最轻的一个」），而日历 P9 搬到了设备上——探针因此需要一个真正最轻的:\n不读学习记录、不组装任何东西、不下发一个字节的内容。\n\n**它同时回答了探针真正关心的两件事**:令牌认不认（401 还是 200），\n以及对面是谁（换过令牌之后名字对不对）。"
       },
       "Phrase": {
         "properties": {

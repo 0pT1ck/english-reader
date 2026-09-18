@@ -249,6 +249,24 @@ public actor SyncEngine {
         return decoded
     }
 
+    /// 这把令牌是谁的。**测试连接用它。**
+    ///
+    /// 在这之前那个探针打的是日历那个端点（「最轻的一个」），而日历 P9 搬到了
+    /// 设备上。这个是真正最轻的:不读学习记录、不组装任何东西、
+    /// 不下发一个字节的内容，而它回答了探针真正关心的两件事——
+    /// 令牌认不认，以及对面是谁。
+    public func me() async throws -> Components.Schemas.MeResponse {
+        let response = try await transport.send(
+            HTTPRequest(method: .get, path: "/v1/client/me"))
+        guard response.isOK else {
+            throw TransportError.server(
+                status: response.status,
+                body: String(decoding: response.body.prefix(400), as: UTF8.self))
+        }
+        return try JSONDecoder().decode(
+            Components.Schemas.MeResponse.self, from: response.body)
+    }
+
     /// The check-in calendar and the streak.
     ///
     /// Its own endpoint rather than fields on the day package, because
