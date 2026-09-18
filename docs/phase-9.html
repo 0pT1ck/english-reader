@@ -1827,6 +1827,110 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
       <b>教训是老的那条：脚本化的删除要断言删完之后剩下什么，不能只断言删掉了什么。</b>
     </div>
 
+    <h3>㉖ 第一次真机验收：<b>四个缺陷，前三个是同一条链，第四个更严重</b>（2026-09-18）</h3>
+    <p>构建 11 装上去之后，用户报的是「为什么还是要转圈，而且非常卡」。
+    <b>而日志把四件事都钉死了</b>，其中没有一件是我预想的那个。</p>
+
+    <div class="callout">
+      <b>① 一批发 534 条，而三个端点都写着 <code>max_length=500</code>。</b>
+      <br><br>
+      服务端的 trace 原话:<code>List should have at most 500 items after
+      validation, not 534</code>。<code>drainLog</code> 把某一种的**全部**待发
+      一次性发出去，于是每次都是 422；<b>而 422 不是 <code>.offline</code></b>，
+      抛出去整趟同步就断——<b>队列从此只会变长</b>，每回到前台就重试一遍
+      三到六秒的请求。「一直转圈而且非常卡」就是这个。
+      <br><br>
+      改成分片，片大小 <b>200 而不是 500</b>:同一个数字在两处各写一遍本来就会漂，
+      取等号的话服务端哪天调小一点，客户端立刻整批被拒，而那个拒绝长得像
+      「包有问题」。<b>更该做的是让服务端把上限下发下来</b>，记进主文档 §M。
+    </div>
+
+    <div class="callout">
+      <b>② <code>drain()</code> 没有互斥，启动时同时跑两条。</b>
+      <br><br>
+      <b>认出它靠的是「日志里每一行都是双份」</b>——<code>adopted=399</code> 两次、
+      <code>progress.pool.reported</code> 两次。<code>AppModel</code> 是
+      <code>@MainActor</code>，而 <b>MainActor 不防重入</b>:<code>await</code>
+      一让出去第二个调用就从头跑。启动时 <code>.task</code> 和
+      <code>scenePhase == .active</code> 几乎同时到，而调用方一共七处。
+      <br><br>
+      <b>这条在 P9 之前就有</b>——09-16 那天的 <code>http.offline</code> 也是双份。
+      只是那时不致命:没有拉取端点，两趟并发只是多打一次请求。
+    </div>
+
+    <div class="callout">
+      <b>③ 两趟并发的 <code>pull()</code> 把同一批事件写进日志两遍。</b>
+      399 × 2 ＝ 798，和日志里的 <code>pending=798</code> 对得上。
+      两趟各自在开头取一份「已知幂等键」的快照，都认为这 399 条是新的；
+      而两边的 <code>markReported</code> 各读各写游标、互相覆盖。
+      <br><br>
+      <b>去重挪到写入侧</b>:<code>appendPulled</code> 自己按幂等键判。
+      <b>调用方手里的快照会过期，写入的那一刻不会</b>——那份快照现在只是省一次读盘，
+      不再是正确性的依据。
+    </div>
+
+    <h4>④ 这一条最严重，而且是 §6 双向同步自己带出来的</h4>
+    <p>422 的 trace 里那些幂等键是 <code>k-mark-1</code>、<code>repro5-mark</code>、
+    <code>k-mark-9</code>，标的是 <code>world</code>——<b>那是验收夹具</b>。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>会合点（阿里云，清理前）</th><th class="num">条数</th><th>会被设备收下</th></tr>
+      <tr><td>真客户端（UUID 形状）</td><td class="num">411</td><td class="ok">是，应该</td></tr>
+      <tr><td><code>v2-ph-mark-*</code> / <code>v2-mark-*</code>（<code>verify_phase2</code>）</td>
+        <td class="num">~300</td><td class="wait"><b>是，不该</b></td></tr>
+      <tr><td><code>k-*</code> <code>repro*</code> <code>rv-*</code> <code>verify*</code>（一次性探针）</td>
+        <td class="num">22</td><td class="wait"><b>是，不该</b></td></tr>
+      <tr><td><b>合计夹具</b></td><td class="num"><b>365</b></td>
+        <td class="wait">其中 198 条属于那五种</td></tr>
+    </table>
+    </div>
+    <p><b><code>verify_phase2</code> 会真的上报 <code>word.marked</code>，而且从不清理。</b>
+    那是它该做的——那条路正是它要验的东西。<b>P9 之前后果只是不整洁</b>:
+    词池里多几个探针词，控制台看得见。<b>而有了拉取端点之后，它变成一条污染通道</b>——
+    每台设备都会把它们拉下来重放进投影，于是手机上出现一批用户从没标过的词，
+    两边都不报错。那些事件从 2026-09-07 就躺在库里。</p>
+    <div class="callout">
+      <b>而清理这件事本身差点又造一个错，这一次是我自己的。</b>
+      <br><br>
+      第一版 <code>clean_probe_events</code> 按事件 payload 里的词
+      <b>无条件</b>删 <code>study_marks</code>。而 <code>verify_phase2</code>
+      标的是<b>真文章里的一个真词</b>（<code>sample["headword"]</code>），
+      不是造出来的探针词——那样删会删掉用户自己标的那一笔。
+      <br><br>
+      改成<b>「只有当没有任何真事件支持它时才删派生行」</b>。
+      实测在阿里云上:删掉 <code>world#9372</code> <b>一个</b>，
+      留下 <code>account for</code>、<code>come from</code>、<code>month</code>、
+      <code>supply</code> <b>四个</b>——那四个都是用户自己标的。
+      <b>这条判断在它写下来的当天就兑现了四次。</b>
+    </div>
+    <p><b>守卫与清理分开放</b>:清理归制造它的那个脚本
+    （<code>verify_phase2</code>，前后各清一次，新断言 6.10 断言自己清干净了）；
+    <b>守卫在 <code>verify_phase9</code> 8.5</b>——「会合点里不许有夹具形状的事件」，
+    它连一次性探针留下的也看得见，而那些没有主人。
+    <b>真正的解法是验收用自己的 learner</b>，那样它产生的事实根本流不到本人的设备上
+    （<code>/events</code> 按 learner 过滤）。那要先有多用户，记进主文档 §M。</p>
+
+    <h4>顺带修的：开发者选项里的「丢掉本地日志，从服务器重新拉」</h4>
+    <p><b>服务端清干净了并不够。</b> 那 798 行已经在设备上，而投影是从它算出来的；
+    <b>日志从不回头改</b>——那是设计，不是缺陷。既然不许改，就得能整份丢掉重来。</p>
+    <p><b>先推，再看，才敢丢。</b> 设备是学习记录的第一副本，会合点只是会合点，
+    所以这个动作只在「本地没有任何还没上报的事实」时才无损。推完还有待发就
+    <b>拒绝并说出数目</b>，不提供「强制」那个选项——一个能把自己的学习记录删掉的
+    按钮，不该由一次点击决定。游标跟着清，否则下一次拉取从旧的
+    <code>pulledThrough</code> 往后取，<b>前面那一段再也拉不回来</b>，
+    那比脏日志更糟。</p>
+    <div class="callout">
+      <b>写这一屏的时候，我把 P8 §18 那个「越用越慢」原样重造了一遍。</b>
+      为了显示「日志里一共多少条」，我把整份读盘塞进了
+      <code>refreshPendingCount()</code>——<b>而那个方法每记一条事件就被调一次</b>。
+      2026-09-16 那次塞进去的是 <code>outbox.pending()</code>（读并解码发件箱里
+      每一个文件），症状是答得越多越慢。
+      <br><br>
+      改成按需算，并在方法上写明「不许塞进那里」。
+      <b>同一个位置、同一个形状、隔两天、两个不同的原因</b>——
+      所以这次把禁令写在了那个方法的注释里，而不只是记在坑里。
+    </div>
+
     <h3>下一步：<b>代码这边做完了，剩下的是人要做的</b></h3>
     <p>§4 到 §12 全部落地，①–㉕ 都有记录，七套自动验收共 <b>229 项零失败</b>。
     CLAUDE.md 的架构铁律与跨 Phase 不变量已照 §4／§15 重写。剩下三件：</p>
