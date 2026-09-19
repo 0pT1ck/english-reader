@@ -103,17 +103,35 @@ public enum ReviewCalendar {
         var out: [String: Counts] = [:]
         var index = 0
         var consumed: [LoggedEvent] = []
+        // **上一次重放的结果，只在 `consumed` 真的变长时才丢掉重算**
+        // （2026-09-19 真机上栽的:「一次前向重放」这句话没有做到——
+        // 这里原来对 400 天里的每一天都调一次 `Projection.replay`，
+        // 而重放本身只随 `consumed` 变化，跟「今天是哪天」无关，
+        // 真正日期相关的只有下面的 `todayQueue`。事件通常只挤在最近几天，
+        // 于是绝大多数天数在重算一个跟昨天一模一样的投影——实测:
+        // 400 天版本 1135ms，而单跑一次 `Projection.replay` 只要 169ms。
+        // 空的 `consumed` 也不例外:没有任何条目，`todayQueue` 必然是空集，
+        // 直接跳过重放和查询，省的不只是重放那一步）。
+        var projection = Projection()
 
         for day in days {
+            let before = consumed.count
             // 把这一天（含）之前的事件都吃进去。
             while index < load.events.count,
                   Projection.day(of: load.events[index].occurredAt) <= day {
                 consumed.append(load.events[index])
                 index += 1
             }
-            let projection = Projection.replay(
-                EventLogLoad(events: consumed, damaged: 0, tornTail: false),
-                weightDecay: weightDecay, settings: settings)
+            guard !consumed.isEmpty else {
+                // 还没有任何历史:那天必然 `.unknown`，连查询都不用做。
+                out[day] = Counts()
+                continue
+            }
+            if consumed.count != before {
+                projection = Projection.replay(
+                    EventLogLoad(events: consumed, damaged: 0, tornTail: false),
+                    weightDecay: weightDecay, settings: settings)
+            }
             guard let end = endOfDay(day) else { continue }
             var counts = Counts()
             // **那天有记录吗**:有事件、或者那天的队列非空。

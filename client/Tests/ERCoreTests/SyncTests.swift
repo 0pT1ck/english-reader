@@ -344,4 +344,54 @@ extension SyncTests {
         #expect(try events.unreported(kinds: LoggedEvent.sendableKinds).isEmpty,
                 "送到了就该记下来，否则下一趟又从头发一遍")
     }
+
+    /// **这一条是「不卡死了，但还是转圈」的回归测试**（2026-09-19 真机上栽的）。
+    ///
+    /// 服务端的 `status: "failed"` 是终局判断，不是「这次没连上」——见
+    /// `review/routes.py` 的 `UnusableItem`：一条作答没有 `item_key`
+    /// （P9 之前记的老事件）会被永久判 `failed`，重发一百次结果都一样。
+    ///
+    /// 真机上撞到的正是这个:四条 2026-09-13 记的老作答，`item_key` 是
+    /// `nil`，永远被拒、永远待发，`pendingEvents` 因此永远非零——而
+    /// `ReviewModel.load()` 那条「有待发才等」的分支就此永远走阻塞路径，
+    /// 每次进复习页都白等一趟注定失败的同步。
+    @Test("服务端判 failed 的那条不再永远待发——拒了就别再问")
+    func aPermanentlyFailedAnswerStopsBeingRetried() async throws {
+        let transport = ScriptedTransport([
+            ("/v1/client/reviews/answers", Self.ok(Self.results([
+                ("ok-1", "accepted"), ("no-identity", "failed"),
+            ]))),
+        ])
+        let root = SyncTests.temporaryRoot()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let events = try EventLog(directory: root.appendingPathComponent("events"))
+        try events.append(kind: .answered,
+                          payload: ["queue_id": .int(1), "passed": .bool(true)],
+                          idemKey: "ok-1")
+        // 老事件的形状:只有 queue_id，没有身份字段。
+        try events.append(kind: .answered,
+                          payload: ["queue_id": .int(281), "passed": .bool(false)],
+                          idemKey: "no-identity")
+
+        let engine = SyncEngine(
+            transport: transport,
+            outbox: try Outbox(directory: root.appendingPathComponent("outbox")),
+            events: events,
+            articles: try ArticleCache(directory: root.appendingPathComponent("articles")),
+            day: try DayCache(directory: root.appendingPathComponent("day")))
+
+        let report = try await engine.drain()
+        #expect(report.landed == 1)
+        #expect(report.rejected == 1)
+        #expect(try events.unreported(kinds: LoggedEvent.sendableKinds).isEmpty,
+                "被拒的那条也该标记已上报——它不会因为再问一次就通过")
+
+        // 再 drain 一次:没有待发的了，不该再打一次网络请求——
+        // `ScriptedTransport` 只认得上面那一条脚本，再打一次也会拿到同样的回应，
+        // 但这里要验证的是「根本没打」，这正是转圈那个症状消失的原因。
+        let again = try await engine.drain()
+        #expect(again.landed == 0 && again.duplicates == 0 && again.rejected == 0,
+                "没有待发的了，drain 应该什么都不做")
+    }
 }

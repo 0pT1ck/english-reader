@@ -576,7 +576,22 @@ public actor SyncEngine {
                         case .landed: report.landed += 1; landed.append(event.localSequence)
                         case .duplicate: report.duplicates += 1
                             landed.append(event.localSequence)
-                        case .rejected: report.rejected += 1
+                        case .rejected:
+                            // **也标记已上报——这是终局判断，不是「这次没连上」。**
+                            // 三个批量端点的 `status: "failed"` 都是服务端主动认定
+                            // 「这一条我不打算收」（见 `review/routes.py` 的
+                            // `UnusableItem`/`item_key` 缺失那两条判断），不是
+                            // 「暂时处理不了，回头再试」——它就是为「逐条拒绝」
+                            // 这件事设计的，而逐条拒绝的另一半是「拒了就别再问」。
+                            //
+                            // 2026-09-19 真机上栽的:四条 P9 之前记的老作答
+                            // （没有 item_key）永远被判 failed，而这里原本什么都不做
+                            // ——于是它们永远待发、`pendingEvents` 永远非零，
+                            // 而 `ReviewModel.load()` 那条「有待发才等」的分支因此
+                            // 永远走阻塞路径:每次进复习页都白等一趟注定失败的同步，
+                            // 表现就是「不卡死了，但还是转圈」。
+                            report.rejected += 1
+                            landed.append(event.localSequence)
                         case nil:
                             // 服务端没提这一条。**沉默不等于同意**——留着下次再发。
                             break
