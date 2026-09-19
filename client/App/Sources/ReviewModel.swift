@@ -171,8 +171,16 @@ final class ReviewModel {
             //
             // 真机上一进复习就撞到了：`fetchDay` 要拉 1 MB 的今日包，
             // 经隧道约一秒，而这一秒里视图重算一次，task 就被取消。
-            // 回到 loading 由 `.onAppear` 再试一次（见 `ReviewScreen`）。
-            phase = .loading
+            // 那时 `phase` 还是 `.loading`（缓存优先那条路还没加），
+            // 退回 `.loading` 无伤大雅，`.onAppear` 会再试一次。
+            //
+            // **不要把已经点亮的屏幕拉回转圈**（2026-09-19，用户实测揪出来的:
+            // 「立马切走再切回」比「放一会儿再切」更容易闪）。缓存优先加了之后，
+            // 被取消时 `phase` 通常已经是 `.ready`——缓存已经把内容点亮，
+            // 被取消的只是后台那次刷新。这时候退回 `.loading` 是在把一个
+            // 好端端的画面往回撤，下次进来又要重新走一遍这整条路径、
+            // 再闪一次。**只在还没显示过任何内容时才退**。
+            if phase != .ready { phase = .loading }
         } catch let error as TransportError {
             if case .offline = error {
                 phase = .offline("离线，连不上服务器")
