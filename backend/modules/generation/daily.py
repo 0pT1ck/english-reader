@@ -73,8 +73,29 @@ def words_in_progress() -> set[str]:
 
     Reads only; a word's pool is decided by the learner's own mark and by
     nothing else.
+
+    **P9 改了来源:先看客户端上报的词池快照。** 学习记录搬到设备上之后，
+    ``study_states`` 不再是那份记录（它只是过渡期还在维护的派生物），
+    而快照是设备把「我在学哪些词」当作事实报上来的那一份（§7）。
+    这是服务端与学习记录**唯一一种解释关系**，而它连解释都不算:直接用。
+
+    **没有快照时回落到 ``study_states``，并且大声说出来。**
+    静默回落会让「设备从没报过」看起来和「一个词都没在学」一样，
+    于是生成把你正在学的词当生词再教一遍——**而那是静默的**，
+    只表现为「这篇怎么全是我标过的词」。§11 拆掉 ``study_states`` 之后，
+    这条回落一起删。
     """
-    rows = get_connection("learning").execute(
+    from backend.modules.progress import module as progress
+
+    reported = progress.words_in_progress()
+    if reported is not None:
+        return reported
+
+    log.warning(
+        "generation.pool.snapshot_missing",
+        "还没有任何设备报过词池快照，这一轮按 study_states 里的旧派生值排除",
+    )
+    rows = get_connection("events").execute(
         "SELECT DISTINCT item_key FROM study_states"
         " WHERE item_type = 'word' AND pool != 'new'"
     ).fetchall()
@@ -88,7 +109,7 @@ def stock() -> int:
     library, not a supply — they were not written to teach anything and they
     never run out.
     """
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT COUNT(*) AS n FROM reading_articles"
         " WHERE source = 'generated' AND status = 'ready' AND read_at IS NULL"
     ).fetchone()
@@ -129,7 +150,7 @@ def _resume_unfinished() -> list[int]:
     # Flip jobs whose process died into a state that can be picked up again.
     jobs.recover_interrupted()
 
-    stuck = get_connection("learning").execute(
+    stuck = get_connection("content").execute(
         "SELECT id, status FROM reading_articles"
         " WHERE source = 'generated' AND status != 'ready' ORDER BY id"
     ).fetchall()

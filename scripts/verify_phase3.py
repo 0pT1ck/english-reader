@@ -33,12 +33,14 @@ it settles will show a real due date afterwards.
 
 from __future__ import annotations
 
+import json
 import random
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -47,7 +49,7 @@ from backend.core.db import get_connection  # noqa: E402
 from backend.core.logging import get_logger, trace  # noqa: E402
 from backend.main import app  # noqa: E402  installs modules and migrations
 from backend.modules.reading import service  # noqa: E402
-from backend.modules.review import clock, repository, scheduler, sentences, session  # noqa: E402
+from backend.modules.review import clock, repository, sentences, session  # noqa: E402
 
 passed: list[str] = []
 failed: list[str] = []
@@ -66,10 +68,6 @@ def check(number: str, title: str, ok: bool, detail: str = "") -> None:
 def note(number: str, title: str, detail: str) -> None:
     manual.append(number)
     print(f"  [人工] {number} {title} — {detail}")
-
-
-def interval(card_state, asks, now):
-    return scheduler.review(card_state, asks, now, fuzz=False).interval_days
 
 
 def cleanup_probe(conn, key: str) -> None:
@@ -96,7 +94,7 @@ def _fresh_device(name: str) -> str:
     So the old ones go first. Revoking rather than deleting keeps the audit
     trail: the row says a token existed and when it stopped working.
     """
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "UPDATE devices SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), name),
@@ -107,7 +105,7 @@ def _fresh_device(name: str) -> str:
 
 def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
     with trace():
-        conn = get_connection("learning")
+        conn = get_connection("events")
         now = datetime.now(timezone.utc)
         rng = random.Random(20260909)
 
@@ -119,221 +117,93 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               if clock.offset_days() == 0
               else f"时钟还停在 +{clock.offset_days()} 天，去复习页点「时钟归零」再跑")
 
-        # --- 1. 调度器接对了没有 ------------------------------------------ #
-        print("\n1. 调度器")
+        # --- 1. 那 25 项搬到哪儿去了 ---------------------------------------- #
+        print("\n1. 调度与队列已经搬走了")
 
-        fresh = None
-        seq = []
-        state = None
-        for _ in range(5):
-            outcome = scheduler.review(state, 0, now, fuzz=False)
-            seq.append(round(outcome.interval_days, 1))
-            state = outcome.state
-            now = outcome.due_at
-        check("1.1", "连续答对，间隔必须递增",
-              all(b > a for a, b in zip(seq, seq[1:])),
-              " → ".join(f"{d}天" for d in seq))
-
-        long_state = state
-        collapsed = scheduler.review(long_state, 2, now, fuzz=False)
-        check("1.2", "答错，间隔必须塌回去",
-              collapsed.interval_days < seq[-1] / 2,
-              f"{seq[-1]} 天 → {round(collapsed.interval_days, 1)} 天")
-
-        base = scheduler.review(None, 0, datetime.now(timezone.utc), fuzz=False).state
-        at = datetime.fromisoformat(base["due_at"])
-        by_miss = {m: round(interval(base, m, at), 2) for m in (0, 1, 2)}
-        easy_iv = round(scheduler.review(base, 0, at, easy=True, fuzz=False).interval_days, 2)
-        check("1.3", "失误越多，下次来得越快；标了太简单则更远",
-              easy_iv > by_miss[0] > by_miss[1] >= by_miss[2],
-              f"太简单→{easy_iv}天  " + "  ".join(f"失误{m}次→{d}天" for m, d in by_miss.items()))
-
-        # 数的是**失误次数**，不是问了几道题。第一版数问题数，而一轮天生就是两道
-        # （两个方向），于是完美一轮记成 2、磕绊一次记成 4——把只磕了一下的词判成
-        # 最差的 Again，而 Easy 在真实流程里根本够不着。2026-09-09 改。
-        rows = [(n, scheduler.rating_for(n).name) for n in (0, 1, 2, 5)]
-        check("1.4", "评分按失误次数，不按问了几道题",
-              [r for _, r in rows] == ["Good", "Hard", "Again", "Again"],
-              "、".join(f"失误{n}次→{r}" for n, r in rows))
-
-        check("1.4b", "Easy 只由你自己标，且磕过就不认",
-              scheduler.rating_for(0, easy=True) is scheduler.EASY_RATING
-              and scheduler.rating_for(1, easy=True).name == "Hard",
-              "系统量的是「答没答对」，不是「费不费劲」——没有的信号不编")
-
-        sched = scheduler.scheduler(fuzz=False)
-        sched_cap = scheduler.scheduler(fuzz=False)
-        check("1.7", "最长间隔压到了半年",
-              sched_cap.maximum_interval <= 365,
-              f"{sched_cap.maximum_interval} 天——FSRS 默认 36500 天是给「终身记住」的，"
-              "而这个项目瞄的是有日期的考试，排到考试之后等于没排")
-
-        check("1.5", "FSRS 自带的当天重复已关掉",
-              not sched.learning_steps and not sched.relearning_steps,
-              "learning_steps 与 relearning_steps 都为空——当天重复由伪随机池负责，"
-              "两个都开会把一天算成两次复习")
-
-        state_a = scheduler.review(None, 2, datetime(2026, 1, 1, tzinfo=timezone.utc), fuzz=False)
-        revived = scheduler.to_card(state_a.state)
-        check("1.6", "记忆状态存进库再取出来还是同一张卡",
-              revived.stability == state_a.state["stability"]
-              and revived.difficulty == state_a.state["difficulty"],
-              "换算法要能拿历史重放，前提是状态存得住")
-
-        # --- 2. 今天的队列 ------------------------------------------------- #
-        print("\n2. 今天要复习什么")
-
-        now = datetime.now(timezone.utc)
-
-        # A probe item of our own, due now, with a sentence in the pool.
+        # **P9 §11／§12。** 排期、当天的队列、三档标记的差别、一轮的状态机，
+        # 这些规则原本由这一节的 25 项守着，而它们现在在客户端（Core）。
+        # r5s 上编不出 Core（没有 Swift 工具链），所以规则本身由 CI 上的
+        # `swift test` 守——**这一节守的是另外两件事**:
         #
-        # **The first version walked whatever happened to be due today, and that
-        # made the script pass or fail depending on the day** — run it after
-        # finishing the day's review and there was nothing left to walk, so five
-        # checks reported failure while nothing was wrong. A verification script
-        # that only works on some days verifies nothing. It seeds its own item
-        # and removes it again, the same way section 3 already did.
-        PROBE, PROBE_SENSE = "__probe_round", 0
-        cleanup_probe(conn, PROBE)
-        conn.execute(
-            "INSERT INTO study_states (learner_id, item_type, item_key, sense_id, pool,"
-            " introduced_at, encounters, updated_at, due_at)"
-            " VALUES (?,'word',?,?, 'reviewing', ?, 0, ?, ?)",
-            (LEARNER, PROBE, PROBE_SENSE, now.isoformat(timespec="seconds"),
-             now.isoformat(timespec="seconds"),
-             (now - timedelta(hours=1)).isoformat(timespec="seconds")))
-        for text, blank in (("The team had to probe the problem before the meeting.", 16),
-                            ("Careful workers probe every corner of the old house.", 16)):
-            conn.execute(
-                "INSERT OR IGNORE INTO review_sentences (item_type, item_key, sense_id, text,"
-                " blank_start, blank_end, surface, source, created_at)"
-                " VALUES ('word',?,?,?,?,?,'probe','generated',?)",
-                (PROBE, PROBE_SENSE, text, blank, blank + 5,
-                 now.isoformat(timespec="seconds")))
-        conn.commit()
+        #   ① 那些向量与样本确实覆盖了那几条规则（读得出来，不用编 Swift）；
+        #   ② **服务端不再实现它们**。
+        #
+        # 两件合起来才是完整的网。只留 ① 会漏掉「删了 Core 那边却没删服务端」，
+        # 只留 ② 会漏掉「删了服务端而 Core 那边根本没接上」。
+        vectors = ROOT / "client/Tests/ERCoreTests/Fixtures"
+        review_vectors = vectors / "review-vectors.json"
+        sched_vectors = vectors / "scheduler-vectors.json"
+        check("1.1", "当天那一轮的状态机向量在，且覆盖最容易写漏的那条",
+              review_vectors.exists()
+              and "第二向答错" in review_vectors.read_text(encoding="utf-8"),
+              "决定 7:答错第二向要重新上锁并退回第一向")
 
-        items = session.collect(LEARNER, now)
-        check("2.1", "到期的条目进得了队列",
-              any(i["item_key"] == PROBE for i in items),
-              f"{len(items)} 条，含刚种下的探针")
+        sched = json.loads(sched_vectors.read_text(encoding="utf-8")) \
+            if sched_vectors.exists() else {}
+        grades = (sched.get("ratings") or {}).get("cases") or []
+        schedules = (sched.get("schedules") or {}).get("cases") or []
+        check("1.2", "评级映射是全枚举，32 条",
+              len(grades) == 32,
+              f"misses 0-3 × easy × revealed × capped——全枚举的表"
+              f"不会在中间有个缺口（实际 {len(grades)} 条）")
 
-        phrase_rows = conn.execute(
-            "SELECT COUNT(*) FROM study_states WHERE item_type='phrase' AND pool='reviewing'"
-        ).fetchone()[0]
-        in_queue = [i for i in items if i["item_type"] != "word"]
-        check("2.2", "词组是被有意跳过的，不是碰巧没查到",
-              phrase_rows > 0 and not in_queue,
-              f"复习池里确有 {phrase_rows} 个词组条目，而队列里 0 个——"
-              "决定 17 把词组留到有数据之后再定" if phrase_rows else
-              "复习池里一个词组都没有，这条查不出东西来")
+        names = " ".join(c.get("name", "") for c in schedules)
+        check("1.3", "排期向量钉住了那几条有明文依据的",
+              all(k in names for k in ("180", "封顶", "提示", "自称简单", "短期")),
+              f"{len(schedules)} 个场景:180 天封顶、提示降一档、自称简单、"
+              "同一天又答一次")
 
-        state = session.ensure(LEARNER, now)
-        rows = repository.queue_rows(state["id"])
-        check("2.3", "会话建起来了", bool(rows), f"session {state['id']}，队列 {len(rows)} 条")
+        sequence = [round(s["interval_days"]) for c in schedules
+                    if len(c.get("reviews") or []) == 5
+                    for s in c.get("expected", [])]
+        check("1.4", "间隔序列还是 2→11→46→163→180",
+              sequence == [2, 11, 46, 163, 180],
+              f"{sequence}——8→66→180 是当年接错线的那一版（坑 §4.5）")
 
-        # --- 3. 「模糊」当天不来 ------------------------------------------- #
-        print("\n3. 三档标记在调度上真的有差别")
+        settings_used = sched.get("settings") or {}
+        check("1.5", "向量带着生成时用的那组参数，不靠任何一边的「默认」",
+              len(settings_used.get("parameters") or []) == 21
+              and settings_used.get("enable_fuzzing") is False,
+              "两个包的「默认」不是同一组数，各取自己的就会跑出不同的间隔"
+              "——而两边都在按自己的文档正常工作、没有东西会报错")
 
-        probe_day = (now + timedelta(days=400)).date().isoformat()
-        conn.execute("DELETE FROM study_states WHERE item_key IN ('__probe_u','__probe_f')")
-        conn.execute("DELETE FROM study_marks WHERE item_key IN ('__probe_u','__probe_f')")
-        for key, kind in (("__probe_u", "unknown"), ("__probe_f", "fuzzy")):
-            conn.execute(
-                "INSERT INTO study_states (learner_id, item_type, item_key, sense_id, pool,"
-                " introduced_at, encounters, updated_at) VALUES (?,'word',?,0,'reviewing',?,0,?)",
-                (LEARNER, key, probe_day, probe_day))
-            conn.execute(
-                "INSERT INTO study_marks (learner_id, item_type, item_key, sense_id, kind,"
-                " created_at) VALUES (?,'word',?,0,?,?)",
-                (LEARNER, key, kind, probe_day + "T08:00:00+00:00"))
-        conn.commit()
+        # ② 服务端不再实现它们。**断言文件不在**，而不是断言某个函数不被调用:
+        # 文件还在就意味着它随时会被再接上，而那种回归是静默的。
+        gone = {
+            "scheduler.py": "排期（FSRS）",
+            "calendar.py": "打卡日历与连续天数",
+        }
+        missing = [f"{name}（{what}）" for name, what in gone.items()
+                   if not (ROOT / "backend/modules/review" / name).exists()]
+        check("1.6", "服务端不再有排期与日历的实现",
+              len(missing) == len(gone),
+              "、".join(missing) if missing else "它们还在——那意味着随时会被再接上")
 
-        probe_now = datetime.fromisoformat(probe_day + "T12:00:00+00:00")
-        collected = session.collect(LEARNER, probe_now)
-        keys = {i["item_key"] for i in collected}
-        check("3.1", "标「不认识」的当天就来", "__probe_u" in keys)
+        session_source = (ROOT / "backend/modules/review/session.py").read_text(
+            encoding="utf-8")
+        for item, needle, what in [
+            ("1.7", "def collect(", "组队列"),
+            ("1.8", "def answer(", "算一次作答"),
+            ("1.9", "def progress(", "算进度"),
+        ]:
+            check(item, f"服务端不再{what}",
+                  needle not in session_source,
+                  f"`{needle.rstrip('(')}` 已经不在 session.py 里")
 
-        # 这一条 2026-09-15 改过。原文守的是 P3 决定 18「模糊的当天不来」，
-        # 而 P7 §3 把它推翻了（卡片上写 3 而你标了 5，没有任何东西解释为什么），
-        # 于是旧断言天天报假警。改成守**始终成立的那一半**：决定 18 的理由
-        # ——你几分钟前刚读过它，答对证明不了什么——现在由 capped 承担。
-        # 删掉它会丢守卫，留着它会天天报假警，两种都比改一次贵（坑 §8）。
-        fuzzy_row = next((i for i in collected if i["item_key"] == "__probe_f"), None)
-        check("3.2", "标「模糊」的当天也来，而且这一次不算满分",
-              fuzzy_row is not None and int(fuzzy_row.get("capped") or 0) == 1,
-              "进了队列且 capped=1" if fuzzy_row else "模糊的探针没进队列")
-        unknown_row = next((i for i in collected if i["item_key"] == "__probe_u"), None)
-        check("3.2b", "标「不认识」的不封顶——三档还是有差别",
-              unknown_row is not None and int(unknown_row.get("capped") or 0) == 0,
-              "决定 18 的另一半：不认识当天就问，而且算数")
-        keys_next = {i["item_key"] for i in
-                     session.collect(LEARNER, probe_now + timedelta(days=1))}
-        check("3.3", "「模糊」第二天还在队列里", "__probe_f" in keys_next)
-
-        # capped 只是一个标志位，真正要守的是它**降了级**。这一步不落库、
-        # 不依赖当天有什么数据，所以它是这三条里最结实的一条：
-        # 标志位传错了地方的话，上面两条照样通过，只有这条会红。
-        plain = scheduler.rating_for(0)
-        capped = scheduler.rating_for(0, capped=True)
-        check("3.4", "封顶真的把评级压下来了", capped != plain and capped < plain,
-              f"未封顶 {plain}，封顶 {capped}——Good 压成 Hard")
-        conn.execute("DELETE FROM study_states WHERE item_key IN ('__probe_u','__probe_f')")
-        conn.execute("DELETE FROM study_marks WHERE item_key IN ('__probe_u','__probe_f')")
-        conn.commit()
-
-        # --- 4. 走一轮 ------------------------------------------------------ #
-        print("\n4. 一轮复习")
-
-        open_rows = [r for r in repository.queue_rows(state["id"], open_only=True)
-                     if r["item_key"] == PROBE]
-        if not open_rows:
-            check("4.0", "探针条目在队列里", False, "种下的探针没进队列")
-        else:
-            row = open_rows[0]
-            item_key, sense_id = row["item_key"], row["sense_id"]
-            before = repository.state_of(LEARNER, "word", item_key, sense_id)
-
-            session.answer(LEARNER, row["id"], passed=True, now=now)
-            mid = [r for r in repository.queue_rows(state["id"]) if r["id"] == row["id"]][0]
-            check("4.1", "看词想义过了才解锁看义想词",
-                  int(mid["step"]) == session.SENSE_TO_WORD and int(mid["asks"]) == 1,
-                  f"step {mid['step']}，今天已问 {mid['asks']} 次")
-
-            session.answer(LEARNER, row["id"], passed=False, now=now)
-            after = [r for r in repository.queue_rows(state["id"]) if r["id"] == row["id"]][0]
-            check("4.2", "看义想词失败要重新上锁并降权",
-                  int(after["step"]) == session.WORD_TO_SENSE
-                  and float(after["weight"]) < float(mid["weight"]),
-                  f"step 回到 {after['step']}，权重 {mid['weight']} → {after['weight']}")
-            check("4.3", "降权不是出局",
-                  float(after["weight"]) > 0 and after["done_at"] is None,
-                  "当天结束的唯一条件是池子空了（决定 15），降权只是让路")
-
-            session.answer(LEARNER, row["id"], passed=True, now=now)
-            done = session.answer(LEARNER, row["id"], passed=True, now=now)
-            check("4.4", "两个方向都过才结算",
-                  done["done"] and done["settled"] is not None,
-                  f"{done['settled']['rating_name']}，{done['settled']['interval_days']} 天后再来"
-                  if done["settled"] else "")
-            check("4.8", "结算按失误次数，磕过的不许标太简单",
-                  done.get("misses", 0) >= 1 and done["settled"]["rating_name"] != "Easy",
-                  f"这一轮失误 {done.get('misses')} 次 → {done['settled']['rating_name']}")
-
-            settled_state = repository.state_of(LEARNER, "word", item_key, sense_id)
-            check("4.5", "复习不改变词池位置",
-                  settled_state["pool"] == (before or {}).get("pool", "reviewing"),
-                  "这是 P2 的不变量：只有你自己的信号能移动词池，复习不是")
-            check("4.6", "记忆状态落库了",
-                  settled_state["stability"] is not None and settled_state["due_at"] is not None,
-                  f"S={round(settled_state['stability'], 2)} "
-                  f"D={round(settled_state['difficulty'], 2)} due={settled_state['due_at']}")
-            hist = conn.execute(
-                "SELECT COUNT(*) FROM review_history WHERE item_key=? AND sense_id=?",
-                (item_key, sense_id)).fetchone()[0]
-            check("4.7", "每一次作答都进了复习历史", hist >= 4,
-                  f"{hist} 条——换算法时靠它重放")
-
-        cleanup_probe(conn, PROBE)
+        # **断言的是「`backend/` 底下没人 import 它」，不是「仓库不依赖它」。**
+        # 那份 FSRS 实现没有删，只是移出了运行的那棵树（`scripts/fsrs_reference.py`）:
+        # 向量的权威性全部来自「它出自另一份独立实现」，删掉它 Swift 那边就成了
+        # 自证的——而「两份都错得一样」正是 P5 §17 担心的那种失败。
+        importers = [
+            path.relative_to(ROOT)
+            for path in (ROOT / "backend").rglob("*.py")
+            if "fsrs" in path.read_text(encoding="utf-8")
+            and "import" in path.read_text(encoding="utf-8").split("fsrs")[0][-200:]
+        ]
+        check("1.10", "服务端跑着的那棵树里没人 import py-fsrs",
+              not importers,
+              "参照实现留在 scripts/ 下，只给导向量用"
+              if not importers else f"还有:{importers}")
 
         # --- 5. 句子池 ------------------------------------------------------ #
         print("\n5. 句子池")
@@ -375,45 +245,41 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         token = _fresh_device("verify-phase3")
         head = {"Authorization": "Bearer " + token}
 
-        res = client.get("/v1/client/reviews", headers=head)
-        check("6.1", "GET /v1/client/reviews 通", res.status_code == 200,
-              f"HTTP {res.status_code}")
+        res = client.get("/v1/client/sentences", headers=head)
+        check("6.1", "GET /v1/client/sentences 通", res.status_code == 200,
+              f"HTTP {res.status_code}——复习那一份的内容入口（P9 §11）")
         body = res.json() if res.status_code == 200 else {}
+        items6 = body.get("items") or []
         check("6.2", "一次给全，读的过程零请求",
-              bool(body.get("items")) and all("questions" in i for i in body["items"]),
-              f"{len(body.get('items', []))} 条，每条自带句子与提示——这是离线形状")
+              all("sentences" in i for i in items6),
+              f"{len(items6)} 个在学词，每个自带全部句子——这是离线形状。"
+              "**没有报过词池快照时是空的**，而 reported_at 为空正是在说这件事")
         check("6.3", "顶层回显 learner", isinstance(body.get("learner"), dict),
               str(body.get("learner")))
 
-        # Both directions have to be answerable from this one response, and they
-        # want different things: 看词想义 answers with the Chinese sense,
-        # 看义想词 with the word. The first manual run found the page showing the
-        # English word as the answer to "what does it mean here", so the payload
-        # is now checked for carrying both.
-        answerable = [
-            i for i in body.get("items", [])
-            if (i.get("sense") or {}).get("gloss_zh")
-            and any(q.get("surface") for q in i.get("questions", []) + i.get("hints", []))
-        ]
-        with_sense = [i for i in body.get("items", []) if i.get("sense")]
-        check("6.6", "两个方向的答案都在同一份响应里",
-              len(answerable) == len(with_sense) and bool(with_sense),
-              "看词想义答中文义项，看义想词答那个词——问的是什么就答什么，"
-              f"{len(answerable)}/{len(with_sense)} 条齐备")
+        # **不分池。** 哪句当考题、哪句当提示取决于你读完过什么，那是学习记录；
+        # 而服务端分了池就等于它在解释记录（P9 §11）。所以这里守的是「它没分」。
+        check("6.6", "服务端不分池，但给足了客户端自己分的依据",
+              all("questions" not in i and "hints" not in i for i in items6)
+              and all(all("source" in s for s in i["sentences"]) for i in items6),
+              "每一句带 source 与 sentence_id／article_id——"
+              "那三样正是 `SentencePool` 那三条规则的输入")
 
-        has_article = [q for i in body.get("items", []) for q in i.get("hints", [])
-                       if "article_id" in q]
-        check("6.7", "提示句带得出处，最深一级能跳回原文",
-              bool(has_article) or not any(i.get("hints") for i in body.get("items", [])),
-              f"{len(has_article)} 条提示句带 article_id")
+        corpus = [s for i in items6 for s in i["sentences"]
+                  if s.get("source") == "corpus"]
+        check("6.7", "语料句带得出处，也带得出文章里那个句子 id",
+              all(s.get("article_id") for s in corpus)
+              and all(s.get("sentence_id") for s in corpus),
+              f"{len(corpus)} 条语料句——`sentence_id` 是「你见过这一句吗」那条"
+              "规则要的输入，而它只该出现在语料句上")
 
-        caps = service.capabilities()
-        check("6.4", "capabilities.memory_state 已转 true", caps.get("memory_state") is True,
-              "P2 留的位置，P3 填上；老客户端一行不用改")
+        caps = body.get("learner") and client.get(
+            "/v1/client/me", headers=head).json().get("capabilities") or {}
+        check("6.4", "capabilities 从 /me 也拿得到", isinstance(caps, dict) and bool(caps),
+              "探测连接用的就是它——不读学习记录、不组装任何东西")
 
-        res = client.get("/v1/admin/review/today")
         check("6.5", "客户端令牌碰不到管理接口",
-              client.get("/v1/admin/review/today", headers=head).status_code in (401, 403),
+              client.get("/v1/admin/review/words", headers=head).status_code in (401, 403),
               "铁律 4")
 
         # --- 5b. 读完就补句子（决定 23） ------------------------------------ #
@@ -431,12 +297,22 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         over = client.get("/v1/admin/review/words", headers={"X-Admin-Secret": SECRET})
         body6 = over.json() if over.status_code == 200 else {}
         rows6 = body6.get("items", [])
-        check("6.8", "词表能说清每个词凭什么排到那天",
+        # **2026-09-18 改写（P9 §11）。** 原文断言词表带着「记忆强度、难度、
+        # 轮次、失误、上次评级、下次到期」——那六个是服务端算的，而服务端不再算了，
+        # 那几列自重构之日起没被写过一次。**留着这条断言只会逼人把旧数再显示出来**，
+        # 而一个显示冻结数字的诊断页比一个少显示的糟得多（坑 §8）。
+        #
+        # 改成守始终成立的那一半:词表要说得清**服务端确实知道的那部分**——
+        # 标记、出处、句子池深度，外加**设备报的词池与服务端存档各说什么**。
+        # 排期去设备上看，那是它算的。
+        check("6.8", "词表说得清服务端确实知道的那部分，且两边的词池并排可比",
               over.status_code == 200 and bool(rows6)
               and all(k in rows6[0] for k in
-                      ("stability", "difficulty", "reps", "total_misses",
-                       "rating_label", "due_in_days", "pool_total", "from_title")),
-              f"{len(rows6)} 条，每条带记忆强度、难度、轮次、失误、上次评级、下次到期、出处、句子数"
+                      ("mark_label", "pool_reported", "pool_archive",
+                       "pool_disagrees", "pool_total", "from_title"))
+              and "snapshot" in body6,
+              f"{len(rows6)} 条，每条带标记、出处、句子数，"
+              f"以及设备报的词池与服务端存档两列——对不上就看得见"
               if rows6 else "取不到")
 
         if rows6:
@@ -479,13 +355,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 8. 模块自包含 ---------------------------------------------------- #
         print("\n8. 模块自包含")
 
-        tables = {r[0] for r in conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'review%'"
-            " OR name = 'spelling_attempts'")}
-        check("8.1", "复习模块自带表、两套接口、管理页与配置",
-              tables >= {"review_sentences", "review_sessions", "review_queue",
-                         "review_history", "spelling_attempts"},
-              "、".join(sorted(tables)))
+        # **2026-09-18 改写（P9 §10）:这几张表不再同处一个文件。**
+        # 句子是内容（模型写的，花了钱），会话／队列／历史／拼写是记录——
+        # 拆库正是按「丢了会怎样」分的，所以这条也得逐个库问，
+        # 而不是在一个 `sqlite_master` 里数个数。**问错文件会静默漏掉一张。**
+        homes = {"review_sentences": "content", "review_sessions": "events",
+                 "review_queue": "events", "review_history": "events",
+                 "spelling_attempts": "events"}
+        misplaced = [
+            t for t, db in homes.items()
+            if not get_connection(db).execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+                (t,)).fetchone()
+        ]
+        check("8.1", "复习模块自带表、两套接口、管理页与配置，且每张都在该在的库里",
+              not misplaced,
+              "句子在 content.db，会话／队列／历史／拼写在 events.db"
+              if not misplaced else f"找不到：{'、'.join(misplaced)}")
         keys = [k for k in ("review_pool_target", "review_weight_decay", "review_spelling",
                             "review_gen_provider", "fsrs_parameters",
                             "fsrs_desired_retention", "fsrs_fuzz")

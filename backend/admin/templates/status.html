@@ -16,7 +16,7 @@
   {% for name, info in data.databases.items() %}
   <div class="card stat">
     <span class="stat-label">
-      {{ {'dictionary': '词典（只读，可重建）', 'content': '生成内容（需备份）', 'learning': '学习数据（需备份）', 'logs': '技术日志（可丢弃）'}[name] }}
+      {{ {'dictionary': '词典（只读，可重建）', 'content': '生成内容（需备份）', 'events': '学习记录（需备份）', 'ops': '本机配置与任务（可重建）', 'logs': '技术日志（可丢弃）'}.get(name, name) }}
     </span>
     <span class="stat-value" data-bytes="{{ info.size_bytes }}">{{ info.size_bytes }} <small>B</small></span>
     <span class="muted mono">{{ name }}.db{% if not info.exists %} · 尚未创建{% endif %}</span>

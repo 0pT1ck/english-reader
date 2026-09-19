@@ -58,6 +58,19 @@ public struct OutboxEntry: Codable, Equatable, Sendable {
         self.payload = payload
         self.occurredAt = ISO8601DateFormatter.contract.string(from: occurredAt)
     }
+
+    /// 时间戳已经是字符串的那一版。
+    ///
+    /// 日志里存的就是格式化过的那一串，**再解一次又格一次是自找漂移**——
+    /// 同一个时刻在两种格式之间来回，末位早晚对不上（坑 §6.3 是同一类事）。
+    public init(idemKey: String, kind: Kind, eventType: String,
+                payload: [String: JSONValue], occurredAt: String) {
+        self.idemKey = idemKey
+        self.kind = kind
+        self.eventType = eventType
+        self.payload = payload
+        self.occurredAt = occurredAt
+    }
 }
 
 /// What the server said about one entry.

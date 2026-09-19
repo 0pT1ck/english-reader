@@ -55,7 +55,7 @@ def recompute_beyond() -> dict[str, Any]:
     Returns what changed, per direction, so the caller can report it rather
     than trust it.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     before = conn.execute("SELECT COUNT(*) FROM reading_tokens").fetchone()[0]
 
     rows = conn.execute(
@@ -99,7 +99,7 @@ def recompute_difficulty() -> dict[str, Any]:
     the point: a second implementation reading the same columns is how the two
     sides drifted apart in the first place.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     rows = conn.execute(
         "SELECT id, body FROM reading_articles WHERE body IS NOT NULL ORDER BY id"
     ).fetchall()

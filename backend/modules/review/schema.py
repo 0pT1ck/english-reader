@@ -39,9 +39,19 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="sentence pool, sessions, queue, review history, spelling",
-        database="learning",
+        database="events",
+        # **`review_sentences` 明写成 `content.`，其余几张不写**（P9 §10）。
+        #
+        # 一次迁移只属于一个文件——它的记录记在那个文件的 `schema_migrations` 里，
+        # 未限定的 `CREATE` 也落在那里。而这一条建的五张表分属两边:句子是**内容**
+        # （模型写的，花了钱，每个学习者都一样），会话／队列／历史／拼写是**记录**。
+        # 拆迁移会动版本号，而版本号已经记在库里了，所以改的是这一处限定名。
+        #
+        # 顺带一个不写限定名就会静默出错的地方:`review_sentences` 上那两个外键指向
+        # `reading_articles` 与 `reading_sentences`，而 **SQLite 的外键不跨文件**。
+        # 三张表同在 content.db 里，那两个外键才真的在管事。
         apply="""
-        CREATE TABLE IF NOT EXISTS review_sentences (
+        CREATE TABLE IF NOT EXISTS content.review_sentences (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             item_type   TEXT    NOT NULL DEFAULT 'word'
                         CHECK (item_type IN ('word', 'phrase')),
@@ -67,9 +77,10 @@ MIGRATIONS = [
             created_at  TEXT    NOT NULL,
             UNIQUE (item_type, item_key, sense_id, text)
         );
-        CREATE INDEX IF NOT EXISTS idx_rsent_item
+        CREATE INDEX IF NOT EXISTS content.idx_rsent_item
             ON review_sentences (item_type, item_key, sense_id);
-        CREATE INDEX IF NOT EXISTS idx_rsent_article ON review_sentences (article_id);
+        CREATE INDEX IF NOT EXISTS content.idx_rsent_article
+            ON review_sentences (article_id);
 
         CREATE TABLE IF NOT EXISTS review_sessions (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -154,7 +165,7 @@ MIGRATIONS = [
     Migration(
         version=2,
         name="count misses, not questions",
-        database="learning",
+        database="events",
         apply="""
         -- 决定 11 grades a round by "how many times it took". That was
         -- implemented as a count of *questions asked*, and a round is two
@@ -176,7 +187,7 @@ MIGRATIONS = [
     Migration(
         version=3,
         name="Chinese for every review sentence, plus where the word lands in it",
-        database="learning",
+        database="content",
         apply="""
         -- 看中文想英文那个方向，题面就是这一列（P7 决定 15）。
         --
@@ -202,7 +213,7 @@ MIGRATIONS = [
     Migration(
         version=4,
         name="two ceilings on the grade: hints taken, and fuzzy-marked today",
-        database="learning",
+        database="events",
         apply="""
         -- 今天在这一条上开过几级提示。**以前只记进历史表，不进调度**——
         -- 于是提示是免费的：把语境和首字母都看了、再点「认识」，

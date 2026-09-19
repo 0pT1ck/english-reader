@@ -4,7 +4,10 @@ name: 客户端内核
 # 截图、XCUITest、TestFlight 全部属于下一个 Phase。
 on:
   push:
-    branches: [main, ios]
+    # `refactor` 是 P9 的分支（phase-9.html §14 U6）。**必须在这里登记**：
+    # 本机不装 Swift，`swift test` 只在 CI 上跑，而 CI 只看得到它被告知的分支——
+    # 不加这一行，整个 P9 期间 Core 一次都验不到，而且是静默的（坑 §6.6 那个形状）。
+    branches: [main, ios, refactor]
   pull_request:
   workflow_dispatch:
 
@@ -140,6 +143,61 @@ jobs:
             exit 1
           fi
 
+  regenerate:
+    name: L0 · 契约真的重新生成一遍
+    # **本机不装 Swift，所以契约类型在本机生成不出来**（「开发场地」那条决定的代价）。
+    # 在 P9 之前这没关系:契约不常改。而 P9 一路上已经为它绕了两次
+    # （排期参数、事件流都改成从原始字节解），下一步还要改契约——
+    # 所以这一层在这里:**CI 会生成，而且生成完和提交的比一比**。
+    #
+    # 这同时把下面那个 `contract` job 从「抽查四个字段」升成了「逐字节一致」。
+    # 抽查放着不删:它读得懂、跑得快，而且它守的是「生成器警告然后跳过」
+    # 那个具体的失败（坑:2026-09-12 有 70 个字段那样没的，构建还是绿的）。
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 选定 Xcode
+        run: |
+          set -euo pipefail
+          APP=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -1)
+          sudo xcode-select -s "$APP"
+          swift --version
+
+      # 生成器是从源码 `swift run` 的，构建它要几分钟——缓存它，
+      # 否则每次推送都付一遍。
+      - uses: actions/cache@v4
+        with:
+          path: |
+            .tooling
+          key: openapi-generator-${{ runner.os }}-v1
+
+      - name: 重新生成，并和提交的比
+        run: |
+          set -euo pipefail
+          python scripts/generate_swift_types.py
+          if ! git diff --quiet -- client/Sources/ERContract; then
+            echo "::error::生成物和 client/openapi.json 对不上。"
+            echo "::error::**这不是要你手改生成物**——把本次运行的 regenerated 产物下载下来提交。"
+            git diff --stat -- client/Sources/ERContract
+            exit 1
+          fi
+          echo "逐字节一致"
+
+      # **失败时也要传。** 本机生成不出来，所以这个产物是唯一的取得方式；
+      # 只在成功时传等于「对不上的时候你什么也拿不到」。
+      - name: 把生成物传出来
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regenerated-contract
+          path: client/Sources/ERContract
+          if-no-files-found: error
+
   contract:
     name: L0 · 契约没有漂
     runs-on: ubuntu-latest
@@ -188,4 +246,25 @@ jobs:
           # 时间戳会让每次导出都不同，那样这份文件就没人会去 diff 了。
           assert "generated_at" not in doc, "向量里不该有生成时间"
           print(f"{len(cases)} 个场景")
+
+          # 排期向量（P9 新建）。**它是删掉服务端 py-fsrs 的前置条件**，
+          # 所以它不在的时候不能悄悄放过——那会让「两边算得一样」变成一句没人验过的话。
+          sched = json.loads(pathlib.Path(
+              "client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json").read_text(encoding="utf-8"))
+          grades = sched["ratings"]["cases"]
+          assert len(grades) == 32, f"评级映射该是全枚举 32 条，实际 {len(grades)}"
+          schedules = sched["schedules"]["cases"]
+          names = " ".join(c["name"] for c in schedules)
+          for needed in ("180", "封顶", "提示", "自称简单", "短期"):
+              assert needed in names, f"排期向量里少了「{needed}」那个场景"
+          # 参数必须是**实际生效的那一组**，不是「空表示用默认」——
+          # 两个包自带的默认不是同一组数，各取自己的就会跑出不同的间隔，
+          # 而两边都在按自己的文档正常工作、没有东西会报错。
+          params = sched["settings"]["parameters"]
+          assert len(params) == 21, f"该是 FSRS-6 的 21 个参数，实际 {len(params)}"
+          assert sched["settings"]["enable_fuzzing"] is False, "向量必须关着抖动导出"
+          seq = [round(s["interval_days"]) for c in schedules
+                 if len(c["reviews"]) == 5 for s in c["expected"]]
+          assert seq == [2, 11, 46, 163, 180], f"间隔序列变成了 {seq}"
+          print(f"排期向量 {len(grades)} 条评级 + {len(schedules)} 个场景")
           PY

@@ -9,15 +9,21 @@ import Foundation
 /// locks it again. A client that could not work that out would stop at the
 /// first question underground.
 ///
-/// **So the rule is narrow: mirror, never invent.** Every transition below is
-/// one the server performs in `session.answer`, and none of them is a decision
-/// this file gets to make. `weightDecay` arrives in the payload rather than
-/// being written here for the same reason — the rule is the server's, and what
-/// the client does is draw from a bag.
+/// **So the rule is narrow: mirror, never invent.** Every transition below was
+/// transcribed from the server's `session.answer`, and none of them is a
+/// decision this file gets to make. `weightDecay` arrives in the payload rather
+/// than being written here for the same reason — it is a tuning knob the server
+/// owns, and what the client does is draw from a bag.
 ///
-/// **And the mirror is checked.** `review-vectors.json` is exported from the
-/// server's own code, and `ReviewStateTests` replays every case through this
-/// type. When the two disagree it is this file that is wrong.
+/// **And the mirror is checked.** `review-vectors.json` is exported from an
+/// independent Python transcription of the same rules
+/// (`scripts/review_reference.py`), and `ReviewStateTests` replays every case
+/// through this type. When the two disagree it is this file that is wrong.
+///
+/// **2026-09-18 (P9): the thing being mirrored moved.** The server used to run
+/// this state machine too and the vectors came from it; now it does not run it
+/// at all. A mirror with nothing behind it is a mirror of itself, which is why
+/// the reference was kept rather than deleted.
 public enum ReviewDirection: Int, Sendable, Codable {
     /// 看词想义：给你这个词，想它的意思。
     case wordToSense = 1
@@ -43,8 +49,9 @@ public struct ReviewItemState: Equatable, Sendable {
     /// answering one is an error rather than a no-op.
     public var done: Bool
     /// "That was trivial." Claimed by the learner, honoured only on a round
-    /// with no misses — and the server checks, so this is a mirror of its
-    /// decision rather than a way to talk the interval longer.
+    /// with no misses — a claim withdrawn by a miss, because it plainly was
+    /// not. **Nobody checks it a second time as of P9**: the device is where
+    /// the interval is computed now, so the rule has to hold here or nowhere.
     public var easy: Bool
 
     /// The floor a weight never goes below. Its purpose is the opposite of what
@@ -71,8 +78,11 @@ public struct ReviewItemState: Equatable, Sendable {
 /// One answer, as the learner gave it.
 public struct ReviewAnswer: Equatable, Sendable {
     public var passed: Bool
-    /// How far the hints had to be opened, 0–3. Recorded, not acted on here:
-    /// the server turns it into a grade, the client only reports it.
+    /// Whether the hint was opened — 0 or 1 since P7 made 「不确定」 a single
+    /// tap. Not acted on *here*: this type only moves the round along, while
+    /// `Scheduler.grade(misses:easy:revealed:capped:)` is where it costs a
+    /// grade. Both are on the device as of P9; before that the second half
+    /// was the server's.
     public var revealed: Int
     public var easy: Bool
 
@@ -114,16 +124,18 @@ extension ReviewItemState {
         return next
     }
 
-    /// Answering a finished item is a mistake, not a no-op — the server raises
-    /// on it, so a client that let it happen would collect failures in its
-    /// outbox that no retry can ever clear.
+    /// Answering a finished item is a mistake, not a no-op. It used to be the
+    /// server that raised on it; now the guard is only here, and a round that
+    /// accepted one would put an event in the log that replays into a state
+    /// nothing else can reach.
     public var acceptsAnswer: Bool { !done }
 }
 
 /// Drawing the next question.
 ///
-/// Weighted, and the weights come from the server. The client picks from a bag;
-/// it does not decide what is in it.
+/// Weighted, and the weight is the round's own — halved by each miss. The draw
+/// is the one genuinely random thing in the day, which is why `random` is a
+/// parameter: a replay has to be able to pin it.
 public struct ReviewDraw: Sendable {
     public init() {}
 

@@ -63,7 +63,7 @@ def harvest(item_key: str, sense_id: int, *, limit: int = 20) -> int:
     this meaning, so nothing has to be inferred. Tokens flagged ``in_phrase``
     are skipped — their sense annotation describes a word that was never there.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     rows = conn.execute(
         """
         SELECT t.surface, t.char_start, t.char_end, t.article_id,
@@ -192,13 +192,18 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     if wanted:
         pairs = [(str(w["item_key"]), int(w["sense_id"])) for w in wanted]
     else:
-        rows = get_connection("learning").execute(
+        # **照上报的词池快照挑，不照服务端那份存档**（P9 §7）。
+        #
+        # 造句子是工厂的活，而「哪些词在学」是学习记录——服务端不推它，用设备
+        # 报上来的那个值。存档那一份（`study_states.pool`）现在只由标记事件维护，
+        # 拿它来排生成会给已经毕业的词继续造句，而给真正在学的词漏掉。
+        rows = get_connection("events").execute(
             """
-            SELECT s.item_key, s.sense_id FROM study_states s
-             WHERE s.learner_id = ? AND s.item_type = 'word' AND s.pool = 'reviewing'
-               AND s.sense_id > 0
+            SELECT p.item_key, p.sense_id FROM learner_pool p
+             WHERE p.learner_id = ? AND p.item_type = 'word' AND p.pool = 'reviewing'
+               AND p.sense_id > 0
                AND (SELECT COUNT(*) FROM review_sentences r
-                     WHERE r.item_key = s.item_key AND r.sense_id = s.sense_id) < ?
+                     WHERE r.item_key = p.item_key AND r.sense_id = p.sense_id) < ?
              LIMIT ?
             """,
             (int(params.get("learner_id", 1)), target, int(params.get("limit", 200))),
@@ -208,7 +213,7 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     units = []
     for item_key, sense_id in pairs:
         harvest(item_key, sense_id)          # free sentences first, then ask for the rest
-        have = get_connection("learning").execute(
+        have = get_connection("content").execute(
             "SELECT COUNT(*) FROM review_sentences WHERE item_key=? AND sense_id=?"
             " AND source='generated'",
             (item_key, sense_id),
@@ -222,12 +227,10 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
     item_key, sense_id = payload["item_key"], int(payload["sense_id"])
-    sense = senses.sense_by_id(sense_id) if hasattr(senses, "sense_by_id") else None
-    if sense is None:
-        row = get_connection("content").execute(
-            "SELECT headword, pos, concept_en, gloss_zh FROM senses WHERE id = ?", (sense_id,)
-        ).fetchone()
-        sense = dict(row) if row else None
+    # `sense_by_id` 2026-09-17 真的做出来了（P9 §8），所以那个 `hasattr` 的
+    # 预留可以撤了。它**退休的义项也找得到**——造例句这一路正是会遇到旧义项 id
+    # 的地方:词标记在两个月前，而义项集后来重建过。
+    sense = senses.sense_by_id(sense_id)
     if not sense:
         return jobs.ItemOutcome(result="义项不存在，跳过")
 
@@ -246,7 +249,7 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         temperature=0.8,
     )
 
-    conn = get_connection("learning")
+    conn = get_connection("content")
     kept = rejected = 0
     reasons: list[str] = []
     for line in split_lines(completion.text):
@@ -322,6 +325,10 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
         "surface": row["surface"],
         "first_letter": (row["surface"] or "?")[:1],
         "source": row["source"],
+        # **P9 加的**：考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，
+        # 而它那个「见过」的集合是按文章里的句子 id 记的（标记事件带着它）。
+        # 和上面那个 `id` 不是一回事——那个是句子池自己的行号。
+        "sentence_id": row["sentence_id"],
         # Lets a hint say where it came from ("——文章a"), and lets a future
         # version jump back into the article. Null for generated sentences,
         # which are never hints anyway.
@@ -341,7 +348,7 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
 def _rows(item_key: str, sense_id: int) -> list[dict[str, Any]]:
     # The title rides along so a hint can say where it came from. It is a join
     # rather than a column: the article may be renamed, and a copy would drift.
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT r.*, a.title AS article_title FROM review_sentences r"
         "  LEFT JOIN reading_articles a ON a.id = r.article_id"
         " WHERE r.item_key = ? AND r.sense_id = ? ORDER BY r.id",
@@ -406,7 +413,7 @@ def pick_hint(item_key: str, sense_id: int, *, finished: set[int],
 
 
 def pool_size(item_key: str, sense_id: int) -> int:
-    return get_connection("learning").execute(
+    return get_connection("content").execute(
         "SELECT COUNT(*) FROM review_sentences WHERE item_key = ? AND sense_id = ?",
         (item_key, sense_id),
     ).fetchone()[0]

@@ -1,19 +1,31 @@
 """SQLite connections and schema migrations.
 
-Four separate database files are used (see :mod:`backend.core.config` for why).
+Five separate database files are used (see :mod:`backend.core.config` for why).
 Raw ``sqlite3`` is used rather than an ORM for two reasons:
 
-1. Cross-database queries via ``ATTACH`` are a normal operation here (study
-   state in ``learning.db`` constantly needs word data from ``dictionary.db``),
-   and ORMs make that awkward.
-2. Migrations need a project-specific guarantee — an automatic backup of
-   ``learning.db`` before any schema change — which is easier to own outright
-   than to bolt onto a migration framework.
+1. Cross-database queries via ``ATTACH`` are a normal operation here (a mark in
+   ``events.db`` constantly needs the sentence it happened in, which is in
+   ``content.db``), and ORMs make that awkward.
+2. Migrations need a project-specific guarantee — an automatic backup of the
+   irreplaceable files before any schema change — which is easier to own
+   outright than to bolt onto a migration framework.
+
+**Every connection attaches every other file** (P9 §10). That is what let the
+split of ``learning.db`` into three happen without touching the ~170 call sites
+that say ``get_connection(...)`` and then name a table: SQLite resolves an
+unqualified table name across the attached databases, for writes as well as
+reads, and the table names in this project are unique across the files. What a
+connection's own file decides is only **where an unqualified `CREATE` lands and
+which `schema_migrations` is consulted** — which is exactly what a migration
+needs to be precise about, and nothing else has to care.
 
 **Migrations are owned by modules.** Each feature module declares its own
 migrations; this module only sequences and applies them. That is what lets a new
 feature ship its tables without editing anything that already exists
-(architecture rule 6).
+(architecture rule 6). A migration declares which file it belongs to; if its SQL
+has to create a table in *another* file, it qualifies that name with the alias
+below — ``review`` v1 does, because the sentences it creates are content while
+the session tables beside them are records.
 """
 
 from __future__ import annotations
@@ -29,13 +41,29 @@ from typing import Literal
 
 from backend.core.config import get_settings
 
-DatabaseName = Literal["dictionary", "content", "learning", "logs"]
+DatabaseName = Literal["dictionary", "content", "events", "ops", "logs"]
 
 #: The databases that cannot be regenerated from a download, and therefore the
 #: ones every backup, restore and pre-migration snapshot must cover.
-#: ``dictionary`` is re-importable and ``logs`` is disposable, so both are
-#: deliberately excluded — that is what keeps a backup small.
-BACKED_UP: tuple[DatabaseName, ...] = ("learning", "content")
+#: ``dictionary`` is re-importable, ``logs`` is disposable, and ``ops`` costs a
+#: re-pairing and a few settings — all three are deliberately excluded, and that
+#: is what keeps a backup small.
+BACKED_UP: tuple[DatabaseName, ...] = ("events", "content")
+
+#: The alias every database is attached under, on every connection. The alias is
+#: the file's own name except for ``dictionary``, which is ``dict`` because that
+#: is what the queries written since P0 say.
+#:
+#: **A connection never attaches itself** — its own file is ``main``, and
+#: attaching the same file twice under two names is a way to get two different
+#: answers about one row.
+ALIASES: dict[DatabaseName, str] = {
+    "dictionary": "dict",
+    "content": "content",
+    "events": "events",
+    "ops": "ops",
+    "logs": "logs",
+}
 
 # Connections are per-thread: sqlite3 connections are not safe to share across
 # threads, and FastAPI runs synchronous endpoint functions in a thread pool.
@@ -54,7 +82,8 @@ def _db_path(name: DatabaseName) -> Path:
     return {
         "dictionary": settings.dictionary_db,
         "content": settings.content_db,
-        "learning": settings.learning_db,
+        "events": settings.events_db,
+        "ops": settings.ops_db,
         "logs": settings.logs_db,
     }[name]
 
@@ -74,17 +103,29 @@ def _configure(conn: sqlite3.Connection) -> None:
 
 
 def get_connection(name: DatabaseName) -> sqlite3.Connection:
-    """Return this thread's connection to one of the four databases.
+    """Return this thread's connection to one of the five databases.
 
-    The ``learning`` connection has the two reference databases attached, so
-    queries can join study state against word data directly::
+    **Every other file is attached**, so a query can join across them directly
+    and an unqualified table name resolves wherever that table actually lives::
 
-        SELECT s.*, w.headword
-        FROM sense_states s
-        JOIN content.senses s2 ON s2.id = s.sense_id
-        JOIN dict.words w      ON w.headword = s2.headword
+        SELECT m.*, s.text, w.headword
+        FROM study_marks m                     -- events.db
+        JOIN reading_sentences s ON s.id = m.sentence_id   -- content.db
+        JOIN words w             ON w.headword = m.item_key     -- dictionary.db
 
-    ``dict`` is the ECDICT import, ``content`` is what we generated ourselves.
+    The aliases are in :data:`ALIASES`; ``dict`` is the ECDICT import.
+
+    **Prefer the unqualified name.** Every table name in this project is unique
+    across the five files (``verify_phase9`` asserts it), so an unqualified name
+    resolves to the one file that has it — which is what let P9 §10 move twenty
+    tables between files without touching the queries. A qualifier is only right
+    when the connection's own file is meant, and then only for the tables that
+    exist in *every* file: ``schema_migrations`` and the ``sqlite_*`` ones, which
+    always resolve to ``main`` anyway.
+
+    **A connection never attaches itself**, so ``content.senses`` is wrong on the
+    ``content`` connection and right on the others — another reason to leave the
+    prefix off and let SQLite find it.
     """
     cache: dict[str, sqlite3.Connection] = getattr(_local, "connections", None)  # type: ignore[assignment]
     if cache is None:
@@ -100,13 +141,14 @@ def get_connection(name: DatabaseName) -> sqlite3.Connection:
     conn = sqlite3.connect(path, check_same_thread=False)
     _configure(conn)
 
-    if name == "learning":
-        # ATTACH creates the file if absent, which is fine: an empty database
-        # simply means the import or generation step has not been run yet.
-        for alias, attached in (("dict", "dictionary"), ("content", "content")):
-            attached_path = _db_path(attached)  # type: ignore[arg-type]
-            attached_path.parent.mkdir(parents=True, exist_ok=True)
-            conn.execute(f"ATTACH DATABASE ? AS {alias}", (str(attached_path),))
+    # ATTACH creates the file if absent, which is fine: an empty database simply
+    # means the import or generation step has not been run yet.
+    for attached, alias in ALIASES.items():
+        if attached == name:
+            continue
+        attached_path = _db_path(attached)
+        attached_path.parent.mkdir(parents=True, exist_ok=True)
+        conn.execute(f"ATTACH DATABASE ? AS {alias}", (str(attached_path),))
 
     cache[name] = conn
     return conn
@@ -155,8 +197,16 @@ def backup_database(name: DatabaseName, reason: str) -> Path:
 
 
 def backup_learning_db(reason: str) -> Path:
-    """Backwards-compatible alias. Prefer :func:`backup_database`."""
-    return backup_database("learning", reason)
+    """Gone with the file it named (P9 §10).
+
+    Kept as a loud failure rather than silently pointed at ``events``: the two
+    are not the same thing, and a caller that still wants "back up the learning
+    database" has to say which of the three it means.
+    """
+    raise RuntimeError(
+        "learning.db 在 P9 §10 拆成了 content / events / ops，"
+        "这个函数没有对应的文件了——改调 backup_database(\"events\") "
+        "或 backup_database(\"content\")")
 
 
 def apply_pending_restore() -> dict[str, Path]:
@@ -344,7 +394,7 @@ def run_migrations(module: str, migrations: Iterable[Migration]) -> list[Migrati
 # --------------------------------------------------------------------------- #
 
 
-def table_exists(name: str, database: DatabaseName = "learning") -> bool:
+def table_exists(name: str, database: DatabaseName = "events") -> bool:
     conn = get_connection(database)
     row = conn.execute(
         "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (name,)

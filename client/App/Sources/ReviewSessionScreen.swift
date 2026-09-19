@@ -25,6 +25,7 @@ struct ReviewSessionScreen: View {
                 question
             }
         }
+        .reviewBackground()
         .navigationTitle("复习")
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog("不再复习这个词？", isPresented: $confirmingDismiss,
@@ -39,10 +40,27 @@ struct ReviewSessionScreen: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                // P7 决定 22 留的空壳，P8 填上。代价当时写得很清楚：
-                // **词一旦标了，只能等 FSRS 慢慢放过它**——而这条出口
-                // 整条路本来就是通的，缺的只是这个菜单项。
                 Menu {
+                    // **「太简单了」在这儿，不在作答那一排按钮里**（2026-09-17 用户定）：
+                    // 它要的是「我确实是特意点它的」，而三个并排的按钮做不到。
+                    // 在这之前这个声明只有命令行客户端发得出来，
+                    // 而 P7 定的「提示要付代价」那条规则因此没有任何界面能触发。
+                    Button("太简单了", systemImage: "hare") { model.claimEasy() }
+                        .disabled(!model.canClaimEasy)
+                    if model.claimedEasy {
+                        // 点过了要看得出来，否则它和「点了没反应」长得一样。
+                        Label("这一轮按「太简单」算", systemImage: "checkmark")
+                    } else if model.easyWithdrawn {
+                        // 灰着要说得出为什么。磕过之后说「太简单」不是关于任何
+                        // 事情的断言，Core 与服务端都会当场撤回这个声明。
+                        Label("这一轮磕过了，算不了简单", systemImage: "info.circle")
+                    }
+
+                    Divider()
+
+                    // P7 决定 22 留的空壳，P8 填上。代价当时写得很清楚：
+                    // **词一旦标了，只能等 FSRS 慢慢放过它**——而这条出口
+                    // 整条路本来就是通的，缺的只是这个菜单项。
                     Button("这个词我已经会了", systemImage: "checkmark.circle") {
                         confirmingDismiss = true
                     }

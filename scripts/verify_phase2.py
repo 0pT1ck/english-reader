@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import json
 import sqlite3
 import statistics
 import sys
@@ -39,6 +40,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # 与 fixture_events 同目录
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -83,7 +85,7 @@ def _fresh_device(name: str) -> str:
     So the old ones go first. Revoking rather than deleting keeps the audit
     trail: the row says a token existed and when it stopped working.
     """
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "UPDATE devices SET revoked_at = ? WHERE name = ? AND revoked_at IS NULL",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), name),
@@ -92,8 +94,23 @@ def _fresh_device(name: str) -> str:
     return auth.create_device(name)
 
 
+def clean_probe_events() -> int:
+    """把灌进会合点的夹具事件清掉。规则在 `scripts/fixture_events.py`。
+
+    **前后各清一次**（坑 §4.1）:中断的上一轮不会污染下一轮，
+    而这一轮也不会留给下一台设备——那正是 2026-09-18 真机上中的那一次。
+
+    **判断「派生的标记能不能删」不在这里做**，在那个模块里，
+    因为这个脚本标的是**真文章里的一个真词**，无条件删会删掉用户自己标的那一笔。
+    """
+    from fixture_events import purge  # noqa: PLC0415 - 只这一处要
+
+    return purge(get_connection("events"))["removed"]
+
+
 def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one place
     with trace():
+        clean_probe_events()
         client = TestClient(app)
         token = _fresh_device("verify-phase2")
         head = {"Authorization": "Bearer " + token}
@@ -176,8 +193,8 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               f"{len(with_sense)} 个词标到了具体义项，"
               f"{sum(1 for t in tokens if t['sense_id'] == 0)} 个词没有义项集（退回词条级）")
 
-        bad = get_connection("learning").execute(
-            "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses s ON s.id = t.sense_id"
+        bad = get_connection("content").execute(
+            "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN senses s ON s.id = t.sense_id"
             " WHERE t.sense_id > 0 AND (s.id IS NULL OR s.headword != t.headword)"
         ).fetchone()[0]
         check("2.3", "没有一条标注指向别的词的义项",
@@ -216,7 +233,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
 
         # The measurement error this project already made twice. `the` carries
         # only zk/gk, so "lacks the cet4 tag" would call it out of syllabus.
-        the_beyond = get_connection("learning").execute(
+        the_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE headword IN ('the','make','people')"
             " AND beyond = 1"
         ).fetchone()[0]
@@ -231,7 +248,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # `labor` carries only `ky`; `judgement` is CET-4 and `judgment` carries
         # nothing at all. This is the known-answer sample for that — it went
         # unchecked for a phase and `labor` read as out of syllabus 41 times.
-        spelling_beyond = get_connection("learning").execute(
+        spelling_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
             " ('labor','center','judgment','organisation','neighbor','theater','honor')"
         ).fetchone()[0]
@@ -248,7 +265,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # before the fix: 3,005 of 8,401 flags in the corpus, 35.8%. These are
         # the known-answer sample — every one is a word no reader would call
         # out of CET-6, and each covers a different one of the four checks.
-        derived_beyond = get_connection("learning").execute(
+        derived_beyond = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_tokens WHERE beyond = 1 AND headword IN"
             " ('quickly','fully','entirely','effectively','cultural','educational',"
             "  'teeth','phenomena','curricula','data','planning','nationality')"
@@ -361,7 +378,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               first["accepted"] == 3 and again["accepted"] == 0 and again["duplicates"] == 3,
               f"首次 {first['accepted']} 条，重放 {again['duplicates']} 条判为重复")
 
-        raw = get_connection("learning").execute(
+        raw = get_connection("events").execute(
             "SELECT COUNT(*) FROM client_events WHERE idem_key LIKE ?", (f"v2-%-{stamp}",)
         ).fetchone()[0]
         check("6.2", "原始事件另存一层，可重放",
@@ -380,14 +397,14 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7. 读完才记账 ------------------------------------------------ #
         print("\n7. 读完才记账")
 
-        unread = get_connection("learning").execute(
+        unread = get_connection("content").execute(
             "SELECT COUNT(*) FROM reading_articles WHERE read_at IS NULL"
         ).fetchone()[0]
         # Words the learner marked by hand are legitimately tracked from the
         # moment they marked them, whether or not they went on to finish the
         # article — so they are excluded here. What must never appear is a word
         # that got into the ledger purely by an article being *ingested*.
-        leaked = get_connection("learning").execute(
+        leaked = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states s"
             " WHERE s.introduced_article_id IN"
             "   (SELECT id FROM reading_articles WHERE read_at IS NULL)"
@@ -400,13 +417,13 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               f"{unread} 篇未读，没有一个词被误记为已学"
               if leaked == 0 else f"{leaked} 个词被未读文章误记为已学")
 
-        draft = get_connection("learning").execute(
+        draft = get_connection("content").execute(
             "SELECT id FROM generation_drafts WHERE model = 'gpt-5.5'"
             " AND target_words != '' ORDER BY id DESC LIMIT 1"
         ).fetchone()
         if draft:
             gen_id = ingest.ingest_draft(int(draft["id"]))
-            targets = get_connection("learning").execute(
+            targets = get_connection("content").execute(
                 "SELECT COUNT(DISTINCT headword) FROM reading_tokens"
                 " WHERE article_id = ? AND is_target = 1", (gen_id,)
             ).fetchone()[0]
@@ -423,7 +440,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         else:
             check("7.2", "生成文章的目标词被标出来", False, "没有带目标词的 gpt-5.5 草稿")
 
-        unmarked = get_connection("learning").execute(
+        unmarked = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states s WHERE s.pool = 'reviewing'"
             " AND NOT EXISTS (SELECT 1 FROM study_marks m"
             "   WHERE m.learner_id = s.learner_id AND m.item_type = s.item_type"
@@ -440,7 +457,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # matters is the half that was always the point: **P2's own pipeline
         # must not touch them.** Ingest analysing an article may not give a word
         # a due date any more than it may put one in the review pool.
-        scheduled_but_unread = get_connection("learning").execute(
+        scheduled_but_unread = get_connection("events").execute(
             "SELECT COUNT(*) FROM study_states WHERE due_at IS NOT NULL AND reps = 0"
         ).fetchone()[0]
         check("7.5", "入库与阅读都不碰调度字段",
@@ -452,17 +469,17 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7b. 义项集变动后的引用完整性 ---------------------------------- #
 
         dangling = {
-            "标注": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN content.senses c"
+            "标注": get_connection("content").execute(
+                "SELECT COUNT(*) FROM reading_tokens t LEFT JOIN senses c"
                 " ON c.id = t.sense_id WHERE t.sense_id > 0 AND c.id IS NULL"
             ).fetchone()[0],
-            "标记": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM study_marks w LEFT JOIN content.senses c"
+            "标记": get_connection("events").execute(
+                "SELECT COUNT(*) FROM study_marks w LEFT JOIN senses c"
                 " ON c.id = w.sense_id WHERE w.item_type = 'word' AND w.sense_id > 0"
                 " AND c.id IS NULL"
             ).fetchone()[0],
-            "掌握状态": get_connection("learning").execute(
-                "SELECT COUNT(*) FROM study_states s LEFT JOIN content.senses c"
+            "掌握状态": get_connection("events").execute(
+                "SELECT COUNT(*) FROM study_states s LEFT JOIN senses c"
                 " ON c.id = s.sense_id WHERE s.item_type = 'word' AND s.sense_id > 0"
                 " AND c.id IS NULL"
             ).fetchone()[0],
@@ -478,7 +495,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
 
         from backend.modules.reading import phrases as phrase_module
 
-        conn = get_connection("learning")
+        conn = get_connection("content")
         pstats = phrase_module.stats()
         article_count = len(repository.list_articles(shelf="all", limit=10000))
 
@@ -541,7 +558,7 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # be able to fail before passing means anything.
         select_phrase = (
             "SELECT p.article_id, p.phrase, p.start_seq, p.end_seq FROM reading_phrases p"
-            " JOIN dict.phrases d ON d.phrase = p.phrase"
+            " JOIN phrases d ON d.phrase = p.phrase"
             " WHERE p.verdict = 1 AND d.translation IS NOT NULL{extra}"
             " ORDER BY p.article_id LIMIT 1"
         )
@@ -635,7 +652,11 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7d. 学习记录合表 ---------------------------------------------- #
         print("\n7d. 学习记录合表")
 
-        renamed = {r["name"] for r in conn.execute(
+        # **`sqlite_master` 是每个文件一张**（P9 §10 把库拆成了五个），
+        # 所以问「这张表在不在」必须问对文件——问错的那次会答「不在」，
+        # 而这一条正好是在验「不在」，于是错误地通过或错误地报红都很容易。
+        # 学习记录那几张在 events.db。
+        renamed = {r["name"] for r in get_connection("events").execute(
             "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()}
         check("7.15", "word_marks / sense_states 已并成 study_marks / study_states",
               {"study_marks", "study_states"} <= renamed
@@ -677,10 +698,29 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
               wanted <= specs,
               "、".join(sorted(wanted)))
 
+        # **清理放在最后一步**（「后台任务与等待」那条）。这里还要多一句:
+        # 清完之后断言真的清干净了——**一个说不清自己清没清的清理等于没清**，
+        # 而这一次的代价是「别人手机上多出一批没标过的词」。
+        from fixture_events import purge  # noqa: PLC0415 - 只这一处要
+        result = purge(get_connection("events"))
+        check("6.10", "灌进会合点的夹具事件全部清掉了，而真标记一条没动",
+              result["leftover"] == 0,
+              f"删了 {result['removed']} 条事件；派生的标记删了 "
+              f"{len(result['marks_dropped'])} 个、"
+              f"**留下 {len(result['marks_kept'])} 个有真事件支持的**。"
+              "不清掉会被每台设备拉下来当成真的学习历史——"
+              "2026-09-18 真机上就这么中过一次（776 条里 240 条是夹具）"
+              if result["leftover"] == 0 else f"还剩 {result['leftover']} 条没清掉")
+
         # --- 人工 ---------------------------------------------------------- #
         print("\n需要人工确认")
-        note("M1", "电脑上真读完一篇",
-             "打开 /admin/reader，挑一篇，点词、标记、读到底，全程不卡")
+        # **2026-09-18 改写（P9 §11）:Web 阅读页删了，这一条改指手机或 ercli。**
+        # 它原本指着 `/admin/reader`——一个在浏览器里实现了半套学习引擎的页面，
+        # 而新架构下那是禁止的（客户端只有一份 Core，不许再写第二份）。
+        note("M1", "真读完一篇",
+             "在手机上或用 ercli 挑一篇，点词、标记、读到底，全程不卡。"
+             "**这一条不能再在浏览器里做了**——读一篇文章现在只发生在"
+             "走同一份 Core 的客户端上")
         note("M2b", "词组：整体渲染、整体标记，并追问组成词",
              "点 account for 的任一半，都应显示词组释义而不是 account 的「账户」，"
              "且选中框框住整个词组；标记之后整个词组一起变底色，同一词组的每一处都变；"

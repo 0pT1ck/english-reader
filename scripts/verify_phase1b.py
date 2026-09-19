@@ -52,18 +52,27 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
 
     with trace(), TestClient(app) as client:
         # --- 1. four databases -------------------------------------------- #
-        print("\n1. 四个数据库")
+        # **2026-09-18 改写（P9 §10）:四个库变成五个，`learning.db` 拆没了。**
+        # 这一节验的从来不是「有几个文件」，是那条分法本身——**按「丢了会怎样」分**，
+        # 而备份范围必须正好等于「丢了补不回来」的那些。拆开之后这条更严了:
+        # 原本 `learning` 里混着设备令牌、设置、任务表（丢了只是麻烦），
+        # 备份因此对整个文件说谎。
+        print("\n1. 五个数据库")
         status = client.get("/v1/admin/status", headers=headers).json()
         check("1.1", "content.db 已建立",
               "content" in status["databases"],
               f"{status['databases'].get('content', {}).get('size_bytes', 0)} 字节")
-        check("1.2", "备份范围是 learning + content",
-              set(BACKED_UP) == {"learning", "content"}, str(BACKED_UP))
+        check("1.2", "备份范围正好是补不回来的那两个",
+              set(BACKED_UP) == {"events", "content"},
+              f"{sorted(BACKED_UP)}——dictionary 可重导、logs 可丢、"
+              "ops 丢了只是重新配对加重填几个设置")
 
-        conn = get_connection("learning")
+        conn = get_connection("events")
         attached = [row[1] for row in conn.execute("PRAGMA database_list")]
-        check("1.3", "learning 连接同时挂载 dict 与 content",
-              {"dict", "content"} <= set(attached), str(attached))
+        check("1.3", "每条连接都挂着其余四个库",
+              {"dict", "content", "ops", "logs"} <= set(attached),
+              f"{sorted(attached)}——未限定的表名靠它解析到真正的那个文件，"
+              "写也一样（P9 §10 实测过）")
 
         dictionary_tables = {
             row["name"] for row in get_connection("dictionary").execute(
@@ -81,8 +90,8 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
                 members = set(archive.namelist())
         except zipfile.BadZipFile:
             members = set()
-        check("2.1", "完整备份含两个库",
-              {"learning.db", "content.db"} <= members,
+        check("2.1", "完整备份含那两个补不回来的库",
+              {"events.db", "content.db"} <= members,
               f"{len(response.content) // 1024} KB · {', '.join(sorted(members))}")
 
         single = client.get("/v1/admin/backup/content", headers=headers)
@@ -162,11 +171,11 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
 
         # --- 6. checker ---------------------------------------------------- #
         print("\n6. 校验器")
-        rows = get_connection("learning").execute(
+        rows = get_connection("content").execute(
             "SELECT body, target_words, report FROM generation_drafts"
         ).fetchall()
         if not rows:
-            note("6.1", "拿 P1a 的 16 篇重跑", "learning.db 里没有草稿，跳过")
+            note("6.1", "拿 P1a 的 16 篇重跑", "content.db 里没有草稿，跳过")
         else:
             from backend.modules.generation import checker
 
@@ -235,14 +244,14 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
               str(sorted(kinds)))
 
         columns = {
-            row[1] for row in get_connection("learning").execute(
+            row[1] for row in get_connection("ops").execute(
                 "PRAGMA table_info(llm_job_items)")
         }
         check("8.2", "任务按项记录状态（断点续传的前提）",
               {"status", "attempts", "cost", "tokens_in"} <= columns)
         check("8.3", "任务有花费上限字段",
               "spend_cap" in {
-                  row[1] for row in get_connection("learning").execute(
+                  row[1] for row in get_connection("ops").execute(
                       "PRAGMA table_info(llm_jobs)")
               })
 

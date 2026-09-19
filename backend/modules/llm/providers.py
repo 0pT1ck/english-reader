@@ -153,14 +153,14 @@ def _from_row(row: Any) -> Provider:
 
 
 def all_providers() -> list[Provider]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT * FROM llm_providers ORDER BY is_default DESC, label"
     ).fetchall()
     return [_from_row(row) for row in rows]
 
 
 def get(provider_id: str) -> Provider:
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT * FROM llm_providers WHERE id = ?", (provider_id,)
     ).fetchone()
     if row is None:
@@ -201,7 +201,7 @@ def upsert(**fields: Any) -> Provider:
         raise InvalidRequest("必须指定模型名")
 
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "INSERT INTO llm_providers (id, label, kind, base_url, model, price_in,"
         " price_out, currency, enabled, is_default, note, created_at, updated_at)"
@@ -235,7 +235,7 @@ def upsert(**fields: Any) -> Provider:
 
 
 def delete(provider_id: str) -> bool:
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     cursor = conn.execute("DELETE FROM llm_providers WHERE id = ?", (provider_id,))
     conn.commit()
     secrets_store.delete_key(provider_id)

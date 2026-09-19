@@ -51,7 +51,7 @@ def capabilities() -> dict[str, bool]:
     phase. The fields are present now because architecture rule 5 forbids
     changing a field's meaning later, and sideloaded clients update late.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     annotated_exams = int(conn.execute(
         "SELECT COUNT(*) FROM reading_articles WHERE source != 'generated'"
         " AND status = 'ready'"
@@ -387,7 +387,7 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
     # in a 430-word article that way. `read_at` and `finished_at` are already
     # once-only (both COALESCE), so the ledger matches them. A genuine re-read
     # is E6's 旧文重读, which is not built yet and will bring its own event.
-    row = get_connection("learning").execute(
+    row = get_connection("content").execute(
         "SELECT read_at, status FROM reading_articles WHERE id = ?", (article_id,)
     ).fetchone()
 
@@ -424,7 +424,7 @@ def _finish_article(learner_id: int, article_id: int) -> dict[str, int]:
     # to — a target word that came out tagged PROPN, for instance. Without the
     # guard the same fold produced a phantom second row for every target word of
     # an article finished before its annotation had run.
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT headword, COALESCE(sense_id, 0) AS sense_id, MAX(is_target) AS is_target,"
         " COUNT(*) AS n, MIN(sentence_id) AS first_sentence"
         " FROM reading_tokens WHERE article_id = ?"

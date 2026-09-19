@@ -240,7 +240,7 @@ def create(
     if spend_cap is None:
         spend_cap = float(runtime_config.get("llm_spend_cap"))
 
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     cursor = conn.execute(
         "INSERT INTO llm_jobs (kind, title, provider_id, status, params, total,"
         " spend_cap, created_at, updated_at)"
@@ -279,7 +279,7 @@ def create(
 
 
 def get(job_id: int) -> dict[str, Any]:
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT * FROM llm_jobs WHERE id = ?", (job_id,)
     ).fetchone()
     if row is None:
@@ -294,7 +294,7 @@ def get(job_id: int) -> dict[str, Any]:
 
 
 def listing(limit: int = 50) -> list[dict[str, Any]]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT id, kind, title, provider_id, status, total, done, failed,"
         " tokens_in, tokens_out, cost, spend_cap, created_at, updated_at, finished_at"
         " FROM llm_jobs ORDER BY id DESC LIMIT ?",
@@ -306,7 +306,7 @@ def listing(limit: int = 50) -> list[dict[str, Any]]:
 def items(job_id: int, *, status: str | None = None, limit: int = 200) -> list[dict[str, Any]]:
     clause = "AND status = ?" if status else ""
     params: tuple[Any, ...] = (job_id, status, limit) if status else (job_id, limit)
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         # The reply is truncated rather than omitted: on a failed item it is the
         # evidence, and the whole point of storing it is being able to read it
         # from the console instead of reproducing the call by hand.
@@ -327,7 +327,7 @@ def _set_status(job_id: int, status: str, **extra: Any) -> None:
         values.append(value)
     values.append(job_id)
     with _write_lock:
-        conn = get_connection("learning")
+        conn = get_connection("ops")
         conn.execute(f"UPDATE llm_jobs SET {', '.join(assignments)} WHERE id = ?", values)
         conn.commit()
 
@@ -360,7 +360,7 @@ def set_spend_cap(job_id: int, spend_cap: float | None) -> dict[str, Any]:
     """
     get(job_id)  # 404 if it does not exist
     with _write_lock:
-        conn = get_connection("learning")
+        conn = get_connection("ops")
         conn.execute(
             "UPDATE llm_jobs SET spend_cap = ?, updated_at = ?,"
             " error = CASE WHEN status = 'capped' THEN NULL ELSE error END,"
@@ -390,7 +390,7 @@ def pause(job_id: int) -> dict[str, Any]:
 
 def delete(job_id: int) -> bool:
     pause(job_id)
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute("DELETE FROM llm_job_items WHERE job_id = ?", (job_id,))
     cursor = conn.execute("DELETE FROM llm_jobs WHERE id = ?", (job_id,))
     conn.commit()
@@ -424,7 +424,7 @@ def recover_interrupted() -> int:
     cutoff = (
         datetime.now(timezone.utc) - timedelta(minutes=STALE_MINUTES)
     ).isoformat(timespec="seconds")
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     cursor = conn.execute(
         "UPDATE llm_jobs SET status = 'paused', updated_at = ?"
         " WHERE status = 'running' AND updated_at < ?",
@@ -451,7 +451,7 @@ def _pending_items(job_id: int) -> list[dict[str, Any]]:
     Failed items are included: a batch that failed on a rate limit should
     continue where it stopped once the limit clears.
     """
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT seq, key, payload, attempts FROM llm_job_items"
         " WHERE job_id = ? AND status != 'done' ORDER BY seq",
         (job_id,),
@@ -471,7 +471,7 @@ def _record_item(job_id: int, seq: int, *, status: str, outcome: ItemOutcome | N
                  cost: float, error: str | None, attempts: int,
                  raw: str | None = None) -> None:
     with _write_lock:
-        conn = get_connection("learning")
+        conn = get_connection("ops")
         conn.execute(
             "UPDATE llm_job_items SET status = ?, result = ?, tokens_in = ?,"
             " tokens_out = ?, cost = ?, attempts = ?, error = ?, updated_at = ?"
@@ -517,7 +517,7 @@ def _record_item(job_id: int, seq: int, *, status: str, outcome: ItemOutcome | N
 
 
 def _spent(job_id: int) -> float:
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT cost FROM llm_jobs WHERE id = ?", (job_id,)
     ).fetchone()
     return float(row["cost"]) if row else 0.0
@@ -597,7 +597,7 @@ def _run(job_id: int) -> None:
             with ThreadPoolExecutor(max_workers=concurrency) as pool:
                 list(pool.map(process, runnable))
 
-            remaining = get_connection("learning").execute(
+            remaining = get_connection("ops").execute(
                 "SELECT COUNT(*) AS n FROM llm_job_items"
                 " WHERE job_id = ? AND status != 'done'",
                 (job_id,),
@@ -642,7 +642,7 @@ def _run(job_id: int) -> None:
 
 def summary() -> dict[str, Any]:
     """Totals for the console header — and for answering 'what has this cost?'."""
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT COUNT(*) AS jobs, COALESCE(SUM(cost), 0) AS cost,"
         " COALESCE(SUM(tokens_in), 0) AS tokens_in,"
         " COALESCE(SUM(tokens_out), 0) AS tokens_out FROM llm_jobs"
@@ -658,7 +658,7 @@ def summary() -> dict[str, Any]:
 
 def iter_results(job_id: int) -> Iterable[tuple[str, str]]:
     """(key, raw reply) for every finished item — used when re-parsing a batch."""
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT key, result FROM llm_job_items"
         " WHERE job_id = ? AND status = 'done' ORDER BY seq",
         (job_id,),

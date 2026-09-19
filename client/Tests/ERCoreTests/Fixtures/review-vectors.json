@@ -1,11 +1,11 @@
 {
-  "note": "由 scripts/export_review_vectors.py 从服务端真实代码导出，不要手改。重新导出之后不应有 diff——有 diff 就说明服务端的规则变了，客户端那份镜像要跟着改。",
-  "source": "backend/modules/review/session.py::answer",
-  "covers": "客户端要镜像的那几条：方向、问过几次、错过几次、权重、今天过没过。间隔、评级、到期时间是调度器的，客户端从不计算，故意不在这里。",
+  "note": "由 scripts/export_review_vectors.py 从 scripts/review_reference.py 导出，不要手改。重新导出之后不应有 diff——有 diff 就说明那份参照实现变了，客户端那份镜像要跟着改。",
+  "source": "scripts/review_reference.py::answer",
+  "covers": "客户端要镜像的那几条：方向、问过几次、错过几次、权重、今天过没过。间隔、评级、到期时间是调度器的，它们有自己那份向量。",
   "constants": {
     "word_to_sense": 1,
     "sense_to_word": 2,
-    "max_reveal": 3,
+    "max_reveal": 1,
     "weight_decay": 0.5,
     "weight_floor": 0.0001
   },

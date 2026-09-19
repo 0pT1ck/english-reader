@@ -12,59 +12,34 @@ public import struct Foundation.Date
 extension Components {
     /// Types generated from the `#/components/schemas` section of the OpenAPI document.
     public enum Schemas {
-        /// - Remark: Generated from `#/components/schemas/AnswerIn`.
-        public struct AnswerIn: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/queue_id`.
-            public var queue_id: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/passed`.
-            public var passed: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/revealed`.
-            public var revealed: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/sentence_id`.
-            public var sentence_id: Swift.Int?
-            /// - Remark: Generated from `#/components/schemas/AnswerIn/easy`.
-            public var easy: Swift.Bool?
-            /// Creates a new `AnswerIn`.
-            ///
-            /// - Parameters:
-            ///   - queue_id:
-            ///   - passed:
-            ///   - revealed:
-            ///   - sentence_id:
-            ///   - easy:
-            public init(
-                queue_id: Swift.Int,
-                passed: Swift.Bool,
-                revealed: Swift.Int? = nil,
-                sentence_id: Swift.Int? = nil,
-                easy: Swift.Bool? = nil
-            ) {
-                self.queue_id = queue_id
-                self.passed = passed
-                self.revealed = revealed
-                self.sentence_id = sentence_id
-                self.easy = easy
-            }
-            public enum CodingKeys: String, CodingKey {
-                case queue_id
-                case passed
-                case revealed
-                case sentence_id
-                case easy
-            }
-        }
         /// - Remark: Generated from `#/components/schemas/AnswerItem`.
         public struct AnswerItem: Codable, Hashable, Sendable {
+            /// 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/queue_id`.
-            public var queue_id: Swift.Int
+            public var queue_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/passed`.
             public var passed: Swift.Bool
+            /// 开了几级提示。**入站不设上限**，理由见下——服务端在解释它的时候 clamp 到 `MAX_REVEAL`
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/revealed`.
             public var revealed: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/sentence_id`.
             public var sentence_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/easy`.
             public var easy: Swift.Bool?
+            /// word / phrase。**P9 加的**:见 item_key
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/item_type`.
+            public var item_type: Swift.String?
+            /// 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/item_key`.
+            public var item_key: Swift.String?
+            /// 义项 id。词组恒为 0
+            ///
+            /// - Remark: Generated from `#/components/schemas/AnswerItem/sense_id`.
+            public var sense_id: Swift.Int?
             /// 客户端生成的幂等键
             ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/idem_key`.
@@ -76,19 +51,25 @@ extension Components {
             /// Creates a new `AnswerItem`.
             ///
             /// - Parameters:
-            ///   - queue_id:
+            ///   - queue_id: 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
             ///   - passed:
-            ///   - revealed:
+            ///   - revealed: 开了几级提示。**入站不设上限**，理由见下——服务端在解释它的时候 clamp 到 `MAX_REVEAL`
             ///   - sentence_id:
             ///   - easy:
+            ///   - item_type: word / phrase。**P9 加的**:见 item_key
+            ///   - item_key: 被考的那个词。**P9 加的**——日志里不许出现只有别处才解释得了的标识符:`queue_id` 是服务端那张表的行号，换台设备重放就指不到任何东西了
+            ///   - sense_id: 义项 id。词组恒为 0
             ///   - idem_key: 客户端生成的幂等键
             ///   - occurred_at: 客户端时钟，可能不准
             public init(
-                queue_id: Swift.Int,
+                queue_id: Swift.Int? = nil,
                 passed: Swift.Bool,
                 revealed: Swift.Int? = nil,
                 sentence_id: Swift.Int? = nil,
                 easy: Swift.Bool? = nil,
+                item_type: Swift.String? = nil,
+                item_key: Swift.String? = nil,
+                sense_id: Swift.Int? = nil,
                 idem_key: Swift.String,
                 occurred_at: Swift.String? = nil
             ) {
@@ -97,6 +78,9 @@ extension Components {
                 self.revealed = revealed
                 self.sentence_id = sentence_id
                 self.easy = easy
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
                 self.idem_key = idem_key
                 self.occurred_at = occurred_at
             }
@@ -106,6 +90,9 @@ extension Components {
                 case revealed
                 case sentence_id
                 case easy
+                case item_type
+                case item_key
+                case sense_id
                 case idem_key
                 case occurred_at
             }
@@ -159,59 +146,6 @@ extension Components {
                 case settled
             }
         }
-        /// - Remark: Generated from `#/components/schemas/AnswerResponse`.
-        public struct AnswerResponse: Codable, Hashable, Sendable {
-            /// 这个条目今天过了——两个方向都答对了
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/done`.
-            public var done: Swift.Bool
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/asks`.
-            public var asks: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/misses`.
-            public var misses: Swift.Int
-            /// 「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/easy`.
-            public var easy: Swift.Bool
-            /// 过了才有。没过是 null
-            ///
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/settled`.
-            public var settled: Components.Schemas.Settlement?
-            /// - Remark: Generated from `#/components/schemas/AnswerResponse/progress`.
-            public var progress: Components.Schemas.ReviewProgress
-            /// Creates a new `AnswerResponse`.
-            ///
-            /// - Parameters:
-            ///   - done: 这个条目今天过了——两个方向都答对了
-            ///   - asks:
-            ///   - misses:
-            ///   - easy: 「这个太简单了」。只在零失误的一轮才作数，**服务端自己判**，客户端说了不算
-            ///   - settled: 过了才有。没过是 null
-            ///   - progress:
-            public init(
-                done: Swift.Bool,
-                asks: Swift.Int,
-                misses: Swift.Int,
-                easy: Swift.Bool,
-                settled: Components.Schemas.Settlement? = nil,
-                progress: Components.Schemas.ReviewProgress
-            ) {
-                self.done = done
-                self.asks = asks
-                self.misses = misses
-                self.easy = easy
-                self.settled = settled
-                self.progress = progress
-            }
-            public enum CodingKeys: String, CodingKey {
-                case done
-                case asks
-                case misses
-                case easy
-                case settled
-                case progress
-            }
-        }
         /// - Remark: Generated from `#/components/schemas/AnswerResult`.
         public struct AnswerResult: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/AnswerResult/idem_key`.
@@ -261,15 +195,66 @@ extension Components {
         /// as the reading events — one event store, not two (see ``client_events``,
         /// whose own comment anticipated this phase).
         ///
+        /// **元素是个联合类型，那是有意的**（2026-09-19）:见 :class:`UnusableItem`。
+        /// 一条坏的只挡住自己，不挡它后面的——那是这个端点从第一天就承诺的事，
+        /// 而在这之前它做不到。
+        ///
         /// - Remark: Generated from `#/components/schemas/AnswersIn`.
         public struct AnswersIn: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload`.
+            public struct answersPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload/value1`.
+                public var value1: Components.Schemas.AnswerItem?
+                /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload/value2`.
+                public var value2: Components.Schemas.UnusableItem?
+                /// Creates a new `answersPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.AnswerItem? = nil,
+                    value2: Components.Schemas.UnusableItem? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/AnswersIn/answers`.
-            public var answers: [Components.Schemas.AnswerItem]?
+            public typealias answersPayload = [Components.Schemas.AnswersIn.answersPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/AnswersIn/answers`.
+            public var answers: Components.Schemas.AnswersIn.answersPayload?
             /// Creates a new `AnswersIn`.
             ///
             /// - Parameters:
             ///   - answers:
-            public init(answers: [Components.Schemas.AnswerItem]? = nil) {
+            public init(answers: Components.Schemas.AnswersIn.answersPayload? = nil) {
                 self.answers = answers
             }
             public enum CodingKeys: String, CodingKey {
@@ -294,8 +279,10 @@ extension Components {
             public var failed: Swift.Int
             /// - Remark: Generated from `#/components/schemas/AnswersResponse/results`.
             public var results: [Components.Schemas.AnswerResult]
+            /// **P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswersResponse/progress`.
-            public var progress: Components.Schemas.ReviewProgress
+            public var progress: Components.Schemas.ReviewProgress?
             /// Creates a new `AnswersResponse`.
             ///
             /// - Parameters:
@@ -303,13 +290,13 @@ extension Components {
             ///   - duplicates:
             ///   - failed:
             ///   - results:
-            ///   - progress:
+            ///   - progress: **P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」
             public init(
                 accepted: Swift.Int,
                 duplicates: Swift.Int,
                 failed: Swift.Int,
                 results: [Components.Schemas.AnswerResult],
-                progress: Components.Schemas.ReviewProgress
+                progress: Components.Schemas.ReviewProgress? = nil
             ) {
                 self.accepted = accepted
                 self.duplicates = duplicates
@@ -569,68 +556,6 @@ extension Components {
                 case phrases
                 case glossary
                 case progress
-            }
-        }
-        /// - Remark: Generated from `#/components/schemas/CalendarDay`.
-        public struct CalendarDay: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/day`.
-            public var day: Swift.String
-            /// complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
-            ///
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/status`.
-            public var status: Swift.String
-            /// - Remark: Generated from `#/components/schemas/CalendarDay/is_today`.
-            public var is_today: Swift.Bool
-            /// Creates a new `CalendarDay`.
-            ///
-            /// - Parameters:
-            ///   - day:
-            ///   - status: complete 两项都做完 / partial 只做完一项、或那天压根没活 / missed 有活但一项都没做完 / unknown 那天没开过 App，重建不出来。**partial 里那个「没活」很要紧**：系统没派活的日子不该判成你失败
-            ///   - is_today:
-            public init(
-                day: Swift.String,
-                status: Swift.String,
-                is_today: Swift.Bool
-            ) {
-                self.day = day
-                self.status = status
-                self.is_today = is_today
-            }
-            public enum CodingKeys: String, CodingKey {
-                case day
-                case status
-                case is_today
-            }
-        }
-        /// - Remark: Generated from `#/components/schemas/CalendarResponse`.
-        public struct CalendarResponse: Codable, Hashable, Sendable {
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/learner`.
-            public var learner: Components.Schemas.Learner
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/days`.
-            public var days: [Components.Schemas.CalendarDay]
-            /// 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
-            ///
-            /// - Remark: Generated from `#/components/schemas/CalendarResponse/streak`.
-            public var streak: Swift.Int
-            /// Creates a new `CalendarResponse`.
-            ///
-            /// - Parameters:
-            ///   - learner:
-            ///   - days:
-            ///   - streak: 连续多少天两项都做完。**今天还没做完不算断**——你可能正要去做，午夜就清零的计数器量的是时钟不是人
-            public init(
-                learner: Components.Schemas.Learner,
-                days: [Components.Schemas.CalendarDay],
-                streak: Swift.Int
-            ) {
-                self.learner = learner
-                self.days = days
-                self.streak = streak
-            }
-            public enum CodingKeys: String, CodingKey {
-                case learner
-                case days
-                case streak
             }
         }
         /// Which reserved slots actually carry values yet.
@@ -919,13 +844,60 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/EventBatch`.
         public struct EventBatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload`.
+            public struct eventsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload/value1`.
+                public var value1: Components.Schemas.ClientEvent?
+                /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload/value2`.
+                public var value2: Components.Schemas.UnusableEvent?
+                /// Creates a new `eventsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ClientEvent? = nil,
+                    value2: Components.Schemas.UnusableEvent? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/EventBatch/events`.
-            public var events: [Components.Schemas.ClientEvent]?
+            public typealias eventsPayload = [Components.Schemas.EventBatch.eventsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/EventBatch/events`.
+            public var events: Components.Schemas.EventBatch.eventsPayload?
             /// Creates a new `EventBatch`.
             ///
             /// - Parameters:
             ///   - events:
-            public init(events: [Components.Schemas.ClientEvent]? = nil) {
+            public init(events: Components.Schemas.EventBatch.eventsPayload? = nil) {
                 self.events = events
             }
             public enum CodingKeys: String, CodingKey {
@@ -972,6 +944,55 @@ extension Components {
                 case duplicates
                 case failed
                 case results
+            }
+        }
+        /// 按序号往后取一段事件。
+        ///
+        /// - Remark: Generated from `#/components/schemas/EventFeedResponse`.
+        public struct EventFeedResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EventFeedResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// - Remark: Generated from `#/components/schemas/EventFeedResponse/events`.
+            public var events: [Components.Schemas.LoggedEventOut]
+            /// 这一批里最大的序号。**一条都没有时回传你给的那个 after**，这样客户端不用区分「空」和「到底了」
+            ///
+            /// - Remark: Generated from `#/components/schemas/EventFeedResponse/through`.
+            public var through: Swift.Int
+            /// 服务端手上最大的序号。`through < latest` 就是还有
+            ///
+            /// - Remark: Generated from `#/components/schemas/EventFeedResponse/latest`.
+            public var latest: Swift.Int
+            /// 还有没有下一段
+            ///
+            /// - Remark: Generated from `#/components/schemas/EventFeedResponse/more`.
+            public var more: Swift.Bool
+            /// Creates a new `EventFeedResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - events:
+            ///   - through: 这一批里最大的序号。**一条都没有时回传你给的那个 after**，这样客户端不用区分「空」和「到底了」
+            ///   - latest: 服务端手上最大的序号。`through < latest` 就是还有
+            ///   - more: 还有没有下一段
+            public init(
+                learner: Components.Schemas.Learner,
+                events: [Components.Schemas.LoggedEventOut],
+                through: Swift.Int,
+                latest: Swift.Int,
+                more: Swift.Bool
+            ) {
+                self.learner = learner
+                self.events = events
+                self.through = through
+                self.latest = latest
+                self.more = more
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case events
+                case through
+                case latest
+                case more
             }
         }
         /// - Remark: Generated from `#/components/schemas/EventResult`.
@@ -1410,6 +1431,126 @@ extension Components {
                 case articles
             }
         }
+        /// 事件日志里的一条，原样下发。
+        ///
+        /// **这是多设备的会合点**（P9 §6）。一台设备把它的事件推上来，另一台按序号
+        /// 拉下去，两边各自重放同一份日志，得出同一个状态——所以不需要合并算法。
+        ///
+        /// **`sequence` 是服务端收到即分配的全序号**，而 `occurred_at` 是设备时钟、
+        /// 可能是错的。**两个用途分开**:排序用序号，判「当天」用设备时钟。
+        /// 合用一个数就会在两台手机时间不同步时排出一个谁都没经历过的顺序。
+        ///
+        /// - Remark: Generated from `#/components/schemas/LoggedEventOut`.
+        public struct LoggedEventOut: Codable, Hashable, Sendable {
+            /// 全序序号。游标用它，**会有缺口，那是对的**
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/sequence`.
+            public var sequence: Swift.Int
+            /// 设备生成的幂等键。拉回自己的事件时靠它认出来
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/idem_key`.
+            public var idem_key: Swift.String
+            /// 事件类型，如 word.marked / review.answered
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/type`.
+            public var _type: Swift.String
+            /// **原样，服务端不解释**
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/payload`.
+            public struct payloadPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+                /// Creates a new `payloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// **原样，服务端不解释**
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/payload`.
+            public var payload: Components.Schemas.LoggedEventOut.payloadPayload
+            /// 设备时钟
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/occurred_at`.
+            public var occurred_at: Swift.String?
+            /// 服务端收到的时刻
+            ///
+            /// - Remark: Generated from `#/components/schemas/LoggedEventOut/received_at`.
+            public var received_at: Swift.String?
+            /// Creates a new `LoggedEventOut`.
+            ///
+            /// - Parameters:
+            ///   - sequence: 全序序号。游标用它，**会有缺口，那是对的**
+            ///   - idem_key: 设备生成的幂等键。拉回自己的事件时靠它认出来
+            ///   - _type: 事件类型，如 word.marked / review.answered
+            ///   - payload: **原样，服务端不解释**
+            ///   - occurred_at: 设备时钟
+            ///   - received_at: 服务端收到的时刻
+            public init(
+                sequence: Swift.Int,
+                idem_key: Swift.String,
+                _type: Swift.String,
+                payload: Components.Schemas.LoggedEventOut.payloadPayload,
+                occurred_at: Swift.String? = nil,
+                received_at: Swift.String? = nil
+            ) {
+                self.sequence = sequence
+                self.idem_key = idem_key
+                self._type = _type
+                self.payload = payload
+                self.occurred_at = occurred_at
+                self.received_at = received_at
+            }
+            public enum CodingKeys: String, CodingKey {
+                case sequence
+                case idem_key
+                case _type = "type"
+                case payload
+                case occurred_at
+                case received_at
+            }
+        }
+        /// 这把令牌是谁的，以及哪些留好的位置真的有值了。
+        ///
+        /// **测试连接用的就是它。** 在这之前那个探针打的是日历那个端点
+        /// （「最轻的一个」），而日历 P9 搬到了设备上——探针因此需要一个真正最轻的:
+        /// 不读学习记录、不组装任何东西、不下发一个字节的内容。
+        ///
+        /// **它同时回答了探针真正关心的两件事**:令牌认不认（401 还是 200），
+        /// 以及对面是谁（换过令牌之后名字对不对）。
+        ///
+        /// - Remark: Generated from `#/components/schemas/MeResponse`.
+        public struct MeResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/MeResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// - Remark: Generated from `#/components/schemas/MeResponse/capabilities`.
+            public var capabilities: Components.Schemas.Capabilities
+            /// Creates a new `MeResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - capabilities:
+            public init(
+                learner: Components.Schemas.Learner,
+                capabilities: Components.Schemas.Capabilities
+            ) {
+                self.learner = learner
+                self.capabilities = capabilities
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case capabilities
+            }
+        }
         /// A phrase is an item in its own right.
         ///
         /// Marking `account for` records nothing against `account`: not knowing the
@@ -1482,6 +1623,114 @@ extension Components {
                 case definition
                 case mark
                 case state
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PoolEntryIn`.
+        public struct PoolEntryIn: Codable, Hashable, Sendable {
+            /// word 或 phrase
+            ///
+            /// - Remark: Generated from `#/components/schemas/PoolEntryIn/item_type`.
+            public var item_type: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PoolEntryIn/item_key`.
+            public var item_key: Swift.String
+            /// 词组带 0——它是一个整体
+            ///
+            /// - Remark: Generated from `#/components/schemas/PoolEntryIn/sense_id`.
+            public var sense_id: Swift.Int?
+            /// new | reviewing | graduated
+            ///
+            /// - Remark: Generated from `#/components/schemas/PoolEntryIn/pool`.
+            public var pool: Swift.String
+            /// Creates a new `PoolEntryIn`.
+            ///
+            /// - Parameters:
+            ///   - item_type: word 或 phrase
+            ///   - item_key:
+            ///   - sense_id: 词组带 0——它是一个整体
+            ///   - pool: new | reviewing | graduated
+            public init(
+                item_type: Swift.String? = nil,
+                item_key: Swift.String,
+                sense_id: Swift.Int? = nil,
+                pool: Swift.String
+            ) {
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
+                self.pool = pool
+            }
+            public enum CodingKeys: String, CodingKey {
+                case item_type
+                case item_key
+                case sense_id
+                case pool
+            }
+        }
+        /// 整份词池。**只带非 `new` 的那些就够了**，但带全了也接受。
+        ///
+        /// 服务端要的是「哪些词你已经在学或学过」，`new` 是补集。客户端只报非 new 的，
+        /// 省掉绝大部分条目——实测非 new 的有 30 条，而词典里有 318,207 条。
+        ///
+        /// - Remark: Generated from `#/components/schemas/PoolSnapshotIn`.
+        public struct PoolSnapshotIn: Codable, Hashable, Sendable {
+            /// 设备上算出这份快照的时刻。**服务端不用它做判断**，只是存着——将来做「长期不上线」的退化策略时要有东西可依据
+            ///
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotIn/reported_at`.
+            public var reported_at: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotIn/entries`.
+            public var entries: [Components.Schemas.PoolEntryIn]
+            /// Creates a new `PoolSnapshotIn`.
+            ///
+            /// - Parameters:
+            ///   - reported_at: 设备上算出这份快照的时刻。**服务端不用它做判断**，只是存着——将来做「长期不上线」的退化策略时要有东西可依据
+            ///   - entries:
+            public init(
+                reported_at: Swift.String? = nil,
+                entries: [Components.Schemas.PoolEntryIn]
+            ) {
+                self.reported_at = reported_at
+                self.entries = entries
+            }
+            public enum CodingKeys: String, CodingKey {
+                case reported_at
+                case entries
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PoolSnapshotResponse`.
+        public struct PoolSnapshotResponse: Codable, Hashable, Sendable {
+            /// 收下了多少条
+            ///
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotResponse/stored`.
+            public var stored: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotResponse/reviewing`.
+            public var reviewing: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotResponse/graduated`.
+            public var graduated: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PoolSnapshotResponse/received_at`.
+            public var received_at: Swift.String
+            /// Creates a new `PoolSnapshotResponse`.
+            ///
+            /// - Parameters:
+            ///   - stored: 收下了多少条
+            ///   - reviewing:
+            ///   - graduated:
+            ///   - received_at:
+            public init(
+                stored: Swift.Int,
+                reviewing: Swift.Int,
+                graduated: Swift.Int,
+                received_at: Swift.String
+            ) {
+                self.stored = stored
+                self.reviewing = reviewing
+                self.graduated = graduated
+                self.received_at = received_at
+            }
+            public enum CodingKeys: String, CodingKey {
+                case stored
+                case reviewing
+                case graduated
+                case received_at
             }
         }
         /// Not an error: lazy ingest means asking for an unprepared article is normal.
@@ -2191,6 +2440,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/SentenceCard/source`.
             public var source: Swift.String?
+            /// 这一句在文章里的那个 id（`reading_sentences.id`）。**P9 加的**:考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，而它手上「见过」的那个集合是按这个 id 记的（标记事件带着它）。**和上面那个 `id` 不是一回事**——那个是句子池自己的行号。生成的句子没有它（它们不出自任何文章）
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentenceCard/sentence_id`.
+            public var sentence_id: Swift.Int?
             /// 提示可以说出处，也留着将来跳回原文。生成的句子没有——而生成的句子本来就不会当提示
             ///
             /// - Remark: Generated from `#/components/schemas/SentenceCard/article_id`.
@@ -2219,6 +2472,7 @@ extension Components {
             ///   - surface: 被挖掉的那个词在句子里的原样
             ///   - first_letter: 看义想词的第一级提示。**在服务端算**——什么算首字母是一条规则，而规则按架构前提 1 留在这边
             ///   - source: generated 生成的 / corpus 语料里的
+            ///   - sentence_id: 这一句在文章里的那个 id（`reading_sentences.id`）。**P9 加的**:考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，而它手上「见过」的那个集合是按这个 id 记的（标记事件带着它）。**和上面那个 `id` 不是一回事**——那个是句子池自己的行号。生成的句子没有它（它们不出自任何文章）
             ///   - article_id: 提示可以说出处，也留着将来跳回原文。生成的句子没有——而生成的句子本来就不会当提示
             ///   - article_title: 提示上那句「——文章a」。join 出来的，不另存一份
             ///   - text_zh: 整句中文翻译，**看中文想英文那个方向的题面**。还没翻到的是 null。这跟「句子里不许出现中文」那条禁令不冲突：禁的是英文题面里混中文
@@ -2232,6 +2486,7 @@ extension Components {
                 surface: Swift.String,
                 first_letter: Swift.String,
                 source: Swift.String? = nil,
+                sentence_id: Swift.Int? = nil,
                 article_id: Swift.Int? = nil,
                 article_title: Swift.String? = nil,
                 text_zh: Swift.String? = nil,
@@ -2245,6 +2500,7 @@ extension Components {
                 self.surface = surface
                 self.first_letter = first_letter
                 self.source = source
+                self.sentence_id = sentence_id
                 self.article_id = article_id
                 self.article_title = article_title
                 self.text_zh = text_zh
@@ -2259,11 +2515,49 @@ extension Components {
                 case surface
                 case first_letter
                 case source
+                case sentence_id
                 case article_id
                 case article_title
                 case text_zh
                 case zh_start
                 case zh_end
+            }
+        }
+        /// 在学的那些词的句子。
+        ///
+        /// **依据是你上报的词池快照**（§7），不是服务端自己推的——
+        /// 服务端对学习记录只有两种关系:生文需要的那一小撮信号，和它不解释的存档。
+        /// 这里用的是前者，而它连解释都不算:直接用。
+        ///
+        /// - Remark: Generated from `#/components/schemas/SentencePoolResponse`.
+        public struct SentencePoolResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/learner`.
+            public var learner: Components.Schemas.Learner
+            /// 那份快照是什么时候的。**为空表示这台设备还没报过**——那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」
+            ///
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/reported_at`.
+            public var reported_at: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/SentencePoolResponse/items`.
+            public var items: [Components.Schemas.StudyItemSentences]
+            /// Creates a new `SentencePoolResponse`.
+            ///
+            /// - Parameters:
+            ///   - learner:
+            ///   - reported_at: 那份快照是什么时候的。**为空表示这台设备还没报过**——那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」
+            ///   - items:
+            public init(
+                learner: Components.Schemas.Learner,
+                reported_at: Swift.String? = nil,
+                items: [Components.Schemas.StudyItemSentences]
+            ) {
+                self.learner = learner
+                self.reported_at = reported_at
+                self.items = items
+            }
+            public enum CodingKeys: String, CodingKey {
+                case learner
+                case reported_at
+                case items
             }
         }
         /// What the scheduler decided when an item left the pool.
@@ -2439,15 +2733,68 @@ extension Components {
                 case result
             }
         }
+        /// **元素同样是联合类型**，理由见 :class:`UnusableItem`。
+        ///
+        /// 这一路还没出过事，而形状和作答那一路一模一样:一条字段验不过去就整批 422，
+        /// 而这个端点的契约写的也是「the same per-item verdict as the answers batch」。
+        /// **等它出事再改，就是等一次「手机一直转圈」**——那一次已经付过了。
+        ///
         /// - Remark: Generated from `#/components/schemas/SpellingsIn`.
         public struct SpellingsIn: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload`.
+            public struct spellingsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload/value1`.
+                public var value1: Components.Schemas.SpellingItem?
+                /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload/value2`.
+                public var value2: Components.Schemas.UnusableItem?
+                /// Creates a new `spellingsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.SpellingItem? = nil,
+                    value2: Components.Schemas.UnusableItem? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellings`.
-            public var spellings: [Components.Schemas.SpellingItem]?
+            public typealias spellingsPayload = [Components.Schemas.SpellingsIn.spellingsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellings`.
+            public var spellings: Components.Schemas.SpellingsIn.spellingsPayload?
             /// Creates a new `SpellingsIn`.
             ///
             /// - Parameters:
             ///   - spellings:
-            public init(spellings: [Components.Schemas.SpellingItem]? = nil) {
+            public init(spellings: Components.Schemas.SpellingsIn.spellingsPayload? = nil) {
                 self.spellings = spellings
             }
             public enum CodingKeys: String, CodingKey {
@@ -2494,6 +2841,64 @@ extension Components {
                 case results
             }
         }
+        /// 一个在学的词，连它的句子——**不分池**。
+        ///
+        /// **P9 §11。** 分池（哪句当考题、哪句当提示）依赖「你读完过哪些文章、
+        /// 见过哪些句子」，那是学习记录；而造句子要钱、要模型，是内容生产。
+        /// 那条线把两件事分开了，所以这里原样全给，由客户端分（`ERCore/SentencePool`）。
+        ///
+        /// **和 `ReviewItem` 的差别正是那条线**：这里没有 `queue_id`、`bucket`、
+        /// `direction`、`asks`、`weight`、`done`——那些全是学习状态，现在由设备重放算出来。
+        ///
+        /// - Remark: Generated from `#/components/schemas/StudyItemSentences`.
+        public struct StudyItemSentences: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/item_type`.
+            public var item_type: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/item_key`.
+            public var item_key: Swift.String
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sense_id`.
+            public var sense_id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/word`.
+            public var word: Components.Schemas.WordCard?
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sense`.
+            public var sense: Components.Schemas.SenseCard?
+            /// 这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分
+            ///
+            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sentences`.
+            public var sentences: [Components.Schemas.SentenceCard]
+            /// Creates a new `StudyItemSentences`.
+            ///
+            /// - Parameters:
+            ///   - item_type:
+            ///   - item_key:
+            ///   - sense_id:
+            ///   - word:
+            ///   - sense:
+            ///   - sentences: 这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分
+            public init(
+                item_type: Swift.String,
+                item_key: Swift.String,
+                sense_id: Swift.Int,
+                word: Components.Schemas.WordCard? = nil,
+                sense: Components.Schemas.SenseCard? = nil,
+                sentences: [Components.Schemas.SentenceCard]
+            ) {
+                self.item_type = item_type
+                self.item_key = item_key
+                self.sense_id = sense_id
+                self.word = word
+                self.sense = sense
+                self.sentences = sentences
+            }
+            public enum CodingKeys: String, CodingKey {
+                case item_type
+                case item_key
+                case sense_id
+                case word
+                case sense
+                case sentences
+            }
+        }
         /// 当天的文章与复习，一次拿全。
         ///
         /// **全文内联，不是清单**（P4 决定 8）。实测一篇约 300 KB，三篇不到 1 MB——
@@ -2517,10 +2922,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/TodayResponse/extra_articles`.
             public var extra_articles: [Components.Schemas.ArticleResponse]
-            /// 跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里
+            /// **P9 起不再下发。** 复习那一份由设备自己算（句子来自 `/v1/client/sentences`，状态来自它重放自己的事件日志）。字段留着不删——铁律 5 只增不减，而老客户端还在读它；但服务端组装它意味着**每次请求都要建会话、入队**，也就是服务端在写学习状态，而那正是那条线禁止的事
             ///
             /// - Remark: Generated from `#/components/schemas/TodayResponse/reviews`.
-            public var reviews: Components.Schemas.ReviewDayResponse
+            public var reviews: Components.Schemas.ReviewDayResponse?
             /// - Remark: Generated from `#/components/schemas/TodayResponse/settings`.
             public var settings: Components.Schemas.TodaySettings
             /// **今日包 ≠ 今天能读的全部。**真题走自己的入口 /library?source=cet4|cet6|kaoyan。写在响应里而不只是写在文档里——一个以为这就是全部的客户端会静默地藏起 452 篇真题
@@ -2535,7 +2940,7 @@ extension Components {
             ///   - day: 复习那一天的日期
             ///   - articles: 今天的正课。**正好 3 篇**，由配置项 today_article_count 决定
             ///   - extra_articles: **永远是空的。**加餐已于 2026-09-12 取消——往期本身就是加餐，往列表下面翻就有。字段留着不删是因为铁律 5 只增不减；把 today_extra_count 改回非零就能恢复
-            ///   - reviews: 跟 /v1/client/reviews 返回的是同一个对象，原样嵌在这里
+            ///   - reviews: **P9 起不再下发。** 复习那一份由设备自己算（句子来自 `/v1/client/sentences`，状态来自它重放自己的事件日志）。字段留着不删——铁律 5 只增不减，而老客户端还在读它；但服务端组装它意味着**每次请求都要建会话、入队**，也就是服务端在写学习状态，而那正是那条线禁止的事
             ///   - settings:
             ///   - excludes_exam_papers: **今日包 ≠ 今天能读的全部。**真题走自己的入口 /library?source=cet4|cet6|kaoyan。写在响应里而不只是写在文档里——一个以为这就是全部的客户端会静默地藏起 452 篇真题
             public init(
@@ -2544,7 +2949,7 @@ extension Components {
                 day: Swift.String? = nil,
                 articles: [Components.Schemas.ArticleResponse],
                 extra_articles: [Components.Schemas.ArticleResponse],
-                reviews: Components.Schemas.ReviewDayResponse,
+                reviews: Components.Schemas.ReviewDayResponse? = nil,
                 settings: Components.Schemas.TodaySettings,
                 excludes_exam_papers: Swift.Bool
             ) {
@@ -2568,6 +2973,14 @@ extension Components {
                 case excludes_exam_papers
             }
         }
+        /// 服务端定的那几个数，随今日包一起下发。**客户端只读它们。**
+        ///
+        /// **2026-09-17 加上排期那四个（P9）。** 在那之前客户端从不计算间隔，所以不需要
+        /// 它们；而 P9 把排期搬到了设备上（`phase-9.html` §4），它现在必须知道服务端配的
+        /// 是什么。**不许在客户端写一份默认值**：两边各用自己的默认，就会跑出不同的间隔，
+        /// 而且两边都在按自己的文档正常工作、没有东西会报错——这正是 swift-fsrs
+        /// 与 py-fsrs 默认参数不一致那次差点踩进去的形状（§16 ②）。
+        ///
         /// - Remark: Generated from `#/components/schemas/TodaySettings`.
         public struct TodaySettings: Codable, Hashable, Sendable {
             /// 「新备的」这个书架算几天之内
@@ -2580,25 +2993,57 @@ extension Components {
             public var weight_decay: Swift.Double
             /// - Remark: Generated from `#/components/schemas/TodaySettings/spelling_enabled`.
             public var spelling_enabled: Swift.Bool
+            /// FSRS 的参数向量。**21 个是 FSRS-6，19 个是 FSRS-5**，下发的是服务端实际生效的那一组，不是「用默认」——两边的「默认」不是同一组数。
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySettings/fsrs_parameters`.
+            public var fsrs_parameters: [Swift.Double]?
+            /// 目标可提取性
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySettings/fsrs_desired_retention`.
+            public var fsrs_desired_retention: Swift.Double?
+            /// 间隔上限（天）。FSRS 自己默认 36500，那是「记一辈子」的答案；这个项目对着一场有日期的考试，落在考试之后的间隔不是复习。
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySettings/fsrs_maximum_interval`.
+            public var fsrs_maximum_interval: Swift.Int?
+            /// 抖动。开着让同一天学的一批词不会永远同一天回来；验收与向量一律关掉，否则两种语言的随机数种子不同就成了「分歧」。
+            ///
+            /// - Remark: Generated from `#/components/schemas/TodaySettings/fsrs_fuzz`.
+            public var fsrs_fuzz: Swift.Bool?
             /// Creates a new `TodaySettings`.
             ///
             /// - Parameters:
             ///   - fresh_days: 「新备的」这个书架算几天之内
             ///   - weight_decay: 复习答错之后权重乘以它
             ///   - spelling_enabled:
+            ///   - fsrs_parameters: FSRS 的参数向量。**21 个是 FSRS-6，19 个是 FSRS-5**，下发的是服务端实际生效的那一组，不是「用默认」——两边的「默认」不是同一组数。
+            ///   - fsrs_desired_retention: 目标可提取性
+            ///   - fsrs_maximum_interval: 间隔上限（天）。FSRS 自己默认 36500，那是「记一辈子」的答案；这个项目对着一场有日期的考试，落在考试之后的间隔不是复习。
+            ///   - fsrs_fuzz: 抖动。开着让同一天学的一批词不会永远同一天回来；验收与向量一律关掉，否则两种语言的随机数种子不同就成了「分歧」。
             public init(
                 fresh_days: Swift.Int,
                 weight_decay: Swift.Double,
-                spelling_enabled: Swift.Bool
+                spelling_enabled: Swift.Bool,
+                fsrs_parameters: [Swift.Double]? = nil,
+                fsrs_desired_retention: Swift.Double? = nil,
+                fsrs_maximum_interval: Swift.Int? = nil,
+                fsrs_fuzz: Swift.Bool? = nil
             ) {
                 self.fresh_days = fresh_days
                 self.weight_decay = weight_decay
                 self.spelling_enabled = spelling_enabled
+                self.fsrs_parameters = fsrs_parameters
+                self.fsrs_desired_retention = fsrs_desired_retention
+                self.fsrs_maximum_interval = fsrs_maximum_interval
+                self.fsrs_fuzz = fsrs_fuzz
             }
             public enum CodingKeys: String, CodingKey {
                 case fresh_days
                 case weight_decay
                 case spelling_enabled
+                case fsrs_parameters
+                case fsrs_desired_retention
+                case fsrs_maximum_interval
+                case fsrs_fuzz
             }
         }
         /// - Remark: Generated from `#/components/schemas/Token`.
@@ -2702,6 +3147,118 @@ extension Components {
                 case sense_ordinal
                 case in_phrase
                 case note
+            }
+        }
+        /// 一条验不过去的上报。**留着它，好让它有资格被逐条拒绝。**
+        ///
+        /// 2026-09-19 加，起因是复习作答那一路的同一个形状（见
+        /// `review/routes.py` 的 `UnusableItem`）:这个端点回的是**逐条**裁决
+        /// （`EventBatchResponse` 的注释写着「What matters to the client is the
+        /// per-item verdict」），而 pydantic 的校验发生在 handler 之前——
+        /// 一条字段验不过去就让整批 500 条一起 422，逐条那套完全没机会跑。
+        ///
+        /// 这一路实际发作过一次，形状还不一样:客户端一批发 534 条而这里写着
+        /// `max_length=500`，于是**每次都是 422，队列只会变长**（手机卡了一天）。
+        /// 那一次是客户端改成分片修的；**而「一条坏的不许拖垮整批」是这一侧的事**。
+        ///
+        /// - Remark: Generated from `#/components/schemas/UnusableEvent`.
+        public struct UnusableEvent: Codable, Hashable, Sendable {
+            /// 能认出是哪一条就够了，其余字段不做要求
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnusableEvent/idem_key`.
+            public var idem_key: Swift.String?
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `UnusableEvent`.
+            ///
+            /// - Parameters:
+            ///   - idem_key: 能认出是哪一条就够了，其余字段不做要求
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(
+                idem_key: Swift.String? = nil,
+                additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()
+            ) {
+                self.idem_key = idem_key
+                self.additionalProperties = additionalProperties
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idem_key
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.idem_key = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .idem_key
+                )
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [
+                    "idem_key"
+                ])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(
+                    self.idem_key,
+                    forKey: .idem_key
+                )
+                try encoder.encodeAdditionalProperties(additionalProperties)
+            }
+        }
+        /// 一条验不过去的补报。**留着它，好让它有资格被逐条拒绝。**
+        ///
+        /// 这个类型存在的理由是一次事故（2026-09-19）。这个端点的契约写的是
+        /// 「a failure in the middle stops nothing — the one that failed is reported
+        /// with its key so the client can decide」，而 **pydantic 的校验发生在
+        /// handler 之前**——一条字段越界就让整批 500 条一起 422，
+        /// 逐条裁决那套设计完全没机会跑。**注释描述的是意图，实现从来没跟上**
+        /// （坑 §7.1 的同一个形状，而那段注释是我自己刚写下的）。
+        ///
+        /// 实际发作的样子:设备把老事件拉下来又推回去，其中 2 条是 P7 之前记的
+        /// `revealed=2`，于是那 118 条作答**永远**进不来，手机一直转圈。
+        ///
+        /// 所以列表的元素类型是「一条作答 **或** 一条验不过去的东西」。
+        /// 后者只需要认得出是哪一条（`idem_key`），好把 `failed` 连同理由回给客户端;
+        /// 认不出的话连拒绝都没法逐条拒绝，那就只能整批砸掉，也就回到了原点。
+        ///
+        /// - Remark: Generated from `#/components/schemas/UnusableItem`.
+        public struct UnusableItem: Codable, Hashable, Sendable {
+            /// 能认出是哪一条就够了，其余字段不做要求
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnusableItem/idem_key`.
+            public var idem_key: Swift.String?
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `UnusableItem`.
+            ///
+            /// - Parameters:
+            ///   - idem_key: 能认出是哪一条就够了，其余字段不做要求
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(
+                idem_key: Swift.String? = nil,
+                additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()
+            ) {
+                self.idem_key = idem_key
+                self.additionalProperties = additionalProperties
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idem_key
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.idem_key = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .idem_key
+                )
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [
+                    "idem_key"
+                ])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(
+                    self.idem_key,
+                    forKey: .idem_key
+                )
+                try encoder.encodeAdditionalProperties(additionalProperties)
             }
         }
         /// - Remark: Generated from `#/components/schemas/ValidationError`.

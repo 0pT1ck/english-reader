@@ -37,6 +37,7 @@ from backend.modules.reading import (
 from backend.modules.reading.contract import (
     ArticleResponse,
     EventBatchResponse,
+    EventFeedResponse,
     LibraryResponse,
 )
 
@@ -68,8 +69,29 @@ class ClientEvent(BaseModel):
     occurred_at: str | None = Field(default=None, description="客户端时钟，可能不准")
 
 
+class UnusableEvent(BaseModel):
+    """一条验不过去的上报。**留着它，好让它有资格被逐条拒绝。**
+
+    2026-09-19 加，起因是复习作答那一路的同一个形状（见
+    `review/routes.py` 的 `UnusableItem`）:这个端点回的是**逐条**裁决
+    （`EventBatchResponse` 的注释写着「What matters to the client is the
+    per-item verdict」），而 pydantic 的校验发生在 handler 之前——
+    一条字段验不过去就让整批 500 条一起 422，逐条那套完全没机会跑。
+
+    这一路实际发作过一次，形状还不一样:客户端一批发 534 条而这里写着
+    `max_length=500`，于是**每次都是 422，队列只会变长**（手机卡了一天）。
+    那一次是客户端改成分片修的；**而「一条坏的不许拖垮整批」是这一侧的事**。
+    """
+
+    model_config = {"extra": "allow"}
+
+    idem_key: str | None = Field(
+        default=None, description="能认出是哪一条就够了，其余字段不做要求")
+
+
 class EventBatch(BaseModel):
-    events: list[ClientEvent] = Field(default_factory=list, max_length=500)
+    events: list[ClientEvent | UnusableEvent] = Field(
+        default_factory=list, max_length=500)
 
 
 # **Why `response_model=` and not a return annotation.** The service layer
@@ -129,6 +151,49 @@ async def report_events(device_id: DeviceId, batch: EventBatch) -> dict[str, Any
         auth.learner_for_device(device_id),
         [event.model_dump() for event in batch.events],
     )
+
+
+#: 一次最多下发多少条。取 500 是因为一年约 2.5 万条（P9 §14 U3 实测），
+#: 500 一段意味着新设备首次同步约五十个来回——够快，而且每一段都小。
+EVENT_PAGE_MAX = 500
+
+
+@client_router.get("/events", summary="按序号往后取事件（多设备同步用）",
+                   response_model=EventFeedResponse)
+async def event_feed(device_id: DeviceId,
+                     after: int = Query(0, ge=0),
+                     limit: int = Query(EVENT_PAGE_MAX, ge=1, le=EVENT_PAGE_MAX),
+                     ) -> dict[str, Any]:
+    """这个学习者的事件，序号大于 ``after`` 的那些。
+
+    **P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，
+    而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。
+
+    **序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是
+    ``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；
+    再造一个会得到第二个顺序，然后两个顺序说反话。
+    **服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。
+    
+    **拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在
+    那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:
+    按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，
+    那时它会以为自己的历史不存在。
+
+    **GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义
+    都该按读取来。
+    """
+    learner_id = auth.learner_for_device(device_id)
+    events = repository.events_after(learner_id, after, limit)
+    latest = repository.latest_event_sequence(learner_id)
+    # 一条都没有时回传你给的那个 after——这样客户端不用区分「空」和「到底了」。
+    through = events[-1]["sequence"] if events else after
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "events": events,
+        "through": through,
+        "latest": latest,
+        "more": through < latest,
+    }
 
 
 # --------------------------------------------------------------------------- #
@@ -271,7 +336,7 @@ async def admin_settle_phrases() -> dict[str, Any]:
 
 @admin_router.get("/reading/phrases", summary="词组识别概览")
 async def admin_phrases(limit: int = Query(40, ge=1, le=500)) -> dict[str, Any]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT phrase, verdict, COUNT(*) AS n FROM reading_phrases"
         " WHERE verdict IS NOT NULL GROUP BY phrase, verdict ORDER BY n DESC LIMIT ?",
         (limit * 4,),
@@ -312,6 +377,19 @@ async def admin_missing_senses(limit: int = Query(200, ge=1, le=1000)) -> dict[s
             for word, items in sorted(by_word.items(), key=lambda kv: -len(kv[1]))
         ],
     }
+
+
+@admin_router.get("/reading/articles/{article_id}", summary="一篇文章的全部内容（诊断用）")
+async def admin_article(article_id: int) -> dict[str, Any]:
+    """**2026-09-18 加（P9 §11）:Web 阅读页删掉之后，文章库那页要有地方可点。**
+
+    和客户端那个端点同一个函数，但走管理凭证、不带学习者——
+    **标记那一层是空的**，因为这里不是学习的地方，只是看一眼文章有没有做好:
+    分句对不对、token 有没有标注、释义齐不齐。
+
+    看得见而改不了，正是架构铁律 8 说的诊断通道。
+    """
+    return service.article(learner_id=0, article_id=article_id)
 
 
 @admin_router.delete("/reading/articles/{article_id}", summary="删除一篇文章")
@@ -368,23 +446,18 @@ async def admin_calibration() -> dict[str, Any]:
 # Pages
 # --------------------------------------------------------------------------- #
 
-WEB_READER_DEVICE = "web-reader"
-
-
-def _web_reader_token() -> str:
-    """A device token for the development reading page.
-
-    The page could have used the admin session it is already served under, but
-    then it would not be exercising the client contract at all — and the client
-    contract is the thing P2 exists to get right. So it registers itself as a
-    device like any other and talks to ``/v1/client`` over a bearer token.
-    """
-    token = runtime_config.get("reading_web_token")
-    if token:
-        return str(token)
-    issued = auth.create_device(WEB_READER_DEVICE)
-    runtime_config.set("reading_web_token", issued)
-    return issued
+# Web 阅读页没有了（P9 §11，这个 Phase 的最后一步）。
+#
+# **理由比「省 719 行」强:`ercli` 已经是第二个客户端了**，它和 App 共用同一份
+# Core。新架构下 Web 页要能学习，就得在 JS 里再实现一遍学习引擎——投影、排期、
+# 当天那一轮的状态机——而那正是 §2 那条线禁止的事。`ercli` 天然合规:
+# 它是客户端，它做学习的事，它走同一份 Core。
+#
+# 跟着走的还有 `reading_web_token`:那个令牌存在的理由是「让这个页面走真正的
+# /v1/client 接口，而不是借管理会话抄近路」。没有页面就没有那个理由了。
+#
+# **文章库那一页留着**（架构铁律 8:控制台是诊断通道，长期存在），
+# 只是它的「打开」按钮不再指向一个会改学习状态的页面。
 
 
 @pages_router.get("/admin/reading", response_class=HTMLResponse)
@@ -401,19 +474,3 @@ async def reading_page(request: Request) -> Response:
         sortable=difficulty.SORTABLE,
         sources=repository.SOURCE_LABELS,
     )
-
-
-@pages_router.get("/admin/reader", response_class=HTMLResponse)
-async def reader_index(request: Request) -> Response:
-    if (redirect := require_page_auth(request)) is not None:
-        return redirect
-    return render(request, "reader.html", token=_web_reader_token(), article_id=0,
-                  progress_seconds=int(runtime_config.get("progress_report_seconds")))
-
-
-@pages_router.get("/admin/reader/{article_id}", response_class=HTMLResponse)
-async def reader_page(request: Request, article_id: int) -> Response:
-    if (redirect := require_page_auth(request)) is not None:
-        return redirect
-    return render(request, "reader.html", token=_web_reader_token(), article_id=article_id,
-                  progress_seconds=int(runtime_config.get("progress_report_seconds")))

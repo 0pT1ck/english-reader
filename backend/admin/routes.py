@@ -91,7 +91,7 @@ async def status() -> dict[str, Any]:
         pass
 
     try:
-        decisions_total = get_connection("learning").execute(
+        decisions_total = get_connection("events").execute(
             "SELECT COUNT(*) AS n FROM decisions"
         ).fetchone()["n"]
     except sqlite3.Error:
@@ -110,7 +110,8 @@ async def status() -> dict[str, Any]:
             for name, path in (
                 ("dictionary", settings.dictionary_db),
                 ("content", settings.content_db),
-                ("learning", settings.learning_db),
+                ("events", settings.events_db),
+                ("ops", settings.ops_db),
                 ("logs", settings.logs_db),
             )
         },
@@ -188,7 +189,7 @@ async def query_decisions(
     """Why the system did what it did. Never pruned — see core.logging."""
     clause = "WHERE kind = ?" if kind else ""
     params: tuple[Any, ...] = (kind, limit) if kind else (limit,)
-    rows = get_connection("learning").execute(
+    rows = get_connection("events").execute(
         f"SELECT * FROM decisions {clause} ORDER BY id DESC LIMIT ?", params
     ).fetchall()
     return {"count": len(rows), "records": [dict(row) for row in rows]}
@@ -209,7 +210,7 @@ async def diagnostic_bundle(
         "SELECT * FROM logs WHERE ts > datetime('now', ?) ORDER BY id DESC LIMIT 5000",
         (since,),
     ).fetchall()
-    decisions = get_connection("learning").execute(
+    decisions = get_connection("events").execute(
         "SELECT * FROM decisions WHERE ts > datetime('now', ?) ORDER BY id DESC LIMIT 1000",
         (since,),
     ).fetchall()
@@ -446,8 +447,14 @@ def _identify(payload: bytes) -> DatabaseName:
     """Work out which database a bare uploaded file is, by its tables.
 
     Filenames are unreliable — browsers append "(1)" and users rename things —
-    so the content decides. ``content.db`` is recognised by a table only it has;
-    anything else that is one of ours is treated as learning data.
+    so the content decides: each file is recognised by a table only it has.
+
+    **2026-09-18 (P9 §10): it has to be recognised, not assumed.** Before the
+    split there were two restorable files and "not content.db" was a safe
+    default. Now a wrong guess writes one file's tables over another's, so an
+    unrecognised upload is refused instead — and a ``learning.db`` from before
+    the split is refused by name, because restoring it would silently reinstate
+    the very layout this phase took apart.
     """
     if not payload.startswith(SQLITE_MAGIC):
         raise InvalidRequest("上传的文件既不是压缩包也不是 SQLite 数据库")
@@ -471,7 +478,16 @@ def _identify(payload: bytes) -> DatabaseName:
 
     if "senses" in names or "word_families" in names:
         return "content"
-    return "learning"
+    if "client_events" in names or "study_marks" in names:
+        return "events"
+    if {"reading_articles", "devices", "settings"} <= names:
+        raise InvalidRequest(
+            "这是拆库之前的 learning.db。它里面混着内容、学习记录和本机配置，"
+            "恢复它会把现在这三个库覆盖成旧的那一份——"
+            "要用它请先在一个副本上跑一次重切（P9 §10）")
+    raise InvalidRequest(
+        "认不出这是哪个库。可恢复的只有 content.db 与 events.db，"
+        "而认错了会把一个库的表写到另一个库上——那种错是静默的")
 
 
 @admin_api.post("/backup/snapshot", summary="立即生成一次本地备份")

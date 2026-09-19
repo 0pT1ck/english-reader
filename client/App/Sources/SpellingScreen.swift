@@ -35,6 +35,7 @@ struct SpellingScreen: View {
                 question(words[index])
             }
         }
+        .reviewBackground()
         .navigationTitle("拼写强化")
         .navigationBarTitleDisplayMode(.inline)
     }

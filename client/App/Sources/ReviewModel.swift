@@ -29,7 +29,10 @@ final class ReviewModel {
     }
 
     private(set) var phase: Phase = .loading
-    private(set) var days: [Components.Schemas.CalendarDay] = []
+    /// 七天打卡条。**类型是 Core 的，不是契约的**（P9 §11）:
+    /// 日历现在由重放算出来，服务端那个端点和它的契约类型一起删了，
+    /// 再往一个不存在的形状里搬一次只是多一层翻译。
+    private(set) var days: [ReviewCalendar.Day] = []
     private(set) var streak: Int = 0
 
     /// 两张卡片的数字。
@@ -38,11 +41,23 @@ final class ReviewModel {
     private(set) var dueTotal = 0
     private(set) var dueDone = 0
 
-    private(set) var weightDecay: Double = 0.5
 
-    /// 本地这一份状态机。服务端那份是权威，但离线时要照样走得下去。
-    private var states: [Int: ReviewItemState] = [:]
-    private var cards: [Int: Components.Schemas.ReviewItem] = [:]
+    /// 今天这一份复习，**由 Core 拼出来**（`ReviewDay.assemble`）。
+    ///
+    /// **在这之前这几个数来自服务端快照里的 `progress.buckets_done`**，而那是
+    /// 它上次收到上报时的样子——于是复习完一池子、回主界面一刷新就变回 0/13，
+    /// 刷几次才回来。病根不是哪一行写错了，是「我做了多少」有两个来源而旧的那个赢
+    /// （`phase-9.html` §1）。现在只有一个来源。
+    ///
+    /// **拼装在 Core 而不在这里**:命令行客户端也要同一份，
+    /// 而同一条规则写两遍就会漂、漂了不报错（P5 那条纪律）。
+    private(set) var today = ReviewDay()
+
+    /// 服务端手上那份词池快照是什么时候的。nil ＝ 它还没收到过。
+    var poolReportedAt: String? { today.poolReportedAt }
+
+    /// 投影说该问、而句子池里还没有它，有几个。**平时是 0。**
+    var awaitingContent: Int { today.awaitingContent }
 
     /// 拼写这一轮开没开（P3 决定 13）。两个标志位是两件事：
     /// `spellingEnabled` 是「这个功能开着」，`spellingAvailable` 是
@@ -51,36 +66,28 @@ final class ReviewModel {
     private(set) var spellingEnabled = false
     private(set) var spellingAvailable = false
 
-    /// 今天要拼的词。**一个词多个义项只拼一次**——照命令行客户端那套，
-    /// 拼的是词形，跟义项无关。
-    var spellingWords: [SpellingWord] {
-        var seen = Set<String>()
-        return cards.values
-            .sorted { $0.queue_id < $1.queue_id }
-            .filter { seen.insert($0.item_key).inserted }
-            .map { SpellingWord(key: $0.item_key,
-                                phonetic: $0.word?.phonetic,
-                                gloss: Self.gloss(of: $0)) }
-    }
-
-    /// 提示给中文，不给英文概念——**拼写考的是「听到／想到这个意思，写得出这个词」**，
-    /// 而英文概念里常常就含着这个词的同根词。
-    private static func gloss(of item: Components.Schemas.ReviewItem) -> String {
-        if let list = item.sense?.gloss_zh?.value1, !list.isEmpty {
-            return list.joined(separator: "，")
-        }
-        if let single = item.sense?.gloss_zh?.value2 { return single }
-        return item.word?.translation ?? ""
-    }
+    /// 今天要拼的词。算在 Core 里（`ReviewDay.spellingWords()`）。
+    var spellingWords: [SpellingWord] { today.spellingWords() }
 
     /// 正在做哪一个池子。nil＝在主界面。
-    private(set) var bucket: String?
-    private(set) var current: Int?
+    private(set) var bucket: Projection.Bucket?
+    private(set) var current: Projection.Key?
     private(set) var step: Step = .asking
     private(set) var asked: Components.Schemas.SentenceCard?
     private(set) var hint: Hint?
-    /// 这道题开过提示没有。**开了就是成绩**——服务端据此把评级封顶到 Hard。
+    /// 这道题开过提示没有。**开了就是成绩**——服务端据此把评级降一档。
     private(set) var revealed = 0
+
+    /// 这一轮你说过「太简单了」没有。
+    ///
+    /// **它是学习者的判断，系统从不推断。** FSRS 把「我会了」和「这太简单」分开，
+    /// 而分开它们要的是「多快、多确定」这类度量，这个项目不收集；把每次干净通过都
+    /// 判成简单，正是当年间隔跑成 8→66→180 的原因。
+    ///
+    /// **放在 `···` 菜单里，不放在作答那一排按钮里**（2026-09-17 用户定）：
+    /// 它要的是「我确实是特意点它的」，而三个并排的按钮做不到这一点。
+    /// P7 决定 22 留了那个菜单、P8 填了一项，这是第二项。
+    private(set) var claimedEasy = false
 
     private let draw = ReviewDraw()
 
@@ -88,31 +95,74 @@ final class ReviewModel {
 
     // MARK: 载入
 
+    /// 正在载入。**`needsLoad` 靠不住，所以另立一个**（2026-09-19）。
+    ///
+    /// `needsLoad` 读的是 `phase == .loading`，而 `phase` 要到第一个 `await`
+    /// 之后才变——于是 `.task` 和 `.onAppear` 两个入口的检查**都会通过**，
+    /// 两趟 `load()` 并发跑起来:两次 `fetchDay()`、两次句子池。
+    /// 09-17 的日志里那些成对的 `/v1/client/today` 超时就是它。
+    ///
+    /// 两个入口都留着（那是 P7 真机上逼出来的:`.task` 会在切走时被取消，
+    /// 而取消之后没有东西再叫它）。**要护的是「同时只跑一趟」，不是「只有一个入口」。**
+    private var loading = false
+
     func load(_ app: AppModel) async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+
         guard let engine = app.engine else {
             phase = .failed("连接还没建好，先到设置里填地址和令牌")
             return
         }
 
-        // **先用本地那一份把屏幕点亮**（2026-09-15 真机之后加）。
-        // 今日包就在盘上，而原先每次进这一格都要等它重新下来——1 MB 过隧道
-        // 0.85–1.4 秒，这一秒里屏幕上什么都没有，而答案其实一直在本地。
+        // **先用本地那两份把屏幕点亮**（2026-09-15 真机之后加）。
+        // 内容就在盘上，而原先每次进这一格都要等它重新下来——过隧道 0.85–1.4 秒，
+        // 这一秒里屏幕上什么都没有，而答案其实一直在本地。
         //
-        // **只认今天的**：昨天的包不是「旧一点」，是错的。日期对不上就老实等。
+        // **今日包只为那几个服务端参数**（排期参数、权重衰减），
+        // 而题目的内容来自句子池那一份。**只认今天的今日包**：
+        // 昨天的包不是「旧一点」，是错的——而句子池没有这个问题:
+        // 它是「你在学哪些词」的函数，不是「今天是哪天」的函数。
         if let cached = await engine.cachedDay(), cached.day == Self.localToday {
-            apply(cached.reviews)
+            app.adopt(cached)
+            spellingEnabled = cached.settings.spelling_enabled
+        }
+        if let cachedPool = await engine.cachedSentences() {
+            pool = cachedPool
+            sync(app)
             phase = .ready
         }
 
         do {
             let package = try await engine.fetchDay()
-            apply(package.reviews)
-            phase = .ready
-            // 日历单独一条请求，拿不到不影响复习本身。
-            if let calendar = try? await engine.calendar(days: 7) {
-                days = calendar.days
-                streak = calendar.streak
+            app.adopt(package)
+            // 拼写这个功能开没开是服务端的配置，随今日包下发（P8 §7）。
+            spellingEnabled = package.settings.spelling_enabled
+
+            // **顺序仍然有意义，但屏幕不再等它**（2026-09-19 真机之后改）。
+            //
+            // 原文是「先把事件推上去、把词池快照报上去，句子池才是对的那一批」——
+            // 那个理由今天照样成立。**错的是让屏幕等在上面**:
+            // `drain()` 要走网络，而它失败的时候要走好几秒，
+            // 于是「切一下选项卡」变成「等一趟正在失败的同步」，屏幕上一直转圈。
+            //
+            // 所以:有待发才等（那时句子池确实可能不对），没有就直接取。
+            // **常态是 0 条**，也就是常态下这一格立刻就亮。
+            if app.pendingEvents > 0 {
+                await app.drain()
+            } else {
+                // 没有待发也还是要报一次快照／拉一次别处做的事，
+                // 只是不占着屏幕——它回来之后 `sync` 会再刷一遍数。
+                Task { [weak app] in
+                    guard let app else { return }
+                    await app.drain()
+                    sync(app)
+                }
             }
+            pool = try await engine.fetchSentences()
+            sync(app)
+            phase = .ready
         } catch is CancellationError {
             // **取消不是故障。**`IOSTransport` 早就把它和「离线」分开了，
             // 注释写的是「用户划走了一屏就取消一次请求」——而这里原本把它
@@ -121,8 +171,16 @@ final class ReviewModel {
             //
             // 真机上一进复习就撞到了：`fetchDay` 要拉 1 MB 的今日包，
             // 经隧道约一秒，而这一秒里视图重算一次，task 就被取消。
-            // 回到 loading 由 `.onAppear` 再试一次（见 `ReviewScreen`）。
-            phase = .loading
+            // 那时 `phase` 还是 `.loading`（缓存优先那条路还没加），
+            // 退回 `.loading` 无伤大雅，`.onAppear` 会再试一次。
+            //
+            // **不要把已经点亮的屏幕拉回转圈**（2026-09-19，用户实测揪出来的:
+            // 「立马切走再切回」比「放一会儿再切」更容易闪）。缓存优先加了之后，
+            // 被取消时 `phase` 通常已经是 `.ready`——缓存已经把内容点亮，
+            // 被取消的只是后台那次刷新。这时候退回 `.loading` 是在把一个
+            // 好端端的画面往回撤，下次进来又要重新走一遍这整条路径、
+            // 再闪一次。**只在还没显示过任何内容时才退**。
+            if phase != .ready { phase = .loading }
         } catch let error as TransportError {
             if case .offline = error {
                 phase = .offline("离线，连不上服务器")
@@ -147,27 +205,27 @@ final class ReviewModel {
         return formatter.string(from: Date())
     }
 
-    private func apply(_ day: Components.Schemas.ReviewDayResponse) {
-        weightDecay = day.weight_decay
-        states.removeAll()
-        cards.removeAll()
-        for item in day.items {
-            cards[item.queue_id] = item
-            states[item.queue_id] = ReviewItemState(
-                direction: ReviewDirection(rawValue: item.direction) ?? .wordToSense,
-                asks: item.asks, misses: item.misses,
-                weight: item.weight, done: item.done)
+    /// 句子池那一份，原样存着。**内容归服务端，状态归重放**——
+    /// 对到一起的活在 Core 的 `ReviewDay` 里。
+    private var pool: Components.Schemas.SentencePoolResponse?
+
+    /// 把内容与投影对到一起。**记完一条事件就调它。**
+    private func sync(_ app: AppModel) {
+        today = ReviewDay.assemble(pool: pool, projection: app.projection,
+                                   day: Self.localToday, now: Date())
+        // **日历也由重放算出来**（P9 §11）。在这之前它是单独一条请求
+        // （`/reviews/calendar`），而那条路读的是服务端的会话与队列——
+        // 也就是学习记录。现在它和那两个数同源，所以**答完一题当场变色**，
+        // 而不是等下一次联网。
+        if let calendar = app.calendar(days: 7) {
+            days = calendar.days
+            streak = calendar.streak
         }
-        spellingEnabled = day.spelling_enabled
-        spellingAvailable = day.progress.spelling_available
-        let total = day.progress.buckets.additionalProperties
-        // `buckets_done` has a default on the server, so it is optional on the
-        // wire — a client built before it existed has to keep decoding (铁律 5).
-        let done = day.progress.buckets_done?.additionalProperties ?? [:]
-        todayTotal = total["today"] ?? 0
-        todayDone = done["today"] ?? 0
-        dueTotal = total["due"] ?? 0
-        dueDone = done["due"] ?? 0
+        todayTotal = today.total(.today)
+        todayDone = today.done(.today)
+        dueTotal = today.total(.due)
+        dueDone = today.done(.due)
+        spellingAvailable = today.spellingAvailable
     }
 
     private func describe(_ error: TransportError) -> String {
@@ -182,7 +240,7 @@ final class ReviewModel {
     // MARK: 一道题
 
     /// 进某个池子，抽第一题。
-    func begin(bucket name: String) {
+    func begin(bucket name: Projection.Bucket) {
         bucket = name
         next()
     }
@@ -195,32 +253,37 @@ final class ReviewModel {
     /// 抽下一题。**只从这个池子里抽**，权重和衰减率都来自服务端。
     private func next() {
         guard let name = bucket else { return }
-        let pool = states.keys.filter { cards[$0]?.bucket == name }.sorted()
+        let open = today.entries.filter { $0.bucket == name }
         current = draw.pick(
-            from: pool,
-            weight: { self.states[$0]?.weight ?? 1 },
-            isOpen: { !(self.states[$0]?.done ?? true) },
+            from: open,
+            weight: { $0.state.weight },
+            isOpen: { !$0.state.done },
             random: Double.random(in: 0..<1)
-        )
+        )?.key
         step = .asking
         revealed = 0
+        claimedEasy = false
         hint = nil
         asked = nil
-        if let id = current, let card = cards[id], let state = states[id] {
-            asked = HintLadder.askedSentence(for: card, direction: state.direction)
+        if let card, let entry = entry(of: current) {
+            asked = HintLadder.askedSentence(for: card, direction: entry.state.direction)
         }
     }
 
-    var card: Components.Schemas.ReviewItem? { current.flatMap { cards[$0] } }
+    /// 队列里那一条。
+    private func entry(of key: Projection.Key?) -> ReviewDay.Entry? {
+        guard let key else { return nil }
+        return today.entries.first { $0.key == key }
+    }
+
+    var card: Components.Schemas.ReviewItem? { entry(of: current)?.item }
     /// 这道题用的那一句，揭晓时还要拿它补另一面。
     var askedCard: Components.Schemas.SentenceCard? { asked }
 
     /// **两个池子都做完了。**决定 20 只在这时候才显示「今天的所有复习」那一屏——
     /// 只做完一张卡就这么说是句假话，那时直接回主界面，反馈是那张卡变绿。
-    var allDone: Bool {
-        states.values.allSatisfy { $0.done }
-    }
-    var direction: ReviewDirection { current.flatMap { states[$0]?.direction } ?? .wordToSense }
+    var allDone: Bool { today.allDone }
+    var direction: ReviewDirection { entry(of: current)?.state.direction ?? .wordToSense }
 
     /// 题面那一句（方向 2 是整句中文）。
     var prompt: String {
@@ -272,6 +335,29 @@ final class ReviewModel {
         return false
     }
 
+    /// 点「太简单了」。
+    ///
+    /// **只在这一轮一次没错时才给点**：在磕过之后说「太简单」不是关于任何事情的
+    /// 断言，而 Core 与服务端都会当场把这个声明撤回（`ReviewItemState.applying`
+    /// 里那句 `&& next.misses == 0`）。一个点了会被静默撤回的菜单项，
+    /// 比一个点不动的菜单项难查得多——所以这里由 `canClaimEasy` 把它关掉。
+    func claimEasy() {
+        guard canClaimEasy else { return }
+        claimedEasy = true
+    }
+
+    /// 现在能不能说「太简单了」。
+    var canClaimEasy: Bool {
+        guard let entry = entry(of: current) else { return false }
+        return entry.state.misses == 0 && !claimedEasy
+    }
+
+    /// 这一轮已经磕过了，所以那一项是灰的——菜单上要说得出为什么。
+    var easyWithdrawn: Bool {
+        guard let entry = entry(of: current) else { return false }
+        return entry.state.misses > 0
+    }
+
     /// 「这个词我已经会了，别再考」（P8 §10 第 2 条）。
     ///
     /// P7 决定 22 把 `···` 菜单留成了空壳，代价写得很清楚：**词一旦标了，
@@ -282,41 +368,43 @@ final class ReviewModel {
     /// **当场从今天的池子里拿掉，不等服务端回话**：离线也要对，而这条事件
     /// 带着幂等键，重复上报算正常。
     func dismissCurrent(_ app: AppModel) {
-        guard let id = current, let card = cards[id] else { return }
+        guard let card else { return }
         app.record(.unmarked(card.item_key, senseId: card.sense_id,
                              itemType: card.item_type))
         app.log?.write(.info, "review.dismissed", "把一个词移出了复习",
                        fields: ["item": card.item_key])
-        // 不计进「已复习」那个数：它没被复习，是被拿走了。
-        states[id]?.done = true
-        cards.removeValue(forKey: id)
+        // **不用手动把它从名单上拿掉。** 撤销标记让它退回 `new`，
+        // 而投影只收 `reviewing` 那一档——重放一次它自己就不在了。
+        // 「不计进已复习」也因此自动成立:它没被复习，是被拿走了。
+        sync(app)
         next()
     }
 
     /// 「下一个」。**作答在这一刻才落盘**——揭晓屏能改主意，点按钮那一下就发的话
     /// 改回来也追不回已经发出去的事。
+    /// 「下一个」。**作答在这一刻才落盘**——揭晓屏能改主意，点按钮那一下就发的话
+    /// 改回来也追不回已经发出去的事。
+    ///
+    /// **落盘之后重放，不自己改数。** 上一版在这里手动 `todayDone += 1`，
+    /// 那是「同一个数有两处在写」——而这个 Phase 的全部内容就是把那种情况消掉。
+    /// 现在写完日志重放一次，数字是算出来的。
     func advance(_ app: AppModel) {
-        guard let id = current, let state = states[id], case .revealed(let passed) = step
+        guard let key = current, let card, case .revealed(let passed) = step
         else { return }
 
-        let answer = ReviewAnswer(passed: passed, revealed: revealed)
-        states[id] = state.applying(answer, weightDecay: weightDecay)
-
-        app.record(.answered(queueId: id, passed: passed, revealed: revealed,
-                             sentenceId: asked?.id))
-
-        // 两张卡的数字跟着本地状态走，不等服务端回话——离线也要对。
-        if states[id]?.done == true, let name = cards[id]?.bucket {
-            if name == "today" { todayDone += 1 } else { dueDone += 1 }
-        }
+        // **事件自带条目身份，不只带 `queue_id`**（P9，phase-9.html §16）。
+        // 那个号是服务端队列表的行号，而那张表每天重建、编号天天不一样——
+        // 日志里引一个只有别处才解释得了的标识符，就不是可重放的日志：
+        // 换台设备重放它，这条作答指不到任何词。`queue_id` 照旧带着（铁律 5，
+        // 只增不减），身份是新加的那几个字段。
+        // `card.queue_id` 现在恒为 0（题目是现拼的，见 `sync`）。
+        // 服务端认得「0 ＋ 身份」那一支:它只把事件记下来，不再算一遍（§11）。
+        app.record(.answered(queueId: card.queue_id, passed: passed,
+                             revealed: revealed, sentenceId: asked?.id,
+                             easy: claimedEasy,
+                             itemType: key.itemType, itemKey: key.key,
+                             senseId: key.senseId))
+        sync(app)
         next()
     }
-}
-
-/// 拼写那一轮要的三样：词、音标、中文。
-struct SpellingWord: Identifiable, Equatable {
-    let key: String
-    let phonetic: String?
-    let gloss: String
-    var id: String { key }
 }

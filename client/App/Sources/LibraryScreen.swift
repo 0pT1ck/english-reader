@@ -13,6 +13,7 @@ struct LibraryScreen: View {
     var body: some View {
         NavigationStack {
             content
+                .libraryBackground()
                 .navigationTitle("阅读")
                 .navigationDestination(for: ArticleCard.self) { card in
                     ReaderScreen(card: card)
@@ -52,6 +53,7 @@ struct LibraryScreen: View {
                 if let notice = model.notice {
                     Section { OfflineRow(text: notice) }
                         .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
 
                 // 第一次进这个书架、盘上什么都没有时才转圈。
@@ -61,6 +63,7 @@ struct LibraryScreen: View {
                             .padding(.vertical, 24)
                     }
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
 
                 ForEach(model.cards) { card in
@@ -69,9 +72,11 @@ struct LibraryScreen: View {
                     }
                     .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .refreshable { await model.load(app, force: true) }
         }
     }
@@ -86,10 +91,14 @@ private struct ArticleCardRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(card.topline)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text(card.topline)
+                Spacer()
+                Text(card.preparedLine)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity)
 
             Text(card.title)
                 .font(.headline)
@@ -176,7 +185,20 @@ final class LibraryModel {
     /// 是白送的，客户端一行过滤都不用写。
     ///
     /// shelf 传 `all`：决定 6 说暂不分「今天 / 往期」，一个列表按序号排。
+    ///
+    /// **单飞:同一时刻只有一趟**（2026-09-19，Mac 上复现）。`.task` 在切走
+    /// 这一格时被取消、切回来时重新跑——和 `ReviewModel.load()`、
+    /// `AppModel.drain()` 是同一个形状（那两处的注释已经写过这个坑），
+    /// 而这里当时漏了同一处守卫。直接在这个 App 进程里对同一个 `LibraryModel`
+    /// 触发两次并发 `load()` 实测：两次都各自打了一次 `/v1/client/library`，
+    /// 没有任何东西挡它们。快速切换标签页时这会在阅读这一格上反复发生，
+    /// 而它和复习那几个请求走的是同一个 `SyncEngine` actor、同一条隧道。
+    private var isLoading = false
+
     func load(_ app: AppModel, force: Bool = false) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
         guard let engine = app.engine else {
             notice = app.connection.isConfigured ? "连接还没建好" : nil
             return

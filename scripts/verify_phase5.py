@@ -179,7 +179,7 @@ def section_c() -> None:
 
     app = create_app()
     client = TestClient(app)
-    conn = get_connection("learning")
+    conn = get_connection("events")
 
     def clean() -> None:
         conn.execute("DELETE FROM client_events WHERE idem_key LIKE 'p5probe-%'")

@@ -144,7 +144,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="articles, sentences, tokens",
-        database="learning",
+        database="content",
         apply="""
         CREATE TABLE IF NOT EXISTS reading_articles (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -251,7 +251,7 @@ MIGRATIONS = [
     Migration(
         version=2,
         name="marks, sense states, progress, client events",
-        database="learning",
+        database="events",
         apply="""
         -- What the learner said about a word. Three levels, counting the
         -- absence of a mark: unknown (into the review queue), fuzzy (understood
@@ -341,13 +341,13 @@ MIGRATIONS = [
     Migration(
         version=3,
         name="one study record for words and phrases",
-        database="learning",
+        database="events",
         apply=_merge_study_tables,
     ),
     Migration(
         version=4,
         name="phrase occurrences",
-        database="learning",
+        database="content",
         # Where a run of tokens is a phrase rather than words that merely stand
         # next to each other. Two stages produce a row here: a structural filter
         # (a verb followed by a particle, the pair having a dictionary entry)
@@ -404,7 +404,7 @@ MIGRATIONS = [
     Migration(
         version=5,
         name="memory state on study_states, for P3 review",
-        database="learning",
+        database="events",
         apply="""
         -- P3 needs somewhere to keep each item's memory state, and this is the
         -- table that already answers "where does this sense stand now".
@@ -438,7 +438,7 @@ MIGRATIONS = [
     Migration(
         version=6,
         name="topic and one-line summary on articles, for the phone's list",
-        database="learning",
+        database="content",
         apply="""
         -- 手机端的列表卡片上，标题上面一行是话题、下面一行是一句中文概括。
         -- 两样以前都没有：话题只在生成时算过一次，连一列自己的地方都没有

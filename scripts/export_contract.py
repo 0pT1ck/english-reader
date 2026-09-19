@@ -132,7 +132,7 @@ def main(argv: list[str]) -> int:
 
     app = create_app()
     client = TestClient(app)
-    conn = get_connection("learning")
+    conn = get_connection("ops")
 
     SPEC_OUT.parent.mkdir(parents=True, exist_ok=True)
     FIXTURE_DIR.mkdir(parents=True, exist_ok=True)

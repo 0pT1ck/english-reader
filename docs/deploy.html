@@ -485,6 +485,38 @@
       别当成学习记录，别拷回来。这样「任何时候只有一份在被写」仍然成立。
       <b>正式迁移的那一刻方向会反过来</b>，那是一次性的整体搬迁，不是同步。
     </div>
+
+    <h3 style="margin-top:1.8rem">2026-09-16：出稿的那台反过来了</h3>
+    <p>上面「副本上改了三处」的第一条<b>当天就被推翻了</b>，原因不在部署，在模型：
+    09-15 中转站与 ShuaiAPI 双双断供，用户另配了一条免费的路（<code>gemini-3.8-flash-high</code>，
+    自建网关），<b>而那把 key 是在阿里云的管理台上填的</b>。于是能出稿的机器只剩阿里云一台。</p>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>夜间备稿开在阿里云</b>
+      <span><code>task_generation_daily_enabled=true</code>，<code>gen_provider</code> 与
+      <code>llm_provider_generate_article</code> 都指向 <code>gemini</code>。
+      其余九个 worker 没有单独设置，走「默认提供商」——那台唯一有 key 的就是它，所以标注、判词组自动跟着走。</span></span></div>
+      <div class="not"><i>2</i><span><b>r5s 那边仍然关着，而且根本没跑服务</b>
+      <span>所以「两台各自 04:00 生成、<code>content.db</code> 分叉」这个风险没有发生。
+      <b>要在 r5s 上也出稿的话，那台得单独配一次 key</b>（它连那个网关是通的，试过，401 就差 key）。</span></span></div>
+      <div class="not"><i>3</i><span><b>镜像必须重建，改服务端代码不算数</b>
+      <span>当天改了写文章的提示词（见 <code>phase-4.html</code> §4 末节），而阿里云跑的是镜像里的代码。
+      不重建的话那一轮会按旧提示词写，12 次尝试全被合格线拦下、出 0 篇。
+      <b>判断标准别靠记忆</b>：<code>docker exec english-reader grep -c &lt;新函数名&gt; /app/backend/...</code>，
+      答案是 0 就是没上去。代码层在 Dockerfile 最后，依赖层命中缓存，重建只花几十秒。</span></span></div>
+      <div class="not"><i>4</i><span><b>那台拉 GitHub 要挂代理</b>
+      <span>直连报 <code>GnuTLS recv error (-110)</code>，TLS 被中途掐断。
+      <code>https_proxy=http://127.0.0.1:7890 git pull</code> 就过（mihomo 的口）。
+      <b>这跟「别给 Docker 守护进程配代理」不冲突</b>——那条说的是构建时拉包，这里只是 git 拉两个提交。</span></span></div>
+    </div>
+
+    <div class="callout" style="margin-top:1.2rem">
+      <b>一个口径因此变了，记在这里免得下次撞上：新文章现在只在阿里云产生。</b>
+      §8 那条「数据只许单向流动 r5s → 阿里云」说的是<b>搬运方向</b>，而<b>生产方向反了</b>——
+      每天 04:00 新出的三篇文章连同它们的标注，只存在于阿里云那份 <code>content.db</code> 里，
+      而 <code>content.db</code> 属于「丢了会心疼」的那一类（花钱生成的义项集、例句、词族都在里面）。
+      开发实例上的<b>学习记录</b>照旧作废，这条没变；变的是<b>内容</b>不再只在 r5s 有。
+      正式迁移那次整体搬迁会把它一并带走，所以不是漏洞；<b>但在那之前，阿里云那台是有东西可丢的</b>。
+    </div>
   </section>
 
   <section>
@@ -546,6 +578,11 @@
       <code>/etc/docker/daemon.json.bak-2026-09-14</code>。</span></span></div>
       <div class="not"><i>·</i><span><b>加了 DNS A 记录</b>
       <span><code>reader.cntick.top</code> → <code>47.116.104.62</code>，用 RAM 子账号经 API 加的。</span></span></div>
+      <div class="not"><i>·</i><span><b>2026-09-16 重建过一次镜像并重启</b>
+      <span>为的是让新提示词上去。<code>git pull</code>（挂 7890）+ <code>/root/build-er.sh</code> +
+      <code>docker compose up -d</code>，容器 Recreated 后 healthy。
+      <b>重启顺带补跑了一轮过期的夜间备稿</b>——<code>next_due_at</code> 停在 09-15 04:00，
+      服务一起来调度循环就发现它到期了。三篇一次过（超纲 0.00 / 0.00 / 0.36%），全部 <code>ready</code>。</span></span></div>
       <div class="not"><i>·</i><span><b>中途把 Docker 弄挂过一次</b>
       <span>往 <code>daemon.json</code> 加了个 <code>_comment</code> 键，而它不接受未知键，
       守护进程起不来。已修复。<b>那个文件不能写注释。</b></span></span></div>
@@ -554,7 +591,7 @@
 
   <footer>
     <span>English Reader · 部署</span>
-    <span>2026-09-14 / 09-15</span>
+    <span>2026-09-14 / 09-15 / 09-16</span>
     <span>阿里云 47.116.104.62 · x86_64 · Ubuntu 24.04</span>
   </footer>
 

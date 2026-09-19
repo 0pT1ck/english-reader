@@ -162,7 +162,7 @@ def start_for_many(article_ids: list[int], *, title: str | None = None,
 
 def _sentences_for(token_ids: list[int]) -> list[dict[str, Any]]:
     placeholders = ",".join("?" * len(token_ids))
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT DISTINCT s.id, s.seq, s.text FROM reading_sentences s"  # noqa: S608
         f" JOIN reading_tokens t ON t.sentence_id = s.id WHERE t.id IN ({placeholders})"
         " ORDER BY s.seq",
@@ -173,7 +173,7 @@ def _sentences_for(token_ids: list[int]) -> list[dict[str, Any]]:
 
 def _load_tokens(token_ids: list[int]) -> list[dict[str, Any]]:
     placeholders = ",".join("?" * len(token_ids))
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT t.*, s.seq AS sentence_seq FROM reading_tokens t"  # noqa: S608
         f" JOIN reading_sentences s ON s.id = t.sentence_id WHERE t.id IN ({placeholders})"
         " ORDER BY t.seq",

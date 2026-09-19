@@ -45,7 +45,7 @@ def note(number: str, title: str, detail: str) -> None:
 def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
     with trace():
         content = get_connection("content")
-        learning = get_connection("learning")
+        drafts = get_connection("content")
 
         # --- 1. 义项集补全 --------------------------------------------- #
         print("\n1. 义项集")
@@ -134,7 +134,7 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
               bool(str(runtime_config.get("gen_provider")).strip()),
               f"gen_provider = {runtime_config.get('gen_provider') or '（空，用默认）'}")
 
-        api_drafts = learning.execute(
+        api_drafts = drafts.execute(
             "SELECT COUNT(*) n FROM generation_drafts WHERE note = 'api'").fetchone()["n"]
         check("5.3", "已有通过 API 生成的文章", api_drafts > 0, f"{api_drafts} 篇")
 
@@ -162,15 +162,33 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
         # Only the model actually configured to write articles. Averaging across
         # models mixes a 3.64% out-of-syllabus rate with a 0.09% one and reports
         # something that describes neither.
-        writer = learning.execute(
-            "SELECT model FROM generation_drafts WHERE prompt_version = 'p1b-1'"
-            " ORDER BY id DESC LIMIT 1").fetchone()
-        rows = learning.execute(
+        #
+        # **版本号不许写死。** 原本这里查的是 ``prompt_version = 'p1b-1'``，而提示词
+        # 一改版（2026-09-16 改成 p1b-2）这个查询就永远只看得见旧草稿——断言照旧
+        # 通过，量的却是上一版提示词的成绩，而且不会有任何东西提醒你。
+        # 现在先问当前版本，当前版本还没有产出时回落到最近有数据的那一版，
+        # 并**把用的是哪一版印出来**：回落是合理的，隐瞒不是。
+        from backend.modules.generation import prompts
+
+        writer = drafts.execute(
+            "SELECT prompt_version, model FROM generation_drafts"
+            " WHERE prompt_version = ? ORDER BY id DESC LIMIT 1",
+            (prompts.PROMPT_VERSION,)).fetchone()
+        if writer is None:
+            writer = drafts.execute(
+                "SELECT prompt_version, model FROM generation_drafts"
+                " WHERE prompt_version IS NOT NULL AND prompt_version <> ''"
+                " ORDER BY id DESC LIMIT 1").fetchone()
+        rows = drafts.execute(
             "SELECT body, target_words FROM generation_drafts"
-            " WHERE prompt_version = 'p1b-1' AND model = ? ORDER BY id DESC LIMIT 8",
-            (writer["model"] if writer else "",)).fetchall()
+            " WHERE prompt_version = ? AND model = ? ORDER BY id DESC LIMIT 8",
+            (writer["prompt_version"] if writer else "",
+             writer["model"] if writer else "")).fetchall()
         if rows:
-            print(f"  （只统计 {writer['model']} 的 {len(rows)} 篇）")
+            stale = "" if writer["prompt_version"] == prompts.PROMPT_VERSION else \
+                f"，当前提示词 {prompts.PROMPT_VERSION} 本机还没有产出"
+            print(f"  （只统计 {writer['model']} 在 {writer['prompt_version']} 下的 "
+                  f"{len(rows)} 篇{stale}）")
             reports = [
                 checker.check(r["body"], target_words=json.loads(r["target_words"]),
                               allowed_tiers=["zk", "gk", "cet4"], exam="cet4").as_dict()

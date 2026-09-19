@@ -2,19 +2,24 @@
 
 双向 both directions / 提示分级 graded hints / 结算 settlement / 权重 weight
 
-**The offline shape is the whole point of `/reviews`.** Every card ships with
-its sentences and its hint already attached, so a client can work through the
-day without another request (架构前提 2). That is why these models are large:
-the size is the feature.
+**The offline shape is the whole point.** Every card ships with its sentences
+already attached, so a client can work through the day without another request
+(架构前提 2). That is why these models are large: the size is the feature.
 
-**What the client is allowed to compute.** 架构前提 1 says client-side business
-logic is forbidden, and the offline requirement makes one exception unavoidable
-— the draw and the state transitions have to exist on the device or the day
-cannot be finished without a network. The rule the client follows is: mirror
-the few transitions written into this contract, never invent one, and let the
-server overwrite the result when the answers are reported. `weight_decay` is in
-the payload for exactly this reason: the *rules* come from the server, and what
-the client does is pick from a bag.
+**2026-09-17 (P9): which of them are still served.** `SentencePoolResponse` is,
+and it carries content only. The `/reviews` family — `ReviewDayResponse`,
+`ReviewItem`, `ReviewProgress` — is **no longer returned by any live endpoint**:
+those models describe today's queue, and the queue is learning state, which now
+lives on the device (`phase-9.html` §11). They stay in the file because
+`ReviewDayResponse` is still the declared shape of `TodayResponse.reviews`, a
+field 铁律 5 keeps rather than deletes, and because the day the client sends
+back what it computed, these are the names it uses.
+
+**What the client computes.** 架构前提 1 said no business logic on the client;
+P9 redrew that line rather than bending it. The server generates and delivers,
+the device learns — so the draw, the transitions and the intervals are all the
+device's now, and this contract's job is to hand it content and the few tuning
+numbers (`weight_decay`, the `fsrs_*` settings in 今日包) it must not invent.
 
 Read the note at the top of `core/contract.py` before changing anything here.
 """
@@ -57,6 +62,14 @@ class SentenceCard(BaseModel):
         "而规则按架构前提 1 留在这边"
     )
     source: str | None = Field(default=None, description="generated 生成的 / corpus 语料里的")
+    sentence_id: int | None = Field(
+        default=None,
+        description="这一句在文章里的那个 id（`reading_sentences.id`）。"
+        "**P9 加的**:考句／提示的划分搬到客户端之后，客户端要判「这一句你见过吗」，"
+        "而它手上「见过」的那个集合是按这个 id 记的（标记事件带着它）。"
+        "**和上面那个 `id` 不是一回事**——那个是句子池自己的行号。"
+        "生成的句子没有它（它们不出自任何文章）",
+    )
     article_id: int | None = Field(
         default=None,
         description="提示可以说出处，也留着将来跳回原文。生成的句子没有——"
@@ -128,13 +141,48 @@ class ReviewItem(BaseModel):
         default=None,
         description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
     )
-    word: WordCard | None = Field(
-        default=None,
-        description="被考的这个词的全部资料（音标、全部义项、考频占比）。揭晓屏用",
-    )
     sense: SenseCard | None = None
     questions: list[SentenceCard] = Field(description="用来出题的句子，你没读到过的")
     hints: list[SentenceCard] = Field(description="提示用的句子，当初读到它的那一句")
+
+
+class StudyItemSentences(BaseModel):
+    '''一个在学的词，连它的句子——**不分池**。
+
+    **P9 §11。** 分池（哪句当考题、哪句当提示）依赖「你读完过哪些文章、
+    见过哪些句子」，那是学习记录；而造句子要钱、要模型，是内容生产。
+    那条线把两件事分开了，所以这里原样全给，由客户端分（`ERCore/SentencePool`）。
+
+    **和 `ReviewItem` 的差别正是那条线**：这里没有 `queue_id`、`bucket`、
+    `direction`、`asks`、`weight`、`done`——那些全是学习状态，现在由设备重放算出来。
+    '''
+
+    item_type: str
+    item_key: str
+    sense_id: int
+    word: WordCard | None = None
+    sense: SenseCard | None = None
+    sentences: list[SentenceCard] = Field(
+        description="这个词（这个义项）的全部句子，**没有分池**。"
+        "`source` 与 `sentence_id`／`article_id` 够客户端自己分"
+    )
+
+
+class SentencePoolResponse(BaseModel):
+    '''在学的那些词的句子。
+
+    **依据是你上报的词池快照**（§7），不是服务端自己推的——
+    服务端对学习记录只有两种关系:生文需要的那一小撮信号，和它不解释的存档。
+    这里用的是前者，而它连解释都不算:直接用。
+    '''
+
+    learner: Learner
+    reported_at: str | None = Field(
+        default=None,
+        description="那份快照是什么时候的。**为空表示这台设备还没报过**——"
+        "那时 `items` 也是空的，而那不是「你没在学任何词」，是「服务端还不知道」",
+    )
+    items: list[StudyItemSentences]
 
 
 class ReviewSession(BaseModel):
@@ -266,7 +314,12 @@ class AnswersResponse(BaseModel):
     duplicates: int
     failed: int
     results: list[AnswerResult]
-    progress: ReviewProgress
+    progress: ReviewProgress | None = Field(
+        default=None,
+        description="**P9 起恒为空。**进度是学习状态，设备重放自己的日志就知道，"
+        "而服务端为了回它就得再建一次会话、再算一遍队列——那正是那条线禁止的事。"
+        "字段留着不删（铁律 5），老客户端读到 null 当作「这次没带」",
+    )
 
 
 class SpellingResponse(BaseModel):

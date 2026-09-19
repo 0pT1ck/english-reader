@@ -1,4 +1,21 @@
-"""When does this item come back — the only place that decides it.
+"""FSRS 的参照实现——**只给导向量用，不在服务端跑**。
+
+**2026-09-18 从 `backend/modules/review/scheduler.py` 移到这里**（P9 §11）。
+排期搬到了客户端，所以服务端不再需要它；而**删掉它是另一回事，那件事不该做**：
+
+向量（`client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json`）的权威性
+**全部来自「它出自另一份独立实现」**。删掉这份实现，Swift 那边就成了自证的——
+而「两份都错得一样」正是这个项目一直担心的失败，P5 §17 专门写过它。
+所以它留着，但**移出运行的那棵树**：服务端（跑着的那个应用）没有学习逻辑，
+仓库里有一份参照实现，而它唯一的消费者是 `export_scheduler_vectors.py`。
+
+由此 `pyproject.toml` 里的 `fsrs` 依赖也留着。要守的那条断言因此不是
+「仓库不依赖 py-fsrs」，而是**「`backend/` 底下没有任何模块 import 它」**
+——那才是有意义的那一条（`verify_phase3` 1.10）。
+
+以下是原文，一字未改。
+
+When does this item come back — the only place that decides it.
 
 调度 scheduling / 记忆状态 memory state / 评分 grade
 
@@ -57,6 +74,19 @@ from backend.core import runtime_config
 #: stumble as Again, the worst there is, and made Easy unreachable.
 MISS_RATING = {0: Rating.Good, 1: Rating.Hard}
 WORST_RATING = Rating.Again
+
+#: Grades worst-first. The two ceilings below both move a rating along this
+#: list, but **they move it differently** — which is what a single shared
+#: condition hid until the vectors enumerated it (phase-9.html §16).
+GRADE_ORDER = (Rating.Again, Rating.Hard, Rating.Good, Rating.Easy)
+
+#: Taking a hint never drops the grade below this. ``Again`` says "you had
+#: forgotten it", which is a claim about recall — help taken is not forgetting.
+HINT_FLOOR = Rating.Hard
+
+#: The most a word marked today can score on that same day (P7 §3 的原话是
+#: 「封顶为 Hard」——**封顶**，不是降档)。
+CAPPED_CEILING = Rating.Hard
 
 #: Easy is **claimed by the learner, never inferred.** FSRS separates "I got it"
 #: (Good) from "that was trivial" (Easy), and telling them apart needs a measure
@@ -143,17 +173,50 @@ def rating_for(misses: int, *, easy: bool = False, revealed: int = 0,
     ``Good`` would inflate the first interval for **the most commonly used
     mark there is**. Capping keeps the review without believing it.
 
-    Both only ever lower the grade — neither can turn a miss into a pass.
+    **The two are not the same rule, and until 2026-09-17 the code treated them
+    as one.** Written into a single ``revealed > 0 or capped`` condition they
+    agree on ``Good`` — both land it on ``Hard`` — so the difference never
+    showed. On ``Easy`` they disagree:
+
+    * a hint **costs a grade** (P7 的原话: "taking a hint costs a grade"), so
+      ``Easy`` becomes ``Good``;
+    * today's mark **caps at Hard** (P7 §3 的原话: 「封顶为 Hard」), so ``Easy``
+      becomes ``Hard``.
+
+    And neither reached ``Easy`` at all: the ``easy`` branch returned before
+    them, which made the line that lowered ``Easy`` unreachable — its presence
+    being the evidence that it was meant to run. The grade enumeration exported
+    for Phase 9 is what surfaced it (phase-9.html §16).
+
+    **用户 2026-09-17 定的**: 「太简单了」是学习者的判断，提示不否决它——
+    它藏在右上角的二级菜单里，点它的人知道自己在干什么，不存在误触；
+    **但看了提示就降一档**。所以 ``Easy`` ＋ 提示 ＝ ``Good``，
+    不是 ``Hard``（降一档，不是降两档），也不是 ``Easy``（提示不白拿）。
+
+    Neither ceiling can turn a pass into a lapse: the hint stops at
+    :data:`HINT_FLOOR`, and a cap never raises a grade.
     """
     misses = max(0, int(misses))
-    if easy and misses == 0:
-        return EASY_RATING
-    rating = MISS_RATING.get(misses, WORST_RATING)
-    if (int(revealed) > 0 or capped) and rating is EASY_RATING:
-        rating = MISS_RATING[0]
-    if (int(revealed) > 0 or capped) and rating is MISS_RATING[0]:
-        rating = MISS_RATING[1]          # Good → Hard
+    rating = (EASY_RATING if easy and misses == 0
+              else MISS_RATING.get(misses, WORST_RATING))
+    if int(revealed) > 0:
+        rating = _one_grade_lower(rating)
+    if capped:
+        rating = _at_most(rating, CAPPED_CEILING)
     return rating
+
+
+def _one_grade_lower(rating: Rating) -> Rating:
+    """One grade down, never below :data:`HINT_FLOOR`."""
+    index = GRADE_ORDER.index(rating)
+    floor = GRADE_ORDER.index(HINT_FLOOR)
+    return rating if index <= floor else GRADE_ORDER[index - 1]
+
+
+def _at_most(rating: Rating, ceiling: Rating) -> Rating:
+    """The lower of the two — a cap never raises a grade."""
+    return (rating if GRADE_ORDER.index(rating) <= GRADE_ORDER.index(ceiling)
+            else ceiling)
 
 
 def _parse(value: Any) -> datetime | None:

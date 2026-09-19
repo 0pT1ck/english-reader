@@ -27,7 +27,7 @@ How to add a module — the shape to copy::
         name="example",
         title="示例",
         description="what this feature is for",
-        migrations=[Migration(version=1, name="...", database="learning", apply="...")],
+        migrations=[Migration(version=1, name="...", database="events", apply="...")],
         client_router=client_router,
         admin_router=admin_router,
         admin_pages=[AdminPage(title="示例", path="/admin/example", order=90)],

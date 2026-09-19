@@ -34,7 +34,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="runtime settings table",
-        database="learning",
+        database="ops",
         apply="""
         CREATE TABLE IF NOT EXISTS settings (
             key        TEXT PRIMARY KEY,
@@ -127,7 +127,7 @@ def get(key: str) -> Any:
 
     with _lock:
         try:
-            row = get_connection("learning").execute(
+            row = get_connection("ops").execute(
                 "SELECT value FROM settings WHERE key = ?", (key,)
             ).fetchone()
         except Exception:  # noqa: BLE001 - before migrations have run
@@ -162,7 +162,7 @@ def set(key: str, value: Any) -> None:  # noqa: A001 - reads naturally as config
     parsed = _coerce(encoded, spec.value_type)
 
     with _lock:
-        conn = get_connection("learning")
+        conn = get_connection("ops")
         conn.execute(
             "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))"
             " ON CONFLICT(key) DO UPDATE SET value = excluded.value,"

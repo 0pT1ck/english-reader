@@ -19,7 +19,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="generation drafts",
-        database="learning",
+        database="content",
         apply="""
         CREATE TABLE IF NOT EXISTS generation_drafts (
             id             INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +56,7 @@ MIGRATIONS = [
     Migration(
         version=4,
         name="topic and one-line summary on drafts, carried into the article",
-        database="learning",
+        database="content",
         apply="""
         -- 话题以前是写进 ``word_set`` 的——那一列说的是「A 组还是 B 组目标词」，
         -- 两件事共用一列，谁都说不清读出来的是哪一个。给它一列自己的地方。

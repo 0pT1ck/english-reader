@@ -1,0 +1,2149 @@
+<title>Phase 9 重构</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+  .wire { font-family:var(--f-mono); font-size:0.76rem; line-height:1.9; white-space:pre;
+         background:var(--surface); border:1px solid var(--rule); padding:1.1rem 1.2rem;
+         overflow-x:auto; color:var(--ink-mid); margin:0 0 1.6rem; }
+  .wire b { color:var(--ink); font-weight:500; }
+</style>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 9 · 方案讨论中 · 2026-09-17 开始 · 未定稿</div>
+    <h1>重构</h1>
+    <p class="standfirst">每个端只干它该干的事。服务端生文，客户端学习，
+    学完把进度报回去，服务端照着进度继续生文。</p>
+    <p class="thesis">这个 Phase 不加一个功能。它做的是<b>搬家</b>——
+    把本该在设备上的东西搬回设备，把服务端缩回它存在的那个理由。
+    <b>触发它的是一个很小的症状</b>：复习完一池子，回主界面刷新变成 0/13，
+    刷几次才回到 13/13，每次刷新还要转一秒多（§1）。
+    追下去发现病根不是哪一行代码写错了，而是<b>「我做了多少」这件事被交给了服务端回答</b>，
+    而改变它的事件正躺在手机上的队列里。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-8.html">Phase 8</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>这是讨论稿，不是定稿。</b>标「已定」的是用户 2026-09-17 当场拍板的，
+    标<b>「拟定」</b>的是我提的、等确认，标「不做」的是明确划出去的边界，
+    <b>§15 是动手前必须先验的未知数</b>——照 <a href="./phase-5.html">P5</a> §16 那次的规矩，先验再定案。
+    <br><br>
+    <b>用户已拍板的：</b>
+    <br>① <b>完全重构，包括改铁律</b>；不考虑改动大小，也不考虑是不是破坏性改动；
+    <br>② 那条线：<b>服务端该干的就是生文；客户端拿到生的文、学习、把进度汇报回去；
+    服务端根据进度继续生文</b>（§2）；
+    <br>③ <b>支持多台设备</b>（§6）；
+    <br>④ 进度指<b>学过的单词的进度</b>，服务端和客户端必须同步，
+    因为要保证每篇都有一定数量的生词（§7）；
+    <br>⑤ 学习的决策日志<b>当成一种事件上报，存在服务端</b>，服务端存着不解释（§5 第五种）；
+    <br>⑥ 内容同步<b>分三层</b>，「读完」事件自带词表（§9）；
+    <br>⑦ <b>Web 阅读页与 Web 复习页一并废弃</b>，`ercli` 是第二客户端（§11）；
+    <br>⑧ <b>长期不上线的账号</b>怎么办留给未来，记进主文档 §M——
+    「暂时只有我用，我可以确定我不会这样」。
+    <br><br>
+    <b>讨论期间不写任何实现代码</b>，包括脚手架和示例。本文档里出现的表名、
+    函数名、行号都是<b>现在已经存在的东西</b>。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>触发它的那个症状，和查出来的病根</h2>
+    </div>
+    <p class="lede">用户的原话：「为什么复习页经常要转圈圈？……我复习完了温故知新，
+    返回主界面后刷新，又成了 0/13，刷新几次后才能回到 13/13。」</p>
+
+    <h3>0/13 的完整链条</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>答 13 张，会话里数字是对的</b>
+        <span>每次 <code>advance()</code>（<code>ReviewModel.swift:298</code>）写一条事件进发件箱、
+        本地把 <code>done</code> 置上、<code>dueDone += 1</code>。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>下拉刷新 → 先读缓存包 → 当场变 0/13</b>
+        <span><code>apply()</code> 里 <code>states.removeAll()</code>（<code>:152</code>），
+        然后 <code>todayDone</code>／<code>dueDone</code> 从包里的
+        <code>progress.buckets_done</code> 重新读（<code>:168</code>）。
+        而那个包是上一次成功取包时存的盘，里面是 0。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>再取一次包 → 服务端回 304 → 还是 0/13</b>
+        <span>那 13 条答案还在手机上没发出去，所以服务端那份包一个字节没变。
+        ETag 算的是整包（<code>backend/modules/today/module.py:55</code>），进度当然也在里面——
+        进度没变，是因为事件没到。</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what">
+        <b>复习会话结束之后，没有任何东西去发发件箱</b>
+        <span><code>drain()</code> 的调用点只有五处：启动、回前台、读完一篇文章、
+        拼写做完、设置页。<b>产生事件最多的那一屏，恰恰没有。</b></span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what">
+        <b>所以「刷新几次」本身救不了</b>
+        <span>真正起作用的是这期间你碰巧把 App 切到后台再回来、或者去读了篇文章。
+        那一下发件箱空了，服务端 <code>done_at</code> 落了
+        （<code>backend/modules/review/session.py:293</code> 才数得到），
+        ETag 变了，下一次刷新才拿回新的包。</span></span></div>
+    </div>
+
+    <h3>转圈的四个来源</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>症状</th><th>原因</th></tr>
+      <tr><td>每次刷新都要等</td><td><code>load()</code> 串行两个请求：
+        <code>/today</code> 然后 <code>/reviews/calendar</code>。
+        <b>实测隧道往返 0.82–0.95 秒</b>（2026-09-17 三次，无认证请求），
+        所以一次刷新起步 1.8 秒</td></tr>
+      <tr><td>什么都没变也慢</td><td>304 只省流量不省时间：服务端照样把整包拼出来、
+        序列化、算 sha256 才知道没变，还顺手往 <code>decisions</code> 写一条</td></tr>
+      <tr><td>有时一直转不出来</td><td>请求被取消时 <code>phase = .loading</code>（<code>:125</code>），
+        而这个状态<b>没有重试</b>——<code>.offline</code> 有个 5 秒循环，它没有</td></tr>
+      <tr><td>日历经常空</td><td><code>calendar()</code> 故意没有离线退路</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>病根一句话</b>：屏幕上「我做了多少」这个数，和改变它的那些事件，
+      有<b>两个来源</b>——服务端的快照和本地的发件箱。而每次刷新，<b>旧的那个赢</b>。
+      <br><br>
+      这不是「过度依赖网络」，是<b>依赖错了地方</b>。内容依赖网络是对的（一天一次，有缓存有 304）；
+      「我刚才做完了」依赖网络是错的，而它恰好是每天要看几十次的那个数。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>那条线</h2>
+      <span class="sec-note">已定</span>
+    </div>
+    <p class="lede">用户的原话：「每个端都必须专干他该干的事。服务端该干的事就是生文，
+    客户端该干的事就是拿到生的文、学习、学习完把进度汇报给服务器，
+    服务器根据进度继续生文。」</p>
+
+    <div class="steps">
+      <div class="step"><span class="step-n">工厂</span><span class="step-what">
+        <b>服务端：生文、造例句、建义项集、标注、判词组、算难度</b>
+        <span>要钱、要 API key、要 24 小时醒着。<b>这是服务端存在的全部原因</b>——
+        手机不可能夜里 04:00 自己起来花钱写文章。</span></span></div>
+      <div class="step"><span class="step-n">邮局</span><span class="step-what">
+        <b>服务端：发内容（增量），收事件</b>
+        <span>而且<b>邮局自带存档</b>：多设备必须有一个会合点，所以事件日志本来就得存在它这儿。</span></span></div>
+      <div class="step"><span class="step-n">学习者</span><span class="step-what">
+        <b>客户端：拥有全部学习状态，屏幕上每个数都自己算</b>
+        <span>选文、抽题、排期、进度、日历、拼写，全在这儿。
+        上报事件 + 上报词池快照。</span></span></div>
+    </div>
+
+    <div class="callout">
+      <b>判断一件事该在哪，只问一句</b>：它是<b>供给</b>还是<b>记账</b>？
+      供给是异步的——夜里发生，不需要人在场。记账是<b>跟着拇指同步发生的</b>。
+      把记账放到 0.9 秒的隧道那一头，就是 §1 那个症状的来源。
+      <br><br>
+      <b>服务端对学习记录只有两种关系</b>：要么是生文需要的那一小撮信号（它解释，见 §7），
+      要么是它不解释的存档（§5）。<b>出现第三种关系，就是这条线破了。</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>证据：<code>learning.db</code> 这个名字在说谎</h2>
+    </div>
+    <p class="lede">这条线不是凭空画的。现在的数据库切法是按「模块长在哪」切的，
+    不是按「谁产出它」切的，而两者已经对不上了。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>类</th><th><code>learning.db</code> 里的表</th></tr>
+      <tr><td><b>内容</b>（花钱产出的）</td><td><code>reading_articles</code>
+        <code>reading_tokens</code> <code>reading_sentences</code> <code>reading_phrases</code>
+        <code>generation_drafts</code> <code>review_sentences</code>
+        <code>example_observations</code></td></tr>
+      <tr><td><b>学习记录</b>（设备产出的）</td><td><code>study_states</code>
+        <code>study_marks</code> <code>reading_progress</code> <code>review_queue</code>
+        <code>review_sessions</code> <code>review_history</code>
+        <code>spelling_attempts</code> <code>client_events</code></td></tr>
+      <tr><td><b>运维</b></td><td><code>devices</code> <code>settings</code>
+        <code>task_runs</code> <code>llm_jobs</code> <code>llm_job_items</code>
+        <code>llm_providers</code> <code>decisions</code></td></tr>
+    </table>
+    </div>
+
+    <p>而 CLAUDE.md 的备份规则写着「<code>learning.db</code>（学习记录）与 <code>content.db</code>
+    （花钱生成的义项集、例句、词族）」。<b>实际上花钱产出的东西在 <code>learning.db</code>
+    里比在 <code>content.db</code> 里还多</b>——文章、token、标注、草稿、复习句子全在那边。</p>
+
+    <div class="callout">
+      <b>这不是巧合。</b>要划的那条线，是这个库本来就该有的那条。§10 把它切开。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>新的铁律</h2>
+      <span class="sec-note">已定并落地 · 2026-09-18 已写进 CLAUDE.md</span>
+    </div>
+    <p class="lede">每条都附「它替掉了什么」和「怎么验」。
+    <b>一条规矩没有验法，就只是一句愿望</b>——这是 P8 §8 动铁律 4 那次学到的。</p>
+
+    <h3>1 · 服务端不许有任何学习逻辑</h3>
+    <p><b>替掉</b>旧铁律 1「客户端零业务逻辑」。<b>验法</b>：读源码断言服务端没有排期、
+    没有队列组成、没有选文、没有进度聚合。</p>
+    <p><b>旧铁律 1 的理由现在不成立。</b>它写的是「破了这条，将来要在三种语言里各实现一遍同样的算法」——
+    而现在<b>只有一种语言</b>：Core 是 Swift，iOS App 和 <code>ercli</code> 共用同一份。
+    更要紧的是，<b>搬下去之后调度只有一份实现</b>：查过
+    <code>backend/modules/generation/daily.py:66</code>，夜间备稿从学习记录里
+    <b>只要一个「正在学的词」的集合</b>，不读排期、不读到期日、不读队列。
+    模块注释自己写着「The only thing this module reads from the learner's record is
+    which words to avoid teaching again」。<b>所以服务端根本不需要 FSRS。</b></p>
+
+    <h3>2 · 客户端不许产出内容，服务端不许解释记录</h3>
+    <p><b>替掉</b>旧铁律 3「服务端是唯一事实来源」的措辞。两个方向都要说：
+    前半句防「顺手在手机上拼个句子」，后半句防「管理台顺手算一下他学得怎么样」。
+    <b>唯一的记名例外在 §7</b>，而那一条是靠「客户端上报快照」避开的，不是靠破例。</p>
+
+    <h3>3 · 屏幕上没有一个数字等网络</h3>
+    <p><b>新增。</b>这是 §1 那个症状的可执行版本。<b>验法</b>：每一个显示出来的数都有本地来源。
+    这一条要配一套新的验收项，是这个 Phase 该产出的东西之一。</p>
+
+    <h3>4 · 内容 id 一旦发出去就不许变</h3>
+    <div class="callout">
+      <b>这一条现在不成立，而新架构必须有它。</b>
+      现在文章可以被重新分析，<code>reading_tokens</code> 删了重建、id 全变——
+      「踩过的坑」§6.5 就是这么来的：标注任务举着旧 id 报成功、
+      <b>文章永远停在 <code>annotating</code>、点开是空的、全程零日志</b>。
+      <br><br>
+      以前这个坑只伤服务端自己。<b>记录搬到设备之后，标记指着的是内容 id，
+      id 一变就是设备上的记录静默失效</b>，而且是在别人的手机上失效。
+      所以「内容 id 不可变」从实现细节升成契约。
+      <br><br>
+      <b>推论</b>：重新分析必须变成<b>加一个新版本</b>，不是原地重建。
+    </div>
+
+    <h3>不动的三条</h3>
+    <div class="nots">
+      <div class="not"><i>＝</i><span><b>可扩展性优先</b>
+        <span>模块自包含、一处登记自动挂载、订阅事件而非改原流程、版本化迁移。这套东西正是让这次搬家做得动的原因。</span></span></div>
+      <div class="not"><i>＝</i><span><b>前端零构建链</b>
+        <span>控制台仍然服务端渲染，不引入 node_modules。</span></span></div>
+      <div class="not"><i>＝</i><span><b>Web 管理控制台长期存在</b>
+        <span>但要加一句：<b>它看的是副本，不是原本</b>（§11）。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>五种事件，别的都算得回来</h2>
+      <span class="sec-note">已定</span>
+    </div>
+    <p class="lede">备份、同步、重放，三件事的对象是同一个东西：事件日志。
+    <b>派生状态一概不备份</b>，因为它们算得回来。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>事件</th><th>现在在哪</th><th>带什么</th></tr>
+      <tr><td>标记 / 撤销标记</td><td><code>study_marks</code></td>
+          <td>词、义项、什么时候、在哪篇哪句标的</td></tr>
+      <tr><td>读完一篇</td><td><code>reading_articles.read_at</code></td>
+          <td>哪篇、什么时候，<b>外加这篇里遇见了哪些词</b>（§9）</td></tr>
+      <tr><td>一次作答</td><td><code>review_history</code></td>
+          <td>词、方向、用的哪句、开没开提示、对错、时间</td></tr>
+      <tr><td>一次拼写</td><td><code>spelling_attempts</code></td>
+          <td><b>拼成了什么</b>，不只是对错</td></tr>
+      <tr><td>一次判断（决策日志）</td><td><code>decisions</code></td>
+          <td>输入、候选、选了什么、为什么</td></tr>
+    </table>
+    </div>
+
+    <h3>可重算的，不备份</h3>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>词池归属</b>
+        <span>＝ 标记事件的函数。不变量：进队列只有你自己标记；撤销退回 <code>new</code>。</span></span></div>
+      <div class="not"><i>×</i><span><b>遇见次数、首次出现在哪篇哪句</b>
+        <span>＝ 读完事件里自带的词表（§9）。</span></span></div>
+      <div class="not"><i>×</i><span><b>FSRS 记忆状态和到期日</b>
+        <span>＝ 作答历史重放。<code>review_history</code> 的注释自己写着这是它存在的理由：
+        「Kept so an algorithm change can be replayed against real history instead of
+        re-derived from assumptions」。</span></span></div>
+      <div class="not"><i>×</i><span><b>今天的队列、进度、日历、连续打卡、拼写可用</b>
+        <span>＝ 以上的聚合。</span></span></div>
+    </div>
+
+    <h3>为什么决策日志是第五种，而不是第六类派生物</h3>
+    <p><b>因为它不可重算。</b>抽卡用的是 <code>Double.random</code>，当时货架上有哪几篇、
+    配置是多少，过后都复原不出来。丢了就真的答不上「为什么」——
+    而这一类日志的设计目的原话就是「用户说『不对劲』时，AI 能查出来到底怎么了」。</p>
+    <p>现在全项目只有<b>两个</b>地方写它，一共 118 行：
+    <code>article.prepared</code>（备稿，15 行）与 <code>today.assembled</code>（选文，103 行）。
+    前者是工厂决定、留服务端；<b>后者是选文，按 §2 归客户端</b>。
+    重构之后客户端还会多出几个同类的判断：抽了哪张卡、排期给了什么评级和间隔、拼写词表怎么挑的。</p>
+    <p><b>定的是存在服务端</b>（客户端把它当一种事件上报），三个理由：
+    诊断工具在服务端（管理台是诊断通道）；存着不看不算解释，和存档是同一种关系；
+    走发件箱那条现成的管子，不用造新机制。量也不值一提——
+    选文一天一条、抽卡一天三十条左右，一年一万来行。</p>
+
+    <div class="callout">
+      <b>顺带两个小修，都在这个 Phase 里做掉：</b>
+      <br>① 现在 <code>today.assembled</code> 是<b>每次 <code>/today</code> 请求都写一条</b>
+      （所以 103 行里绝大多数是下拉刷新写出来的）。它该在<b>真的做了一次选文</b>时写。
+      <br>② <b>抽卡要记种子</b>，或者整天用一个带种子的 PRNG。
+      现在 <code>Double.random(in: 0..&lt;1)</code> 抽完就没了，记了也重放不出来——
+      改成有种子的，「为什么抽到这张」才真的答得上，顺带验收脚本也能复现。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>多设备：事件日志成为主干</h2>
+      <span class="sec-note">已定 ③，三条细则已定并落地（§16 ⑪）</span>
+    </div>
+    <p class="lede">状态是事件日志的纯函数。两台设备各自重放，得出同一个状态——
+    <b>所以不需要合并算法</b>。Anki 撞到真冲突时要弹窗让人选「上传还是下载」，我们不用。</p>
+
+    <p>我们已经走了一半而没说出口：发件箱本来就是追加式的、带幂等键、带 <code>occurred_at</code>；
+    <code>OutboxVerdict</code> 是逐条的（Core 的注释写着「silence is not consent」）；
+    铁律 2 本来就说事件先落本地。缺的只是<b>承认它是主干，而不是一条上报管道</b>。</p>
+
+    <h3>三条细则</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">①</span><span class="step-what">
+        <b>服务端收到即分配单调序号，排序用序号</b>
+        <span>两台手机的时钟不一样，而重放要全序。设备时钟（<code>occurred_at</code>）原样保留，
+        <b>只用来判「当天」</b>。两个用途分开，别用同一个数。</span></span></div>
+      <div class="step"><span class="step-n">②</span><span class="step-what">
+        <b>同步变双向</b>
+        <span>现在只有发件箱（上报）。要加「拉取序号 N 之后的事件」。</span></span></div>
+      <div class="step"><span class="step-n">③</span><span class="step-what">
+        <b>唯一一种真冲突：同一张卡，两台设备在同一天各答一次</b>
+        <span>按现有规则<b>累加</b>——规则本来就是「一天算一轮，<code>asks</code> 累计，
+        失误次数定评级」（P3 决定 11）。重放天然就对，不用特殊处理。
+        <b>这条要写进不变量</b>，否则以后有人会「修」它。</span></span></div>
+    </div>
+
+    <div class="callout">
+      <b>多设备把备份这件事顺手解决了。</b>上一轮我说服务端要当个「保险柜」，
+      存一坨它不解释的字节——<b>不对</b>：它存的是结构化的事件日志（多设备要按序号合并），
+      但它仍然不解释。<b>备份不是另一件事，是同步的副产品。</b>
+      三个角色因此缩成两个：工厂 + 邮局，邮局自带存档。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>进度报告 ＝ 词池快照</h2>
+      <span class="sec-note">已定 ④</span>
+    </div>
+    <p class="lede">用户的话：「我说的根据进度是学过的单词的进度。这个我们服务端和客户端必须同步，
+    因为我们要保证每篇都有一定数量的生词。」</p>
+
+    <p>这和现在的代码正好对上：<code>daily.py:66</code> 的 <code>words_in_progress()</code>
+    读的就是 <code>pool != 'new'</code> 的词表，用来<b>避开</b>已经在学的词。
+    而「保证每篇有一定数量的生词」要的是同一张表——<code>pool</code> 有三档
+    <code>new｜reviewing｜graduated</code>，「我学过的」就是后两档。</p>
+
+    <div class="figures">
+      <div class="fig"><div class="fig-val">30</div>
+        <div class="fig-key"><code>study_states</code> 现在的行数</div></div>
+      <div class="fig"><div class="fig-val">~100 <span>KB</span></div>
+        <div class="fig-key">就算六级 6000 词全在里面</div></div>
+      <div class="fig"><div class="fig-val">3</div>
+        <div class="fig-key"><code>pool</code> 的档数</div></div>
+    </div>
+
+    <h3>为什么是「客户端上报快照」，不是「服务端从日志算」</h3>
+    <p>服务端要用这张表，就得知道词池归属；而词池归属是标记事件的函数——
+    <b>那就等于服务端也实现了一条学习规则</b>，破了 §4 的规矩 2。</p>
+    <p><b>定的是客户端上报一张 <code>(词, 义项, pool)</code> 的快照</b>，服务端直接当事实用、零解释。
+    理由正好是用户那句话：「学习完把进度汇报给服务器」——
+    <b>词池快照就是那份进度报告本身</b>，不是从日志里推出来的副产品。
+    代价只是多传 100 KB。</p>
+
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>服务端不主动推，客户端开 App 就取</b>
+        <span>没有推送通道，「每天下发」实际是「每天第一次打开时取一次」。</span></span></div>
+      <div class="not"><i>·</i><span><b>报告里带上「这份报告是什么时候的」</b>
+        <span>长期不上线的退化策略留给未来（记进主文档 §M），
+        <b>但这个字段现在就要留</b>，否则将来做那件事要改契约。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>义项换稳定键，和那次数据大清洗的关系</h2>
+      <span class="sec-note">已做完 · §16 ⑬（13,741 条已回填）</span>
+    </div>
+    <p class="lede">讨论里一度以为「先清洗、后重构」更安全。
+    <b>数完真实数据之后这个理由站不住</b>，但顺着它查出了一件更该做的事。</p>
+
+    <h3>先说清楚现在「方便替换」是个陷阱</h3>
+    <p><code>backend/modules/senses/repository.py:37-48</code> 自己写着：</p>
+    <pre>This path is for topping up one word. <b>It is the wrong path for replacing
+the whole inventory</b> … Called in a loop over every headword, the subscriber
+would reset all 95,058 contextual annotations, discarding the 4.6M input
+tokens the corpus pass cost, <b>silently and in the time it takes to click a button.</b></pre>
+    <p>所以「按一下按钮就能全量替换」这件事本身是成立的，<b>代价是静默作废九万多条标注</b>。
+    跨 Phase 不变量那一段就是为了拦住这个按钮而写的，
+    它推荐的正确做法（保留旧表 + 义项级映射，约 7,200 次调用）
+    <b>就是「费很大力」的来源，而它是现在这个架构的价格，不是重构的价格</b>。</p>
+
+    <h3>耦合量：93,063 比 178</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>引用义项 id 的</th><th class="num">行数</th><th>重构后归谁</th></tr>
+      <tr><td><code>reading_tokens</code> 语境标注</td><td class="num">93,063</td>
+          <td>内容，<b>留服务端，一行不动</b></td></tr>
+      <tr><td><code>senses</code> 本身</td><td class="num">13,741</td><td>内容，留服务端</td></tr>
+      <tr><td><code>study_states</code></td><td class="num">22</td><td>学习记录，搬设备</td></tr>
+      <tr><td><code>study_marks</code></td><td class="num">20</td><td>搬设备</td></tr>
+      <tr><td><code>review_history</code></td><td class="num">136</td><td>搬设备</td></tr>
+    </table>
+    </div>
+    <p><b>清洗的成本 99.8% 在内容那一侧，而内容那一侧不管重不重构都待在原地。</b>
+    搬到设备上去的义项 id 引用一共 178 条。所以<b>顺序不重要</b>，
+    「趁 id 只有一个主人的时候换掉」这个理由作废。</p>
+
+    <h3>但「为什么费力」有一半是架构造成的</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">躲不掉</span><span class="step-what">
+        <b>新义项集对词的切分本来就和现在不一样</b>
+        <span>要从真词典源重建，「旧义项 3 对应新义项 2」是个判断题。
+        7,200 次调用就是这个判断的价格，重构不能让它变便宜。</span></span></div>
+      <div class="step"><span class="step-n">可避免</span><span class="step-what">
+        <b>义项 id 是自增代理键，<code>store_senses</code> 是删了重插</b>
+        <span>于是<b>任何</b>一次重建——补一个词的义项、重跑一次生成器、做一次迁移——
+        都会让 id 全变，<b>而这跟语义变没变毫无关系</b>。
+        九万条标注每次都被推到悬崖边上，靠一段注释和一条不变量拦着。</span></span></div>
+    </div>
+
+    <h3>所以 P9 做三件，清洗本身不在 P9</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">①</span><span class="step-what">
+        <b>义项换成稳定的自然键</b>
+        <span>headword + 内容指纹。标注和学习记录都指它，不指自增 id。
+        替换整个库变成「按键 upsert」，语义没变的义项键不变、标注自动存活。</span></span></div>
+      <div class="step"><span class="step-n">②</span><span class="step-what">
+        <b>映射表永不删除</b>
+        <span>13,741 行，留着不费什么。有了它，<b>离线设备揣着旧 id 回来也翻译得出来</b>——
+        这是多设备逼出来的要求，不是可选项。</span></span></div>
+      <div class="step"><span class="step-n">③</span><span class="step-what">
+        <b><code>store_senses</code> 那个「删了重插」的行为本身改掉</b>
+        <span>不再靠注释警告。</span></span></div>
+    </div>
+    <p><b>数据大清洗不属于 P9</b>——它是数据操作，不是重构，按「只规划当前 Phase」留在主文档 §M。
+    P9 做完之后它从「7,200 次调用 + 悬崖」变成「7,200 次调用，而且掉不下去」；
+    稳定键做得好的话，只需要给真正合并／拆分／消失的那部分调用。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>内容同步分三层</h2>
+      <span class="sec-note">已定 ⑥</span>
+    </div>
+    <p class="lede">「把我没有的都拿来」这个问法有陷阱：如果指全部内容，<b>那是 136 MB</b>。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th></th><th class="num">篇数</th><th class="num">已读</th><th class="num">整体约</th><th>粒度</th></tr>
+      <tr><td>生成文（货架）</td><td class="num">25</td><td class="num">18</td>
+          <td class="num">未读 7 篇 ≈ 2 MB</td><td><b>整体增量拉</b></td></tr>
+      <tr><td>真题（图书馆）</td><td class="num">452</td><td class="num">6</td>
+          <td class="num">136 MB</td><td><b>永远按需一篇</b></td></tr>
+      <tr><td>读过的文章</td><td class="num">—</td><td class="num">—</td>
+          <td class="num">—</td><td>按需，回看时再取</td></tr>
+      <tr><td>复习句子池</td><td class="num">398 条</td><td class="num">—</td>
+          <td class="num">很小</td><td>跟着进度报告的回应下发</td></tr>
+    </table>
+    </div>
+    <p>货架就是「每天下发」的对象。真题本来就有自己的入口
+    （<code>/library?source=cet4</code>），今日包也明确不含它们（<code>excludes_exam_papers</code>）。
+    一篇约 300 KB、平均 476 词 29 句。</p>
+
+    <h3>「读完」事件自带词表</h3>
+    <div class="callout">
+      <b>这一条修正了讨论里我说错的一点。</b>我说过「遇见记录＝读完事件 × 文章内容，可重算」。
+      可如果客户端不留读过的文章，它就算不回来；换台新设备从备份恢复，
+      得把读过的文章重新下载一遍才能算出遇见次数。
+      <br><br>
+      <b>所以让「读完」这个事件自己带上这篇里遇见了哪些词</b>
+      （词、义项、出现在哪一句）。一篇约 476 词、去重后 300 来个，约 3 KB；18 篇一共 54 KB。
+      <br><br>
+      两个好处，<b>第二个比第一个重要</b>：
+      <br>① 重放永远不需要文章内容，「只备份事件」这条规则保持成立；
+      <br>② <b>更忠实</b>。「我在第 480 篇第 12 句遇见过 <code>municipal</code>」是一件历史事实，
+      而文章将来可能被重新分析过。把它冻在事件里，比事后拿一篇可能已经变了的文章去推它要准确。
+      不变量那句「撤销标记后遇见记录保留——它确实被遇见过」说的就是这个意思。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>数据库重切</h2>
+      <span class="sec-note">已做完 · §16 ㉔（两台机器都切完了）</span>
+    </div>
+    <div class="table-scroll">
+    <table>
+      <tr><th>库</th><th>装什么</th><th>丢了会怎样</th></tr>
+      <tr><td><code>content.db</code></td><td>现在的 content.db
+        <b>＋ 从 <code>learning.db</code> 搬出来的全部内容表</b></td>
+        <td class="wait">必须备份（花的是真钱）</td></tr>
+      <tr><td><code>dictionary.db</code></td><td>不变</td>
+        <td class="none">可从 ECDICT 重建</td></tr>
+      <tr><td><code>ops.db</code></td><td><code>devices</code> <code>settings</code>
+        <code>task_runs</code> <code>llm_*</code></td>
+        <td class="none">可丢弃</td></tr>
+      <tr><td><code>events.db</code></td><td>五种事件的日志 + 单调序号 + 词池快照</td>
+        <td class="wait">必须备份（它就是学习记录）</td></tr>
+      <tr><td><code>logs.db</code></td><td>技术日志，30 天轮转</td>
+        <td class="none">可丢弃</td></tr>
+      <tr><td><code>learning.db</code></td><td><b>消失</b></td>
+        <td class="none">拆进上面四个</td></tr>
+    </table>
+    </div>
+    <p><b>设备上那份成为学习记录的第一副本</b>，服务端的 <code>events.db</code> 是它的会合点与存档。
+    CLAUDE.md 那条「按丢了会怎样分两类」的备份规则要照这张表重写。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§11</span>
+      <h2>逐模块：留、走、劈开</h2>
+    </div>
+    <div class="table-scroll">
+    <table>
+      <tr><th>现在</th><th>去哪</th></tr>
+      <tr><td><code>generation</code> <code>llm</code> <code>vocabulary</code>
+        <code>wordfamily</code> <code>senses</code></td>
+        <td class="ok">全留。都是工厂的输入或产出</td></tr>
+      <tr><td><code>reading</code></td>
+        <td><b>劈开。</b>文章制作（分句、分词、标注、词汇表、难度、词组候选）留服务端；
+        阅读记录（<code>reading_progress</code>、遇见、<code>study_states</code>、
+        <code>study_marks</code>）走客户端</td></tr>
+      <tr><td><code>review</code>（<code>scheduler</code> <code>session</code>
+        队列 进度 日历 拼写）</td>
+        <td><b>整个走客户端。</b>服务端只剩「为标记过的词造例句」那一路，那是工厂活</td></tr>
+      <tr><td><code>today</code>（今日包合成）</td>
+        <td><b>消失。</b>选文是学习决定（将来还要接水平估计），归客户端。
+        服务端只回答「你还没有哪些文章」</td></tr>
+      <tr><td><code>core/auth</code> <code>core/tasks</code> <code>notifications</code></td>
+        <td class="ok">留。认人、跑夜班、报生成失败</td></tr>
+      <tr><td><code>core/logging</code> 的决策日志</td>
+        <td><b>劈开。</b>生成的决策留服务端自己写；学习的决策由客户端上报（§5）</td></tr>
+    </table>
+    </div>
+
+    <h3>Web 学习界面废弃</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>模板</th><th class="num">行数</th><th>去哪</th></tr>
+      <tr><td><code>reading/reader.html</code></td><td class="num">719</td>
+          <td class="wait">废（Web 阅读页）</td></tr>
+      <tr><td><code>review/review.html</code></td><td class="num">549</td>
+          <td class="wait">废（Web 复习页）</td></tr>
+      <tr><td><code>review/review_words.html</code></td><td class="num">176</td>
+          <td>改成「看上报的词池快照」</td></tr>
+      <tr><td><code>admin/*</code>（7 个）</td><td class="num">918</td>
+          <td class="ok">留（控制台）</td></tr>
+      <tr><td><code>generation</code> <code>llm</code> <code>senses</code>
+        <code>vocabulary</code> <code>wordfamily</code> <code>reading/reading.html</code></td>
+          <td class="num">1382</td><td class="ok">留（工厂的控制台）</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+      <b>废掉 Web 阅读页的理由比「省 1268 行」强：<code>ercli</code> 已经是第二个客户端了。</b>
+      它和 App 共用同一份 Core。新架构下 Web 页要能学习，就得在 JS 里再实现一遍学习引擎——
+      <b>那正是 §2 那条线禁止的事</b>；而 <code>ercli</code> 天然合规：它是客户端，
+      它做学习的事，它走同一份 Core。
+      <br><br>
+      <b>验收网只踩着一处</b>：<code>verify_phase2.py</code> 的<b>人工项 M1</b>
+      「打开 <code>/admin/reader</code>，挑一篇，点词、标记、读到底」。
+      它变成「在手机或 ercli 上读一篇」——P6／P7／P8 验收那天本来就是在真机上这么做的。
+      <br><br>
+      <code>/v1/admin/review/today</code> 和 <code>/words</code> 那两个管理接口
+      （<code>verify_phase3</code> 在用）跟着变成<b>看上报的快照</b>，不再是原本。
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§12</span>
+      <h2>验收网怎么保住</h2>
+    </div>
+    <p class="lede">223 项自动验收是 Python 写的，而被验的规则要搬进 Swift。
+    <b>重构期间没有网是这个 Phase 最大的风险</b>，比任何一处代码都大。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>脚本</th><th class="num">行数</th><th class="num">提到调度／记录的行</th><th>受影响</th></tr>
+      <tr><td><code>verify_phase0.py</code></td><td class="num">307</td><td class="num">0</td><td class="ok">不动</td></tr>
+      <tr><td><code>verify_phase1b.py</code></td><td class="num">274</td><td class="num">0</td><td class="ok">不动</td></tr>
+      <tr><td><code>verify_phase1c.py</code></td><td class="num">268</td><td class="num">0</td><td class="ok">不动</td></tr>
+      <tr><td><code>verify_phase2.py</code></td><td class="num">709</td><td class="num">8</td><td>三条不变量守卫要搬（7.1／7.4／7.13）</td></tr>
+      <tr><td><code>verify_phase3.py</code></td><td class="num">515</td><td class="num">51</td><td class="wait"><b>主要工作量</b>，42 项要重新指向 Core</td></tr>
+      <tr><td><code>verify_phase4.py</code></td><td class="num">502</td><td class="num">8</td><td>供给那半不动，今日包那半要改</td></tr>
+      <tr><td><code>verify_phase5.py</code></td><td class="num">352</td><td class="num">6</td><td>Core 长大了，这一套要跟着长</td></tr>
+    </table>
+    </div>
+
+    <p><b>原本写的是「杠杆是 <code>ercli</code>」，2026-09-18 改正了</b>——
+    r5s 上不装 Swift，<code>ercli</code> 在这台机器上编不出来也跑不了。
+    实际的分工见 §16 ⑰:<b>一半在 CI 的 <code>swift test</code>，一半在
+    <code>verify_phase9.py</code></b>。</p>
+
+    <div class="callout">
+      <b>顺序上必须守住一条</b>：<b>先搬网，再搬代码。</b>
+      任何一处规则搬进 Core 之前，那条规则的验收项要先能通过 <code>ercli</code> 跑通——
+      否则就是在没有网的时候走钢丝，而「踩过的坑」§6.6 那条说得很清楚：
+      <b>绿着的空跑比没有这个 job 更糟，因为它还给人信心。</b>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§13</span>
+      <h2>明确不做</h2>
+    </div>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>不加任何新功能</b>
+        <span>纯搬家 + 改铁律。发现的新需求一律记进主文档 §M，不动手。</span></span></div>
+      <div class="not"><i>×</i><span><b>词典和分词不下来</b>
+        <span>两个理由，都是栽过的：<b>token 身份必须只有一个产地</b>（坑 §6.5）；
+        <b>大纲判定必须三方调同一个函数</b>（坑 §5.1 栽了四次、3005 处误判、
+        还差点把活派给贵四倍的模型）。把它复制到设备上就是开第五次。</span></span></div>
+      <div class="not"><i>×</i><span><b>数据大清洗不在这个 Phase</b>
+        <span>它是数据操作。P9 只把稳定键和映射表做出来，让它以后不再贵（§8）。</span></span></div>
+      <div class="not"><i>×</i><span><b>长期不上线的退化策略不做</b>
+        <span>用户定的：留给未来。但 §7 那个时间戳字段现在就留。</span></span></div>
+      <div class="not"><i>×</i><span><b>不做账号与多用户</b>
+        <span>P8 只画了 UI。多设备（§6）指的是<b>同一个人的几台设备</b>，不是几个人。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§14</span>
+      <h2>动手前先验的未知数</h2>
+      <span class="sec-note">六项全部验完 · <b>U1 的结论被实施推翻了，见下</b></span>
+    </div>
+    <p class="lede">照 <a href="./phase-5.html">P5</a> §16 那次的规矩：这些先验出结果，再定案。
+    <b>它们会改变方案，不是方案的注脚。</b></p>
+
+    <div class="checks">
+      <div class="check"><span class="check-n">U1 ✗</span><span class="check-what">
+        <b>「Swift 有能用的 FSRS，用官方那个，不自己写」——<span style="color:var(--stop)">这个结论错了</span></b>
+        <span><b>2026-09-17 一动手就被推翻，详见 §16 ②。</b>
+        <code>swift-fsrs</code> <code>import JavaScriptCore</code>，<b>在 Linux 上编不出来</b>——
+        而 CI 的 Core 测试跑在 Linux 上。另一个候选 <code>4rays/SwiftFSRS</code> 只到 FSRS-5、
+        19 个参数，而我们钉的是 21 个的 FSRS-6。
+        <b>所以是自己从 <code>py-fsrs</code> 移植的</b>（<code>ERCore/Scheduler.swift</code>，
+        323 行，靠 <code>scripts/fsrs_reference.py</code> 导出的向量对拍）。
+        <br><b>而下面这段照错的地方正是这条 Phase 最该记住的一点</b>:
+        P5 那条规矩写的是「每个依赖都要单独核实<b>能不能编</b>」，
+        而我核的是「它<b>有没有</b>依赖」——<b>两个不同的问题，我把后者当成了前者的答案</b>。
+        「零外部依赖」这句话是真的，它照样编不出来。</span>
+        <span><b>以下原文照录</b>（不删，理由同上）:<br>
+        2026-09-17 查清。<code>open-spaced-repetition/swift-fsrs</code>——
+        和 <code>py-fsrs</code> <b>同一个组织</b>，<b>MIT 许可</b>（坑 §2.3 那条警告是「同组织下许可不一」，
+        这个核过了：LICENSE 第一行就是 MIT，不是 AGPL）。
+        <br><b>四件正好对上我们的前提：</b>
+        <br>① <b>零外部依赖</b>（<code>Package.swift</code> 里一个 dependency 都没有）——
+        P5 那条「每个依赖都要单独核实能不能编」的成本直接省掉；
+        <br>② <b><code>StrictConcurrency=complete</code> 已经开着</b>，所有类型 <code>Sendable</code>——
+        和我们 <code>SWIFT_STRICT_CONCURRENCY: complete</code> 同一个规矩，不用事后补；
+        <br>③ iOS 14+ / swift-tools 5.10，远低于我们的 iOS 26；
+        <br>④ 有 <code>LongTermScheduler</code>——<b>正是我们 <code>learning_steps=()</code> 那个配置</b>
+        （「一天是一次复习」，P3 决定 11 的前提）。
+        <br><b>类型也对得上</b>：<code>FSRSParameters{requestRetention, maximumInterval, w}</code>
+        ↔ 我们的 <code>fsrs_desired_retention</code>／<code>fsrs_maximum_interval</code>／<code>fsrs_parameters</code>；
+        <code>Card{stability, difficulty, reps, lapses, state, lastReview}</code>
+        ↔ <code>from_card()</code> 存的那几列；<code>Rating</code> 四档 ↔ 我们的评级映射。
+        <code>Card</code> 和 <code>ReviewLog</code> 都是 <code>Codable</code>。
+        <br><b>算法版本要对齐</b>：我们钉的是 <code>fsrs&gt;=6.3.2</code>（py-fsrs 6.x ＝ FSRS-6，21 个参数），
+        而 swift-fsrs 的 README 写「FSRS-6.0（19 长 <code>w</code> 可退回 5.0）」，
+        默认就是 6——<b>对得上</b>。另外 <code>fsrs_parameters</code> 我们配的是 <code>[]</code>（空），
+        也就是两边都用各自的内置默认 <code>w</code>，<b>这一项必须验一次数值是否一致</b>。
+        <br><b>剩下要验的只有一件</b>：拿 <code>verify_phase3</code> 现有的向量跑一次
+        （验收套件本来就关掉 fuzz「so runs are reproducible」，正好可比）。
+        <b>而且这件事只需要验一次</b>——搬完之后服务端不再需要 FSRS，
+        <code>py-fsrs</code> 从依赖里删掉，<b>世上只剩一份实现，没有「两边要永远一致」这个负担</b>。
+        要对齐的只是<b>一次性迁移</b>：现有 30 条 <code>study_states</code> 与 147 条作答历史。</span></span></div>
+      <div class="check"><span class="check-n">U2 ✓改了</span><span class="check-what">
+        <b>设备上用什么存？——定的是 SQLite，做的时候改成了追加式日志</b>
+        <span><b>结论见 §16 第 ④ 条</b>：一个追加式文件、一行一条 JSON，投影在内存里。
+        下面这段是当时的推理，留着是因为<b>它错在哪里值得记住</b>——
+        我主张 SQLite 的理由是「客户端现在真需要查询了」，
+        而 U3 量完之后（375 条、2.5 万条/年）那个理由不成立。</span>
+        <span style="opacity:.62"><b>当时的倾向：系统自带的 SQLite（<code>libsqlite3</code>）＋ 一层薄封装，由一个 actor 独占连接。</b>
+        <br>四个理由：① <b>零依赖</b>——<code>libsqlite3</code> 随 iOS 出厂，
+        而 P5 定的是「每个依赖都要单独核实能不能编」，能不加就不加；
+        ② 要搬的那些表<b>本来就是 SQLite 表</b>，schema 知识直接转移；
+        ③ 客户端现在真的需要查询了（今天到期的、按词查历史、词池聚合），
+        而 P5 决定 8 那套「一条一个文件」<b>对事件日志够用、对查询不够</b>；
+        ④ <b>可检查</b>——导出一个文件，用服务端那套工具就能打开看。
+        <br><b>没选另外两个的理由：</b>
+        <code>SwiftData</code> 在 iOS 26 ＋ Swift 6 严格并发下没验过，而且它想拥有模型层，
+        跟「状态是日志的纯函数」拧着；<code>GRDB</code>（MIT、成熟）多一个依赖，
+        而它给的东西这里用不上多少。
+        </span></span></div>
+      <div class="check"><span class="check-n">U3 ✓</span><span class="check-what">
+        <b>重放不是问题，暂时不做快照</b>
+        <span>2026-09-17 数的真实数据：<b>现在全部历史一共 375 条事件</b>——
+        标记 26、读完 24、作答 147、拼写 60、决策 118。
+        <br>增速：一天约 70 条（作答 30–40 ＋ 决策 31 ＋ 读完 3 ＋ 标记若干），
+        <b>约 25,000 条/年</b>。两万五千条的重放是毫秒级的事。
+        <br><b>所以不做快照，但要留一个位置</b>：重放入口写成「从某个序号开始」，
+        将来加快照就是给它传一个非零的起点。
+        <b>什么时候回来看这条</b>：日志到百万级，或者重放超过 200 ms。</span></span></div>
+      <div class="check"><span class="check-n">U4 ✓基线</span><span class="check-what">
+        <b>基线量好了：61–74 秒</b>
+        <span>2026-09-17 取的最近六次 <code>client.yml</code>：61／62／74／65／66／63 秒。
+        CLAUDE.md 写的「0–1 分钟」偏乐观了一点，实际是<b>一分钟出头</b>。
+        <br>这个数字支撑着「不在 r5s 上装 Swift」那个决定，
+        所以 phase3 那 42 项搬进 <code>swift test</code> 之后<b>要重新量，并且写回这里</b>——
+        如果涨到五分钟以上，那个决定就该重新讨论。</span></span></div>
+      <div class="check"><span class="check-n">U5</span><span class="check-what">
+        <b>管理台失去原本之后还能不能诊断？</b>
+        <span>铁律 8 说它是「用户说不对劲时 AI 能查出来」的唯一通道。
+        §5 把决策日志留在了服务端正是为了这个，但要验一遍够不够。</span></span></div>
+      <div class="check"><span class="check-n">U6</span><span class="check-what">
+        <b>分支策略</b>
+        <span>现行规矩是「界面的提交走 <code>ios</code>，验收通过合回 <code>main</code>」，
+        而这个 Phase 同时动服务端、Core、App 三处。
+        <b>倾向开 <code>refactor</code> 分支</b>，验收通过合回 <code>main</code>。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§15</span>
+      <h2>这个 Phase 结束时，CLAUDE.md 要改哪些地方</h2>
+    </div>
+    <p class="lede">列在这里是为了别漏。<b>现在不改</b>——铁律还没定稿，
+    而提前改掉会让手上这份文档和现行口径说反话。</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>架构铁律 1、3、5</b><span>照 §4 重写；8 加一句「它看的是副本」。</span></span></div>
+      <div class="not"><i>·</i><span><b>跨 Phase 不变量</b>
+        <span>三条要改措辞（记账在哪一刻发生、进队列只有一条路、撤销退回 <code>new</code>）——
+        <b>语义不变，执行点从服务端换到设备</b>。
+        新增两条：内容 id 不可变；同一天同一卡按 <code>asks</code> 累加。</span></span></div>
+      <div class="not"><i>·</i><span><b>数据库那段备份规则</b><span>照 §10 的四个库重写。</span></span></div>
+      <div class="not"><i>·</i><span><b>「踩过的坑」</b>
+        <span>§5.1 与 §6.5 要各加一句：记录搬到设备之后，这两个坑的后果从
+        「服务端自己难受」变成「别人手机上的记录静默失效」。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§16</span>
+      <h2>实施进度，与路上撞到的东西</h2>
+      <span class="sec-note">2026-09-17 起</span>
+    </div>
+    <p class="lede">方案 2026-09-17 定案（U2 定为系统 SQLite ＋ 薄封装、§4 四条铁律按草案、
+    分支 <code>refactor</code>）。按 §12「先搬网，再搬代码」推进。</p>
+
+    <h3>① 调度向量桥 — 做完</h3>
+    <p><code>scripts/export_scheduler_vectors.py</code> →
+    <code>client/Tests/ERCoreTests/Fixtures/scheduler-vectors.json</code>。
+    这是删掉 <code>py-fsrs</code> 的前置条件：没有它，Swift 那份调度是「看着像对」。</p>
+    <p><b>现有 <code>export_review_vectors.py</code> 刻意不含调度</b>，它的理由写得很清楚——
+    「including them would tie these vectors to FSRS parameters that are free to change」。
+    <b>这个反驳靠「把设置一起记下来」解掉</b>：向量说的是「给定这组设置，这些输入产生这些输出」，
+    在控制台改了 retention 也仍然成立。<b>代价是 Swift 那边必须被喂同一组设置，不能用它自己的默认。</b></p>
+    <p>两半：<b>评级映射全枚举</b>（misses 0–3 × easy × revealed × capped ＝ 32 条，
+    这半是我们自己的规则，最容易搬错）；<b>排期 12 个场景</b>，每个都钉住一条有明文依据的东西。</p>
+    <p><b>间隔序列导出来是 2 → 11 → 46 → 163 → 180</b>——和「踩过的坑」§4.5 记的
+    「正确的是 2→11→46→163→180」一字不差，同时把 180 天封顶也钉住了。
+    这说明导出的是对的那一版，不是接线错的 8→66→180。</p>
+    <p><b>这个脚本不调 <code>create_app()</code></b>：<code>rating_for</code> 与 <code>review</code>
+    是纯函数，所以它碰不到坑 §4.6 那个形状（建 app → 定时任务循环起来 → 夜间备稿真的跑 →
+    脚本退出把它掐死在半路）。fuzz 关掉。<b>重新导出无 diff，验过了</b>——那是这个文件存在的全部意义。</p>
+
+    <div class="callout">
+      <b>撞到的第一件事：<code>rating_for</code> 里有一支死代码，而它盖住了一个真的洞。</b>
+      <br><br>
+      <code>scheduler.py:150</code> 先 <code>if easy and misses == 0: return EASY_RATING</code>
+      提前返回，所以下面那句 <code>if (revealed &gt; 0 or capped) and rating is EASY_RATING</code>
+      <b>永远到不了</b>——它的存在本身说明作者原本想让 Easy → Good → Hard 连着降。
+      <br><br>
+      <b>今天踩不到，而它踩不到的方式本身是个问题。</b>
+      核过两个客户端：<b>iOS App 根本没有「太简单了」这个按钮</b>
+      （<code>···</code> 菜单里只有「这个词我已经会了」，作答时 <code>easy</code> 恒为 false）；
+      <b><code>ercli</code> 有那个选项，但写着 <code>case "4" where revealed == 0</code></b>
+      ——开过提示就不给这个选项。所以只有手搓一个 API 请求才够得着。
+      <br><br>
+      <b>也就是说这条规则现在靠界面挡着，而那正是铁律 1 反对的事</b>：
+      规则该在规则里成立，不该靠某个按钮的显示条件。
+      将来多一个客户端，或者谁把那个 <code>where revealed == 0</code> 去掉，洞就露出来了。
+      <br><br>
+      向量全枚举把它当场照出来了：<code>misses=0 E R -</code> → <code>Easy</code>（8 天），
+      而 <code>misses=0 - R -</code> → <code>Hard</code>（1 天）。
+      <code>rating_for</code> 的文档写着「Both only ever lower the grade」——
+      <b>这句话对 Easy 不成立。</b>
+      <br><br>
+      <b>向量先按真实行为钉住，没有顺手改</b>——改它是动一条已定的调度规则，按铁律要讨论过才算。
+    </div>
+
+    <h3>② 两个上限本来是两条规则，代码把它们混成了一条 — 2026-09-17 定并改完</h3>
+    <div class="callout">
+      <b>用户的决定：「太简单了」是学习者的判断，提示不否决它</b>——
+      它藏在右上角的二级菜单里，点它的人知道自己在干什么，不存在误触；
+      <b>但看了提示就降一档。</b>
+      <br><br>
+      <b>这两句话合起来，推出的不是我给的任何一个选项</b>，而是第三种答案：
+      <code>Easy</code> ＋ 提示 ＝ <code>Good</code>。而那支死代码是
+      <code>Easy→Good</code> 紧跟 <code>Good→Hard</code> 两句顺着执行的，<b>降的是两档</b>。
+      <br><br>
+      顺着这条线查出了真正的病：<b>现在的代码把两种不同语义混成了一个
+      <code>revealed &gt; 0 or capped</code> 条件。</b>
+      <br>· <b>开过提示</b>——P7 原话「taking a hint <b>costs a grade</b>」＝<b>降一档</b>
+      <br>· <b>当天刚标</b>——P7 §3 原话「当天这一次<b>封顶为 Hard</b>」＝<b>封顶</b>，不是降档
+      <br>对 <code>Good</code> 两者结果相同（都得 <code>Hard</code>），所以混着也看不出来；
+      <b>对 <code>Easy</code> 就分家了</b>：降一档是 <code>Good</code>，封顶是 <code>Hard</code>。
+      两处注释也各写了一半——<code>session.py:50</code> 写的是 "caps the grade at Hard"，
+      <code>scheduler.py</code> 写的是 "costs a grade"，<b>两句话说的是两回事</b>。
+    </div>
+    <p><b>改法</b>：拆成两个具名的东西——<code>_one_grade_lower()</code>（降一档，
+    下限 <code>HINT_FLOOR = Hard</code>，因为提示不该把「答对了」变成「忘了」）
+    与 <code>_at_most()</code>（封顶，<code>CAPPED_CEILING = Hard</code>，封顶绝不抬高评级）。
+    <code>easy</code> 不再提前 <code>return</code>，而是作为起点参与这两步。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>misses</th><th>easy</th><th>提示</th><th>当天封顶</th><th>评级</th><th></th></tr>
+      <tr><td class="num">0</td><td>—</td><td>—</td><td>—</td><td>Good</td><td></td></tr>
+      <tr><td class="num">0</td><td>E</td><td>—</td><td>—</td><td class="ok">Easy</td>
+          <td>学习者的判断，没人否决</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>R</td><td>—</td><td class="wait">Good</td>
+          <td><b>降一档，不是降到 Hard</b>（变了）</td></tr>
+      <tr><td class="num">0</td><td>—</td><td>R</td><td>—</td><td>Hard</td><td>照旧</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>—</td><td>C</td><td class="wait">Hard</td>
+          <td><b>封顶</b>，按 P7 原话（变了）</td></tr>
+      <tr><td class="num">0</td><td>E</td><td>R</td><td>C</td><td class="wait">Hard</td>
+          <td>先降一档再封顶（变了）</td></tr>
+      <tr><td class="num">1</td><td>E</td><td>—</td><td>—</td><td>Hard</td>
+          <td>磕过就不认，照旧</td></tr>
+      <tr><td class="num">≥2</td><td>任意</td><td>任意</td><td>任意</td><td>Again</td>
+          <td>提示有下限，压不到 Again 以下</td></tr>
+    </table>
+    </div>
+    <p><b>32 条里只有 3 条变了</b>，全在 <code>easy</code> 与两个上限的组合上，其余 29 条一字未动——
+    这正是想要的形状：动的是那个洞，没有顺手改别的。
+    <code>verify_phase3</code> 重跑 <b>44 项全过、0 失败</b>，
+    其中 1.4b（Easy 只由你自己标、磕过就不认）与 3.4（封顶真的把评级压下来）都在改动范围内，都仍然成立。
+    收尾查过：<code>running</code> 批次 0、探针残留 0、停在 <code>annotating</code> 的文章 0、无残留进程。</p>
+
+    <h3>③ 调度搬进 Core — 做完，向量全过</h3>
+    <p><code>client/Sources/ERCore/Scheduler.swift</code>（323 行）＋
+    <code>SchedulerVectorTests.swift</code>。CI 上 <b>65 项测试全过</b>，
+    其中三条是新的：评级映射 32 种组合、15 个排期场景逐个重放、间隔序列那一条。
+    <b>整数完全一致，双精度在 1e-6 内一致。</b></p>
+
+    <div class="callout">
+      <b>路上撞到第二件：两个现成的 Swift FSRS 包都不能用，而我第一次核错了东西。</b>
+      <br><br>
+      · <b>官方 <code>open-spaced-repetition/swift-fsrs</code></b>：算法版本对（FSRS-6）、
+      MIT、<b>零包依赖</b>、连 <code>StrictConcurrency=complete</code> 都已经开着——
+      我据此写进 §14 说「零依赖所以只要核它一个」。
+      <b>而它 <code>FSRSAlea.swift</code> 里 <code>import JavaScriptCore</code>，
+      Linux 上没有这个模块。</b> 而 <code>Package.swift</code> 开头就写着 Core 必须在
+      Windows、Linux、iOS 上都编得过，CI 的 L0 就在 ubuntu 上跑。
+      <br>· <b><code>4rays/SwiftFSRS</code></b>：MIT、零依赖、编得过，
+      <b>但只实现 FSRS-5</b>，服务端跑的是 6。
+      <br><br>
+      <b>教训是关于「核什么」的。</b> P5 那条规矩说「Core 的每个依赖都要单独核实
+      <b>能不能编</b>」，而我核的是「它有没有依赖」。<b>这是两个问题</b>，
+      而第一个问题的答案（没有）让我觉得第二个不用问了。
+      形状同坑 §2.3：别拿一个看起来相关的指标当权威证据。
+    </div>
+
+    <p><b>所以自己实现，照 <code>py-fsrs</code> 移植</b>（MIT，服务端用的就是它）。
+    <b>敢移植的前提是网已经建好了</b>——期望值出自服务端真实代码，公式错一项就红。
+    只实现服务端真正配的那条路径：两个步骤列表都空，状态机塌成一条直线，
+    <code>Relearning</code> 永远不出现。</p>
+    <p><b>两个会静默咬人的细节，都在移植时对齐了</b>：
+    ① 经过天数要按 <code>timedelta.days</code> 那样<b>向下取整到整天</b>，
+    直接 <code>/86400</code> 会差一点；
+    ② 间隔取整要用<b>四舍六入五成双</b>（Python 的 <code>round()</code>），
+    Swift 的 <code>rounded()</code> 是逢五进一——只在正好半天的边界上不同，
+    而那正是最难查的一类差。抖动没实现，置 true 会<b>抛错而不是悄悄不抖</b>。</p>
+    <p><b>补了两个向量场景盖住「同一天又答一次」那条公式</b>。
+    我们的规矩是「一天是一次复习」，正常流程走不到它——但公式两边都实现着，
+    不盖住就是留一个静默给错值的口子。其中「同一天答错」那条是唯一能让记忆强度
+    当场变小的路径（<code>again</code> 不受 1.0 下限约束），
+    实测 5.0 → 1.596818，和取 max 的那条区分得开。</p>
+
+    <h3>④ 事件日志 — 做完。<b>U2 那个决定改了</b></h3>
+    <p><code>client/Sources/ERCore/EventLog.swift</code>（251 行）＋ 6 项测试。
+    <b>一个追加式文件,一行一条 JSON</b>——不是 SQLite,也不是发件箱那套「一条一个文件」。</p>
+    <div class="callout">
+      <b>U2 原本定的是「系统 SQLite ＋ 薄封装」,2026-09-17 改掉。三条依据:</b>
+      <br><br>
+      <b>① 量太小,数据库没活可干。</b> 实测全部历史 <b>375 条</b>事件,
+      增速约 70 条/天 ＝ <b>2.5 万条/年</b>,一年约 5 MB。重放两万五千条是毫秒级的,
+      投影整个放内存里、启动时重放一次就有——<b>比任何查询都快</b>。
+      我当初主张 SQLite 的理由是「客户端现在真需要查询了」,而 U3 量完之后那个理由不成立。
+      <br><br>
+      <b>② Linux 那一课刚上过。</b> 从 Swift 用 SQLite 在 Linux 上要
+      systemLibrary ＋ modulemap ＋ 容器里装 <code>libsqlite3-dev</code>。
+      <b>和 <code>import JavaScriptCore</code> 同一个形状的风险,而且这次是自找的。</b>
+      <br><br>
+      <b>③ 有数据库会把人引回旧错误。</b> 一张 <code>study_states</code> 表摆在那儿,
+      下一个人就会把它当事实来源直接改——<b>而 P9 存在的全部理由就是那件事</b>。
+      「只有日志能写,投影只能算」这条规矩,靠「没有别的东西可以写」来保证最结实。
+      <br><br>
+      <b>发件箱那条「一条一个文件」的理由不适用。</b> 它的原话是
+      「a log only grows, so it has to be compacted, and compaction rewrites the
+      whole file」——<b>而这份日志永不压缩</b>(它是事实,只增不减,5 MB/年没必要),
+      所以那个失败模式不存在。反过来,两万五千个文件会让每次追加都去列一遍目录,
+      <b>而那正是发件箱越用越慢的原因</b>(P8 §18 修过一次同形状的)。
+      <br><br>
+      <b>唯一的崩溃损伤是断尾</b>:最后一行写了一半。而那一行按定义是「还没告诉用户
+      已经保存」的那条——和发件箱依赖的是同一个性质。丢掉它,但<b>报出来</b>,
+      而且<b>和「中间坏了一行」分开报</b>:前者是崩在写的那一刻,后者要查。
+      <br><br>
+      <b>「报到哪儿了」存在日志之外的小文件里,绝不回头改日志。</b>
+      改日志就意味着重写它,而重写是这份文件唯一没有的危险操作。
+    </div>
+
+    <h3>⑤ 投影 — 做完,不变量带守卫</h3>
+    <p><code>Projection.swift</code>(317 行)＋ <code>ProjectionTests.swift</code>(11 项)。
+    把日志重放成屏幕要的一切:词池、遇见次数、记忆状态、当天计数。
+    <b>没有一样是独立存着的事实</b>——所以「两个来源,旧的那个赢」这件事在结构上不可能再发生。</p>
+    <p><b>每一条规则都是先去服务端查清楚再镜像的,没有一条是猜的:</b></p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>规则</th><th>镜像的是</th></tr>
+      <tr><td>读完只加遇见次数,不改词池</td><td>跨 Phase 不变量,服务端由
+        <code>verify_phase2</code> 7.4 守</td></tr>
+      <tr><td>进复习池只有标记这一条路</td><td>同上,7.1</td></tr>
+      <tr><td>撤销退回 <code>new</code>,遇见记录保留</td><td>同上,7.13</td></tr>
+      <tr><td><b>撤销不清记忆状态</b></td><td><code>demote_if_unmarked</code> 只动
+        <code>pool</code> 一列——所以再标一次接着原排期走。
+        <b>这条是查出来的,我原本以为要清</b></td></tr>
+      <tr><td><b>标记是一个集合,不是布尔</b></td><td><code>clear_mark</code> 只清指定
+        那一种,<code>demote_if_unmarked</code> 一种都不剩才退回</td></tr>
+      <tr><td><b>只有 <code>reviewing</code> 会被退回</b></td><td>那句 SQL 的
+        <code>AND pool = 'reviewing'</code>——<code>graduated</code> 不往回拉</td></tr>
+      <tr><td>一轮走完才调调度器,评级看当天失误几次</td><td>P3 决定 11
+        （修订版）</td></tr>
+      <tr><td>模糊当天封顶,用掉就没了</td><td>P7 推翻 P3 决定 18</td></tr>
+      <tr><td>拼写不动任何状态</td><td>P3 决定 13</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>撞到第三件,这条影响契约:<code>answered</code> 事件现在只带
+      <code>queue_id</code>,而那是服务端队列表的行号。</b>
+      <br><br>
+      P9 之后队列是设备自己组的,<b>日志里引一个别处的行号就不是可重放的日志了</b>——
+      换台设备、或者服务端那张表重建过,这条事件就指不到任何东西。
+      <br><br>
+      所以 <code>answered</code> 必须自带条目身份(<code>item_type</code> /
+      <code>item_key</code> / <code>sense_id</code>)。
+      投影已经按自带身份实现,<b>但发这条事件的那一端还没改</b>
+      （<code>Events.swift</code> 的 <code>answered(queueId:…)</code>）。
+      这是「①内容 id 不可变」之外的第二条同类教训:
+      <b>日志里不许出现只有别处才能解释的标识符。</b>
+    </div>
+
+    <h3>⑥ 「太简单了」装进菜单，作答事件带上身份 — 做完</h3>
+    <p><b>那条规则原本没有任何界面能触发。</b> 用户定上限规则时的理由是
+    「太简单了是要在右上角的二级菜单中点的，用户肯定知道自己在干什么，不可能误触」——
+    <b>而 App 的 <code>···</code> 菜单里没有这一项</b>：<code>ReviewModel</code> 发作答时
+    <code>easy</code> 恒为 false，只有 <code>ercli</code> 发得出来（而它那个选项还写着
+    <code>where revealed == 0</code>）。所以 2026-09-17 那条决定落地时，
+    它管的那一格在手机上根本到不了。现在加上了。</p>
+    <p><b>只在这一轮零失误时才给点</b>，灰着的时候菜单要说得出为什么：
+    磕过之后说「太简单」不是关于任何事情的断言，Core 与服务端都会当场撤回这个声明——
+    <b>一个点了会被静默撤回的菜单项，比一个点不动的难查得多</b>。
+    点过之后打一个勾，否则它和「点了没反应」长得一样。</p>
+    <p><b>作答事件现在带条目身份</b>（<code>item_type</code> / <code>item_key</code> /
+    <code>sense_id</code>），<code>queue_id</code> 照旧留着（铁律 5，只增不减，
+    服务端目前还按它索引）。</p>
+    <div class="callout">
+      <b>服务端契约那半故意没动，这是个排期决定不是遗漏。</b>
+      服务端默认忽略未知字段（Pydantic <code>extra='ignore'</code>），所以客户端今天就能发、
+      不会 422。但把字段写进 <code>AnswerIn</code> 会改 <code>client/openapi.json</code>，
+      而<b>生成 Swift 契约类型要 Swift 工具链，r5s 上不装</b>（开发场地那条决定的代价）——
+      现在改就会让契约快照和生成物对不上，CI 的「契约没有漂」当场红。
+      <b>所以它和 §6 的同步工作一起做</b>，那时本来就要重新生成一次。
+    </div>
+
+    <h3>⑦ 今天的队列也由投影组出来 — 做完，网抓到一个</h3>
+    <p><code>Projection.todayQueue(day:now:)</code> ＋ <code>progress(day:now:)</code>
+    ＋ 8 项测试。<b>两张卡上那两个数现在是重放算出来的</b>，不再读服务端快照里的
+    <code>progress.buckets_done</code>——这就是 §1 那个 0/13 的落点。
+    分桶逐条镜像服务端 <code>session.collect</code>：排期到点的进 <code>due</code>；
+    从没排过期而今天标的进 <code>today</code>；从没排过期而更早标的也进
+    <code>due</code>，它是欠着的。<b>只看 <code>reviewing</code> 这一档</b>，
+    而唯一会把条目挡在外面的规则是「还没到点」——一个标过的词永不消失，只会等。</p>
+    <p>有一条测试是<b>重放同一份日志两次、要求结果相同</b>：
+    让旧症状不可能再发生的性质是「它是纯函数」，不是「某一屏被补了一下」。</p>
+
+    <div class="callout">
+      <b>撞到第四件，而这次是测试抓到的，不是我想到的。</b>
+      <br><br>
+      一张卡答完之后拿到了两天后的到期时间，而我那版 <code>todayQueue</code>
+      每次都现算桶：现算的结果是「还没到点」，<b>于是那张卡从今天的名单上消失了，
+      「已复习」那个数也跟着丢</b>。89 项里红了 3 项。
+      <br><br>
+      <b>这是同一个症状从另一侧又长了一次</b>——P9 存在就是为了修「答完了数字不对」，
+      而我的实现自己造了一遍。
+      <br><br>
+      <b>服务端不现算。</b> 队列行是 <code>enqueue</code> 那一刻写好
+      <code>bucket</code> 与 <code>capped</code> 的，做完只打一个 <code>done_at</code>。
+      所以改成那一轮开始时定死、之后只读不算。补了一条守卫，
+      而且断言里明确要求「它确实已经排到将来了」——
+      <b>那个条件就是会让现算出错的条件，不钉住它，这条守卫哪天就变成空跑。</b>
+    </div>
+
+    <h3>⑧ 复习那几屏改读投影 — 做完。<b>这是这个 Phase 的那一刀</b></h3>
+    <p>两张卡上那两个数、队列、方向、权重、封顶、拼写开没开，
+    <b>现在全部来自重放</b>。今日包照旧读，但<b>只取内容</b>——句子、义项、整个词，
+    因为生出它们正是服务端存在的理由。</p>
+    <p><b>包里的 <code>progress</code>、<code>direction</code>、<code>asks</code>、
+    <code>weight</code>、<code>done</code> 一个都不读了。</b>
+    它们是服务端上次收到上报时的样子，而那正是「复习完一池子、刷新变回 0/13」的来源。
+    字段留在线上不删（铁律 5，老服务端照旧下发），<b>读它们才是把症状请回来</b>。</p>
+    <p><code>advance()</code> 不再手动 <code>todayDone += 1</code>——
+    那是「同一个数有两处在写」，而这个 Phase 的全部内容就是把那种情况消掉。
+    现在写完日志重放一次，数字是算出来的。<code>dismissCurrent()</code> 同理，
+    不再手改名单:撤销标记让条目退回 <code>new</code>，而投影只收 <code>reviewing</code>，
+    重放一次它自己就不在了。</p>
+
+    <div class="callout">
+      <b>服务端现在把排期参数随今日包下发，而 Core 从原始字节里读它，
+      不从生成的契约类型读。</b>
+      原始字节保留的理由原话就是「a field this version of the client does not
+      understand must still survive to the next one」，而重新生成 Swift 契约要
+      Swift 工具链、r5s 上不装。四个字段都是可选的（不在 <code>required</code> 里），
+      老客户端照旧解得开。
+      <br><br>
+      <b>故意没有本地默认值。</b> 服务端没下发就是 nil，投影那时把记忆状态留空、
+      界面说「服务端还没更新」——<b>宁可缺一半，也不要一半是编的</b>。
+      两边各取自己的默认会跑出不同的间隔，而且两边都在按自己的文档正常工作、
+      没有东西会报错（§16 ② 那个形状）。
+      <br><br>
+      <b>由此有一条运维后果要记住：阿里云那台跑的是旧镜像。</b>
+      合回去之后要 <code>git pull</code> ＋ 重建镜像 ＋ 重启容器，
+      否则手机上会一直说「服务端还没更新」——而这句话是对的。
+      判断标准别靠记忆:<code>docker exec english-reader grep -c fsrs_parameters
+      /app/backend/modules/today/service.py</code>，答案是 0 就是没上去。
+    </div>
+
+    <p><b>投影说该问、而包里还没有它的句子的那些，单独计数并显示出来。</b>
+    这种情形是真实的:离线标了个词、包还没重新取下来。那个词没丢（投影里它在），
+    只是还问不了。<b>算进「共」会让 13/13 永远到不了；不说出来，
+    「今天 12 个」和「13 个」的差别没人解释得了。</b></p>
+
+    <h3>⑨ 一条事件只有一个家 — 做完</h3>
+    <p><b>在这之前一条标记写两处</b>：先进日志，再进发件箱。
+    那中间有一个窄口子——<b>崩在两次写之间，事件在日志里而发件箱里没有</b>，
+    于是它永远发不出去，而屏幕上什么都不会说（本机重放算得出它，服务端永远不知道）。
+    现在 <code>drain()</code> 直接从日志取那五种（<code>SyncEngine.drainLog</code>），
+    发件箱只剩<b>遥测</b>——打开文章、读到哪、点了哪个词，那三样不改变任何状态，
+    所以它们本来就不在日志里。</p>
+    <p><b>映射搬进了 Core</b>（<code>OutboxEntry.loggedKind</code>），App 与
+    <code>ercli</code> 共用一份：两份判断早晚会在某一种事件上分家，
+    而那时<b>一台设备把它记进历史、另一台没有，两边都不会报错</b>。
+    <code>ercli</code> 那 17 处 <code>outbox.append</code> 全部改走同一个 <code>record()</code>。</p>
+
+    <div class="callout">
+      <b>一个水位线不够用，这一条是想清楚才写的，不是撞出来的。</b>
+      服务端的回应是**逐条**的（Core 里那句注释：「silence is not consent」），
+      所以一批里可能第 5 条落了、第 6 条被拒、第 7 条又落了。
+      <b>只有水位线的话，被拒的那一条会把它后面全部挡住</b>——那比重发一条糟得多。
+      所以水位线之上单独记一个集合，追上了就清空。
+      <b>平时那个集合是空的</b>:事件按顺序发、按顺序落。
+      <br><br>
+      <b>决策事件从「待发」里过滤掉。</b> §5 定了它存服务端，
+      但那个端点还没做（§6 的活）——不过滤的话它会永远堆在那儿，
+      把待发数变成一个永远非零的噪音。而<b>待发数现在要算上日志</b>，
+      否则标了一个词、待发显示 0，而它其实还没送出去。
+    </div>
+
+    <h3>⑩ 「读完」事件带上词表 — 做完。客户端这一侧到此为止</h3>
+    <p><code>ERCore/Encounters.swift</code> ＋ 投影那一半改完。
+    词表在 Core 里算（<code>Encounters.met(in:)</code>），**逐条镜像服务端读完时那句
+    SQL**，载入文章时算一次，读完那一刻塞进事件。</p>
+    <p><b>两条只按 kind 过滤就会错的：</b>
+    <br>· <code>kind == "content"</code> <b>或 <code>is_target</code></b>——后半句不能省。
+    目标词可能落在一个被 spaCy 标成 PROPN 的 token 上（要的是 <code>latin</code>，
+    模型写了 <code>Latin</code>），而「它是这篇要教的词」是更强的信号。
+    服务端那段注释写着：<b>只按 kind 过滤，二十五个目标词里会静默丢一个。</b>
+    <br>· 按 <code>(headword, sense_id ?? 0)</code> 分组，<b>NULL 折成 0</b>。
+    这只在文章标注完时安全，而客户端拿到的只会是 <code>ready</code> 的。</p>
+    <div class="callout">
+      <b>重放这一半我原先写错了两条，这次照着服务端改对了。</b>
+      <br>① <b>加的是出现次数，不是加一</b>——服务端那句是 <code>COUNT(*) AS n</code>。
+      <br>② <b>读完不为没标过的词建记录</b>。服务端是
+      <code>if key in known: touch_state(...)</code>——遇见次数是挂在一条**已有**
+      记录上的计数，而记录是标记那一刻建的。少了这一条，一篇文章会为它的
+      每个实词造一行，<b>而那些词你并没有在学</b>。
+      <br><br>
+      <b>没有词表的事件就是没有。</b> 旧客户端发的 <code>article.finished</code>
+      不带它，重放那条只算「读完一篇」、不动任何遇见次数——<b>不去猜</b>。
+    </div>
+    <p><b>服务端那边一行没改，它照旧自己数。</b> 这不冲突:
+    <code>met</code> 是给**设备的重放**用的。而「服务端还在记遇见次数」这件事
+    本身就违反那条线（它是学习记录，不是内容）——那是 §11 模块劈开时要拆掉的，
+    不是这一步。</p>
+
+    <h3>⑪ 双向同步 — 做完（§6）</h3>
+    <p><code>GET /v1/client/events?after=N</code> ＋ <code>SyncEngine.pull()</code>。
+    <b>而全序序号原来就有，不用新造。</b></p>
+    <div class="callout">
+      <b>动手前先查了一遍，结果 §6 缩小了一大半。</b>
+      <code>client_events</code> 这张表从 P2 起就是 <code>AUTOINCREMENT</code>，
+      <b>它一直就是「服务端收到即分配的单调序号」</b>；而且它的注释早就把设备时钟
+      与服务端时钟分开存着，原话是「both are kept so a disagreement is visible
+      rather than silently resolved」——正是 §6 细则 ① 要的那件事。
+      <br><br>
+      <b>所以没有新建事件表。</b> 新建会得到第二个顺序，然后两个顺序说反话。
+      §6 实际缺的只有<b>一个拉取端点</b>:推那一半三个端点本来就在，
+      而拉回自己推上去的事件按 <code>idem_key</code> 跳过就行——
+      <b>这比让服务端按设备过滤好</b>:按设备过滤要服务端知道「哪台设备产生了哪条」，
+      而设备换了令牌就不认了，那时它会以为自己的历史不存在。
+    </div>
+    <p><b>先推后拉，一趟里完成。</b> 反过来的话这一趟拉不到自己刚做的事，
+    下一趟才拉到——中间那段时间「另一台设备的变化看得见、自己的看不见」，
+    那种半态最难解释。翻页<b>有上限（200 页）</b>，不写「跑到服务端说没有为止」——
+    那个循环在服务端一直说 <code>more: true</code> 时没有出口（坑 §7.2 那一类）。</p>
+
+    <h3>⑫ 进度报告落地 — 做完（§7）</h3>
+    <p>新模块 <code>backend/modules/progress/</code>:<code>PUT /v1/client/progress/pool</code>
+    收快照，<code>learner_pool</code> 存它，生成改读它。
+    <b>PUT 因为它是替换</b>——语义说对了，重试就天然安全。</p>
+    <p><b>整份替换用「删了重插」，而且在一个事务里。</b> 逐条 upsert 会留下上一份里
+    已经撤销掉的词:撤销标记让条目退回 <code>new</code>，而 <code>new</code> 不在上报
+    范围内，所以它在新快照里「不出现」——<b>而逐条 upsert 读不出一个「不出现」。</b></p>
+    <div class="callout">
+      <b><code>words_in_progress</code> 没有快照时回落到 <code>study_states</code>，
+      并且大声说出来。</b>
+      静默回落会让「设备从没报过」看起来和「一个词都没在学」一样，
+      于是生成把你正在学的词当生词再教一遍——<b>而那是静默的</b>，
+      只表现为「这篇怎么全是我标过的词」。
+      所以 <code>words_in_progress()</code> 返回的是<b>可选值</b>:
+      空集合是「一个都没学」，<code>None</code> 是「不知道」，两件事差别很大。
+      §11 拆掉 <code>study_states</code> 之后这条回落一起删。
+    </div>
+
+    <h3>⑬ 义项稳定键 — 做完（§8）</h3>
+    <p><code>senses.sense_key</code>（13,741 条全部回填，键唯一）＋ <code>senses_retired</code>
+    ＋ <code>sense_key_map</code>（永不删除）＋ <code>store_senses</code> 重写。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>验的</th><th>结果</th></tr>
+      <tr><td>原样重放同一份义项集</td><td class="ok"><b>id 一个都没变</b>（从前会全变），
+        而且 <code>senses.replaced</code> 不再误触发——19 篇文章不会被无谓地排上重标注</td></tr>
+      <tr><td>把义项顺序颠倒</td><td class="ok"><b>id 跟着键走，不跟着序号走</b></td></tr>
+      <tr><td>去掉一条</td><td class="ok"><b>退休而不是删除</b>，按 id 反查仍然找得到</td></tr>
+      <tr><td>再加回来</td><td class="ok"><b>复活原来那一行，id 不变</b></td></tr>
+      <tr><td>同一个意思换个说法写</td><td class="wait">键变、旧的退休——
+        <b>这是设计边界，不是缺陷</b>:键认的是那句 <code>concept_en</code>，
+        不是那个意思，而「两句话是不是同一个意思」正是那个躲不掉的判断题</td></tr>
+    </table>
+    </div>
+    <p><b>退休的行搬到另一张表，不是在原表里打标记。</b>
+    有<b>二十处</b>代码在读 <code>senses</code>，要它们全都记得加一句「排除退休的」
+    不现实，而漏一处的后果是一个已经退休的义项出现在界面上——<b>静默的</b>。
+    搬出去之后那二十处自然只看得见活的、<b>一处都不用改</b>；
+    只有按 id 反查的那两处（复习卡片、造例句）要加回落，而它们是数得出来的。
+    <br><b>顺带撤了一个预留</b>:<code>sentences.py</code> 里原本写着
+    <code>hasattr(senses, "sense_by_id")</code>——那个函数现在真的做出来了。</p>
+    <p><b>回填时撞出一处数据缺陷</b>:<code>underground</code> 有两条
+    <code>concept_en</code> 完全相同的义项（#1 与 #4）。键把它照了出来，
+    按序号加了后缀。<b>13,741 条里只有这一处。</b></p>
+
+    <div class="callout">
+      <b>⑭ 我自己造的一次事故，记在这儿而不是抹掉。</b>
+      <br><br>
+      验 <code>store_senses</code> 时我<b>直接拿真实的 <code>content.db</code> 跑了
+      变更型探针</b>——用 <code>account</code> 这个真词，把它四条义项的
+      <code>gloss_zh</code> 写成了 <code>["x"]</code>。
+      连带触发了 <code>senses.replaced</code>，订阅者把 <b>22 处语境标注清成了空</b>
+      （全库 93,063 → 93,041），19 篇文章被排上重新标注。
+      <br><br>
+      <b>义项那一半已经从迁移前的备份精确修回</b>（四条 gloss、model、考频、id 全对，
+      13,741 条、键唯一）。<b>22 处标注还没修</b>——见下面那条。
+      <br><br>
+      <b>教训不是「小心一点」，是「探针不许碰真库」。</b>
+      坑 §4.1 说的是验收脚本要自己种探针、用完删掉；
+      我这次连「用探针词」都没做到，直接改了真词。
+      改法:<b>把库用 SQLite 自己的备份 API 拷进沙箱</b>（不是 <code>cp</code>——
+      有 WAL，直接拷可能不一致），在副本上验，探针词用
+      <code>__sense_probe__</code>，前后各清一次。后来那六条性质就是这么验的。
+      <br><br>
+      <b>验收网抓到了它:</b><code>verify_phase2</code> 的 <b>2.1 报 163/164</b>
+      （「全篇实词都有语境义项」）。<b>网是有用的</b>——而这一条同时说明
+      「先搬网再搬代码」那条纪律为什么值。
+    </div>
+
+    <h3>⑮ §10 数据库重切：查清楚了，<b>但没有执行，而且是有理由的</b></h3>
+    <p>两件事先查明白了，一件是好消息，一件不是。</p>
+    <p><b>好消息:168 处调用不用改。</b> 实测 SQLite 的**未限定表名会在 attach 的库里解析**，
+    读和写都是（写也真的落进那个文件）。而 <code>learning</code> 这条连接本来就
+    attach 着 <code>dictionary</code> 与 <code>content</code>。所以把表挪到别的文件之后，
+    <code>SELECT … FROM reading_articles</code> 照旧解析得到——
+    <b>物理重切不必动那 168 处 <code>get_connection("learning")</code>。</b></p>
+    <div class="callout">
+      <b>不是好消息的那件:迁移记录也在 <code>learning.db</code> 里，21 条、10 个模块。</b>
+      <br><br>
+      <code>schema_migrations</code> 是**每个库一张**，而每条迁移自己声明
+      <code>database="learning"</code>。所以搬表要同时做三件事:把表挪过去、
+      把那个模块的迁移记录也挪过去、把所有 <code>database=</code> 改成新家。
+      <b>漏一条，那个模块的全部迁移会在新库上重跑一遍</b>——
+      而 <code>CREATE TABLE IF NOT EXISTS</code> 重跑无害，
+      <code>ALTER TABLE ADD COLUMN</code> 和那几个可调用的迁移
+      （比如 <code>_merge_study_tables</code>）重跑会失败或者把数据弄坏。
+      <br><br>
+      <b>也就是说 §10 是一次「20 张表、21 条迁移、3 个文件，每一处都要对」的手术，
+      而它动的是 93,063 条标注和全部学习记录。</b>
+    </div>
+    <p><b>所以这个 Phase 的顺序要改一下:§11、§12 先做，§10 放到它们之后。</b>
+    理由是 §12 那条纪律本身——「先搬网，再搬代码」。而现在**网是不全的**:
+    中转站 402、gemini 的 key 只在阿里云，所以标注这一路调不通，
+    <code>verify_phase2</code> 与 <code>verify_phase4</code> 有几项因此报红
+    （CLAUDE.md 早就写着那几条「不是回归，别去查代码」）。
+    <b>在一个知道自己不全的网底下搬 20 张表，正是那条纪律要拦的事。</b></p>
+    <p>改完之后这个 Phase 的收尾顺序是:
+    <b>§11 模块劈开 → §12 验收网搬家 → §10 数据库重切 → 删 Web 学习页</b>。
+    §10 从「中间那一步」挪到「倒数第二步」，而它要的前提正是 §12 给的。</p>
+
+    <h3>⑯ 把 key 转回 r5s — <b>而这一下把网补全了</b>（2026-09-18）</h3>
+    <p>用户定的：把阿里云那把 gemini 的 key 转回 r5s，<b>原有那几把一律不要了</b>。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>做了什么</th><th>结果</th></tr>
+      <tr><td>转 key</td><td><code>api_keys</code> 从 6 个条目变成 1 个（只剩 <code>gemini</code>）。
+        指纹与长度与阿里云那把完全一致。<b>全程没有把 key 打印出来</b>——
+        从 ssh 直接管道进本地脚本，只报长度与 sha256 前八位</td></tr>
+      <tr><td>删掉的</td><td>中转站那五个共用的条目（<code>1</code>／<code>dsflash</code>／
+        <code>mimo</code>／<code>judge</code>／<code>dsflash2</code>，402）与 <code>shuai</code>
+        （余额 ¥0.035，403）。<b>提供商的行留着但 <code>enabled=0</code></b>——
+        行留着是为了哪天充值改得回去，而让一个没有 key 的提供商显示成「启用」
+        是在让控制台说假话</td></tr>
+      <tr><td>配置</td><td><code>gen_provider</code> ＋ 十个 <code>llm_provider_*</code>
+        全指向 <code>gemini</code>，它也是默认提供商</td></tr>
+      <tr><td>实测</td><td class="ok">调通，<b>4.7 秒</b>，回了 <code>ready</code></td></tr>
+    </table>
+    </div>
+    <p><b>两件我没照抄阿里云那份，都有理由：</b>
+    <br>① <b>思考开关保持 <code>off</code>（十个全是）</b>。阿里云那份是 <code>default</code>，
+    而 <code>verify_phase4</code> A5.2 守的是「写文章那处必须是关的」——照抄会让它天天报红；
+    而那个网关本来就忽略这个参数，关着零成本。
+    <br>② <b>r5s 的夜间备稿仍然是 <code>false</code></b>。两台各自在 04:00 生成会让
+    <code>content.db</code> 静默分叉。**现在两台都有 key 了，这条比以前更要紧**:
+    从前是「r5s 没法生成」，现在是「r5s 不去生成」。</p>
+
+    <div class="callout">
+      <b>而这一下把 ⑮ 那个理由拆掉了:网现在是全的。</b>
+      <br><br>
+      r5s 调通模型之后，那一串 CLAUDE.md 标着「不是回归，别去查代码」的连锁当天就断了:
+      卡在 <code>annotating</code> 的那篇治好了（走 <code>daily._resume_unfinished</code>，
+      <b>治文章不治任务</b>），被 §4.6 掐死的判词组任务补跑完了。
+      <br><br>
+      <b>全套重跑，206 项自动检查、零失败:</b>
+      P0 32／P1b 28／P1c 15／<b>P2 47</b>／P3 44／<b>P4 40</b>，
+      外加 CI 上 Core 的 95 项。收尾干净:0 个 running 批次、0 篇非 ready、
+      0 条待判词组、无残留进程。
+      <br><br>
+      <b>所以 §10 的前提到了。</b> ⑮ 里写的顺序不用改（§11 → §12 → §10 → 删 Web 页），
+      但那条「网不全所以不敢搬 20 张表」的理由已经不成立——
+      现在不敢搬的理由只剩「§12 还没搬完」，而那是顺序问题，不是安全问题。
+    </div>
+
+    <h3>⑰ 这个 Phase 自己的验收脚本 — 做完，<b>并且改正了 §12 的计划</b></h3>
+    <p><code>scripts/verify_phase9.py</code>，<b>33 项，零失败</b>。七节:那条线归谁、
+    五种事件、屏幕上没有一个数字等网络、向量与样本、稳定键与映射表、双向同步、
+    排期参数从服务端来。</p>
+    <p><b>这个 Phase 不加功能，所以验的不是「它能做什么」，而是「东西在哪一侧」。</b>
+    绝大多数检查是<b>读源码断言某件事不在某一侧</b>——而那正是这种重构唯一验得动的东西。
+    也因此它<b>只读不写、连探针都不用种</b>:「东西在哪一侧」是关于代码的事实，
+    不是关于数据的。</p>
+
+    <div class="callout">
+      <b>§12 的计划要改一处:杠杆不是 <code>ercli</code>，是 <code>swift test</code>。</b>
+      <br><br>
+      原计划写的是「Python 验收照旧存在，只是驱动对象从后端 HTTP 换成 ercli」。
+      <b>而 r5s 上不装 Swift</b>——那是「开发场地」那条决定的代价，
+      <code>ercli</code> 在这台机器上编不出来也跑不了。
+      <br><br>
+      所以网只能是<b>一半在本地、一半在 CI</b>:搬进 Core 的规则由
+      <code>swift test</code> 守（95 项以上），而 <code>verify_phase9.py</code> 守的是
+      <b>「向量与样本确实覆盖了那几条规则」＋「服务端不再实现它们」</b>。
+      两件事合起来才是完整的网。<b>这不是退让</b>——反过来说，
+      规则的正确性由能编 Swift 的那台机器负责，而「东西搬对了没有」
+      由看得见两边源码的这台负责，分工比原计划清楚。
+      <br><br>
+      <code>client.yml</code> 的向量断言也扩到了排期那一套:
+      32 条评级必须是全枚举、五个有明文依据的场景名必须在、
+      参数必须是实际生效的 21 个、抖动必须是关的、
+      间隔序列必须还是 <code>2→11→46→163→180</code>。
+    </div>
+
+    <div class="callout">
+      <b>而这个脚本的第一版四条红的，全是断言自己写错了——坑 §1.2 的原形。</b>
+      <br><br>
+      查「代码还读不读 <code>buckets_done</code>」，查到的是**注释里**那句
+      「在这之前这几个数来自 <code>progress.buckets_done</code>」；
+      查「还有没有手动 <code>todayDone += 1</code>」，查到的是注释里那句
+      「上一版在这里手动 <code>todayDone += 1</code>」；
+      查有没有写死 19 个参数，查到的是 <code>w[19]</code> ——<b>一个真的数组下标</b>；
+      还有一条要求场景名里有「太简单」，而名字写的是「<b>自称</b>简单」。
+      <br><br>
+      <b>四条都红着，而它们指向的东西一点问题都没有。</b>
+      再走一步就是去改根本没错的代码——这正是坑 §1.2 那句
+      「一个错误的度量比没有度量更危险」。
+      <b>而这个项目的注释写得越详细，「注释里提到某个名字」就越不能当成
+      「代码里用着它」。</b>
+      <br><br>
+      改法:先剥注释再扫（<code>code_only()</code>），参数个数改成**断言那个常量本身**。
+      然后按坑 §4.3 做了<b>阴性 ＋ 阳性对照</b>——
+      种一个真的违规进副本会红，只在注释里提到不会红。
+      <b>只在已知好的样本上报零，不等于它有效。</b>
+    </div>
+
+    <h3>⑱ 考句／提示的划分搬到客户端，<b>并且顺手把「改不了契约」这个约束解掉了</b></h3>
+    <p><code>ERCore/SentencePool.swift</code> ＋ 6 项测试。三条规则逐条镜像服务端
+    <code>sentences.split_pools</code>:生成的句子永远是考题；出自读完过的文章 → 提示；
+    <b>那一句你确定见过 → 提示</b>。</p>
+    <p><b>为什么这半该搬:</b>造句子要钱、要模型，是工厂的活；
+    而「这一句该当考题还是当提示」取决于**你读过什么**，那是学习记录。
+    所以服务端把一个词的句子**原样全给**，客户端来分。
+    而分法本来就是<b>算出来的、不是存的</b>（<code>verify_phase3</code> 5.4 守的就是这句）——
+    多读一篇，里面的句子自动从考题搬到提示，没有要维护的字段。</p>
+    <div class="callout">
+      <b>第三条最容易漏，而它单独立了一条测试。</b>
+      判据是「你见过这一句吗」，不是「你读完那篇了吗」——两者在最普通的情形里就分家:
+      <b>你是在读的时候标记的</b>，所以标记所在那一句肯定见过，
+      而文章可能几小时后才读完、也可能永远不读完。
+      少了这一条，那一句算「没见过」、可以被抽成考题——
+      <b>于是你被五分钟前刚读过的那一句考了，看着像道容易题，
+      落下来是一个虚高的评级，而没有任何东西会报告它。</b>
+      <br><br>
+      客户端这边它合成了一个集合:标记事件带着 <code>sentence_id</code>，
+      而<b>日志只增不减——撤销标记也不会让它消失</b>，
+      那正是服务端留 <code>introduced_sentence_id</code> 想要的性质。
+    </div>
+
+    <h3>⑲ CI 现在会重新生成契约类型</h3>
+    <p>第三条规则要卡片带上文章里的那个句子 id，<b>也就是要改契约</b>。
+    而这撞上了这个 Phase 已经绕过两次的约束:<b>r5s 上不装 Swift，契约类型在本机
+    生成不出来</b>（排期参数、事件流都因此改成从原始字节解）。</p>
+    <p><b>第三次不绕了。</b> <code>client.yml</code> 新增一个 job:
+    <b>在 macOS runner 上重新生成，和提交的逐字节比，并且成功失败都把产物传出来</b>——
+    只在成功时传等于「对不上的时候你什么也拿不到」，而本机生成不出来，
+    那个产物是唯一的取得方式。生成器从源码构建要几分钟，所以 <code>.tooling</code> 有缓存。</p>
+    <p><b>回路实测走通了</b>:改契约 → 推 → 那个 job 按设计红了并传出产物 →
+    下载、提交 → 绿。而下载回来的 diff 比要的那一个字段大得多（1011 行）——
+    因为这个 Phase 前面加的<b>事件流与词池快照两个端点从来没进过生成的客户端</b>。
+    现在进去了，<b>那两处「从原始字节解」的理由也就不再成立</b>；
+    代码先留着不动，变的是下一次改契约不用再绕。</p>
+    <p><b>旧那个抽查四个字段的检查留着不删。</b> 它读得懂、跑得快，
+    而且它守的是「生成器警告然后跳过」那个具体的失败——
+    2026-09-12 有 70 个字段那样没的，而构建是绿的。</p>
+
+    <h3>⑳ 复习那几屏改读新的内容端点 — 做完（§11 的前半）</h3>
+    <p>新端点 <code>GET /v1/client/sentences</code>:你在学的每个词，
+    连它的<b>全部句子——服务端不分池</b>。加上 <code>ERCore/SentencePool</code> 那三条规则，
+    复习那几屏的内容来源从「今日包的复习那半」换成了它。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>那个端点给什么</th><th>不给什么</th></tr>
+      <tr><td>句子（未分池）、义项、词条</td>
+          <td><b>队列号、桶、方向、问过几次、权重、做完没有、进度</b>——
+          全是学习状态，现在由重放算出来</td></tr>
+    </table>
+    </div>
+    <p><b>依据是设备上报的词池快照</b>（§7），不是服务端自己推的。
+    所以还没报过快照的设备拿到空列表，而响应里 <code>reported_at</code> 为空
+    正是在说「服务端还不知道」——<b>那和「你没在学任何词」是两件事</b>。
+    实测:没报过 → 0 条；报了 3 个词 → 3 条，每条 15–16 句，
+    <b><code>sentence_id</code> 恰好只出现在语料句上</b>（生成的句子不出自任何文章，
+    而那正是第三条分池规则要的输入）。</p>
+    <p><b>题目是现拼的</b>:内容来自服务端，状态来自投影，分池用本机读过什么。
+    拼在 <code>sync()</code> 里而不是在那个计算属性里——分池要投影，
+    而计算属性拿不到 app，那样就得把 app 存进视图模型。
+    <b>这么做的好处是 <code>HintLadder</code>、会话屏、向量测试一行都不用改</b>:
+    它们吃的还是同一个 <code>ReviewItem</code>，只是那个值现在是拼出来的。</p>
+    <div class="callout">
+      <b><code>queue_id</code> 现在恒为 0，而那不是没清干净的占位符。</b>
+      它是服务端那张表的行号、每天重建，而队列现在是设备自己组的——
+      再引它就不是可重放的日志了（§16 ⑥ 那条教训）。
+      <br><br>
+      所以服务端那个作答端点学会了<b>「0 ＋ 身份」那一支:只把事件记下来，
+      不再算一遍</b>。事件已经由 <code>record_event</code> 存进
+      <code>client_events</code>，而那正是多设备的会合点——<b>两边各算一遍才是
+      真会分家的做法</b>。带真队列号的旧那一支留着不动（Web 复习页和老客户端要它，
+      铁律 5 只增不减），它随那两样一起走。
+    </div>
+    <p><b>载入顺序有意义</b>:先推事件、报词池快照，再取句子池——
+    那个端点的依据正是那份快照。今日包照旧要取，但<b>只为那几个服务端参数</b>
+    （排期参数、权重衰减）。而<b>只有今日包对日期敏感</b>:昨天的包不是「旧一点」，
+    是错的；句子池没有这个问题——它是「你在学哪些词」的函数，
+    不是「今天是哪天」的函数。</p>
+    <p>顺带清掉两处死代码:<code>ReviewItem</code> 上<b>声明了两遍的 <code>word</code> 字段</b>
+    （复制粘贴留下的，Pydantic 只用第二个所以一直没人发现），
+    以及视图模型里那份 <code>weightDecay</code>——规则搬走之后没人读它了。</p>
+
+    <h3>㉑ 拼装搬进 Core — 做完。<b>而这一步是被一个没算到的依赖逼出来的</b></h3>
+    <div class="callout">
+      <b>删服务端那套实现之前查了一遍谁还在用它，查出 <code>ercli</code>。</b>
+      <br><br>
+      命令行客户端<b>在 8 处读今日包的 <code>reviews</code> 那半</b>，
+      并且往 <code>/reviews/answer</code> 发作答——它整套复习都跑在服务端那份实现上。
+      而 <code>ercli</code> 正是文档里说的「第二客户端」，是 Web 阅读页删掉之后
+      <code>verify_phase2</code> M1 的落点。
+      <br><br>
+      <b>所以服务端那套不能先删</b>:得先把 <code>ercli</code> 也搬过来。
+      这是原来的估算里没有的一块——§11 的后半因此比预想的大。
+    </div>
+    <p><b>而这件事同时说明拼装不该待在视图模型里</b>:两个宿主都要它，
+    而 P5 那条纪律说得很清楚——同一条规则写两遍就会漂，而漂了不报错。
+    所以新建 <code>ERCore/ReviewDay.swift</code>:给它句子池、投影、哪一天，
+    它把三份东西对到一起。</p>
+    <p><b>它自己不决定任何规则:</b>桶与封顶来自
+    <code>Projection.todayQueue</code>（镜像服务端 <code>collect</code>）、
+    分池来自 <code>SentencePool</code>（镜像 <code>split_pools</code>）、
+    当天那一轮的状态机是 <code>ReviewItemState</code>（有服务端导出的向量校验）。
+    <b>这里做的只是把三份东西对到一起。</b></p>
+    <p>视图模型因此薄了一大截:它只留住取回来的那份句子池、调一次 <code>assemble</code>、
+    读四个数。<code>SpellingWord</code> 跟着搬进 Core——拼写那一轮现在在那边算，
+    而留在 App 层的类型 Core 引用不到。</p>
+
+    <h3>㉒ §11 的后半与 §12 的验收网，<b>在同一步里做完</b></h3>
+    <p><b>它们分不开。</b> 删掉一条规则、又要把守着它的验收项重新指向别处——
+    这两件事之间没有一个「网还是完整的」的中间状态。所以是一次改完的。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>删掉的</th><th>为什么它必须走</th></tr>
+      <tr><td><code>GET /reviews</code>、<code>GET /reviews/calendar</code>、
+        <code>POST /reviews/answer</code></td>
+        <td>队列、日历、单条作答——全是跟着拇指改学习状态</td></tr>
+      <tr><td><code>session.answer</code> / <code>settle</code> / <code>progress</code>
+        / <code>spelling_words</code>（约 280 行）</td>
+        <td>当天那一轮的状态机与结算。<code>session.py</code> 从 480 行剩到 136 行</td></tr>
+      <tr><td><code>repository</code> 的整个写半边</td>
+        <td>会话、入队、改队列行、记作答、存记忆状态——没有一个还有调用方</td></tr>
+      <tr><td>批量补报里带队列号的那一支</td>
+        <td><b>它已经在调一个不存在的函数了</b>——见下</td></tr>
+      <tr><td><code>on_word_unmarked</code> 订阅</td>
+        <td>它做的是「撤回标记就把今天那道题收掉」，而今天那道题不在服务端了</td></tr>
+      <tr><td><code>calendar.py</code>、<code>templates/review.html</code>、
+        管理台的出题预览与页面令牌</td><td>Web 复习页整条链</td></tr>
+      <tr><td><code>backend/…/scheduler.py</code></td>
+        <td><b>没删，搬到 <code>scripts/fsrs_reference.py</code></b>——向量要有独立来源</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>删到一半发现一个已经坏掉的分支，而没有任何东西在报错。</b>
+      <br><br>
+      批量补报 <code>POST /reviews/answers</code> 有两支：带身份的（P9 加的，只存不算）
+      和带队列号的（老路，调 <code>session.answer</code>）。而
+      <code>session.answer</code> 在前一步就删掉了——那一支于是在调一个不存在的函数，
+      <code>AttributeError</code> 被外面那个「一条坏的不拖垮整批」的
+      <code>except Exception</code> 接住，报成这一条 <code>failed</code>。
+      <br><br>
+      <b>验收项 C3.2「一条坏的不拖垮整批」照样是绿的</b>，因为它只断言
+      <code>failed == 1</code>。它验的是「坏的那条被挡住了」，而挡住它的
+      理由从「这个队列号不存在」悄悄换成了「这个函数不存在」——
+      <b>分不出两种情况的断言等于没有断言</b>（坑 §6.7），这次是自己撞上的。
+      <br><br>
+      改法是两边都改：那一支删掉，没有身份的补报<b>报 failed 并说明理由</b>
+      （「没人认得这条」必须说出来，不能静默丢掉）；C3.2 同时断言
+      <code>accepted == 0</code>。
+    </div>
+
+    <h4>服务端还剩下什么，以及一处必须补的时序</h4>
+    <p>删完之后 review 模块在服务端只剩三件事：<b>造句子</b>（工厂）、
+    <b>查词与义项</b>（内容）、<b>存档</b>（收下事件，不解释）。
+    而「该给哪些词造句子」原先读的是 <code>study_states.pool</code>——
+    那是服务端自己那份存档，从 P9 起它只由标记事件维护，<b>不是「在学」的权威答案</b>。
+    权威答案是设备上报的词池快照（§7），所以造句子那一路改读 <code>learner_pool</code>。</p>
+    <div class="callout">
+      <b>改完立刻撞上一个时序问题，而它是静默的。</b>
+      <br><br>
+      决定 23 说句子要在<b>读完那一刻</b>补上，不能等夜里——当天标的词当天就要复习，
+      而那一轮需要一句你没见过的。原先靠订阅 <code>article.finished</code> 实现。
+      <br><br>
+      但客户端的同步顺序是<b>先推事件、再报快照</b>（先推后拉那条决定的连带结果）。
+      于是「读完」事件到达时，快照里<b>还没有今天新标的那些词</b>——
+      补句子就会正好漏掉它们。不报错，第二天才发现那个词没题可出。
+      <br><br>
+      <b>所以真正的信号是「词池报上来了」，不是「读完了」。</b>
+      新增 <code>progress.pool.reported</code> 事件，review 订阅它
+      （架构铁律 6：订阅，不改别人的流程）。读完那条订阅留着不删——两条都便宜
+      （池子满了 <code>start_for</code> 直接回 <code>None</code>），
+      而留着它，将来换个顺序的客户端也照样对。
+    </div>
+
+    <h4>管理台那两页：<b>少显示，而不是显示旧的</b></h4>
+    <p>词表页原先有「上次评级 / 记忆强度 / 难度 / 轮次·失误 / 下次复习」五列，
+    <b>它们自重构那天起一次都没被写过</b>。留着的话页面看上去信息齐全，
+    报的却是一个冻结在某一天的数——「踩过的坑」§8 里那一整类。所以五列全撤。</p>
+    <p>换上来的是服务端确实知道的：标记、出处、句子池深度，
+    以及<b>设备报的词池与服务端存档并排两列</b>。
+    并排是有意的：<b>两列对不上正是「这台设备有一阵没同步了」的唯一可见信号</b>，
+    合成一列就看不见了。「设备还没报过」也不写成「还没标」——那是两件事。
+    句子池覆盖页（<code>/review/pool</code>）同样改读快照，并把
+    <code>reported</code> 一起回出来：<b>没报过时是空的，而空不等于「都够了」</b>。</p>
+
+    <h4>验收网搬完之后的数</h4>
+    <div class="table-scroll">
+    <table>
+      <tr><th>脚本</th><th>改动</th><th class="num">结果</th></tr>
+      <tr><td><code>verify_phase3</code></td>
+        <td>1–4 节换成迁移断言 1.1–1.10（向量在不在、服务端还实不实现），
+          6.x 重指 <code>/sentences</code> 与 <code>/me</code></td>
+        <td class="num">30 通过 0 失败 1 待人工</td></tr>
+      <tr><td><code>verify_phase4</code></td>
+        <td>C5.1 改成守新的那一半；C3.1／C4.1 <b>改成自己种探针</b></td>
+        <td class="num">40 通过 0 失败 2 待人工</td></tr>
+      <tr><td><code>verify_phase9</code></td>
+        <td>3.2 与 7.2 的断言改成读代码而不是读注释</td>
+        <td class="num">33 通过 0 失败</td></tr>
+      <tr><td><code>verify_phase0</code> / <code>1b</code> / <code>1c</code> / <code>2</code></td>
+        <td>没动</td><td class="num">32 / 28 / 15 / 47，全过</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+      <b>C5.1 这一条按「到期的断言」那条规矩办</b>（CLAUDE.md：改成守始终成立的那一半，
+      没删守卫，也不再天天报假警）。它原本守<b>「单条那个原样还在」</b>——
+      而单条那个正是这一步有意删掉的。
+      <br><br>
+      <b>铁律 5 的放宽只在状态／同步这半边，只此一次</b>，
+      而它唯一的调用方（Web 复习页）在同一个 Phase 一起删了。
+      改后守的是新的那一半：批量端点在，<b>而且它认得没有队列号的身份作答</b>
+      （断言 <code>item_type</code>／<code>item_key</code>／<code>sense_id</code>
+      在契约里、<code>queue_id</code> 默认 0）。
+      <br><br>
+      <b>C3.1／C4.1 顺手还掉了一笔旧账。</b> 它们原先要先 <code>GET /reviews</code>
+      拿一条真的队列行，于是当天复习做完之后就报「跑不了这一项」——2026-09-12 记在
+      坑 §4.4c 里的那次。身份是凭空造得出来的，不需要服务端先有一行，
+      所以这两项从「待人工」变回自动，<b>而且不再依赖「今天碰巧有数据」</b>（坑 §4.1）。
+      <br><br>
+      <code>verify_phase4</code> 的人工项 M1 一并改写：原文写着「打开
+      <code>/admin/review</code>」，而那个页面没了。新的 M1 是手机上那一遍——
+      飞行模式答完、重开 App 看进度还在不在、再连网看事件补没补上去。
+    </div>
+
+    <h3>㉓ 复习向量的来源也搬了家，<b>而搬的过程里露出一处漂了五天的常数</b></h3>
+    <p><code>review-vectors.json</code> 的全部意义是：客户端那份状态机<b>不是拿自己校自己</b>。
+    它原先由 <code>session.answer</code> 在一张真的队列行上跑出来——而那个函数刚被删掉。
+    <b>直接删掉导出脚本，就等于把那份向量悄悄变成「客户端某天的输出记录」</b>，
+    测试照样绿，而它验的东西已经没了。</p>
+    <p>所以照 <code>fsrs_reference.py</code> 的办法办：规则<b>逐行抄进</b>
+    <code>scripts/review_reference.py</code>——纯函数，不碰数据库、不看时钟、不读配置，
+    <code>backend/</code> 下没有任何东西 import 它。导出脚本改调它。</p>
+    <div class="callout">
+      <b>十个场景的期望值一个字节都没变</b>——这本身就是那次转写忠实的证据。
+      变的只有头部两行和<b>一个常数</b>：<code>max_reveal</code> 3 → 1。
+      <br><br>
+      <b>那是 P7 在 2026-09-13 改的</b>（三级提示压成一级），
+      而这份向量从那天起<b>就没有人重新导出过</b>，一直写着 3。
+      <code>verify_phase5</code> 的 D1.2「重新导出之后没有 diff」正是为这件事写的守卫，
+      <b>它没红是因为没人跑它</b>——r5s 上跑 <code>verify_phase5</code> 会先卡在
+      A1.1「找不到 swift」上，而看到两条红之后就不容易注意到里面还夹着这一条。
+      <br><br>
+      <b>教训不是「该跑验收」，是「一个只在别处报红的守卫等于没有守卫」。</b>
+      这条现在由 CI 的 <code>client.yml</code> 一起跑（那里有 Swift 工具链，
+      也就没有 A1.1 那两条噪音）。
+    </div>
+
+    <h3>Web 学习页什么时候删：<b>这个 Phase 的最后一步</b></h3>
+    <p><b>2026-09-17 定了两次，后一次算。</b> 先定「放到 P10 删」，
+    同日改成<b>在 P9 的结尾处做</b>。§11 那张表不变
+    （<code>reader.html</code> 719 行、<code>review.html</code> 549 行，
+    一共 1268 行要废；词池页 176 行改成看上报的快照）。</p>
+    <p><b>改成放在结尾，那条顾虑就自己解决了。</b> 原来担心的是「中间那段既没网也没旧入口」——
+    <code>verify_phase2</code> 的人工项 M1 指着 <code>/admin/reader</code>，
+    而验收网搬家（§12）要等队列组成搬完。<b>放在最后做，等于把顺序钉死成
+    「先搬网，再拆旧入口」</b>，那正是 §12 那条纪律要的顺序。</p>
+    <div class="callout">
+      <b>由此这个 Phase 的收尾顺序是定的，不是随手排的：</b>
+      <br>① 服务端那半（§6 同步、§7 进度报告、§8 稳定键、§10 数据库重切、§11 模块劈开）
+      <br>② <b>§12 验收网搬家</b>——搬完才有网
+      <br>③ <b>最后才删 Web 学习页</b>，并把 M1 改写成「在手机或 ercli 上读一篇」
+      <br>倒过来做任何一步，中间都会出现一段既没有网、也没有旧入口的时间。
+    </div>
+
+    <h3>㉔ §10 数据库重切 — 做完。<b>而它真正难的地方不是搬表</b></h3>
+    <p>⑮ 里已经查清楚了两件事：168 处调用不用改（未限定表名会在 attach 的库里解析），
+    而迁移记录是每个库一张、21 条、10 个模块。<b>做下来，难的确实是后者，
+    但还多出一件当时没看见的。</b></p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>库</th><th>装什么</th><th class="num">大小</th><th>丢了会怎样</th></tr>
+      <tr><td><code>content.db</code></td><td>原有的义项／词族／词缀，
+        <b>＋文章、句子、token、词组、复习例句、草稿</b></td>
+        <td class="num">54 MB</td><td class="wait">花钱重做一遍</td></tr>
+      <tr><td><code>events.db</code></td><td>上报的事件、词池快照、决策日志、
+        标记与进度存档</td><td class="num">0.5 MB</td>
+        <td class="wait"><b>补不回来</b></td></tr>
+      <tr><td><code>ops.db</code></td><td>设备令牌、设置、任务表、LLM 任务日志</td>
+        <td class="num">5.8 MB</td><td class="none">重新配对加重填几个值</td></tr>
+      <tr><td><code>learning.db</code></td><td><b>空了</b></td>
+        <td class="num">12 KB</td><td class="none">留着不删——旁边那三个就是它的去向</td></tr>
+    </table>
+    </div>
+    <div class="callout">
+      <b>这张表本身就是这件事的全部理由：真正补不回来的只有 0.5 MB，
+      而拆开之前那份 42 MB 的文件对备份说的是同一句话。</b>
+      备份规则因此一直在替四种不同的东西打包票，而其中三种根本不需要。
+    </div>
+
+    <h4>搬家怎么做的</h4>
+    <p><code>backend/core/resplit.py</code>，**排在迁移框架之前**跑。
+    它不重跑迁移，而是<b>从 <code>sqlite_master</code> 抄原样的 <code>CREATE</code> 语句</b>
+    到新文件——这样一路 <code>ALTER</code> 加上去的每一列都跟着过来，
+    不用谁去记得有哪些。重跑迁移只会产出<b>一份</b> schema，抄过来产出的是<b>那一份</b>。</p>
+    <p><b>幂等、可续。</b>每张表都先在新家逐行核对行数，核对过了才删旧的——
+    所以中断只会剩下两份，不会剩下零份；再跑一遍就把剩下的做完。
+    已经切过的装机上它什么也不做。</p>
+
+    <div class="callout">
+      <b>没看见的那一件：两个外键跟不过来，而留着它们不是失效，是报错。</b>
+      <br><br>
+      <code>reading_progress.article_id → reading_articles</code> 和
+      <code>review_history.sentence_id → review_sentences</code>——
+      两端现在各在一个文件里，而 <b>SQLite 不跨文件追外键</b>：
+      开着 <code>PRAGMA foreign_keys = ON</code> 的时候，插入会去<b>本文件</b>找父表，
+      找不到就直接失败。
+      <br><br>
+      所以那两句 <code>REFERENCES</code> 在搬运时从存下来的建表语句里删掉了，
+      新装机的那条迁移里也删掉了。<b>真正失去的是级联</b>：
+      删一篇文章不再顺手删掉「读过它」的记录，删一个句子不再删掉答过它的那一笔。
+      <b>而这一半反而是对的</b>——孤儿记录仍然是记录，被删掉的不是。
+    </div>
+
+    <div class="callout">
+      <b>第二件没看见的：「连接不 attach 自己」把一批限定名变成了错的。</b>
+      <br><br>
+      每条连接现在挂着其余四个库，但<b>不挂自己</b>（同一个文件挂两次是拿到两个答案的办法）。
+      于是 <code>content.senses</code> 这种写法在 <code>content</code> 连接上就成了
+      <code>no such table</code>——而这种写法从 P0 起就散在各处，当年全是从 learning 连接发出的。
+      <br><br>
+      改法不是逐处换库名，是<b>一律去掉限定名</b>：表名在五个文件里全局唯一，
+      未限定的名字于是解析到唯一有它的那个文件，读写都一样。
+      <b>而「全局唯一」这条前提现在有守卫</b>（<code>verify_phase9</code> 8.2）——
+      哪天两个文件里出现同名表，未限定的那个名字会静默解析到先挂的那个，
+      读到的是另一张表的数据，没有任何东西会报错。
+    </div>
+
+    <h4>先在副本上整跑一遍，再动真的</h4>
+    <p>「一个探针永远不碰真的数据库」那条是 2026-09-17 花了 22 条标注学来的。
+    这次照办：<code>VACUUM INTO</code> 一份副本、在副本上重切、
+    <b>在副本上把七套验收整跑一遍</b>，全绿之后才动 <code>data/</code>。
+    真跑那次先备份 <code>learning.db</code> 与 <code>content.db</code>，
+    重切自己还会再备一份。两次结果一致。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>脚本</th><th class="num">结果</th><th>改了什么</th></tr>
+      <tr><td><code>verify_phase0</code></td><td class="num">32 / 0</td>
+        <td>7.1 改成<b>逐库</b>数迁移记录；探针库与备份前缀换成 <code>events</code></td></tr>
+      <tr><td><code>verify_phase1b</code></td><td class="num">28 / 0</td>
+        <td>1.2 备份范围断言改成 <code>{events, content}</code>；
+          1.3 改成「每条连接都挂着其余四个」</td></tr>
+      <tr><td><code>verify_phase1c</code></td><td class="num">15 / 0</td><td>连接改名</td></tr>
+      <tr><td><code>verify_phase2</code></td><td class="num">47 / 0</td>
+        <td>7.15 问 <code>sqlite_master</code> 要问对文件</td></tr>
+      <tr><td><code>verify_phase3</code></td><td class="num">30 / 0</td>
+        <td>8.1 改成逐张表问它该在的那个库</td></tr>
+      <tr><td><code>verify_phase4</code></td><td class="num">40 / 0</td><td>连接改名</td></tr>
+      <tr><td><code>verify_phase9</code></td><td class="num"><b>37 / 0</b></td>
+        <td><b>新增 8.1–8.4</b>：拆完了没有、表名有没有撞、
+          <b>每条迁移的记录在不在它声明的那个库里</b>、备份范围对不对</td></tr>
+    </table>
+    </div>
+    <p><b>8.3 是这一节最值钱的一条。</b>它拿代码里每一条
+    <code>Migration(database=…)</code> 的声明去逐条核对库里的记录——
+    <b>记录漏在旧文件里，那个模块的全部迁移会在新库上重跑一遍</b>，
+    而 <code>CREATE TABLE IF NOT EXISTS</code> 挺得住、<code>ALTER TABLE ADD COLUMN</code> 挺不住。
+    这条错是启动时才发作的，而且发作在别人的机器上。</p>
+
+    <h3>㉕ 删 Web 学习页 — <b>这个 Phase 的最后一步，做完了</b></h3>
+    <p><code>reader.html</code> 719 行、<code>review.html</code> 549 行，连同两个页面令牌、
+    四个页面路由一起删。<code>review_words.html</code> 按计划改成「看上报的快照」（㉒）。</p>
+    <div class="callout">
+      <b>顺序确实是对的，而且当场兑现了一次。</b>
+      ⑮ 定的收尾顺序是「先搬网，再拆旧入口」。真到这一步时，
+      <code>verify_phase2</code> 的人工项 M1 和 <code>verify_phase4</code> 的 C 节
+      都还指着那个页面——<b>M1 指着 <code>/admin/reader</code>，
+      而 C 节整段借的是 Web 阅读页那把令牌</b>。
+      网先搬完，这两处才有地方可指:M1 改成「在手机或 ercli 上读一篇」，
+      C 节改成<b>自己签一把令牌</b>——顺带把它从「碰巧有数据」里摘出来了，
+      因为那个页面要是一次都没打开过，那一节原本会整段静默落空。
+    </div>
+    <p>文章库那一页的「打开」按钮改成「查看」，指向新增的
+    <code>GET /v1/admin/reading/articles/{id}</code>——和客户端那个同一个函数，
+    但走管理凭证、不带学习者，<b>标记那一层是空的</b>。
+    看得见而改不了，正是架构铁律 10 说的诊断通道。</p>
+    <div class="callout">
+      <b>删的过程里自己栽了一次，值得记。</b>
+      用脚本切掉配置项那一段时切多了，
+      <b>把 <code>reading/module.py</code> 的 <code>MODULE = Module(...)</code> 整个带走了</b>。
+      结果是<b>整个 reading 模块一条路由都没挂上</b>——而启动日志照旧打印「模块 reading 已挂载」
+      （那行是上一次运行留在滚动里的），<code>app.routes</code> 也看不出来
+      （FastAPI 包着 include 进来的 router）。
+      <br><br>
+      <b>认出来靠的是数端点个数：58 个，而正常是 77 个。</b>
+      验收网会抓到它（<code>verify_phase2</code> 全程在打 <code>/v1/client/articles</code>），
+      但我是在跑验收之前先手点了一下才发现的。
+      <b>教训是老的那条：脚本化的删除要断言删完之后剩下什么，不能只断言删掉了什么。</b>
+    </div>
+
+    <h3>㉖ 第一次真机验收：<b>四个缺陷，前三个是同一条链，第四个更严重</b>（2026-09-18）</h3>
+    <p>构建 11 装上去之后，用户报的是「为什么还是要转圈，而且非常卡」。
+    <b>而日志把四件事都钉死了</b>，其中没有一件是我预想的那个。</p>
+
+    <div class="callout">
+      <b>① 一批发 534 条，而三个端点都写着 <code>max_length=500</code>。</b>
+      <br><br>
+      服务端的 trace 原话:<code>List should have at most 500 items after
+      validation, not 534</code>。<code>drainLog</code> 把某一种的**全部**待发
+      一次性发出去，于是每次都是 422；<b>而 422 不是 <code>.offline</code></b>，
+      抛出去整趟同步就断——<b>队列从此只会变长</b>，每回到前台就重试一遍
+      三到六秒的请求。「一直转圈而且非常卡」就是这个。
+      <br><br>
+      改成分片，片大小 <b>200 而不是 500</b>:同一个数字在两处各写一遍本来就会漂，
+      取等号的话服务端哪天调小一点，客户端立刻整批被拒，而那个拒绝长得像
+      「包有问题」。<b>更该做的是让服务端把上限下发下来</b>，记进主文档 §M。
+    </div>
+
+    <div class="callout">
+      <b>② <code>drain()</code> 没有互斥，启动时同时跑两条。</b>
+      <br><br>
+      <b>认出它靠的是「日志里每一行都是双份」</b>——<code>adopted=399</code> 两次、
+      <code>progress.pool.reported</code> 两次。<code>AppModel</code> 是
+      <code>@MainActor</code>，而 <b>MainActor 不防重入</b>:<code>await</code>
+      一让出去第二个调用就从头跑。启动时 <code>.task</code> 和
+      <code>scenePhase == .active</code> 几乎同时到，而调用方一共七处。
+      <br><br>
+      <b>这条在 P9 之前就有</b>——09-16 那天的 <code>http.offline</code> 也是双份。
+      只是那时不致命:没有拉取端点，两趟并发只是多打一次请求。
+    </div>
+
+    <div class="callout">
+      <b>③ 两趟并发的 <code>pull()</code> 把同一批事件写进日志两遍。</b>
+      399 × 2 ＝ 798，和日志里的 <code>pending=798</code> 对得上。
+      两趟各自在开头取一份「已知幂等键」的快照，都认为这 399 条是新的；
+      而两边的 <code>markReported</code> 各读各写游标、互相覆盖。
+      <br><br>
+      <b>去重挪到写入侧</b>:<code>appendPulled</code> 自己按幂等键判。
+      <b>调用方手里的快照会过期，写入的那一刻不会</b>——那份快照现在只是省一次读盘，
+      不再是正确性的依据。
+    </div>
+
+    <h4>④ 这一条最严重，而且是 §6 双向同步自己带出来的</h4>
+    <p>422 的 trace 里那些幂等键是 <code>k-mark-1</code>、<code>repro5-mark</code>、
+    <code>k-mark-9</code>，标的是 <code>world</code>——<b>那是验收夹具</b>。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>会合点（阿里云，清理前）</th><th class="num">条数</th><th>会被设备收下</th></tr>
+      <tr><td>真客户端（UUID 形状）</td><td class="num">411</td><td class="ok">是，应该</td></tr>
+      <tr><td><code>v2-ph-mark-*</code> / <code>v2-mark-*</code>（<code>verify_phase2</code>）</td>
+        <td class="num">~300</td><td class="wait"><b>是，不该</b></td></tr>
+      <tr><td><code>k-*</code> <code>repro*</code> <code>rv-*</code> <code>verify*</code>（一次性探针）</td>
+        <td class="num">22</td><td class="wait"><b>是，不该</b></td></tr>
+      <tr><td><b>合计夹具</b></td><td class="num"><b>365</b></td>
+        <td class="wait">其中 198 条属于那五种</td></tr>
+    </table>
+    </div>
+    <p><b><code>verify_phase2</code> 会真的上报 <code>word.marked</code>，而且从不清理。</b>
+    那是它该做的——那条路正是它要验的东西。<b>P9 之前后果只是不整洁</b>:
+    词池里多几个探针词，控制台看得见。<b>而有了拉取端点之后，它变成一条污染通道</b>——
+    每台设备都会把它们拉下来重放进投影，于是手机上出现一批用户从没标过的词，
+    两边都不报错。那些事件从 2026-09-07 就躺在库里。</p>
+    <div class="callout">
+      <b>而清理这件事本身差点又造一个错，这一次是我自己的。</b>
+      <br><br>
+      第一版 <code>clean_probe_events</code> 按事件 payload 里的词
+      <b>无条件</b>删 <code>study_marks</code>。而 <code>verify_phase2</code>
+      标的是<b>真文章里的一个真词</b>（<code>sample["headword"]</code>），
+      不是造出来的探针词——那样删会删掉用户自己标的那一笔。
+      <br><br>
+      改成<b>「只有当没有任何真事件支持它时才删派生行」</b>。
+      实测在阿里云上:删掉 <code>world#9372</code> <b>一个</b>，
+      留下 <code>account for</code>、<code>come from</code>、<code>month</code>、
+      <code>supply</code> <b>四个</b>——那四个都是用户自己标的。
+      <b>这条判断在它写下来的当天就兑现了四次。</b>
+    </div>
+    <p><b>守卫与清理分开放</b>:清理归制造它的那个脚本
+    （<code>verify_phase2</code>，前后各清一次，新断言 6.10 断言自己清干净了）；
+    <b>守卫在 <code>verify_phase9</code> 8.5</b>——「会合点里不许有夹具形状的事件」，
+    它连一次性探针留下的也看得见，而那些没有主人。
+    <b>真正的解法是验收用自己的 learner</b>，那样它产生的事实根本流不到本人的设备上
+    （<code>/events</code> 按 learner 过滤）。那要先有多用户，记进主文档 §M。</p>
+
+    <h4>顺带修的：开发者选项里的「丢掉本地日志，从服务器重新拉」</h4>
+    <p><b>服务端清干净了并不够。</b> 那 798 行已经在设备上，而投影是从它算出来的；
+    <b>日志从不回头改</b>——那是设计，不是缺陷。既然不许改，就得能整份丢掉重来。</p>
+    <p><b>先推，再看，才敢丢。</b> 设备是学习记录的第一副本，会合点只是会合点，
+    所以这个动作只在「本地没有任何还没上报的事实」时才无损。推完还有待发就
+    <b>拒绝并说出数目</b>，不提供「强制」那个选项——一个能把自己的学习记录删掉的
+    按钮，不该由一次点击决定。游标跟着清，否则下一次拉取从旧的
+    <code>pulledThrough</code> 往后取，<b>前面那一段再也拉不回来</b>，
+    那比脏日志更糟。</p>
+    <div class="callout">
+      <b>写这一屏的时候，我把 P8 §18 那个「越用越慢」原样重造了一遍。</b>
+      为了显示「日志里一共多少条」，我把整份读盘塞进了
+      <code>refreshPendingCount()</code>——<b>而那个方法每记一条事件就被调一次</b>。
+      2026-09-16 那次塞进去的是 <code>outbox.pending()</code>（读并解码发件箱里
+      每一个文件），症状是答得越多越慢。
+      <br><br>
+      改成按需算，并在方法上写明「不许塞进那里」。
+      <b>同一个位置、同一个形状、隔两天、两个不同的原因</b>——
+      所以这次把禁令写在了那个方法的注释里，而不只是记在坑里。
+    </div>
+
+    <h3>下一步：<b>代码这边做完了，剩下的是人要做的</b></h3>
+    <p>§4 到 §12 全部落地，①–㉕ 都有记录，七套自动验收共 <b>229 项零失败</b>。
+    CLAUDE.md 的架构铁律与跨 Phase 不变量已照 §4／§15 重写。剩下三件：</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>阿里云那台要重建镜像</b>
+        <span><b>手机连的是它，而它跑的还是旧镜像。</b>不重建的话手机上看到的
+        仍然是旧服务端——`git pull`（要挂代理，直连 GnuTLS 报错）＋
+        <code>/root/build-er.sh</code> ＋ 重启容器。
+        <b>判断标准别靠记忆</b>：<code>docker exec english-reader grep -c resplit
+        /app/backend/core/db.py</code>，答案是 0 就是没上去。
+        它那份 <code>learning.db</code> 会在启动时自己拆——重切是幂等的，
+        而且拆之前会自己备份一次。</span></span></div>
+      <div class="not"><i>·</i><span><b>人工验收</b>
+        <span>铁律说每个 Phase 由用户实际跑一遍。这个 Phase 该验的是
+        <b>§1 那个症状没有了</b>：复习完返回主界面，13/13 就是 13/13，
+        刷新不变、不转圈、断网照样对。外加 <code>verify_phase2</code> M1
+        （在手机或 <code>ercli</code> 上真读完一篇）。</span></span></div>
+      <div class="not"><i>·</i><span><b>推一次 TestFlight</b>
+        <span>客户端这一侧改动很大（投影、排期、日历、句子池全在设备上算），
+        而模拟器和 CI 验得了「编得过、装得上、起得来」，验不了拇指。</span></span></div>
+    </div>
+    <div class="callout">
+      <b>没做、也不该在这个 Phase 做的：</b>数据大清洗（§13 明确排除，
+      P9 只把稳定键和映射表做出来让它以后不再贵）、长期不上线的退化策略
+      （§7 那个时间戳字段留着了）、账号与多用户。
+      <b>还有一件是这个 Phase 制造出来的欠账</b>：架构铁律 5「内容 id 一旦发出去就不许变」
+      现在是一条<b>规矩，还不是一个实现</b>——重新分析仍然是原地重建 token。
+      义项那一半 §8 做掉了，token 那一半没有，记进主文档 §M。
+    </div>
+
+    <h3>已经花掉的与已经拿到的</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">25</div>
+        <div class="fig-key">做完的活（①–㉕），§4–§12 全部落地</div></div>
+      <div class="fig"><div class="fig-val">8<span> ＋1 次事故</span></div>
+        <div class="fig-key">路上撞到的教训，外加我自己造的那一次（⑭）</div></div>
+      <div class="fig"><div class="fig-val">112</div>
+        <div class="fig-key">CI 上的 Core 测试，13 个套件（原 65 起）</div></div>
+      <div class="fig"><div class="fig-val">229</div>
+        <div class="fig-key">全套自动验收（七个脚本），<b>零失败</b></div></div>
+      <div class="fig"><div class="fig-val">0.5<span> MB</span></div>
+        <div class="fig-key">拆库之后真正补不回来的那一份（原本混在 42 MB 里）</div></div>
+      <div class="fig"><div class="fig-val">−701<span> 行</span></div>
+        <div class="fig-key">服务端净减（2142 增 / 2843 删）——而<b>删掉的四个文件就有 1631 行</b>:
+          两个 Web 学习页、日历、调度</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
+      <h2>怎么结束的，以及欠下了什么</h2>
+      <span class="sec-note">2026-09-19</span>
+    </div>
+
+    <p class="lede">用户定的：<b>这个 Phase 到此为止。</b>
+    代码写完了、自动验收全绿，<b>而真机上那个症状还在</b>——
+    「快速切换选项卡就会很卡，还是会触发转圈」。推了三版（11、13、14），三版都没修好它。
+    <b>所以这个 Phase 的验收没有通过</b>，下面这一节照实写，不把「做到的」写成「跑通了」。</p>
+
+    <div class="callout">
+      <b>先说清楚哪些是有证据的，哪些不是。</b>这一条比下面任何一段都重要——
+      我在这三轮里反复犯的错，正是把「我修好了一个真的缺陷」当成了
+      「我修好了他看到的那个问题」。
+    </div>
+
+    <h3>确实修掉了，而且有证据</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>缺陷</th><th>证据</th></tr>
+      <tr><td>一批发 534 条，而端点上限 500，每次 422、队列只会变长</td>
+        <td class="ok">用户自己的日志：构建 13 之后
+          <code>07:11:30 http.ok POST /v1/client/events status=200</code></td></tr>
+      <tr><td><code>revealed</code> 的入站上限被收紧（3 → 1），存档里 2 条老值
+        让 118 条作答永远进不来</td>
+        <td class="ok">线上混合批次实测 <code>accepted=2 failed=1</code>，
+          那条 <code>revealed=2</code> 收下了</td></tr>
+      <tr><td>批量端点的校验是全有全无的，逐条裁决从来没生效</td>
+        <td class="ok">同上；三个端点都验过，坏的那条只挡住自己</td></tr>
+      <tr><td>会合点里混着 365 条验收夹具，设备当成真历史收下</td>
+        <td class="ok">r5s 246 → 224、阿里云 776 → 411，
+          清理时**留下 4 笔有真事件支持的标记**没动</td></tr>
+      <tr><td><code>drain()</code> 不互斥、拉取重复收</td>
+        <td class="wait">改了、有回归测试，<b>但没有在真机日志上复验过</b></td></tr>
+    </table>
+    </div>
+
+    <h3>没修掉的，就是他报的那一个</h3>
+    <p><b>「快速切换选项卡就会很卡，还是会触发转圈」——构建 14 之后依然存在。</b>
+    我为它找过三批原因（网络批太大、同步并发、屏幕等在同步上、日志被读两遍），
+    每一批都是真的缺陷，<b>而没有一批被证明是它的成因</b>。</p>
+    <div class="callout">
+      <b>而这三轮里有一件我始终没有做到：让那台设备把症状发生时的样子告诉我。</b>
+      我拿到的一直是<b>事后的日志</b>——它能证明「某个请求失败了」，
+      证明不了「屏幕为什么在转」。
+      <br><br>
+      具体地说，下面这些我一次都没测过，而它们每一个都能单独造成「卡 ＋ 转圈」：
+      <br>· 切选项卡时 SwiftUI 到底重建了哪些视图、`.task` 被取消了几次；
+      <br>· 主线程上那几次重放实际花了多少毫秒（799 条是「应该很快」，不是量过的）；
+      <br>· <code>fetchDay()</code>／<code>fetchSentences()</code> 在隧道上的真实耗时，
+      以及取消之后有没有重来；
+      <br>· 那个转圈到底是哪一屏的哪个 <code>phase</code>。
+      <br><br>
+      <b>「我改对了代码」和「他不卡了」之间隔着一次观测，而那次观测我做不到。</b>
+    </div>
+
+    <h3>有一件事实要一起记着，它既不是借口也不能忽略</h3>
+    <p><b>用户那台设备上的本地日志一直没有重置过。</b>
+    构建 13 才有那个按钮，而用户报「bug 依然存在」时，设备上仍然可能压着构建 11
+    那天收下的 798 条（其中 240 条是夹具）。
+    这<b>不构成「其实已经修好了」</b>——我没有任何证据说它修好了；
+    它只是意味着<b>下一次复现必须先把设备恢复到干净状态</b>，否则测的是两件事叠在一起。</p>
+
+    <h3>真正该改的是做法，不是再猜一轮</h3>
+    <p>用户说了一句改变这件事的话：<b>「我有 mac 了可以测试了」</b>。</p>
+    <div class="callout">
+      <b>这三轮的形状是一样的：远程读日志 → 推断 → 出一版 → 症状还在。</b>
+      而 P6 §13 早就写过同一件事的另一面——
+      「模拟器上用鼠标点和真机上用拇指读判断不出同一批东西」，
+      当时的结论是「远程操控 runner 那条路试过、走死了」。
+      <br><br>
+      <b>有了 Mac，这条路第一次通了</b>：能装 Xcode、能跑 Instruments、
+      能在模拟器和真机上边点边看主线程耗时，
+      也能把 <code>swift build</code> 从「推一次等 CI 一分钟」变成本地几秒。
+      <b>所以下一步是搬场地，不是再猜一轮。</b>
+    </div>
+    <p>用户定的：<b>稍后开始把项目迁到 Mac。</b>
+    那是下一个 Phase 的事，这里只记结论，不提前规划（「只规划当前 Phase」）。</p>
+
+    <h3>同一天后续：Mac 装好之后没等「下一个 Phase」，当场接着查，修好了</h3>
+    <p><b>2026-09-19 当天，Mac 一装好就直接接着查了这条账，而不是留到以后。</b>
+    这一次做到了上面说的「让那台设备把症状发生时的样子告诉我」：用 <code>xcrun devicectl</code>
+    直接连真机——装、启动、拉回它本地的原始文件、挂控制台看实时输出，全部第一次在这个
+    Phase 里真正做到。一路测出四层叠在一起的原因，每一层都配着实测数据，不是推断。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>原因</th><th>证据</th></tr>
+      <tr><td>四条 P9 之前记的老作答（没有 <code>item_key</code>）被服务端永久判
+        <code>failed</code>，客户端却当成「这次没连上」反复重发，<code>pendingEvents</code>
+        永远非零，复习屏因此永远走「等一趟同步」的阻塞路径</td>
+        <td class="ok">从真机拉回原始 <code>events.jsonl</code>：<code>reportedThrough</code>
+        卡在 394、总数 399，差的正好 4 条；改成「服务端判了就别再问」之后实测
+        <code>rejected=4 remaining=0</code></td></tr>
+      <tr><td>打卡日历不是真的「一次前向重放」——四百天窗口里但凡有一天吃进新事件，
+        那天及之后每一天都在把越滚越大的事件数组重新处理一遍</td>
+        <td class="ok">同一份真机事件数据反复重放实测：日历计算 1135ms →
+        869ms（先做到「不变就跳过」）→ <b>48ms</b>（改成真正的增量、
+        一条事件在整个扫描里只处理一次）</td></tr>
+      <tr><td><code>ISO8601DateFormatter</code>／<code>Calendar</code> 在热路径上
+        每次现建，今日包／句子池的 JSON 解码也没有缓存</td>
+        <td class="ok">单次全量重放 169ms → 30ms；<code>cachedDay()</code>
+        解码 1MB 今日包 28ms → 命中缓存后 0ms</td></tr>
+      <tr><td><code>adopt()</code> 无条件重放整个投影，哪怕排期参数根本没变</td>
+        <td class="ok">冷启动实测拆解:<code>events.load()</code> 10ms ＋
+        <code>Projection.replay()</code> 30ms，改成「参数没变就跳过」</td></tr>
+      <tr><td>取消处理会把已经显示好的 <code>.ready</code> 画面强行拉回
+        <code>.loading</code>——这条不是性能问题，是「立刻切走再切回」比
+        「放一会儿再切」更容易复现的真正原因</td>
+        <td class="ok">用户自己复测出的规律（「放着不动过一会儿就不转了」），
+        改完之后同一规律复测通过</td></tr>
+      <tr><td><code>ReviewModel</code> 每次进复习页才诞生、从 <code>.loading</code>
+        起步——SwiftUI 的 <code>.task</code> 调度必然先画一帧初始状态，
+        跟这一下算得快不快无关</td>
+        <td class="ok">改成跟 <code>AppModel</code> 一样在开屏时创建并预热之后，
+        单独测「开屏第一瞬间就点」「立刻切回」「杀后台重开」三种场景，
+        用户确认均不再转圈</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>跟前三版的形状对比一下才看得出差在哪。</b>前三版是「远程读日志 → 推断 →
+      出一版 → 症状还在」，四次都没有真正观测到症状发生的那一刻。这一次每一处修复
+      都配了实测:从真机拉原始数据在本地重放、临时插桩量出耗时分布、改完再装回真机
+      让用户当场复测同一个操作序列。<b>「我改对了代码」和「他不卡了」之间那次观测，
+      这次做到了。</b>
+    </div>
+
+    <p><b>所以这笔账现在可以合上了。</b>「快速切换选项卡卡顿、转圈」——用户确认不转了，
+    包括最极端的「开屏第一瞬间就点」。这不是「应该好了」，是同一天在真机上来回验证了
+    六轮以上、每一轮用户都直接复测过的结论。<b>这不改写上面「怎么结束的」那几节的记录</b>
+    ——那几节写的是 Phase 结束那一刻真实的状态，照实留着；这一节写的是结束之后同一天
+    发生的事。</p>
+
+    <h3>这个 Phase 交付了什么</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">26</div>
+        <div class="fig-key">做完的活（①–㉖），§4–§12 全部落地</div></div>
+      <div class="fig"><div class="fig-val">231</div>
+        <div class="fig-key">自动验收，<b>零失败</b></div></div>
+      <div class="fig"><div class="fig-val">116</div>
+        <div class="fig-key">CI 上的 Core 测试</div></div>
+      <div class="fig"><div class="fig-val">0.5<span> MB</span></div>
+        <div class="fig-key">拆库后真正补不回来的那一份（原本混在 42 MB 里）</div></div>
+      <div class="fig"><div class="fig-val" style="color:var(--stop)">未通过*</div>
+        <div class="fig-key"><b>人工验收</b>——Phase 结束那一刻症状仍在，三版没修好；
+        <b>* 同一天后续修好了，见上一节</b></div></div>
+    </div>
+    <p><b>所以这个 Phase 结束那一刻的状态是「代码完成、验收未通过、暂停」。</b>
+    它不是「做完了」。铁律那条「每个 Phase 结束由用户实际跑一遍验收清单，通过后才进下一个」
+    没有被满足，而这一次<b>不给它记例外</b>——前两次记名的例外都有交换条件
+    （P5 没有界面、P6–P8 要约人用真机），<b>这一次没有</b>：
+    只是我没修好，而修不好的原因是我看不见它。
+    <b>这个判断本身没有错</b>——三版确实没修好，暂停本身是对的决定；
+    只是暂停之后同一天做的事（搬到 Mac）让「看不见它」这个原因不再成立，
+    照实记在上一节，不倒回来改这一段的判断。</p>
+  </section>
+
+
+  <footer>
+    <div>English Reader</div>
+    <div>Phase 9 · 重构 · 代码完成，结束那一刻验收未通过；同一天搬到 Mac 后症状修好</div>
+    <div>2026-09-19</div>
+  </footer>
+
+</div>

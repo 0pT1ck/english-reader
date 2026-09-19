@@ -40,7 +40,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="device tokens",
-        database="learning",
+        database="ops",
         apply="""
         CREATE TABLE IF NOT EXISTS devices (
             id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -56,7 +56,7 @@ MIGRATIONS = [
     Migration(
         version=2,
         name="device belongs to a learner",
-        database="learning",
+        database="ops",
         # The identity hook. There is exactly one learner and this column is
         # always 1 — no registration, no login, nothing reads it as a variable
         # yet. It exists because P2 is the moment the client contract is
@@ -165,7 +165,7 @@ def _hash_token(token: str) -> str:
 def create_device(name: str) -> str:
     """Register a device and return its token. The token is shown exactly once."""
     token = secrets.token_urlsafe(32)
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "INSERT INTO devices (name, token_hash, created_at) VALUES (?, ?, ?)",
         (name, _hash_token(token), datetime.now(timezone.utc).isoformat(timespec="seconds")),
@@ -176,7 +176,7 @@ def create_device(name: str) -> str:
 
 
 def revoke_device(device_id: int) -> bool:
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     cursor = conn.execute(
         "UPDATE devices SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), device_id),
@@ -188,7 +188,7 @@ def revoke_device(device_id: int) -> bool:
 
 
 def list_devices() -> list[dict]:
-    rows = get_connection("learning").execute(
+    rows = get_connection("ops").execute(
         "SELECT id, name, learner_id, created_at, last_seen_at, revoked_at"
         " FROM devices ORDER BY id"
     ).fetchall()
@@ -202,7 +202,7 @@ def learner_for_device(device_id: int) -> int:
     constant inline, so switching to real multi-user work is a change to this
     function and the column behind it — not a sweep through every endpoint.
     """
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT learner_id FROM devices WHERE id = ?", (device_id,)
     ).fetchone()
     return int(row["learner_id"]) if row else SOLE_LEARNER_ID
@@ -231,7 +231,7 @@ async def require_device(
         raise Unauthorized("缺少设备令牌")
 
     token = authorization.split(" ", 1)[1].strip()
-    row = get_connection("learning").execute(
+    row = get_connection("ops").execute(
         "SELECT id, revoked_at FROM devices WHERE token_hash = ?",
         (_hash_token(token),),
     ).fetchone()
@@ -241,7 +241,7 @@ async def require_device(
     if row["revoked_at"]:
         raise Forbidden("该设备令牌已被吊销")
 
-    conn = get_connection("learning")
+    conn = get_connection("ops")
     conn.execute(
         "UPDATE devices SET last_seen_at = ? WHERE id = ?",
         (datetime.now(timezone.utc).isoformat(timespec="seconds"), row["id"]),

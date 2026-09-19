@@ -6,7 +6,9 @@ name: 界面
 # 所以这里的每一次运行都是「第一次编译」——不是补一道保险，是唯一那道。
 on:
   push:
-    branches: [ios]
+    # 同 client.yml：P9 在 `refactor` 上做，而它照样要过那四样——
+    # 编得过、装得上、起得来、不闪退。界面 Phase 的缓解只有这一条，别把它漏在分支外面。
+    branches: [ios, refactor]
   workflow_dispatch:
 
 concurrency:

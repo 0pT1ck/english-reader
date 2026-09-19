@@ -20,7 +20,10 @@ from fastapi import APIRouter, Depends, Request, Response
 from backend.core import auth, runtime_config
 from backend.core.registry import Module
 from backend.modules.today import service
+from backend.core.contract import Capabilities, Learner
+from backend.modules.reading import service as reading
 from backend.modules.today.contract import TodayResponse
+from pydantic import BaseModel
 
 client_router = APIRouter()
 
@@ -60,6 +63,31 @@ async def today(device_id: DeviceId, request: Request, response: Response) -> An
 
     response.headers["ETag"] = etag
     return payload
+
+
+class MeResponse(BaseModel):
+    '''这把令牌是谁的，以及哪些留好的位置真的有值了。
+
+    **测试连接用的就是它。** 在这之前那个探针打的是日历那个端点
+    （「最轻的一个」），而日历 P9 搬到了设备上——探针因此需要一个真正最轻的:
+    不读学习记录、不组装任何东西、不下发一个字节的内容。
+
+    **它同时回答了探针真正关心的两件事**:令牌认不认（401 还是 200），
+    以及对面是谁（换过令牌之后名字对不对）。
+    '''
+
+    learner: Learner
+    capabilities: Capabilities
+
+
+@client_router.get("/me", summary="这把令牌是谁的（测试连接用）",
+                   response_model=MeResponse)
+async def me(device_id: DeviceId) -> Any:
+    learner_id = auth.learner_for_device(device_id)
+    return {
+        "learner": auth.learner_profile(learner_id),
+        "capabilities": reading.capabilities(),
+    }
 
 
 def _etag_for(payload: dict[str, Any]) -> str:

@@ -21,7 +21,7 @@ MIGRATIONS = [
     Migration(
         version=1,
         name="llm providers, jobs and job items",
-        database="learning",
+        database="ops",
         apply="""
         CREATE TABLE IF NOT EXISTS llm_providers (
             id          TEXT    PRIMARY KEY,   -- slug, also the secrets.json key
@@ -99,7 +99,7 @@ MIGRATIONS = [
     Migration(
         version=2,
         name="move the three hand-placed provider settings onto the per-worker keys",
-        database="learning",
+        database="ops",
         apply=lambda conn: _adopt_provider_settings(conn),
     ),
 ]

@@ -124,12 +124,30 @@ runtime_config.register(
     ),
     runtime_config.ConfigSpec(
         key="fsrs_parameters",
-        default=[],
+        # **写死这 21 个数，不再「留空 ＝ 用库的默认」**（P9 §11）。
+        #
+        # 排期搬到了客户端，所以服务端不再有 FSRS 的实现可以去问「你的默认是什么」。
+        # 而「留空」这个约定本来就危险:两个包自带的默认**不是同一组数**
+        # （py-fsrs 6.3.2 是 FSRS-6 的 21 个，那个官方 Swift 包默认仍是 FSRS-5 的 19 个），
+        # 两边各取自己的默认就会跑出不同的间隔——**而两边都在按自己的文档正常工作、
+        # 没有东西会报错**。参数本来就是配置，现在它就长得像配置。
+        #
+        # 这组数是 py-fsrs 6.3.2 的默认值，2026-09-18 照抄进来；
+        # 它同时记在 `scheduler-vectors.json` 的 `settings.parameters` 里，
+        # 而那份向量是拿它导出来的——两处对不上，向量那一套会红。
+        default=[
+            0.212, 1.2931, 2.3065, 8.2956, 6.4133,
+            0.8334, 3.0194, 0.001, 1.8722, 0.1666,
+            0.796, 1.4835, 0.0614, 0.2629, 1.6483,
+            0.6014, 1.8729, 0.5425, 0.0912, 0.0658,
+            0.1542,
+        ],
         value_type="json",
-        title="FSRS 参数（留空用库的默认值）",
+        title="FSRS 参数（21 个数）",
         description=(
-            "21 个数。留空就用 py-fsrs 自带的默认参数——它们是从数百万条真实复习记录拟合出来的。"
+            "21 个数，FSRS-6。默认这一组是从数百万条真实复习记录拟合出来的。"
             "将来攒够自己的复习历史，可以用 optimizer 重新拟合成你个人的遗忘曲线，再填到这里。"
+            "**客户端按下发的这一组算排期**，所以改了它，手机上的间隔跟着变。"
         ),
         group="review",
         order=60,
@@ -209,35 +227,14 @@ def _register_workers() -> None:
     jobs.register_worker(translate.WORKER)
 
 
-def on_word_unmarked(event: Event) -> None:
-    """撤回标记之后，把它今天的那道题也收掉。
-
-    Reading sends the item back to the ``new`` pool; the queue row for today is
-    this module's business. Without this the word keeps being asked all day —
-    found on a device 2026-09-16, pressing 「这个词我已经会了」 and watching it
-    come back on the next draw.
-
-    **Closed rather than deleted.** The row is the day's record of what was
-    planned; deleting it would make today's progress numbers disagree with
-    themselves. It is marked done with no answer recorded — nothing was
-    answered, and `review_history` stays the log of actual answers.
-    """
-    learner_id = int(event.get("learner_id") or 1)
-    item_key = str(event.get("item_key") or "")
-    sense_id = int(event.get("sense_id") or 0)
-    item_type = str(event.get("item_type") or "word")
-    if not item_key:
-        return
-    try:
-        closed = repository.close_open_queue_rows(
-            learner_id, item_type=item_type, item_key=item_key, sense_id=sense_id)
-    except Exception as exc:  # noqa: BLE001 - undoing a mark must not fail on this
-        log.warning("review.unmark.failed",
-                    f"撤回标记后没能收掉今天的题：{exc}", item=item_key)
-        return
-    if closed:
-        log.info("review.unmark.closed",
-                 f"撤回标记，收掉了今天 {closed} 道题", item=item_key, closed=closed)
+# `on_word_unmarked` 没有了（P9 §11）。它做的是「撤回标记之后把今天那道题收掉」，
+# 而今天那道题现在根本不在服务端——队列由设备重放自己的日志算出来，撤回标记就是
+# 日志里的一条 `word.unmarked`，下一次重放它自己就不在了。
+#
+# **这一条值得留个记号**:它是 2026-09-16 真机上逼出来的修复（点「我已经会了」，
+# 那个词照样来），当时补的是「意图写了、实现只做了一半」那个坑（§7.1）。
+# 现在它消失不是因为问题没了，是因为那半边状态消失了——同一个 bug 在新架构里
+# 造不出来。**这是这条线画对了的一个证据，不是一次退步。**
 
 
 def on_article_finished(event: Event) -> None:
@@ -269,6 +266,35 @@ def on_article_finished(event: Event) -> None:
                  article_id=event.get("article_id"), job_id=job_id)
 
 
+def on_pool_reported(event: Event) -> None:
+    """Top up the sentence pools when the device says what it is learning.
+
+    **This is the signal, and `article.finished` is only the older half of it.**
+    Which senses need sentences is a function of which senses are being learned,
+    and as of P9 that answer arrives from the device (`phase-9.html` §7) rather
+    than being derived here. A word marked while reading is not in the snapshot
+    the server holds until the device reports again — and the device reports
+    *after* it pushes its events, so the finish event alone would miss exactly
+    the words marked today. Silently: nothing errors, the word simply has no
+    question when it first comes up.
+
+    Silent when every pool is already full — ``start_for`` returns ``None``.
+    """
+    learner_id = int(event.get("learner_id") or 1)
+    if not int(event.get("reviewing") or 0):
+        return
+    try:
+        job_id = sentences.start_for(learner_id=learner_id)
+    except Exception as exc:  # noqa: BLE001 - reporting a snapshot must not fail on this
+        log.warning("review.autogen.failed",
+                    f"收到词池快照后自动补句子没能启动：{exc}")
+        return
+    if job_id:
+        log.info("review.autogen.started",
+                 f"收到词池快照后开始补句子池（在学 {event.get('reviewing')} 条）",
+                 job_id=job_id, reviewing=event.get("reviewing"))
+
+
 MODULE = Module(
     name="review",
     title="复习",
@@ -278,20 +304,16 @@ MODULE = Module(
     admin_router=routes.admin_router,
     admin_router_pages=routes.pages_router,
     admin_pages=[
-        AdminPage(
-            title="复习",
-            path="/admin/review",
-            order=35,
-            description="今天要复习的词、句子池状态、复习历史",
-        ),
+        # 「复习」那一页 2026-09-18 删了（P9 §11）:它要能复习就得在 JS 里
+        # 再实现一遍学习引擎，而那是那条线禁止的事。复习在手机和 `ercli` 上。
         AdminPage(
             title="词表",
             path="/admin/review/words",
             order=36,
-            description="标记过的每个词：评级、下次复习、出处、编好的句子",
+            description="标记过的每个词：标记、出处、句子池，以及设备报的词池",
         ),
     ],
     on_startup=_register_workers,
     subscriptions={"article.finished": [on_article_finished],
-                   "word.unmarked": [on_word_unmarked]},
+                   "progress.pool.reported": [on_pool_reported]},
 )

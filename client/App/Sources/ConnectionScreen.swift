@@ -127,13 +127,17 @@ struct ConnectionScreen: View {
         Task { await app.drain() }
     }
 
-    /// 用日历那个端点探，**它是最轻的一个**：不下发全文，服务端也不用组装今日包。
+    /// 用 `/me` 探，**它是真正最轻的一个**：不读学习记录、不组装任何东西、
+    /// 不下发一个字节的内容。
+    ///
+    /// **P9 之前探的是日历那个端点**（当时最轻的），而日历搬到了设备上——
+    /// 探针因此换了目标。它回答的还是那两件事:令牌认不认，以及对面是谁。
     private func test() async {
         guard let engine = app.engine else { return }
         probe = .running
         do {
-            let calendar = try await engine.calendar(days: 1)
-            probe = .reachable(calendar.learner.name)
+            let who = try await engine.me()
+            probe = .reachable(who.learner.name)
             app.log?.write(.info, "connection.probe.ok", "测试连接通了")
         } catch let error as TransportError {
             switch error {

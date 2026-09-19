@@ -97,7 +97,7 @@ def find_candidates(article_id: int) -> int:
     expensive pass (95,058 contextual sense annotations, 4.6M input tokens)
     is never touched.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     tokens = conn.execute(
         "SELECT id, sentence_id, seq, surface, headword, pos, kind FROM reading_tokens"
         " WHERE article_id = ? AND surface GLOB '[A-Za-z]*' ORDER BY seq",
@@ -133,7 +133,7 @@ def find_candidates(article_id: int) -> int:
             phrase = None
             for candidate in dict.fromkeys([" ".join([token["headword"].lower()] + tail),
                                             " ".join([token["surface"].lower()] + tail)]):
-                if conn.execute("SELECT 1 FROM dict.phrases WHERE phrase = ?",
+                if conn.execute("SELECT 1 FROM phrases WHERE phrase = ?",
                                 (candidate,)).fetchone():
                     phrase = candidate
                     break
@@ -176,7 +176,7 @@ INSTRUCTION = """\
 
 
 def pending(article_ids: list[int] | None = None, limit: int = 100000) -> list[dict[str, Any]]:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     where = "p.verdict IS NULL"
     params: list[Any] = []
     if article_ids:
@@ -204,7 +204,7 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 def _run(provider: Provider, payload: dict[str, Any],
          params: dict[str, Any]) -> jobs.ItemOutcome:
-    conn = get_connection("learning")
+    conn = get_connection("content")
     ids = [int(i) for i in payload["ids"]]
     rows = conn.execute(
         f"SELECT p.id, p.phrase, p.surface, s.text AS sentence"  # noqa: S608
@@ -320,7 +320,7 @@ def mark_tokens_in_phrases(article_id: int | None = None) -> int:
     Idempotent, and cheap enough to re-run over everything: one UPDATE joined
     against the confirmed spans.
     """
-    conn = get_connection("learning")
+    conn = get_connection("content")
     scope = " AND t.article_id = ?" if article_id else ""
     args: list[Any] = [article_id] if article_id else []
     cursor = conn.execute(
@@ -355,10 +355,10 @@ def mark_tokens_in_phrases(article_id: int | None = None) -> int:
 
 def confirmed_for(article_id: int) -> list[dict[str, Any]]:
     """The phrases to show in one article, with their glosses."""
-    rows = get_connection("learning").execute(
+    rows = get_connection("content").execute(
         "SELECT p.phrase, p.start_seq, p.end_seq, p.surface,"
         " d.translation, d.definition"
-        " FROM reading_phrases p LEFT JOIN dict.phrases d ON d.phrase = p.phrase"
+        " FROM reading_phrases p LEFT JOIN phrases d ON d.phrase = p.phrase"
         " WHERE p.article_id = ? AND p.verdict = 1 ORDER BY p.start_seq",
         (article_id,),
     ).fetchall()
@@ -376,7 +376,7 @@ def confirmed_for(article_id: int) -> list[dict[str, Any]]:
 
 
 def stats() -> dict[str, int]:
-    conn = get_connection("learning")
+    conn = get_connection("content")
 
     def count(sql: str) -> int:
         return int(conn.execute(sql).fetchone()[0])

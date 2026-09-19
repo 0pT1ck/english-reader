@@ -30,6 +30,7 @@ from backend.core.errors import install_error_handlers
 from backend.core.logging import MIGRATIONS as LOG_MIGRATIONS
 from backend.core.logging import get_logger, prune_logs, trace
 from backend.core.registry import install_modules
+from backend.core import resplit
 
 log = get_logger("core.app")
 
@@ -144,7 +145,24 @@ def create_app() -> FastAPI:
     # this is the only safe moment to swap it in.
     restored = apply_pending_restore()
 
+    # **重切要排在迁移之前**（P9 §10）。它搬的是表和 `schema_migrations` 的行，
+    # 而迁移框架正是照那些行判断「这条跑过没有」——先搬完，框架才会在每个文件里
+    # 找到它该找到的记录，从而一条都不重跑。反过来的话，每个模块的全部迁移会在
+    # 新库上重跑一遍，而 `ALTER TABLE ADD COLUMN` 重跑是会失败的。
+    #
+    # 已经切过的装机上它什么也不做（`pending()` 是空的），所以留在这里不花钱。
+    split = resplit.run()
+
     _run_core_migrations()
+
+    if split:
+        log.warning(
+            "resplit.applied",
+            f"learning.db 已经拆成 content / events / ops："
+            f"{len(split['tables'])} 张表、{split['records']} 条迁移记录。"
+            f"拆之前那份备份在 {split['snapshot']}",
+            tables=len(split["tables"]), records=split["records"],
+        )
 
     for name, backup_path in restored.items():
         log.warning(

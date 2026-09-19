@@ -25,6 +25,14 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.0.0"),
+        // **FSRS 没有引成依赖，是自己实现的**（`ERCore/Scheduler.swift`）。
+        // 2026-09-17 两个现成的包都试过、都不行，过程记在 phase-9.html §16：
+        //   · 官方 `open-spaced-repetition/swift-fsrs`：FSRS-6 对，但它的
+        //     `FSRSAlea.swift` `import JavaScriptCore`——**Linux 上没有这个模块**，
+        //     而上面那段注释要求 Core 在 Linux 上也编得过，CI 的 L0 就在那儿跑。
+        //   · `4rays/SwiftFSRS`：零依赖、编得过，但只实现 FSRS-5，我们跑的是 6。
+        // 教训：P5 那条「每个依赖都要单独核实能不能编」说的是**平台**，
+        // 不是「有没有包依赖」。我第一次核错了东西。
     ],
     targets: [
         // Generated from `client/openapi.json` by

@@ -115,7 +115,11 @@
         <td class="mono nowrap">{{ (a.prepared_at or '')[:10] }}</td>
         <td>{% if a.read_at %}<span class="pill ok">读过</span>{% endif %}</td>
         <td class="nowrap">
-          <a class="btn" href="/admin/reader/{{ a.id }}">打开</a>
+          {# **「打开」没有了**（P9 §11）：Web 阅读页删掉了，读一篇文章现在只在
+             手机或 `ercli` 上发生。留在这里的是诊断入口——文章本身，
+             原样的 JSON，控制台该有的样子（架构铁律 8）。 #}
+          <a class="btn" href="/v1/admin/reading/articles/{{ a.id }}"
+             target="_blank" rel="noopener">查看</a>
         </td>
       </tr>
       {% else %}

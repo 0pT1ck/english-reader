@@ -80,7 +80,7 @@ MIGRATIONS = [
     Migration(
         version=2,
         name="decision log table",
-        database="learning",
+        database="events",
         apply="""
         CREATE TABLE IF NOT EXISTS decisions (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -349,7 +349,7 @@ def log_decision(
     to operational logging.
     """
     try:
-        conn = get_connection("learning")
+        conn = get_connection("events")
         conn.execute(
             "INSERT INTO decisions (ts, kind, summary, inputs, candidates, chosen,"
             " reason, trace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

@@ -44,3 +44,9 @@ client/.ercli/
 # 而且它是每次生成都会变的机器产物。要看工程结构就看那份 YAML。
 client/App/*.xcodeproj/
 client/App/DerivedData/
+client/App/Info.plist
+
+# macOS 的 AppleDouble 伴生文件（`._CLAUDE.md` 这种）。
+# 经 Mac 或 Samba 共享拷贝时产生的资源叉，内容是二进制垃圾，不是我们写的东西。
+._*
+.DS_Store

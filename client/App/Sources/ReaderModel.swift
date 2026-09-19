@@ -48,6 +48,11 @@ final class ReaderModel {
     var topParagraph: Int?
 
     private var articleId: Int = 0
+
+    /// 这篇里遇见了哪些词、各几次（P9 §9）。**载入时算一次**，读完那一刻
+    /// 把它塞进事件——让日志自带这份，重放才不需要文章内容。
+    /// 算法在 `Encounters.met(in:)`，逐条镜像服务端读完时那句 SQL。
+    private var metWords: [Encounters.Met] = []
     private var savedSentenceSeq: Int = 0
     private var reportedOpen = false
     private(set) var finished = false
@@ -98,6 +103,8 @@ final class ReaderModel {
         body = response.article
         display = ArticleDisplay(article: response)
         glossary = response.glossary?.additionalProperties ?? [:]
+
+        metWords = Encounters.met(in: response)
 
         let tokens = response.tokens ?? []
         tokensBySeq = Dictionary(uniqueKeysWithValues: tokens.map { ($0.seq, $0) })
@@ -227,6 +234,6 @@ final class ReaderModel {
         guard !finished else { return }
         finished = true
         let last = paragraphs.last?.firstSentenceSeq ?? 0
-        app.record(.articleFinished(articleId, sentenceSeq: last))
+        app.record(.articleFinished(articleId, sentenceSeq: last, met: metWords))
     }
 }

@@ -1,0 +1,849 @@
+{
+  "note": "由 scripts/export_scheduler_vectors.py 从服务端真实代码导出，不要手改。重新导出之后不应有 diff——有 diff 就说明调度规则或 FSRS 版本变了。",
+  "source": "scripts/fsrs_reference.py::rating_for / review（2026-09-18 从 backend 移出来的参照实现，见那个文件的头部）",
+  "covers": "两半：评级映射（我们自己的规则，全枚举）与排期结果（FSRS 的，钉住有明文依据的那些场景）。P9 把调度搬进客户端之后，服务端不再需要 py-fsrs，这个文件是那一步的网。",
+  "tolerance": {
+    "exact": [
+      "rating",
+      "fsrs_state",
+      "fsrs_step",
+      "reps",
+      "lapses"
+    ],
+    "within_1e-6": [
+      "stability",
+      "difficulty",
+      "interval_days"
+    ],
+    "why": "整数不一致就是真不一致；双精度是反复浮点运算的结果，两种语言的末几位不值得当成分歧（同 review-vectors 对权重的处理）。"
+  },
+  "settings": {
+    "fsrs_package": "fsrs 6.3.2",
+    "learning_steps": [],
+    "relearning_steps": [],
+    "enable_fuzzing": false,
+    "desired_retention": 0.9,
+    "maximum_interval": 180,
+    "parameters": [
+      0.212,
+      1.2931,
+      2.3065,
+      8.2956,
+      6.4133,
+      0.8334,
+      3.0194,
+      0.001,
+      1.8722,
+      0.1666,
+      0.796,
+      1.4835,
+      0.0614,
+      0.2629,
+      1.6483,
+      0.6014,
+      1.8729,
+      0.5425,
+      0.0912,
+      0.0658,
+      0.1542
+    ],
+    "parameters_configured": true
+  },
+  "ratings": {
+    "note": "全枚举：misses 0-3 × easy × revealed 0-1 × capped。两个上限都只降级，绝不把失误变成通过。",
+    "cases": [
+      {
+        "misses": 0,
+        "easy": false,
+        "revealed": 0,
+        "capped": false,
+        "rating": 3,
+        "rating_name": "Good"
+      },
+      {
+        "misses": 0,
+        "easy": false,
+        "revealed": 0,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 0,
+        "easy": false,
+        "revealed": 1,
+        "capped": false,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 0,
+        "easy": false,
+        "revealed": 1,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 0,
+        "easy": true,
+        "revealed": 0,
+        "capped": false,
+        "rating": 4,
+        "rating_name": "Easy"
+      },
+      {
+        "misses": 0,
+        "easy": true,
+        "revealed": 0,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 0,
+        "easy": true,
+        "revealed": 1,
+        "capped": false,
+        "rating": 3,
+        "rating_name": "Good"
+      },
+      {
+        "misses": 0,
+        "easy": true,
+        "revealed": 1,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": false,
+        "revealed": 0,
+        "capped": false,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": false,
+        "revealed": 0,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": false,
+        "revealed": 1,
+        "capped": false,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": false,
+        "revealed": 1,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": true,
+        "revealed": 0,
+        "capped": false,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": true,
+        "revealed": 0,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": true,
+        "revealed": 1,
+        "capped": false,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 1,
+        "easy": true,
+        "revealed": 1,
+        "capped": true,
+        "rating": 2,
+        "rating_name": "Hard"
+      },
+      {
+        "misses": 2,
+        "easy": false,
+        "revealed": 0,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": false,
+        "revealed": 0,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": false,
+        "revealed": 1,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": false,
+        "revealed": 1,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": true,
+        "revealed": 0,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": true,
+        "revealed": 0,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": true,
+        "revealed": 1,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 2,
+        "easy": true,
+        "revealed": 1,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": false,
+        "revealed": 0,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": false,
+        "revealed": 0,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": false,
+        "revealed": 1,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": false,
+        "revealed": 1,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": true,
+        "revealed": 0,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": true,
+        "revealed": 0,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": true,
+        "revealed": 1,
+        "capped": false,
+        "rating": 1,
+        "rating_name": "Again"
+      },
+      {
+        "misses": 3,
+        "easy": true,
+        "revealed": 1,
+        "capped": true,
+        "rating": 1,
+        "rating_name": "Again"
+      }
+    ]
+  },
+  "schedules": {
+    "note": "起点固定在 2026-01-01T00:00:00+00:00，每次复习默认发生在上一次的到期时刻，除非 after_days 另说。",
+    "now": "2026-01-01T00:00:00+00:00",
+    "cases": [
+      {
+        "name": "全新卡一次过：关掉 learning steps 之后落在两天外，不是十分钟外",
+        "pins": "参照实现的模块注释：with the steps off, a card leaves Learning on its first review and lands two days out rather than ten minutes out",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 2.3065,
+            "difficulty": 2.118104,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "全新卡失误一次 → Hard",
+        "pins": "决定 11（2026-09-09 修订）：失误一次 → Hard",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 1
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 2,
+            "rating_name": "Hard",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 1.2931,
+            "difficulty": 5.112171,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "全新卡失误两次 → Again，并记一次 lapse",
+        "pins": "决定 11：失误两次及以上 → Again",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 2
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 1,
+            "rating_name": "Again",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 0.212,
+            "difficulty": 6.4133,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 1
+          }
+        ]
+      },
+      {
+        "name": "自称简单 → Easy，只有零失误才作数",
+        "pins": "EASY_RATING 的注释：Easy is claimed by the learner, never inferred",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0,
+            "easy": true
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 4,
+            "rating_name": "Easy",
+            "interval_days": 8.0,
+            "due_at": "2026-01-09T00:00:00+00:00",
+            "stability": 8.2956,
+            "difficulty": 1.0,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "自称简单但失误过 → 不认，按失误算",
+        "pins": "rating_for：claiming a word was trivial after failing it twice is not a claim about anything",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 1,
+            "easy": true
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 2,
+            "rating_name": "Hard",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 1.2931,
+            "difficulty": 5.112171,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "开过提示 → 降一级（Good → Hard）",
+        "pins": "P7 决定（2026-09-13）：taking a hint costs a grade",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0,
+            "revealed": 1
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 2,
+            "rating_name": "Hard",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 1.2931,
+            "difficulty": 5.112171,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "当天标记封顶 → 同样降一级",
+        "pins": "P7 推翻 P3 决定 18：模糊的词当天也进，但当天这一次封顶为 Hard",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0,
+            "capped": true
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 2,
+            "rating_name": "Hard",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 1.2931,
+            "difficulty": 5.112171,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "自称简单 ＋ 开过提示 → 降一档到 Good，不是 Hard，也不是白拿 Easy",
+        "pins": "用户 2026-09-17 定：「太简单了」是学习者的判断、提示不否决它，但看了提示就降一档。这条向量正是那个决定的落点——在它之前这一组会给 Easy（8 天），因为 easy 的分支提前 return 了。",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0,
+            "easy": true,
+            "revealed": 1
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 2.3065,
+            "difficulty": 2.118104,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "自称简单 ＋ 当天刚标 → 封顶为 Hard，因为封顶不是降档",
+        "pins": "P7 §3 的原话是「当天这一次封顶为 Hard」。两个上限语义不同，在 Good 上结果相同所以一直没露出来；在 Easy 上一个给 Good、一个给 Hard。",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0,
+            "easy": true,
+            "capped": true
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 2,
+            "rating_name": "Hard",
+            "interval_days": 1.0,
+            "due_at": "2026-01-02T00:00:00+00:00",
+            "stability": 1.2931,
+            "difficulty": 5.112171,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "连续五次一次过：间隔一路拉长，并被 maximum_interval 封在 180 天",
+        "pins": "坑 §4.5：正确的间隔序列是 2→11→46→163→180，而 8→66→180 是接线错的那一版。这条同时钉住封顶。",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 2.3065,
+            "difficulty": 2.118104,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          },
+          {
+            "at": "2026-01-03T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 11.0,
+            "due_at": "2026-01-14T00:00:00+00:00",
+            "stability": 10.964332,
+            "difficulty": 2.111214,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 2,
+            "lapses": 0
+          },
+          {
+            "at": "2026-01-14T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 46.0,
+            "due_at": "2026-03-01T00:00:00+00:00",
+            "stability": 46.280217,
+            "difficulty": 2.104331,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 3,
+            "lapses": 0
+          },
+          {
+            "at": "2026-03-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 163.0,
+            "due_at": "2026-08-11T00:00:00+00:00",
+            "stability": 162.862202,
+            "difficulty": 2.097455,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 4,
+            "lapses": 0
+          },
+          {
+            "at": "2026-08-11T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 180.0,
+            "due_at": "2027-02-07T00:00:00+00:00",
+            "stability": 497.447194,
+            "difficulty": 2.090586,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 5,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "三次过之后失手一次：lapse 记上，间隔塌回来",
+        "pins": "lapses 只在 Again 时加一（review() 里那一行）",
+        "initial": null,
+        "reviews": [
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          },
+          {
+            "misses": 0
+          },
+          {
+            "misses": 2
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 2.3065,
+            "difficulty": 2.118104,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          },
+          {
+            "at": "2026-01-03T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 11.0,
+            "due_at": "2026-01-14T00:00:00+00:00",
+            "stability": 10.964332,
+            "difficulty": 2.111214,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 2,
+            "lapses": 0
+          },
+          {
+            "at": "2026-01-14T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 46.0,
+            "due_at": "2026-03-01T00:00:00+00:00",
+            "stability": 46.280217,
+            "difficulty": 2.104331,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 3,
+            "lapses": 0
+          },
+          {
+            "at": "2026-03-01T00:00:00+00:00",
+            "rating": 1,
+            "rating_name": "Again",
+            "interval_days": 3.0,
+            "due_at": "2026-03-04T00:00:00+00:00",
+            "stability": 2.93258,
+            "difficulty": 7.389976,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 4,
+            "lapses": 1
+          }
+        ]
+      },
+      {
+        "name": "P3 之前标的词：没有记忆状态，当成没复习过的新卡",
+        "pins": "to_card：a row with no memory state yet — every item marked before P3 — becomes a fresh card, which is the right answer",
+        "initial": {
+          "stability": null,
+          "difficulty": null,
+          "reps": 0,
+          "lapses": 0
+        },
+        "reviews": [
+          {
+            "misses": 0
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 2.3065,
+            "difficulty": 2.118104,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 1,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "同一天又答了一次：走短期那条公式",
+        "pins": "review_card 里 `days_since_last_review < 1` 那一支。**我们的规矩是「一天是一次复习」，所以正常流程走不到这儿**——但公式在两边都实现着，不盖住它就是留一个静默给错值的口子。",
+        "initial": {
+          "stability": 5.0,
+          "difficulty": 5.0,
+          "fsrs_state": 2,
+          "fsrs_step": null,
+          "due_at": "2026-01-06T00:00:00+00:00",
+          "last_review_at": "2026-01-01T00:00:00+00:00",
+          "reps": 2,
+          "lapses": 0
+        },
+        "reviews": [
+          {
+            "misses": 0,
+            "after_days": 0
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 5.0,
+            "due_at": "2026-01-06T00:00:00+00:00",
+            "stability": 5.0,
+            "difficulty": 4.990228,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 3,
+            "lapses": 0
+          }
+        ]
+      },
+      {
+        "name": "同一天又答一次但答错：短期那条对 again 不取 max",
+        "pins": "_short_term_stability 里那个 `if rating in (Hard, Good, Easy)` —— again 不受 1.0 下限约束，所以它是唯一能让强度当场变小的路径。",
+        "initial": {
+          "stability": 5.0,
+          "difficulty": 5.0,
+          "fsrs_state": 2,
+          "fsrs_step": null,
+          "due_at": "2026-01-06T00:00:00+00:00",
+          "last_review_at": "2026-01-01T00:00:00+00:00",
+          "reps": 2,
+          "lapses": 0
+        },
+        "reviews": [
+          {
+            "misses": 2,
+            "after_days": 0
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-01T00:00:00+00:00",
+            "rating": 1,
+            "rating_name": "Again",
+            "interval_days": 2.0,
+            "due_at": "2026-01-03T00:00:00+00:00",
+            "stability": 1.596818,
+            "difficulty": 8.341762,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 3,
+            "lapses": 1
+          }
+        ]
+      },
+      {
+        "name": "带着已有记忆状态的卡，隔 30 天再复习",
+        "pins": "to_card / from_card 的往返：两边存的是同一组列",
+        "initial": {
+          "stability": 12.5,
+          "difficulty": 6.0,
+          "fsrs_state": 2,
+          "fsrs_step": null,
+          "due_at": "2026-01-01T00:00:00+00:00",
+          "last_review_at": "2025-12-02T00:00:00+00:00",
+          "reps": 3,
+          "lapses": 1
+        },
+        "reviews": [
+          {
+            "misses": 0,
+            "after_days": 30
+          }
+        ],
+        "expected": [
+          {
+            "at": "2026-01-31T00:00:00+00:00",
+            "rating": 3,
+            "rating_name": "Good",
+            "interval_days": 68.0,
+            "due_at": "2026-04-09T00:00:00+00:00",
+            "stability": 67.513115,
+            "difficulty": 5.989228,
+            "fsrs_state": 2,
+            "fsrs_step": null,
+            "reps": 4,
+            "lapses": 1
+          }
+        ]
+      }
+    ]
+  }
+}

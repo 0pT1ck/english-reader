@@ -46,6 +46,102 @@ public struct Client: APIProtocol {
     private var converter: Converter {
         client.converter
     }
+    /// 上报词池快照
+    ///
+    /// 整份替换这个学习者的词池快照。
+    ///
+    /// **PUT 而不是 POST**：它是替换，不是追加。语义上说对了，重试也就天然安全——
+    /// 同一份快照报两遍和报一遍结果一样。
+    ///
+    /// - Remark: HTTP `PUT /v1/client/progress/pool`.
+    /// - Remark: Generated from `#/paths//v1/client/progress/pool/put(report_pool_v1_client_progress_pool_put)`.
+    public func report_pool_v1_client_progress_pool_put(_ input: Operations.report_pool_v1_client_progress_pool_put.Input) async throws -> Operations.report_pool_v1_client_progress_pool_put.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.report_pool_v1_client_progress_pool_put.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/client/progress/pool",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .put
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                let body: OpenAPIRuntime.HTTPBody?
+                switch input.body {
+                case let .json(value):
+                    body = try converter.setRequiredRequestBodyAsJSON(
+                        value,
+                        headerFields: &request.headerFields,
+                        contentType: "application/json; charset=utf-8"
+                    )
+                }
+                return (request, body)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.report_pool_v1_client_progress_pool_put.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.PoolSnapshotResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.report_pool_v1_client_progress_pool_put.Output.UnprocessableContent.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HTTPValidationError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
     /// 文章清单
     ///
     /// The library.
@@ -254,6 +350,120 @@ public struct Client: APIProtocol {
             }
         )
     }
+    /// 按序号往后取事件（多设备同步用）
+    ///
+    /// 这个学习者的事件，序号大于 ``after`` 的那些。
+    ///
+    /// **P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，
+    /// 而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。
+    ///
+    /// **序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是
+    /// ``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；
+    /// 再造一个会得到第二个顺序，然后两个顺序说反话。
+    /// **服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。
+    ///
+    /// **拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在
+    /// 那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:
+    /// 按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，
+    /// 那时它会以为自己的历史不存在。
+    ///
+    /// **GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义
+    /// 都该按读取来。
+    ///
+    /// - Remark: HTTP `GET /v1/client/events`.
+    /// - Remark: Generated from `#/paths//v1/client/events/get(event_feed_v1_client_events_get)`.
+    public func event_feed_v1_client_events_get(_ input: Operations.event_feed_v1_client_events_get.Input) async throws -> Operations.event_feed_v1_client_events_get.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.event_feed_v1_client_events_get.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/client/events",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "after",
+                    value: input.query.after
+                )
+                try converter.setQueryItemAsURI(
+                    in: &request,
+                    style: .form,
+                    explode: true,
+                    name: "limit",
+                    value: input.query.limit
+                )
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.event_feed_v1_client_events_get.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.EventFeedResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.event_feed_v1_client_events_get.Output.UnprocessableContent.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HTTPValidationError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
     /// 批量上报交互事件
     ///
     /// Accepts duplicates by design — a retry is the protocol working.
@@ -347,17 +557,36 @@ public struct Client: APIProtocol {
             }
         )
     }
-    /// 今天要复习的全部内容
+    /// 在学的那些词的句子（不分池）
     ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    public func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output {
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
+    ///
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
+    ///
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
+    ///
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
+    ///
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    public func sentence_pool_v1_client_sentences_get(_ input: Operations.sentence_pool_v1_client_sentences_get.Input) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output {
         try await client.send(
             input: input,
-            forOperation: Operations.reviews_v1_client_reviews_get.id,
+            forOperation: Operations.sentence_pool_v1_client_sentences_get.id,
             serializer: { input in
                 let path = try converter.renderedPath(
-                    template: "/v1/client/reviews",
+                    template: "/v1/client/sentences",
                     parameters: []
                 )
                 var request: HTTPTypes.HTTPRequest = .init(
@@ -375,7 +604,7 @@ public struct Client: APIProtocol {
                 switch response.status.code {
                 case 200:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_v1_client_reviews_get.Output.Ok.Body
+                    let body: Operations.sentence_pool_v1_client_sentences_get.Output.Ok.Body
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
@@ -385,7 +614,7 @@ public struct Client: APIProtocol {
                     switch chosenContentType {
                     case "application/json":
                         body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.ReviewDayResponse.self,
+                            Components.Schemas.SentencePoolResponse.self,
                             from: responseBody,
                             transforming: { value in
                                 .json(value)
@@ -397,194 +626,7 @@ public struct Client: APIProtocol {
                     return .ok(.init(body: body))
                 case 422:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_v1_client_reviews_get.Output.UnprocessableContent.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.HTTPValidationError.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .unprocessableContent(.init(body: body))
-                default:
-                    return .undocumented(
-                        statusCode: response.status.code,
-                        .init(
-                            headerFields: response.headerFields,
-                            body: responseBody
-                        )
-                    )
-                }
-            }
-        )
-    }
-    /// 打卡日历与连续天数
-    ///
-    /// The last ``days`` days and the streak.
-    ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
-    ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    public func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
-        try await client.send(
-            input: input,
-            forOperation: Operations.reviews_calendar_v1_client_reviews_calendar_get.id,
-            serializer: { input in
-                let path = try converter.renderedPath(
-                    template: "/v1/client/reviews/calendar",
-                    parameters: []
-                )
-                var request: HTTPTypes.HTTPRequest = .init(
-                    soar_path: path,
-                    method: .get
-                )
-                suppressMutabilityWarning(&request)
-                try converter.setQueryItemAsURI(
-                    in: &request,
-                    style: .form,
-                    explode: true,
-                    name: "days",
-                    value: input.query.days
-                )
-                converter.setAcceptHeader(
-                    in: &request.headerFields,
-                    contentTypes: input.headers.accept
-                )
-                return (request, nil)
-            },
-            deserializer: { response, responseBody in
-                switch response.status.code {
-                case 200:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.Ok.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.CalendarResponse.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .ok(.init(body: body))
-                case 422:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.reviews_calendar_v1_client_reviews_calendar_get.Output.UnprocessableContent.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.HTTPValidationError.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .unprocessableContent(.init(body: body))
-                default:
-                    return .undocumented(
-                        statusCode: response.status.code,
-                        .init(
-                            headerFields: response.headerFields,
-                            body: responseBody
-                        )
-                    )
-                }
-            }
-        )
-    }
-    /// 上报一次作答
-    ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    public func report_answer_v1_client_reviews_answer_post(_ input: Operations.report_answer_v1_client_reviews_answer_post.Input) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output {
-        try await client.send(
-            input: input,
-            forOperation: Operations.report_answer_v1_client_reviews_answer_post.id,
-            serializer: { input in
-                let path = try converter.renderedPath(
-                    template: "/v1/client/reviews/answer",
-                    parameters: []
-                )
-                var request: HTTPTypes.HTTPRequest = .init(
-                    soar_path: path,
-                    method: .post
-                )
-                suppressMutabilityWarning(&request)
-                converter.setAcceptHeader(
-                    in: &request.headerFields,
-                    contentTypes: input.headers.accept
-                )
-                let body: OpenAPIRuntime.HTTPBody?
-                switch input.body {
-                case let .json(value):
-                    body = try converter.setRequiredRequestBodyAsJSON(
-                        value,
-                        headerFields: &request.headerFields,
-                        contentType: "application/json; charset=utf-8"
-                    )
-                }
-                return (request, body)
-            },
-            deserializer: { response, responseBody in
-                switch response.status.code {
-                case 200:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.report_answer_v1_client_reviews_answer_post.Output.Ok.Body
-                    let chosenContentType = try converter.bestContentType(
-                        received: contentType,
-                        options: [
-                            "application/json"
-                        ]
-                    )
-                    switch chosenContentType {
-                    case "application/json":
-                        body = try await converter.getResponseBodyAsJSON(
-                            Components.Schemas.AnswerResponse.self,
-                            from: responseBody,
-                            transforming: { value in
-                                .json(value)
-                            }
-                        )
-                    default:
-                        preconditionFailure("bestContentType chose an invalid content type.")
-                    }
-                    return .ok(.init(body: body))
-                case 422:
-                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
-                    let body: Operations.report_answer_v1_client_reviews_answer_post.Output.UnprocessableContent.Body
+                    let body: Operations.sentence_pool_v1_client_sentences_get.Output.UnprocessableContent.Body
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [
@@ -633,8 +675,12 @@ public struct Client: APIProtocol {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.
@@ -945,6 +991,17 @@ public struct Client: APIProtocol {
     /// ``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in
     /// ``excludes_exam_papers`` so a client cannot conclude otherwise by accident.
     ///
+    /// **条件请求（2026-09-16 加）。** 这个包实测约 1 MB，而客户端每次开复习那一格
+    /// 都要它——绝大多数时候内容跟手机上那份**一模一样**，却照样过一遍隧道
+    /// （实测 0.85–1.4 秒，流量也是真金白银）。带 ``If-None-Match`` 来、内容没变，
+    /// 就回 304 和零字节。
+    ///
+    /// **加的是一个响应头和一条分支，不是新字段**，所以老客户端一行不用改：
+    /// 它不发 ``If-None-Match``，就永远走 200 那条路（铁律 5）。
+    ///
+    /// 哈希算的是**序列化之后的响应体**，不是它的某几个字段——任何一处变化都算变化，
+    /// 包括复习进度、文章读到哪。宁可多发一次，也不能把变了的说成没变。
+    ///
     /// - Remark: HTTP `GET /v1/client/today`.
     /// - Remark: Generated from `#/paths//v1/client/today/get(today_v1_client_today_get)`.
     public func today_v1_client_today_get(_ input: Operations.today_v1_client_today_get.Input) async throws -> Operations.today_v1_client_today_get.Output {
@@ -994,6 +1051,88 @@ public struct Client: APIProtocol {
                 case 422:
                     let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
                     let body: Operations.today_v1_client_today_get.Output.UnprocessableContent.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HTTPValidationError.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .unprocessableContent(.init(body: body))
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
+    /// 这把令牌是谁的（测试连接用）
+    ///
+    /// - Remark: HTTP `GET /v1/client/me`.
+    /// - Remark: Generated from `#/paths//v1/client/me/get(me_v1_client_me_get)`.
+    public func me_v1_client_me_get(_ input: Operations.me_v1_client_me_get.Input) async throws -> Operations.me_v1_client_me_get.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.me_v1_client_me_get.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/v1/client/me",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.me_v1_client_me_get.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.MeResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 422:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.me_v1_client_me_get.Output.UnprocessableContent.Body
                     let chosenContentType = try converter.bestContentType(
                         received: contentType,
                         options: [

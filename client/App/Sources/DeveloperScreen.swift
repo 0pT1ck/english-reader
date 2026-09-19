@@ -7,10 +7,15 @@ import ERCore
 /// 手机上点不动。后端一行没改：`require_admin` 本来就接受 `X-Admin-Secret`
 /// 请求头（注释说的是「命令行，以及 AI 直接查诊断时用」）。
 ///
-/// **只放五样**：跳天、任务、配置、服务端日志、状态。判据是「验收与开发期
-/// 天天要用」——写在这里是因为「顺便再加一个」的门槛一旦没了，这一页就会
-/// 长成第二个管理台。备份和恢复明确不做：在手机上下一个几十 MB 的数据库没有用，
-/// 而「恢复」能把学习记录整份换掉，它该待在需要坐下来才能用的地方。
+/// **只放六样**：跳天、任务、配置、服务端日志、状态，外加**重拉本地日志**。
+/// 判据是「验收与开发期天天要用」——写在这里是因为「顺便再加一个」的门槛
+/// 一旦没了，这一页就会长成第二个管理台。备份和恢复明确不做：在手机上下一个
+/// 几十 MB 的数据库没有用，而「恢复」能把学习记录整份换掉，它该待在需要坐下来
+/// 才能用的地方。
+///
+/// **第六样是 2026-09-18 加的**，用户当天定的。它在这里而不在设置里，
+/// 理由同其余五样：日志从不回头改（那是设计），所以「服务端那份清干净了而设备
+/// 手里还是脏的」只能靠整份重拉；而判断该不该重拉，需要看得懂日志的人。
 struct DeveloperScreen: View {
     @Environment(AppModel.self) private var app
 
@@ -21,6 +26,8 @@ struct DeveloperScreen: View {
     @State private var busy: String?
     @State private var failure: String?
     @State private var running: String?
+    @State private var confirmingReset = false
+    @State private var resetOutcome: AppModel.LocalLogReset?
 
     var body: some View {
         Form {
@@ -30,14 +37,68 @@ struct DeveloperScreen: View {
                 taskSection
                 linkSection
             }
+            // **不在 `app.admin != nil` 里面。** 重拉本地日志走的是设备令牌
+            // 那条普通的客户端路径，跟管理凭证无关——放进那个 `if` 会让它
+            // 在没填管理密码时消失，而那时它照样该能用。
+            resetSection
             if let failure {
                 Section { Text(failure).foregroundStyle(.red).font(.footnote) }
             }
         }
         .navigationTitle("开发者选项")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { adminURL = app.connection.adminBaseURLOverride }
+        .onAppear {
+            adminURL = app.connection.adminBaseURLOverride
+            // 日志总数是按需算的（整份读盘），所以进这一页时算一次。
+            app.refreshEventCount()
+        }
         .task { await refresh() }
+    }
+
+    // MARK: 重拉本地日志
+
+    private var resetSection: some View {
+        Section {
+            LabeledContent("本地事件", value: "\(app.eventCount) 条")
+            LabeledContent("还没上报", value: "\(app.pendingEvents) 条")
+            Button("丢掉本地日志，从服务器重新拉", role: .destructive) {
+                confirmingReset = true
+            }
+            .disabled(app.engine == nil)
+            if let resetOutcome {
+                switch resetOutcome {
+                case .done(let discarded, let adopted):
+                    Text("丢掉 \(discarded) 条，重新拉回 \(adopted) 条。")
+                        .font(.footnote).foregroundStyle(.secondary)
+                case .refusedPending(let count):
+                    // **拒绝要说清为什么**，否则它看起来像没反应。
+                    Text("没做：还有 \(count) 条没上报，丢掉就真的没了。"
+                         + "先联网让它们传上去，再来。")
+                        .font(.footnote).foregroundStyle(.orange)
+                case .failed(let why):
+                    Text(why).font(.footnote).foregroundStyle(.red)
+                }
+            }
+        } header: {
+            Text("本地日志")
+        } footer: {
+            Text("学习记录的第一副本在这台设备上，服务器是会合点。"
+                 + "日志只增不改，所以服务器那份修正过之后，"
+                 + "这台设备手里那份要靠整份重拉才跟得上。"
+                 + "**只在没有待上报的事件时才会执行。**")
+        }
+        .confirmationDialog("丢掉本地日志？", isPresented: $confirmingReset,
+                            titleVisibility: .visible) {
+            Button("丢掉并重新拉", role: .destructive) {
+                Task {
+                    resetOutcome = await app.resetLocalLog()
+                    app.refreshEventCount()
+                }
+            }
+            Button("算了", role: .cancel) {}
+        } message: {
+            Text("会先推一次。还有没上报的事件时不会执行。")
+        }
     }
 
     // MARK: 凭证

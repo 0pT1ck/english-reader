@@ -11,6 +11,16 @@ public import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// 上报词池快照
+    ///
+    /// 整份替换这个学习者的词池快照。
+    ///
+    /// **PUT 而不是 POST**：它是替换，不是追加。语义上说对了，重试也就天然安全——
+    /// 同一份快照报两遍和报一遍结果一样。
+    ///
+    /// - Remark: HTTP `PUT /v1/client/progress/pool`.
+    /// - Remark: Generated from `#/paths//v1/client/progress/pool/put(report_pool_v1_client_progress_pool_put)`.
+    func report_pool_v1_client_progress_pool_put(_ input: Operations.report_pool_v1_client_progress_pool_put.Input) async throws -> Operations.report_pool_v1_client_progress_pool_put.Output
     /// 文章清单
     ///
     /// The library.
@@ -35,6 +45,29 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `GET /v1/client/articles/{article_id}`.
     /// - Remark: Generated from `#/paths//v1/client/articles/{article_id}/get(article_v1_client_articles__article_id__get)`.
     func article_v1_client_articles__article_id__get(_ input: Operations.article_v1_client_articles__article_id__get.Input) async throws -> Operations.article_v1_client_articles__article_id__get.Output
+    /// 按序号往后取事件（多设备同步用）
+    ///
+    /// 这个学习者的事件，序号大于 ``after`` 的那些。
+    ///
+    /// **P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，
+    /// 而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。
+    ///
+    /// **序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是
+    /// ``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；
+    /// 再造一个会得到第二个顺序，然后两个顺序说反话。
+    /// **服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。
+    ///
+    /// **拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在
+    /// 那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:
+    /// 按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，
+    /// 那时它会以为自己的历史不存在。
+    ///
+    /// **GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义
+    /// 都该按读取来。
+    ///
+    /// - Remark: HTTP `GET /v1/client/events`.
+    /// - Remark: Generated from `#/paths//v1/client/events/get(event_feed_v1_client_events_get)`.
+    func event_feed_v1_client_events_get(_ input: Operations.event_feed_v1_client_events_get.Input) async throws -> Operations.event_feed_v1_client_events_get.Output
     /// 批量上报交互事件
     ///
     /// Accepts duplicates by design — a retry is the protocol working.
@@ -42,28 +75,30 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /v1/client/events`.
     /// - Remark: Generated from `#/paths//v1/client/events/post(report_events_v1_client_events_post)`.
     func report_events_v1_client_events_post(_ input: Operations.report_events_v1_client_events_post.Input) async throws -> Operations.report_events_v1_client_events_post.Output
-    /// 今天要复习的全部内容
+    /// 在学的那些词的句子（不分池）
     ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    func reviews_v1_client_reviews_get(_ input: Operations.reviews_v1_client_reviews_get.Input) async throws -> Operations.reviews_v1_client_reviews_get.Output
-    /// 打卡日历与连续天数
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
     ///
-    /// The last ``days`` days and the streak.
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
     ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
     ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    func reviews_calendar_v1_client_reviews_calendar_get(_ input: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output
-    /// 上报一次作答
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
     ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    func report_answer_v1_client_reviews_answer_post(_ input: Operations.report_answer_v1_client_reviews_answer_post.Input) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    func sentence_pool_v1_client_sentences_get(_ input: Operations.sentence_pool_v1_client_sentences_get.Input) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output
     /// 批量上报作答（离线补报用）
     ///
     /// Replay a day's answers in order, skipping anything already recorded.
@@ -81,8 +116,12 @@ public protocol APIProtocol: Sendable {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.
@@ -135,13 +174,47 @@ public protocol APIProtocol: Sendable {
     /// ``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in
     /// ``excludes_exam_papers`` so a client cannot conclude otherwise by accident.
     ///
+    /// **条件请求（2026-09-16 加）。** 这个包实测约 1 MB，而客户端每次开复习那一格
+    /// 都要它——绝大多数时候内容跟手机上那份**一模一样**，却照样过一遍隧道
+    /// （实测 0.85–1.4 秒，流量也是真金白银）。带 ``If-None-Match`` 来、内容没变，
+    /// 就回 304 和零字节。
+    ///
+    /// **加的是一个响应头和一条分支，不是新字段**，所以老客户端一行不用改：
+    /// 它不发 ``If-None-Match``，就永远走 200 那条路（铁律 5）。
+    ///
+    /// 哈希算的是**序列化之后的响应体**，不是它的某几个字段——任何一处变化都算变化，
+    /// 包括复习进度、文章读到哪。宁可多发一次，也不能把变了的说成没变。
+    ///
     /// - Remark: HTTP `GET /v1/client/today`.
     /// - Remark: Generated from `#/paths//v1/client/today/get(today_v1_client_today_get)`.
     func today_v1_client_today_get(_ input: Operations.today_v1_client_today_get.Input) async throws -> Operations.today_v1_client_today_get.Output
+    /// 这把令牌是谁的（测试连接用）
+    ///
+    /// - Remark: HTTP `GET /v1/client/me`.
+    /// - Remark: Generated from `#/paths//v1/client/me/get(me_v1_client_me_get)`.
+    func me_v1_client_me_get(_ input: Operations.me_v1_client_me_get.Input) async throws -> Operations.me_v1_client_me_get.Output
 }
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// 上报词池快照
+    ///
+    /// 整份替换这个学习者的词池快照。
+    ///
+    /// **PUT 而不是 POST**：它是替换，不是追加。语义上说对了，重试也就天然安全——
+    /// 同一份快照报两遍和报一遍结果一样。
+    ///
+    /// - Remark: HTTP `PUT /v1/client/progress/pool`.
+    /// - Remark: Generated from `#/paths//v1/client/progress/pool/put(report_pool_v1_client_progress_pool_put)`.
+    public func report_pool_v1_client_progress_pool_put(
+        headers: Operations.report_pool_v1_client_progress_pool_put.Input.Headers = .init(),
+        body: Operations.report_pool_v1_client_progress_pool_put.Input.Body
+    ) async throws -> Operations.report_pool_v1_client_progress_pool_put.Output {
+        try await report_pool_v1_client_progress_pool_put(Operations.report_pool_v1_client_progress_pool_put.Input(
+            headers: headers,
+            body: body
+        ))
+    }
     /// 文章清单
     ///
     /// The library.
@@ -182,6 +255,37 @@ extension APIProtocol {
             headers: headers
         ))
     }
+    /// 按序号往后取事件（多设备同步用）
+    ///
+    /// 这个学习者的事件，序号大于 ``after`` 的那些。
+    ///
+    /// **P9 §6:同步要变双向。** 在这之前只有上报——一台设备把事件送上来，
+    /// 而另一台设备永远看不到它。多设备要一个会合点，这就是那个会合点的读取口。
+    ///
+    /// **序号是 `client_events.id`，不是新造的东西。** 那张表从 P2 起就是
+    /// ``AUTOINCREMENT``，它一直是「服务端收到即分配的单调序号」；
+    /// 再造一个会得到第二个顺序，然后两个顺序说反话。
+    /// **服务端只存不解释**（架构铁律 2 的后半句），所以 `payload` 原样回去。
+    ///
+    /// **拉回自己推上去的事件是正常的。** 游标是「大于某个号」，而自己的事件也在
+    /// 那个号后面。客户端按 `idem_key` 认出来并跳过——**这比让服务端按设备过滤好**:
+    /// 按设备过滤要服务端知道「哪台设备产生了哪条」，而设备换了令牌就不认了，
+    /// 那时它会以为自己的历史不存在。
+    ///
+    /// **GET 而不是 POST，`after` 在查询串里**:它是一次读取，缓存与重试的语义
+    /// 都该按读取来。
+    ///
+    /// - Remark: HTTP `GET /v1/client/events`.
+    /// - Remark: Generated from `#/paths//v1/client/events/get(event_feed_v1_client_events_get)`.
+    public func event_feed_v1_client_events_get(
+        query: Operations.event_feed_v1_client_events_get.Input.Query = .init(),
+        headers: Operations.event_feed_v1_client_events_get.Input.Headers = .init()
+    ) async throws -> Operations.event_feed_v1_client_events_get.Output {
+        try await event_feed_v1_client_events_get(Operations.event_feed_v1_client_events_get.Input(
+            query: query,
+            headers: headers
+        ))
+    }
     /// 批量上报交互事件
     ///
     /// Accepts duplicates by design — a retry is the protocol working.
@@ -197,45 +301,31 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// 今天要复习的全部内容
+    /// 在学的那些词的句子（不分池）
     ///
-    /// - Remark: HTTP `GET /v1/client/reviews`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/get(reviews_v1_client_reviews_get)`.
-    public func reviews_v1_client_reviews_get(headers: Operations.reviews_v1_client_reviews_get.Input.Headers = .init()) async throws -> Operations.reviews_v1_client_reviews_get.Output {
-        try await reviews_v1_client_reviews_get(Operations.reviews_v1_client_reviews_get.Input(headers: headers))
-    }
-    /// 打卡日历与连续天数
+    /// 你在学的每个词，连它的全部句子——**服务端不分池**。
     ///
-    /// The last ``days`` days and the streak.
+    /// **P9 §11:那条线把两件事分开了。** 造句子要钱、要模型、要 24 小时醒着，
+    /// 是工厂的活；而「这一句该当考题还是当提示」取决于你读完过哪些文章、
+    /// 见过哪些句子——那是学习记录，现在在设备上。所以这里原样全给，
+    /// 由客户端分（`ERCore/SentencePool`，三条规则逐条镜像 `sentences.split_pools`）。
     ///
-    /// **A new endpoint rather than fields on `/reviews`.** 跨 Phase 不变量 only
-    /// allows obvious shapes to be reserved in place; a list of days is not one, so
-    /// it arrives as its own endpoint the way the invariant says complex additions
-    /// should.
+    /// **依据是你上报的词池快照**（§7），不是服务端自己推的。服务端对学习记录只有
+    /// 两种关系:生文需要的那一小撮信号，和它不解释的存档——这里用的是前者，
+    /// 而它连解释都不算:直接用。**所以还没报过快照的设备会拿到空列表**，
+    /// 而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
+    /// 是「服务端还不知道」。
     ///
-    /// - Remark: HTTP `GET /v1/client/reviews/calendar`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/calendar/get(reviews_calendar_v1_client_reviews_calendar_get)`.
-    public func reviews_calendar_v1_client_reviews_calendar_get(
-        query: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Query = .init(),
-        headers: Operations.reviews_calendar_v1_client_reviews_calendar_get.Input.Headers = .init()
-    ) async throws -> Operations.reviews_calendar_v1_client_reviews_calendar_get.Output {
-        try await reviews_calendar_v1_client_reviews_calendar_get(Operations.reviews_calendar_v1_client_reviews_calendar_get.Input(
-            query: query,
-            headers: headers
-        ))
-    }
-    /// 上报一次作答
+    /// **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
+    /// 而句子池本来也是按词与义项建的——词组拿不到句子。
     ///
-    /// - Remark: HTTP `POST /v1/client/reviews/answer`.
-    /// - Remark: Generated from `#/paths//v1/client/reviews/answer/post(report_answer_v1_client_reviews_answer_post)`.
-    public func report_answer_v1_client_reviews_answer_post(
-        headers: Operations.report_answer_v1_client_reviews_answer_post.Input.Headers = .init(),
-        body: Operations.report_answer_v1_client_reviews_answer_post.Input.Body
-    ) async throws -> Operations.report_answer_v1_client_reviews_answer_post.Output {
-        try await report_answer_v1_client_reviews_answer_post(Operations.report_answer_v1_client_reviews_answer_post.Input(
-            headers: headers,
-            body: body
-        ))
+    /// **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
+    /// 全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
+    ///
+    /// - Remark: HTTP `GET /v1/client/sentences`.
+    /// - Remark: Generated from `#/paths//v1/client/sentences/get(sentence_pool_v1_client_sentences_get)`.
+    public func sentence_pool_v1_client_sentences_get(headers: Operations.sentence_pool_v1_client_sentences_get.Input.Headers = .init()) async throws -> Operations.sentence_pool_v1_client_sentences_get.Output {
+        try await sentence_pool_v1_client_sentences_get(Operations.sentence_pool_v1_client_sentences_get.Input(headers: headers))
     }
     /// 批量上报作答（离线补报用）
     ///
@@ -254,8 +344,12 @@ extension APIProtocol {
     /// stops nothing — the remaining answers still apply, and the one that failed
     /// is reported with its key so the client can decide.
     ///
-    /// The single-answer endpoint stays exactly as it was. 架构铁律 5 is only
-    /// additive, and a client written against it keeps working untouched.
+    /// **The single-answer endpoint is gone (P9 §11).** It was the one route that
+    /// wrote learning state on the user's thumb — one POST per question, no key,
+    /// no batch — and the whole point of this phase is that the device owns that
+    /// state. 铁律 5「只增不减」was relaxed here on purpose and only here, for the
+    /// state/sync half of the contract: the client that used it is the Web review
+    /// page, which went away in the same phase. **Everything else stays additive.**
     ///
     /// - Remark: HTTP `POST /v1/client/reviews/answers`.
     /// - Remark: Generated from `#/paths//v1/client/reviews/answers/post(report_answers_v1_client_reviews_answers_post)`.
@@ -332,10 +426,28 @@ extension APIProtocol {
     /// ``/v1/client/library?source=cet4|cet6|kaoyan``. The response says so in
     /// ``excludes_exam_papers`` so a client cannot conclude otherwise by accident.
     ///
+    /// **条件请求（2026-09-16 加）。** 这个包实测约 1 MB，而客户端每次开复习那一格
+    /// 都要它——绝大多数时候内容跟手机上那份**一模一样**，却照样过一遍隧道
+    /// （实测 0.85–1.4 秒，流量也是真金白银）。带 ``If-None-Match`` 来、内容没变，
+    /// 就回 304 和零字节。
+    ///
+    /// **加的是一个响应头和一条分支，不是新字段**，所以老客户端一行不用改：
+    /// 它不发 ``If-None-Match``，就永远走 200 那条路（铁律 5）。
+    ///
+    /// 哈希算的是**序列化之后的响应体**，不是它的某几个字段——任何一处变化都算变化，
+    /// 包括复习进度、文章读到哪。宁可多发一次，也不能把变了的说成没变。
+    ///
     /// - Remark: HTTP `GET /v1/client/today`.
     /// - Remark: Generated from `#/paths//v1/client/today/get(today_v1_client_today_get)`.
     public func today_v1_client_today_get(headers: Operations.today_v1_client_today_get.Input.Headers = .init()) async throws -> Operations.today_v1_client_today_get.Output {
         try await today_v1_client_today_get(Operations.today_v1_client_today_get.Input(headers: headers))
+    }
+    /// 这把令牌是谁的（测试连接用）
+    ///
+    /// - Remark: HTTP `GET /v1/client/me`.
+    /// - Remark: Generated from `#/paths//v1/client/me/get(me_v1_client_me_get)`.
+    public func me_v1_client_me_get(headers: Operations.me_v1_client_me_get.Input.Headers = .init()) async throws -> Operations.me_v1_client_me_get.Output {
+        try await me_v1_client_me_get(Operations.me_v1_client_me_get.Input(headers: headers))
     }
 }
 
