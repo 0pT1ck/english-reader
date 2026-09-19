@@ -2060,6 +2060,61 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     <p>用户定的：<b>稍后开始把项目迁到 Mac。</b>
     那是下一个 Phase 的事，这里只记结论，不提前规划（「只规划当前 Phase」）。</p>
 
+    <h3>同一天后续：Mac 装好之后没等「下一个 Phase」，当场接着查，修好了</h3>
+    <p><b>2026-09-19 当天，Mac 一装好就直接接着查了这条账，而不是留到以后。</b>
+    这一次做到了上面说的「让那台设备把症状发生时的样子告诉我」：用 <code>xcrun devicectl</code>
+    直接连真机——装、启动、拉回它本地的原始文件、挂控制台看实时输出，全部第一次在这个
+    Phase 里真正做到。一路测出四层叠在一起的原因，每一层都配着实测数据，不是推断。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>原因</th><th>证据</th></tr>
+      <tr><td>四条 P9 之前记的老作答（没有 <code>item_key</code>）被服务端永久判
+        <code>failed</code>，客户端却当成「这次没连上」反复重发，<code>pendingEvents</code>
+        永远非零，复习屏因此永远走「等一趟同步」的阻塞路径</td>
+        <td class="ok">从真机拉回原始 <code>events.jsonl</code>：<code>reportedThrough</code>
+        卡在 394、总数 399，差的正好 4 条；改成「服务端判了就别再问」之后实测
+        <code>rejected=4 remaining=0</code></td></tr>
+      <tr><td>打卡日历不是真的「一次前向重放」——四百天窗口里但凡有一天吃进新事件，
+        那天及之后每一天都在把越滚越大的事件数组重新处理一遍</td>
+        <td class="ok">同一份真机事件数据反复重放实测：日历计算 1135ms →
+        869ms（先做到「不变就跳过」）→ <b>48ms</b>（改成真正的增量、
+        一条事件在整个扫描里只处理一次）</td></tr>
+      <tr><td><code>ISO8601DateFormatter</code>／<code>Calendar</code> 在热路径上
+        每次现建，今日包／句子池的 JSON 解码也没有缓存</td>
+        <td class="ok">单次全量重放 169ms → 30ms；<code>cachedDay()</code>
+        解码 1MB 今日包 28ms → 命中缓存后 0ms</td></tr>
+      <tr><td><code>adopt()</code> 无条件重放整个投影，哪怕排期参数根本没变</td>
+        <td class="ok">冷启动实测拆解:<code>events.load()</code> 10ms ＋
+        <code>Projection.replay()</code> 30ms，改成「参数没变就跳过」</td></tr>
+      <tr><td>取消处理会把已经显示好的 <code>.ready</code> 画面强行拉回
+        <code>.loading</code>——这条不是性能问题，是「立刻切走再切回」比
+        「放一会儿再切」更容易复现的真正原因</td>
+        <td class="ok">用户自己复测出的规律（「放着不动过一会儿就不转了」），
+        改完之后同一规律复测通过</td></tr>
+      <tr><td><code>ReviewModel</code> 每次进复习页才诞生、从 <code>.loading</code>
+        起步——SwiftUI 的 <code>.task</code> 调度必然先画一帧初始状态，
+        跟这一下算得快不快无关</td>
+        <td class="ok">改成跟 <code>AppModel</code> 一样在开屏时创建并预热之后，
+        单独测「开屏第一瞬间就点」「立刻切回」「杀后台重开」三种场景，
+        用户确认均不再转圈</td></tr>
+    </table>
+    </div>
+
+    <div class="callout">
+      <b>跟前三版的形状对比一下才看得出差在哪。</b>前三版是「远程读日志 → 推断 →
+      出一版 → 症状还在」，四次都没有真正观测到症状发生的那一刻。这一次每一处修复
+      都配了实测:从真机拉原始数据在本地重放、临时插桩量出耗时分布、改完再装回真机
+      让用户当场复测同一个操作序列。<b>「我改对了代码」和「他不卡了」之间那次观测，
+      这次做到了。</b>
+    </div>
+
+    <p><b>所以这笔账现在可以合上了。</b>「快速切换选项卡卡顿、转圈」——用户确认不转了，
+    包括最极端的「开屏第一瞬间就点」。这不是「应该好了」，是同一天在真机上来回验证了
+    六轮以上、每一轮用户都直接复测过的结论。<b>这不改写上面「怎么结束的」那几节的记录</b>
+    ——那几节写的是 Phase 结束那一刻真实的状态，照实留着；这一节写的是结束之后同一天
+    发生的事。</p>
+
     <h3>这个 Phase 交付了什么</h3>
     <div class="figures">
       <div class="fig"><div class="fig-val">26</div>
@@ -2070,20 +2125,24 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
         <div class="fig-key">CI 上的 Core 测试</div></div>
       <div class="fig"><div class="fig-val">0.5<span> MB</span></div>
         <div class="fig-key">拆库后真正补不回来的那一份（原本混在 42 MB 里）</div></div>
-      <div class="fig"><div class="fig-val" style="color:var(--stop)">未通过</div>
-        <div class="fig-key"><b>人工验收</b>——症状仍在，三版没修好</div></div>
+      <div class="fig"><div class="fig-val" style="color:var(--stop)">未通过*</div>
+        <div class="fig-key"><b>人工验收</b>——Phase 结束那一刻症状仍在，三版没修好；
+        <b>* 同一天后续修好了，见上一节</b></div></div>
     </div>
-    <p><b>所以这个 Phase 的状态是「代码完成、验收未通过、暂停」。</b>
+    <p><b>所以这个 Phase 结束那一刻的状态是「代码完成、验收未通过、暂停」。</b>
     它不是「做完了」。铁律那条「每个 Phase 结束由用户实际跑一遍验收清单，通过后才进下一个」
     没有被满足，而这一次<b>不给它记例外</b>——前两次记名的例外都有交换条件
     （P5 没有界面、P6–P8 要约人用真机），<b>这一次没有</b>：
-    只是我没修好，而修不好的原因是我看不见它。</p>
+    只是我没修好，而修不好的原因是我看不见它。
+    <b>这个判断本身没有错</b>——三版确实没修好，暂停本身是对的决定；
+    只是暂停之后同一天做的事（搬到 Mac）让「看不见它」这个原因不再成立，
+    照实记在上一节，不倒回来改这一段的判断。</p>
   </section>
 
 
   <footer>
     <div>English Reader</div>
-    <div>Phase 9 · 重构 · 代码完成，验收未通过</div>
+    <div>Phase 9 · 重构 · 代码完成，结束那一刻验收未通过；同一天搬到 Mac 后症状修好</div>
     <div>2026-09-19</div>
   </footer>
 
