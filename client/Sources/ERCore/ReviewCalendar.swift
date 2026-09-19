@@ -102,43 +102,49 @@ public enum ReviewCalendar {
                          days: [String]) -> [String: Counts] {
         var out: [String: Counts] = [:]
         var index = 0
-        var consumed: [LoggedEvent] = []
-        // **上一次重放的结果，只在 `consumed` 真的变长时才丢掉重算**
-        // （2026-09-19 真机上栽的:「一次前向重放」这句话没有做到——
-        // 这里原来对 400 天里的每一天都调一次 `Projection.replay`，
-        // 而重放本身只随 `consumed` 变化，跟「今天是哪天」无关，
-        // 真正日期相关的只有下面的 `todayQueue`。事件通常只挤在最近几天，
-        // 于是绝大多数天数在重算一个跟昨天一模一样的投影——实测:
-        // 400 天版本 1135ms，而单跑一次 `Projection.replay` 只要 169ms。
-        // 空的 `consumed` 也不例外:没有任何条目，`todayQueue` 必然是空集，
-        // 直接跳过重放和查询，省的不只是重放那一步）。
+        var hasHistory = false
+
+        // **每条事件的日期只解析一次**（2026-09-19 实测踩到）。这个函数原来
+        // 有三处各自解析同一条事件的时间戳:`while` 判「是不是这一天前」、
+        // 判「是不是正好今天」、以及 `apply()` 内部自己再分一次日。
+        // 格式器已经缓存住了,但解析字符串本身仍有真实开销——399 条事件被
+        // 解析三遍,比只解析一遍慢了两倍多(测得 107ms 对 25ms)。
+        // 这里整批算好「这条事件是哪一天」,后面两处直接查表,不再现解析。
+        let eventDays = load.events.map { Projection.day(of: $0.occurredAt) }
+
+        // **真正的一次前向重放。** 第一版只做到「`consumed` 没变就不重算」，
+        // 而它仍然是把越滚越大的 `consumed` 数组交给 `Projection.replay`
+        // 从头处理一遍——四百天里但凡有一天吃进新事件，那天及之后每一天都在
+        // 重复处理更早的事件（实测 1135ms）。`projection` 现在只在这里出现
+        // 一次，新事件用 `apply` 一条条叠上去，一条事件在整个四百天的扫描里
+        // 只被处理一次，加上上面那条只解析一次，最终 48ms。
         var projection = Projection()
 
         for day in days {
-            let before = consumed.count
-            // 把这一天（含）之前的事件都吃进去。
-            while index < load.events.count,
-                  Projection.day(of: load.events[index].occurredAt) <= day {
-                consumed.append(load.events[index])
+            // 把这一天（含）之前的事件都吃进去，一条条叠加到已有状态上。
+            var newToday = false
+            while index < load.events.count, eventDays[index] <= day {
+                projection.apply(load.events[index], weightDecay: weightDecay,
+                                 settings: settings)
+                if eventDays[index] == day { newToday = true }
+                hasHistory = true
                 index += 1
             }
-            guard !consumed.isEmpty else {
+            guard hasHistory else {
                 // 还没有任何历史:那天必然 `.unknown`，连查询都不用做。
                 out[day] = Counts()
                 continue
-            }
-            if consumed.count != before {
-                projection = Projection.replay(
-                    EventLogLoad(events: consumed, damaged: 0, tornTail: false),
-                    weightDecay: weightDecay, settings: settings)
             }
             guard let end = endOfDay(day) else { continue }
             var counts = Counts()
             // **那天有记录吗**:有事件、或者那天的队列非空。
             // 后者是「有活而你没开 App」——服务端那边是 `missed`，这里也是。
+            //
+            // `newToday` 取代了原来那句「把已消费的事件整个再扫一遍找当天的」
+            // ——那句话每天都要扫一遍最多 399 条,而这里在上面的 `while` 里
+            // 顺手就知道了,不需要再问一次。
             let queue = projection.todayQueue(day: day, now: end)
-            counts.recorded = !queue.isEmpty
-                || consumed.contains { Projection.day(of: $0.occurredAt) == day }
+            counts.recorded = !queue.isEmpty || newToday
             for entry in queue {
                 counts.total[entry.bucket, default: 0] += 1
                 if entry.state.done { counts.done[entry.bucket, default: 0] += 1 }
@@ -173,11 +179,16 @@ public enum ReviewCalendar {
     /// **和 `Projection.day(of:)` 用同一个时区（设备本地）。**
     /// 两边不一致的话，日历的日期键和投影的分日就对不上——而那种错
     /// 只在跨时区或半夜才现形，平时看着一切正常。
-    static var calendar: Foundation.Calendar {
+    /// **缓存住，不是每次现建**（2026-09-19 真机上栽的，和 `Projection` 那处
+    /// 同一形状）。`dayKeys(endingAt:count:)` 对 400 天的每一天都会经手它
+    /// 一两次——原来是个计算属性，那就是四百次以上的 `Calendar` 构造。
+    /// `Calendar` 是值类型、天然 `Sendable`，缓存源头不会带来任何共享可变
+    /// 状态的问题，每个访问者拿到的都是自己的一份拷贝。
+    static let calendar: Foundation.Calendar = {
         var calendar = Foundation.Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone.current
         return calendar
-    }
+    }()
 
     /// 一个 `Date` 落在哪一天。**公开的**:宿主要用它把「今天」说给 `build`，
     /// 而那个日期必须和重放里用的那一套（`TimeZone.current`）是同一套——

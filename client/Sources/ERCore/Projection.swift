@@ -142,132 +142,139 @@ public struct Projection: Sendable, Equatable {
                              settings: ReviewScheduler.Settings) -> Projection {
         var projection = Projection()
         projection.damagedEvents = load.damaged
-
         for event in load.events {
-            projection.throughLocalSequence = event.localSequence
-            let day = Self.day(of: event.occurredAt)
-
-            switch event.kind {
-            case .marked:
-                guard let key = Self.key(from: event.payload) else { break }
-                var item = projection.items[key] ?? Item()
-                if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
-                    item.marks.insert(kind)
-                }
-                // **进复习队列只有这一条路。** 已经 graduated 的不往回拉:
-                // 镜像服务端,只有 `reviewing` 这一档被 demote 碰过。
-                if item.pool == .new { item.pool = .reviewing }
-                item.lastMarkedDay = day
-                if item.introducedAt == nil {
-                    item.introducedAt = event.occurredAt
-                    item.introducedArticleId = Self.int(event.payload["article_id"])
-                    item.introducedSentenceId = Self.int(event.payload["sentence_id"])
-                }
-                // 标记所在那一句肯定见过。**撤销标记不会让它消失**——
-                // 日志只增不减，而那正是服务端留 `introduced_sentence_id` 的用意。
-                if let sentence = Self.int(event.payload["sentence_id"]) {
-                    projection.seenSentences.insert(sentence)
-                }
-                projection.items[key] = item
-
-            case .unmarked:
-                guard let key = Self.key(from: event.payload),
-                      var item = projection.items[key] else { break }
-                if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
-                    item.marks.remove(kind)
-                } else {
-                    // 没说哪一种就全清,同服务端 `clear_mark` 的 kind 为空那一支。
-                    item.marks.removeAll()
-                }
-                // **一种都不剩才退回 `new`**,而且只动 `reviewing`。
-                if item.marks.isEmpty && item.pool == .reviewing { item.pool = .new }
-                // **遇见记录与记忆状态都保留。** 它确实被遇见过;而你对它的记忆
-                // 也没有因为撤一个标记就重置。
-                projection.items[key] = item
-
-            case .read:
-                // **读完只增加遇见次数,不改变词池位置。** 试过两版自动记账,
-                // 都推翻了(跨 Phase 不变量)。
-                var record = projection.days[day] ?? Day()
-                record.readArticles += 1
-                projection.days[day] = record
-                if let article = Self.int(event.payload["article_id"]) {
-                    projection.finishedArticles.insert(article)
-                }
-                for met in Self.met(in: event.payload) {
-                    // **只给已经有记录的条目加,不为没标过的词建行。**
-                    // 镜像服务端那句 `if key in known: touch_state(...)`——
-                    // 遇见记录是挂在一条已有记录上的计数，而记录是标记那一刻建的。
-                    // 少了这一条，一篇文章会为它的每个实词造一行,
-                    // 而那些词你并没有在学。
-                    guard var item = projection.items[met.key] else { continue }
-                    // **加的是出现次数,不是加一**——同服务端那句 `COUNT(*) AS n`。
-                    item.encounters += met.count
-                    projection.items[met.key] = item
-                }
-
-            case .answered:
-                guard let key = Self.key(from: event.payload) else { break }
-                var record = projection.days[day] ?? Day()
-                record.answered += 1
-                projection.days[day] = record
-
-                // 跨天了就是新的一轮。**新一轮开始时定桶与封顶**,
-                // 用的是这一刻的条目状态——之后它会因为有了排期而变。
-                let existing = projection.rounds[key]?.day == day
-                    ? projection.rounds[key]
-                    : nil
-                let before = projection.items[key] ?? Item()
-                let bucket = existing?.bucket
-                    ?? (before.memory == nil
-                        ? (before.lastMarkedDay == day ? Bucket.today : .due)
-                        : .due)
-                let capped = existing?.capped ?? before.capped(on: day)
-                var round = existing?.state ?? ReviewItemState()
-                guard round.acceptsAnswer else { break }
-
-                let answer = ReviewAnswer(
-                    passed: Self.bool(event.payload["passed"]) ?? false,
-                    revealed: Self.int(event.payload["revealed"]) ?? 0,
-                    easy: Self.bool(event.payload["easy"]) ?? false
-                )
-                round = round.applying(answer, weightDecay: weightDecay)
-                projection.rounds[key] = Round(day: day, bucket: bucket,
-                                               capped: capped, state: round)
-
-                guard round.done else { break }
-                // 一轮走完,交给调度器。**评级看的是这一天失误了几次**,不是问了几次。
-                record = projection.days[day] ?? Day()
-                record.finishedRounds += 1
-                projection.days[day] = record
-
-                var item = projection.items[key] ?? Item()
-                let at = Self.date(of: event.occurredAt) ?? Date(timeIntervalSince1970: 0)
-                if let outcome = try? ReviewScheduler.review(
-                    state: item.memory, misses: round.misses, now: at,
-                    easy: round.easy,
-                    revealed: Self.int(event.payload["revealed"]) ?? 0,
-                    // 用这一轮开始时定下的那个,不是现算的——现算的话
-                    // 在同一次调用里就已经不对了。
-                    capped: capped,
-                    settings: settings
-                ) {
-                    item.memory = outcome.state
-                }
-                // 封顶算出来就自己消失了:这一轮之后 `memory` 不再是 nil，
-                // 而 `capped(on:)` 的第三个条件正是「从没排过期」。
-                projection.items[key] = item
-
-            case .spelled:
-                // **拼错不影响调度,只记一笔**(P3 决定 13)。所以这里什么都不改。
-                break
-
-            case .decided:
-                // 决策日志是给人和 AI 查的,不参与任何状态。
-                break
-            }
+            projection.apply(event, weightDecay: weightDecay, settings: settings)
         }
         return projection
+    }
+
+    /// 把一条事件叠加到已有状态上。**`replay` 就是从空状态开始逐条调它。**
+    ///
+    /// 拆出来是为了让调用方能在已有状态上继续叠加新事件——2026-09-19 之前
+    /// `ReviewCalendar.evaluate` 每天都调一次 `replay`,把 `consumed` 这个
+    /// 越滚越大的数组从头重放一遍,而这个方法本身只随事件变,跟「今天是哪天」
+    /// 无关。那正是「一次前向重放」这句话该有的做法:一条事件只处理一次。
+    public mutating func apply(_ event: LoggedEvent, weightDecay: Double,
+                               settings: ReviewScheduler.Settings) {
+        throughLocalSequence = event.localSequence
+        let day = Self.day(of: event.occurredAt)
+
+        switch event.kind {
+        case .marked:
+            guard let key = Self.key(from: event.payload) else { break }
+            var item = items[key] ?? Item()
+            if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
+                item.marks.insert(kind)
+            }
+            // **进复习队列只有这一条路。** 已经 graduated 的不往回拉:
+            // 镜像服务端,只有 `reviewing` 这一档被 demote 碰过。
+            if item.pool == .new { item.pool = .reviewing }
+            item.lastMarkedDay = day
+            if item.introducedAt == nil {
+                item.introducedAt = event.occurredAt
+                item.introducedArticleId = Self.int(event.payload["article_id"])
+                item.introducedSentenceId = Self.int(event.payload["sentence_id"])
+            }
+            // 标记所在那一句肯定见过。**撤销标记不会让它消失**——
+            // 日志只增不减，而那正是服务端留 `introduced_sentence_id` 的用意。
+            if let sentence = Self.int(event.payload["sentence_id"]) {
+                seenSentences.insert(sentence)
+            }
+            items[key] = item
+
+        case .unmarked:
+            guard let key = Self.key(from: event.payload),
+                  var item = items[key] else { break }
+            if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
+                item.marks.remove(kind)
+            } else {
+                // 没说哪一种就全清,同服务端 `clear_mark` 的 kind 为空那一支。
+                item.marks.removeAll()
+            }
+            // **一种都不剩才退回 `new`**,而且只动 `reviewing`。
+            if item.marks.isEmpty && item.pool == .reviewing { item.pool = .new }
+            // **遇见记录与记忆状态都保留。** 它确实被遇见过;而你对它的记忆
+            // 也没有因为撤一个标记就重置。
+            items[key] = item
+
+        case .read:
+            // **读完只增加遇见次数,不改变词池位置。** 试过两版自动记账,
+            // 都推翻了(跨 Phase 不变量)。
+            var record = days[day] ?? Day()
+            record.readArticles += 1
+            days[day] = record
+            if let article = Self.int(event.payload["article_id"]) {
+                finishedArticles.insert(article)
+            }
+            for met in Self.met(in: event.payload) {
+                // **只给已经有记录的条目加,不为没标过的词建行。**
+                // 镜像服务端那句 `if key in known: touch_state(...)`——
+                // 遇见记录是挂在一条已有记录上的计数，而记录是标记那一刻建的。
+                // 少了这一条，一篇文章会为它的每个实词造一行,
+                // 而那些词你并没有在学。
+                guard var item = items[met.key] else { continue }
+                // **加的是出现次数,不是加一**——同服务端那句 `COUNT(*) AS n`。
+                item.encounters += met.count
+                items[met.key] = item
+            }
+
+        case .answered:
+            guard let key = Self.key(from: event.payload) else { break }
+            var record = days[day] ?? Day()
+            record.answered += 1
+            days[day] = record
+
+            // 跨天了就是新的一轮。**新一轮开始时定桶与封顶**,
+            // 用的是这一刻的条目状态——之后它会因为有了排期而变。
+            let existing = rounds[key]?.day == day ? rounds[key] : nil
+            let before = items[key] ?? Item()
+            let bucket = existing?.bucket
+                ?? (before.memory == nil
+                    ? (before.lastMarkedDay == day ? Bucket.today : .due)
+                    : .due)
+            let capped = existing?.capped ?? before.capped(on: day)
+            var round = existing?.state ?? ReviewItemState()
+            guard round.acceptsAnswer else { break }
+
+            let answer = ReviewAnswer(
+                passed: Self.bool(event.payload["passed"]) ?? false,
+                revealed: Self.int(event.payload["revealed"]) ?? 0,
+                easy: Self.bool(event.payload["easy"]) ?? false
+            )
+            round = round.applying(answer, weightDecay: weightDecay)
+            rounds[key] = Round(day: day, bucket: bucket, capped: capped, state: round)
+
+            guard round.done else { break }
+            // 一轮走完,交给调度器。**评级看的是这一天失误了几次**,不是问了几次。
+            record = days[day] ?? Day()
+            record.finishedRounds += 1
+            days[day] = record
+
+            var item = items[key] ?? Item()
+            let at = Self.date(of: event.occurredAt) ?? Date(timeIntervalSince1970: 0)
+            if let outcome = try? ReviewScheduler.review(
+                state: item.memory, misses: round.misses, now: at,
+                easy: round.easy,
+                revealed: Self.int(event.payload["revealed"]) ?? 0,
+                // 用这一轮开始时定下的那个,不是现算的——现算的话
+                // 在同一次调用里就已经不对了。
+                capped: capped,
+                settings: settings
+            ) {
+                item.memory = outcome.state
+            }
+            // 封顶算出来就自己消失了:这一轮之后 `memory` 不再是 nil，
+            // 而 `capped(on:)` 的第三个条件正是「从没排过期」。
+            items[key] = item
+
+        case .spelled:
+            // **拼错不影响调度,只记一笔**(P3 决定 13)。所以这里什么都不改。
+            break
+
+        case .decided:
+            // 决策日志是给人和 AI 查的,不参与任何状态。
+            break
+        }
     }
 
     // MARK: 给服务端的进度报告(§7)
@@ -298,20 +305,52 @@ public struct Projection: Sendable, Equatable {
     /// 两个用途分开,别用同一个数(§6 细则 ①)。
     static func day(of timestamp: String) -> String {
         guard let date = date(of: timestamp) else { return String(timestamp.prefix(10)) }
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone.current
-        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let parts = Self.localCalendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d",
                       parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
+    /// **格式器与日历缓存住,不是每次现建**（2026-09-19 真机上栽的）。
+    ///
+    /// `ISO8601DateFormatter()`/`Calendar(identifier:)` 的构造本身不便宜——
+    /// 重放一遍历史要为每条事件调一两次 `date(of:)`/`day(of:)`，而
+    /// `ReviewCalendar.evaluate` 那边为了判「这天有没有记录」还会对同一批事件
+    /// 再扫一遍。399 条事件、每次现建格式器和日历，单次全量重放实测 169ms，
+    /// 而那份数据本身小到不该有感——真正贵的不是重放的逻辑，是反复重建
+    /// 这两样东西的开销。
+    ///
+    /// **`Calendar` 是值类型、天然 `Sendable`**，缓存源头不需要任何并发标注——
+    /// 每个访问者拿到的都是自己的一份拷贝。`ISO8601DateFormatter` 是类，
+    /// 下面两个要标 `nonisolated(unsafe)`；配置好之后只做只读的
+    /// `.date(from:)`，并发调用是安全的，真正不安全的是并发去改
+    /// `formatOptions`，这里从创建之后再没改过，所以这个标注是如实的，
+    /// 不是绕过检查。
+    ///
+    /// **代价要认**:`TimeZone.current` 只在首次访问时读一次，之后哪怕设备
+    /// 跨时区、这个进程活着不重启，也不会跟着变。这本来就是隐含假设
+    /// ——`ReviewCalendar.calendar` 那处同样假设时区在一次会话里不变——
+    /// 只是缓存把它从「每次都重新问但答案总一样」变成了「问一次」。
+    private static let localCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone.current
+        return calendar
+    }()
+
+    nonisolated(unsafe) private static let isoFormatterWithFraction: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    nonisolated(unsafe) private static let isoFormatterPlain: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
     static func date(of timestamp: String) -> Date? {
-        let full = ISO8601DateFormatter()
-        full.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let parsed = full.date(from: timestamp) { return parsed }
-        let plain = ISO8601DateFormatter()
-        plain.formatOptions = [.withInternetDateTime]
-        return plain.date(from: timestamp)
+        if let parsed = Self.isoFormatterWithFraction.date(from: timestamp) { return parsed }
+        return Self.isoFormatterPlain.date(from: timestamp)
     }
 
     /// 条目身份。
