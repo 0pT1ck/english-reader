@@ -43,23 +43,21 @@ struct EnglishReaderApp: App {
             .environment(app)
             .environment(reviewModel)
             .task {
-                await app.drain()
-                // **把复习屏要做的事提前在这里做完，而不是等它出现。**
-                // 默认落地的是阅读页，用户点进复习页之前主线程通常闲着一段
-                // 时间——趁那段时间把今日包解码、投影重放、日历计算、
-                // `reviewModel.phase` 的翻转都做掉。排在 `drain()` 之后:
-                // `drain()` 可能拉回别的设备做的事，顺序反过来的话
-                // 这里刚预热的缓存会立刻过期。
+                // **预热排第一，`drain()` 不再排在它前面**（2026-09-19，
+                // 用户提的:「让转圈这件事在开屏第一瞬间完成，再算别的」）。
+                // `reviewModel.load(app)` 自己会在合适的时候调 `drain()`
+                // （有待发才等、没有就后台跑），不需要外面再先等一趟——
+                // 先等的话，`drain()` 走网络的那部分会把预热往后推，
+                // 而预热本该走的是「从盘上缓存读」这条最快的路，
+                // 跟网络快慢没关系。
                 await reviewModel.load(app)
             }
             .onChange(of: scenePhase) { _, phase in
                 // 回到前台就把攒着的事件发一次。**离线时写下的标记要自己回去**，
-                // 不该等用户想起来去点什么。
+                // 不该等用户想起来去点什么。`load()` 内部会处理 drain，
+                // 理由同上面那个 `.task`。
                 if phase == .active {
-                    Task {
-                        await app.drain()
-                        await reviewModel.load(app)
-                    }
+                    Task { await reviewModel.load(app) }
                 }
             }
         }
