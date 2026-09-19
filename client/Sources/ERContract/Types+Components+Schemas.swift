@@ -20,6 +20,8 @@ extension Components {
             public var queue_id: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/passed`.
             public var passed: Swift.Bool
+            /// 开了几级提示。**入站不设上限**，理由见下——服务端在解释它的时候 clamp 到 `MAX_REVEAL`
+            ///
             /// - Remark: Generated from `#/components/schemas/AnswerItem/revealed`.
             public var revealed: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/AnswerItem/sentence_id`.
@@ -51,7 +53,7 @@ extension Components {
             /// - Parameters:
             ///   - queue_id: 今天这一轮的排队号。**不是义项 id。****P9 起可以是 0**:队列由设备自己组，而这个号是服务端那张表的行号、每天重建——带身份（下面三个字段）来的作答只被记下来，服务端不再算一遍
             ///   - passed:
-            ///   - revealed:
+            ///   - revealed: 开了几级提示。**入站不设上限**，理由见下——服务端在解释它的时候 clamp 到 `MAX_REVEAL`
             ///   - sentence_id:
             ///   - easy:
             ///   - item_type: word / phrase。**P9 加的**:见 item_key
@@ -193,15 +195,66 @@ extension Components {
         /// as the reading events — one event store, not two (see ``client_events``,
         /// whose own comment anticipated this phase).
         ///
+        /// **元素是个联合类型，那是有意的**（2026-09-19）:见 :class:`UnusableItem`。
+        /// 一条坏的只挡住自己，不挡它后面的——那是这个端点从第一天就承诺的事，
+        /// 而在这之前它做不到。
+        ///
         /// - Remark: Generated from `#/components/schemas/AnswersIn`.
         public struct AnswersIn: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload`.
+            public struct answersPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload/value1`.
+                public var value1: Components.Schemas.AnswerItem?
+                /// - Remark: Generated from `#/components/schemas/AnswersIn/answersPayload/value2`.
+                public var value2: Components.Schemas.UnusableItem?
+                /// Creates a new `answersPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.AnswerItem? = nil,
+                    value2: Components.Schemas.UnusableItem? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/AnswersIn/answers`.
-            public var answers: [Components.Schemas.AnswerItem]?
+            public typealias answersPayload = [Components.Schemas.AnswersIn.answersPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/AnswersIn/answers`.
+            public var answers: Components.Schemas.AnswersIn.answersPayload?
             /// Creates a new `AnswersIn`.
             ///
             /// - Parameters:
             ///   - answers:
-            public init(answers: [Components.Schemas.AnswerItem]? = nil) {
+            public init(answers: Components.Schemas.AnswersIn.answersPayload? = nil) {
                 self.answers = answers
             }
             public enum CodingKeys: String, CodingKey {
@@ -791,13 +844,60 @@ extension Components {
         }
         /// - Remark: Generated from `#/components/schemas/EventBatch`.
         public struct EventBatch: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload`.
+            public struct eventsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload/value1`.
+                public var value1: Components.Schemas.ClientEvent?
+                /// - Remark: Generated from `#/components/schemas/EventBatch/eventsPayload/value2`.
+                public var value2: Components.Schemas.UnusableEvent?
+                /// Creates a new `eventsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.ClientEvent? = nil,
+                    value2: Components.Schemas.UnusableEvent? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/EventBatch/events`.
-            public var events: [Components.Schemas.ClientEvent]?
+            public typealias eventsPayload = [Components.Schemas.EventBatch.eventsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/EventBatch/events`.
+            public var events: Components.Schemas.EventBatch.eventsPayload?
             /// Creates a new `EventBatch`.
             ///
             /// - Parameters:
             ///   - events:
-            public init(events: [Components.Schemas.ClientEvent]? = nil) {
+            public init(events: Components.Schemas.EventBatch.eventsPayload? = nil) {
                 self.events = events
             }
             public enum CodingKeys: String, CodingKey {
@@ -2633,15 +2733,68 @@ extension Components {
                 case result
             }
         }
+        /// **元素同样是联合类型**，理由见 :class:`UnusableItem`。
+        ///
+        /// 这一路还没出过事，而形状和作答那一路一模一样:一条字段验不过去就整批 422，
+        /// 而这个端点的契约写的也是「the same per-item verdict as the answers batch」。
+        /// **等它出事再改，就是等一次「手机一直转圈」**——那一次已经付过了。
+        ///
         /// - Remark: Generated from `#/components/schemas/SpellingsIn`.
         public struct SpellingsIn: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload`.
+            public struct spellingsPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload/value1`.
+                public var value1: Components.Schemas.SpellingItem?
+                /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellingsPayload/value2`.
+                public var value2: Components.Schemas.UnusableItem?
+                /// Creates a new `spellingsPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                ///   - value2:
+                public init(
+                    value1: Components.Schemas.SpellingItem? = nil,
+                    value2: Components.Schemas.UnusableItem? = nil
+                ) {
+                    self.value1 = value1
+                    self.value2 = value2
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    var errors: [any Swift.Error] = []
+                    do {
+                        self.value1 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    do {
+                        self.value2 = try .init(from: decoder)
+                    } catch {
+                        errors.append(error)
+                    }
+                    try Swift.DecodingError.verifyAtLeastOneSchemaIsNotNil(
+                        [
+                            self.value1,
+                            self.value2
+                        ],
+                        type: Self.self,
+                        codingPath: decoder.codingPath,
+                        errors: errors
+                    )
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1?.encode(to: encoder)
+                    try self.value2?.encode(to: encoder)
+                }
+            }
             /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellings`.
-            public var spellings: [Components.Schemas.SpellingItem]?
+            public typealias spellingsPayload = [Components.Schemas.SpellingsIn.spellingsPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/SpellingsIn/spellings`.
+            public var spellings: Components.Schemas.SpellingsIn.spellingsPayload?
             /// Creates a new `SpellingsIn`.
             ///
             /// - Parameters:
             ///   - spellings:
-            public init(spellings: [Components.Schemas.SpellingItem]? = nil) {
+            public init(spellings: Components.Schemas.SpellingsIn.spellingsPayload? = nil) {
                 self.spellings = spellings
             }
             public enum CodingKeys: String, CodingKey {
@@ -2994,6 +3147,118 @@ extension Components {
                 case sense_ordinal
                 case in_phrase
                 case note
+            }
+        }
+        /// 一条验不过去的上报。**留着它，好让它有资格被逐条拒绝。**
+        ///
+        /// 2026-09-19 加，起因是复习作答那一路的同一个形状（见
+        /// `review/routes.py` 的 `UnusableItem`）:这个端点回的是**逐条**裁决
+        /// （`EventBatchResponse` 的注释写着「What matters to the client is the
+        /// per-item verdict」），而 pydantic 的校验发生在 handler 之前——
+        /// 一条字段验不过去就让整批 500 条一起 422，逐条那套完全没机会跑。
+        ///
+        /// 这一路实际发作过一次，形状还不一样:客户端一批发 534 条而这里写着
+        /// `max_length=500`，于是**每次都是 422，队列只会变长**（手机卡了一天）。
+        /// 那一次是客户端改成分片修的；**而「一条坏的不许拖垮整批」是这一侧的事**。
+        ///
+        /// - Remark: Generated from `#/components/schemas/UnusableEvent`.
+        public struct UnusableEvent: Codable, Hashable, Sendable {
+            /// 能认出是哪一条就够了，其余字段不做要求
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnusableEvent/idem_key`.
+            public var idem_key: Swift.String?
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `UnusableEvent`.
+            ///
+            /// - Parameters:
+            ///   - idem_key: 能认出是哪一条就够了，其余字段不做要求
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(
+                idem_key: Swift.String? = nil,
+                additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()
+            ) {
+                self.idem_key = idem_key
+                self.additionalProperties = additionalProperties
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idem_key
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.idem_key = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .idem_key
+                )
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [
+                    "idem_key"
+                ])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(
+                    self.idem_key,
+                    forKey: .idem_key
+                )
+                try encoder.encodeAdditionalProperties(additionalProperties)
+            }
+        }
+        /// 一条验不过去的补报。**留着它，好让它有资格被逐条拒绝。**
+        ///
+        /// 这个类型存在的理由是一次事故（2026-09-19）。这个端点的契约写的是
+        /// 「a failure in the middle stops nothing — the one that failed is reported
+        /// with its key so the client can decide」，而 **pydantic 的校验发生在
+        /// handler 之前**——一条字段越界就让整批 500 条一起 422，
+        /// 逐条裁决那套设计完全没机会跑。**注释描述的是意图，实现从来没跟上**
+        /// （坑 §7.1 的同一个形状，而那段注释是我自己刚写下的）。
+        ///
+        /// 实际发作的样子:设备把老事件拉下来又推回去，其中 2 条是 P7 之前记的
+        /// `revealed=2`，于是那 118 条作答**永远**进不来，手机一直转圈。
+        ///
+        /// 所以列表的元素类型是「一条作答 **或** 一条验不过去的东西」。
+        /// 后者只需要认得出是哪一条（`idem_key`），好把 `failed` 连同理由回给客户端;
+        /// 认不出的话连拒绝都没法逐条拒绝，那就只能整批砸掉，也就回到了原点。
+        ///
+        /// - Remark: Generated from `#/components/schemas/UnusableItem`.
+        public struct UnusableItem: Codable, Hashable, Sendable {
+            /// 能认出是哪一条就够了，其余字段不做要求
+            ///
+            /// - Remark: Generated from `#/components/schemas/UnusableItem/idem_key`.
+            public var idem_key: Swift.String?
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `UnusableItem`.
+            ///
+            /// - Parameters:
+            ///   - idem_key: 能认出是哪一条就够了，其余字段不做要求
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(
+                idem_key: Swift.String? = nil,
+                additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()
+            ) {
+                self.idem_key = idem_key
+                self.additionalProperties = additionalProperties
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idem_key
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.idem_key = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .idem_key
+                )
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [
+                    "idem_key"
+                ])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encodeIfPresent(
+                    self.idem_key,
+                    forKey: .idem_key
+                )
+                try encoder.encodeAdditionalProperties(additionalProperties)
             }
         }
         /// - Remark: Generated from `#/components/schemas/ValidationError`.
