@@ -259,14 +259,27 @@ final class AppModel {
     private static let unusableSettings = ReviewScheduler.Settings(
         requestRetention: 0.9, maximumInterval: 180, parameters: [], enableFuzz: false)
 
-    /// 今日包带来的那几个服务端参数。**每次取到包都调它。**
+    /// 今日包带来的那几个服务端参数。**每次取到包都调它**——但只在参数真的
+    /// 变了的时候才重放。
+    ///
+    /// **这是「全盘筛查」揪出来的第三处同一形状**（2026-09-19，日历和
+    /// 今日包/句子池解码之后）:`ReviewModel.load()` 每次进复习屏都会用
+    /// 盘上缓存的今日包调一次 `adopt`,而这里原来无条件 `refreshProjection()`
+    /// ——那是对全部事件日志的一次完整重放,而它排在 `phase = .ready` **之前**,
+    /// 直接算在了「这一帧还没画出来」那段时间里。真正需要重放的唯一理由是
+    /// 排期参数变了(权重衰减、FSRS 参数)——事件日志本身的变化已经由
+    /// `record()`/`pull()` 各自触发过一次,不需要这里再兜底一遍。
     func adopt(_ package: DayPackage) {
-        weightDecay = package.settings.weight_decay
-        schedulerSettings = package.schedulerSettings
+        let newDecay = package.settings.weight_decay
+        let newSettings = package.schedulerSettings
+        let unchanged = newDecay == weightDecay && newSettings == schedulerSettings
+        weightDecay = newDecay
+        schedulerSettings = newSettings
         if schedulerSettings == nil {
             log?.write(.warn, "settings.scheduler.missing",
                        "今日包里没有排期参数——服务端还是旧镜像")
         }
+        guard !unchanged else { return }
         refreshProjection()
     }
 
