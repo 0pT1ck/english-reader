@@ -13,6 +13,7 @@ struct LibraryScreen: View {
     var body: some View {
         NavigationStack {
             content
+                .libraryBackground()
                 .navigationTitle("阅读")
                 .navigationDestination(for: ArticleCard.self) { card in
                     ReaderScreen(card: card)
@@ -52,6 +53,7 @@ struct LibraryScreen: View {
                 if let notice = model.notice {
                     Section { OfflineRow(text: notice) }
                         .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                 }
 
                 // 第一次进这个书架、盘上什么都没有时才转圈。
@@ -61,6 +63,7 @@ struct LibraryScreen: View {
                             .padding(.vertical, 24)
                     }
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
 
                 ForEach(model.cards) { card in
@@ -69,9 +72,11 @@ struct LibraryScreen: View {
                     }
                     .listRowInsets(.init(top: 6, leading: 16, bottom: 6, trailing: 16))
                     .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
             .listStyle(.plain)
+            .scrollContentBackground(.hidden)
             .refreshable { await model.load(app, force: true) }
         }
     }

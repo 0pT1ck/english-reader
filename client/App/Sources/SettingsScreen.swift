@@ -29,6 +29,8 @@ struct SettingsScreen: View {
                 if app.preferences.developerUnlocked { developerSection }
                 aboutSection
             }
+            .scrollContentBackground(.hidden)
+            .settingsBackground()
             .navigationTitle("设置")
             .task {
                 model.load(app)
@@ -77,6 +79,7 @@ struct SettingsScreen: View {
         } footer: {
             Text("这里显示的是这台设备连着的那份学习记录。要换成别的，在下面的「连接」里改。")
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 连接
@@ -107,6 +110,7 @@ struct SettingsScreen: View {
                 }
             }
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 阅读
@@ -137,6 +141,7 @@ struct SettingsScreen: View {
             // 觉得漏了一项，然后在这儿再加一个滑块。
             Text("正文字号在阅读界面的「···」里调，那里看得到效果。")
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 今天的安排（只读）
@@ -151,6 +156,7 @@ struct SettingsScreen: View {
         } footer: {
             Text("这几项由服务端决定，手机上只显示。要改，在管理控制台改。")
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 存储
@@ -214,6 +220,7 @@ struct SettingsScreen: View {
                 .padding(.vertical, 2)
             }
         }
+        .listRowBackground(Color.clear)
     }
 
     static func describe(_ report: SyncReport) -> String {
@@ -240,6 +247,7 @@ struct SettingsScreen: View {
         } footer: {
             Text("手机这边发生了什么。存三天，可以复制、分享、存成文件。")
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 开发者选项
@@ -254,6 +262,7 @@ struct SettingsScreen: View {
         } footer: {
             Text("直接控制后台：跳天、任务、配置、服务端日志。用的是管理密码，不是设备令牌。")
         }
+        .listRowBackground(Color.clear)
     }
 
     // MARK: 关于
@@ -277,6 +286,7 @@ struct SettingsScreen: View {
                 }
             }
         }
+        .listRowBackground(Color.clear)
     }
 
     /// 构建号由 `testflight.yml` 用 `github.run_number` 写进去，所以它对得回
