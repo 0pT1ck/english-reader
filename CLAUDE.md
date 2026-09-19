@@ -77,7 +77,16 @@
 
 ## 仓库
 
-https://github.com/SCmenghua/english-reader （**公开**，默认分支 `main`）
+https://github.com/0pT1ck/english-reader （**公开**，默认分支 `main`）
+
+**2026-09-19 账号改名**：`SCmenghua` → **`0pT1ck`**（零、p、大写 T、数字 1、c、k——
+这几个字符容易看错，照着抄）。两台机器的 remote 当天改完并实测通了。
+**没受影响的**：令牌与 SSH key（绑的是账号数字 id `100364688`，不绑用户名）、
+Actions 的 secrets、提交历史与贡献图（GitHub 按**邮箱**认作者，
+本仓库全部是 `2059263572@qq.com`）、star/fork/issue。
+CI 的三条 workflow 一个字没改——它们用的是 `github.repository` 这类上下文变量。
+**唯一要记着的风险**：旧用户名立刻可被他人注册，而 GitHub 的重定向
+**只在旧名没被占用时有效**。
 
 **2026-09-12 从私有转为公开**，为的是 GitHub Actions 的 macOS runner 在公开仓库上不计费（P5/手机端要用）。
 转之前扫过全部历史确认没有泄漏，扫的结果记在 `phase-5.html` §4。
