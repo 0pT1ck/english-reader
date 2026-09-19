@@ -180,7 +180,20 @@ final class LibraryModel {
     /// 是白送的，客户端一行过滤都不用写。
     ///
     /// shelf 传 `all`：决定 6 说暂不分「今天 / 往期」，一个列表按序号排。
+    ///
+    /// **单飞:同一时刻只有一趟**（2026-09-19，Mac 上复现）。`.task` 在切走
+    /// 这一格时被取消、切回来时重新跑——和 `ReviewModel.load()`、
+    /// `AppModel.drain()` 是同一个形状（那两处的注释已经写过这个坑），
+    /// 而这里当时漏了同一处守卫。直接在这个 App 进程里对同一个 `LibraryModel`
+    /// 触发两次并发 `load()` 实测：两次都各自打了一次 `/v1/client/library`，
+    /// 没有任何东西挡它们。快速切换标签页时这会在阅读这一格上反复发生，
+    /// 而它和复习那几个请求走的是同一个 `SyncEngine` actor、同一条隧道。
+    private var isLoading = false
+
     func load(_ app: AppModel, force: Bool = false) async {
+        guard !isLoading else { return }
+        isLoading = true
+        defer { isLoading = false }
         guard let engine = app.engine else {
             notice = app.connection.isConfigured ? "连接还没建好" : nil
             return
