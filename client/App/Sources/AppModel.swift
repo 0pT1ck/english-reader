@@ -261,15 +261,33 @@ final class AppModel {
     /// 排期算不算得出来。界面据此决定要不要说话。
     var canSchedule: Bool { schedulerSettings != nil }
 
+    /// 上一次算出来的日历，连同算它时用的那把钥匙。**答案没变就不用重算。**
+    ///
+    /// 2026-09-19 真机上又栽了一次坑 §7.6 那个形状：以为「一次前向重放」
+    /// 就够快，而它确实比「每天都从头重放」快，**但它仍然是每次进复习屏都要
+    /// 重新跑一遍的实打实的计算**——399 条事件、约 8 个有记录的日子，
+    /// 实测 869ms。真正的问题不是「算得慢」，是**同一个答案被反复算**:
+    /// 用户没做任何事、事件日志一个字节没变，切一次选项卡就重算一次。
+    ///
+    /// **答案只在两件事上会变**:事件日志前进了（钥匙用
+    /// `projection.throughLocalSequence`，投影每次重放都会更新它），
+    /// 或者日界跨过去了（钥匙用今天的日期）。两个都没变，直接把上次的结果
+    /// 递出去——这才是「本地计算」这句话原本该兑现的样子。
+    private var calendarCache: (day: String, through: Int, span: Int,
+                                result: (days: [ReviewCalendar.Day], streak: Int))?
+
     /// 打卡日历与连续天数，**由重放算出来**（P9 §11）。
     ///
     /// nil ＝ 服务端还没下发排期参数，那时算不出「那天该做多少」——
     /// 而一个编出来的日历比没有日历糟得多:它会把没做的日子画成绿的。
-    ///
-    /// **一次前向重放、在日界处求值**，所以它不贵；但它比那两个数贵
-    /// （要回看 400 天算连续），所以只在 `sync` 里算一次，不做成计算属性。
     func calendar(days span: Int = 7) -> (days: [ReviewCalendar.Day], streak: Int)? {
         guard let settings = schedulerSettings else { return nil }
+        let today = ReviewCalendar.key(of: Date())
+        let through = projection.throughLocalSequence
+        if let cache = calendarCache, cache.day == today, cache.through == through,
+           cache.span == span {
+            return cache.result
+        }
         // **复用重放时那一份，不再自己读一遍盘**（2026-09-19）。
         //
         // 原本这里自己 `events.load()`——于是进一次复习屏要把日志整份读两遍、
@@ -279,10 +297,10 @@ final class AppModel {
         // **这和 P8 §18 那个「越用越慢」是同一个形状的第三次**:
         // 贵的东西被放在了「每次都会走」的路上。
         guard let load = lastLoad ?? (try? events?.load()) else { return nil }
-        return ReviewCalendar.build(load, weightDecay: weightDecay,
-                                    settings: settings,
-                                    today: ReviewCalendar.key(of: Date()),
-                                    span: span)
+        let result = ReviewCalendar.build(load, weightDecay: weightDecay,
+                                          settings: settings, today: today, span: span)
+        calendarCache = (today, through, span, result)
+        return result
     }
 
     /// 重置结果，给开发者选项那一屏显示。
