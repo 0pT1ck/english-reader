@@ -187,17 +187,15 @@ E「句子质量抽验」**通过**——105 条生成句盲判、混 15 条阳�
     **缓解只有一条，但必须守住**：每个界面 Phase 仍然必须过 CI——
     **编得过、装得上、起得来、不闪退**，这四样机器验得了。
 - 每个 Phase 结束时更新文档，让文档和实际做出来的东西对齐。
-- **提交只在三个节点发生，别处一律不提交：**
+- **提交只在两个节点发生，别处一律不提交：**
   1. **Phase 的方案文档彻底定稿时——问一句要不要推**（不自动推，等回答）。
      加这一条的原因是方案讨论常常跨天跨会话，文档定稿了却不落库，下次开会就得靠翻对话重建。
   2. **验收通过后自动提交并推送**，不必再询问。
-  3. **要验 Core 时**（2026-09-14 加）：本地不再装 Swift，`swift test` 只在 CI 上跑，
-     而 CI 要先 push 才动得了——`workflow_dispatch` 也救不了，它跑的是远端的 ref。
-     所以改完 Core 就提交并推 `ios`，不必询问。
-     **这一条明确破了下面那句「保持工作区未提交」**，是有意的：那句话的目的是
-     「你随时看得到改了什么」，而提交到 `ios` 之后 `git log` 一样看得到，只是从工作区挪进了历史。
-     边界：**只限 `ios` 分支、只为触发 CI**，别顺手把无关的改动一起带进去。
-  除这三处之外，**Phase 进行中保持工作区未提交**，便于用户随时看到改了什么。
+  除这两处之外，**Phase 进行中保持工作区未提交**，便于用户随时看到改了什么。
+  **原来还有第三个节点**（2026-09-14 加、2026-09-19 撤销）：「本地不装 Swift，
+  改完 Core 必须提交并推 `ios` 才能靠 CI 验证」——那条的前提是本地验不了 Core，
+  而 Mac 迁移之后前提没了（见「开发场地」），本地跑一遍
+  `scripts/ci_client.py` 就知道改得对不对，不用再靠提交触发验证。
 - **界面的提交走 `ios` 分支，验收通过后合回 `main`**（2026-09-13 定，2026-09-16 第一次兑现）。
   P6/P7/P8 的提交在 `ios` 上攒了三个 Phase，TestFlight 验收通过当天一次合回 `main`。
   **下一个界面 Phase 照旧**：先在 `ios` 上攒，验收通过再合。
@@ -421,37 +419,70 @@ E「句子质量抽验」**通过**——105 条生成句盲判、混 15 条阳�
 
 ## 开发场地
 
-**2026-09-19：用户有 Mac 了，下一步要把项目迁过去。** 还没迁，下面这一整节仍然是现行口径。
-**为什么要迁**，理由不是「方便一点」而是 P9 结束时那笔账（`phase-9.html` §17）：
-真机上「切选项卡卡 ＋ 转圈」推了三版没修好，而三版的形状一模一样——
-**远程读日志 → 推断 → 出一版 → 症状还在**。事后的日志能证明「某个请求失败了」，
-证明不了「屏幕为什么在转」。有了 Mac 才量得到主线程耗时、才看得见切屏时
-SwiftUI 重建了什么、`.task` 被取消了几次，而 `swift build` 也从「推一次等 CI 一分钟」
-变成本地几秒。**P6 §13 当年写「远程操控 runner 那条路试过、走死了」，这条路现在通了。**
+**2026-09-19：Swift / iOS 那一侧的开发场地迁到了 Mac，Python 后端仍在 r5s。**
+起因是 P9 结束时那笔账（`phase-9.html` §17）：真机上「切选项卡卡 ＋ 转圈」
+推了三版没修好，而三版的形状一模一样——**远程读日志 → 推断 → 出一版 → 症状
+还在**。事后的日志能证明「某个请求失败了」，证明不了「屏幕为什么在转」。
+有了 Mac 才量得到主线程耗时、才看得见切屏时 SwiftUI 重建了什么、`.task`
+被取消了几次，而 `swift build` 也从「推一次等 CI 一分钟」变成本地几秒。
+**P6 §13 当年写「远程操控 runner 那条路试过、走死了」，这条路现在通了。**
 
-**2026-09-14 起主场地从 Windows 搬到 r5s**（自家的 NanoPi R5S，Armbian 25.5.1 / Ubuntu 24.04 /
-aarch64 / 4 核 Cortex-A55 / 3.6G 内存 / NVMe 挂在 `/data`）。搬的理由是不占 Windows，
-外加它 7×24 不关机——夜间备稿任务不再依赖某台机器正好醒着。
-用 Claude Code 的 **Remote Control** 驱动（全套餐可用，进程跑在 r5s 上，代码和数据不离开它），
-**必须挂在 `tmux` 里**：SSH 一断进程就没，会话当场下线。
+**Swift/iOS 那一侧不再靠 CI 才能验证**（2026-09-19 定）：`scripts/ci_client.py`、
+`scripts/ci_app.py`、`scripts/ci_testflight.py` 三份脚本照着 `client.yml`、
+`app.yml`、`testflight.yml` 各自的步骤原样搬了一遍，本地跑，比推一次等 CI 快得多。
 
 | 活 | 在哪 |
 |---|---|
 | Python 后端、文档、Python 那几套验收脚本 | **r5s** |
-| Swift / SwiftUI 代码的**编写** | **r5s**（只写不编） |
-| `swift test`、iOS 编译、模拟器、TestFlight | **CI**（`client.yml` / `app.yml` / `testflight.yml`） |
-| Windows 上那套 Swift 工具链 | 保留，**备用与应急** |
+| Swift / SwiftUI 代码的编写、`swift test`、Core 给 iOS 编译、契约生成比对、App 编译装模拟器起来、TestFlight 归档签名上传 | **这台 Mac**（`uv run python scripts/ci_client.py` / `ci_app.py` / `ci_testflight.py [--upload]`） |
+| 上面这些的独立第二次验证 | **CI**（`client.yml` / `app.yml` / `testflight.yml`，一字没改，只是从「唯一能验的地方」降成「另一台机器再验一遍」） |
+| 远程连 CI 模拟器点界面 | **退休了**——`remote.yml` 已删，有 Mac 不用再远程操控 runner |
+| Windows 上那套 Swift 工具链 | 保留，**再降一级，备用的备用** |
 
-**r5s 上跑不了 `verify_phase5.py` 的 Swift 部分**（它内含 `swift test` 47 项），这是砍掉本地 Swift
-的直接后果，不是回归。Core 的覆盖由 `client.yml` 在 CI 上提供。
+**CI 还在，一个字没改。** `client.yml` 里 Core 在 `swift:6.3` 的 Linux 容器里
+跑 `swift test` 那半份，本地 Mac 验不了（Core 在 Linux 上编不编得过是本地
+macOS 环境回答不了的问题）——所以 CI 不是被替换，是从「唯一能验的地方」
+降级成「独立的第二次验证」，这一半的覆盖仍然只有它能给。
 
-**r5s 上不装 Swift**（2026-09-14 定）：一整套 toolchain 好几百 MB，Cortex-A55 编 Swift 很慢，
-换来的只是省掉一轮 CI——而实测 `client.yml` 全程 **0–1 分钟**（`.build` 有 cache），不值。
-**代价是写 SwiftUI 时没有本地语法检查**，第一个拼写错误要等 CI 那一分钟才知道。
-**契约类型也在本机生成不出来**（生成器要 `swift run` 从源码构建）。
-2026-09-18 起这条有出口了：`client.yml` 有一个 job **在 CI 上重新生成、逐字节比、
-成功失败都把产物传出来**——改了契约就推一次，那个 job 红了就把产物下载下来提交。
-**别手改 `client/Sources/ERContract`**，那是生成物。
+**云签名以前在 CI 上每推一次就烧一张证书，根子不在签名方式，在「CI 的钥匙串
+每次都是空的」**——本地钥匙串是持久的，Xcode 认得已经建过的证书就直接用，
+不会再问 Apple 要一张新的（2026-09-19 实测：本地连跑两次归档，第二次原样
+复用了第一次建的那张）。签名凭证放在 `data/signing/`（整个 `data/` 都在
+`.gitignore` 里）——和 CI 用的那份 GitHub secret 是**同一把**App Store Connect
+团队密钥的两份拷贝，不是另建的。`ci_testflight.py` 默认只导出到本地，
+要真的传上 TestFlight 得显式加 `--upload`（那是号主和测试员都看得到的外部动作，
+脚本的默认值就是唯一的关卡，没有 Actions 页面那道「点 Run 之前看一眼参数」）。
+
+**Core 交叉编译踩过一个坑，记这儿免得下次又撞上**：`client.yml` 写的
+`-Xswiftc -target ... -Xswiftc -sdk ...` 那套在这台 Mac 的 Xcode 27 上
+**不生效**——会静默编出 macOS 的产物，不报错，只是 Mach-O 里的平台标记不对，
+`otool -l` 读出来是 `platform 1` 不是 `2`。CI 锁的是 Xcode 26，这大概率是
+两个版本间 SwiftPM 处理跨平台编译目标的差异。本地要用 `--triple` **加**
+`--sdk` 这两个顶层参数（缺一个都不对），`ci_client.py` 已经改成这个写法；
+**CI 那份先不动**，Xcode 26 上原来那套还是好的，等哪天升级 CI 的 Xcode
+版本再一起核实。
+
+**契约类型现在本地也生成得出来**（`python3 scripts/generate_swift_types.py`，
+生成器要 `swift run`，这台 Mac 有 Swift 工具链）。2026-09-19 用这条本地路径
+逮到一次真的漂移：`client/openapi.json` 在 `4aac095` 那次改了批量端点的入参
+形状，但生成的 Swift 类型没跟上——r5s 编不出来、也没人推一次去触发 CI 的
+`regenerate` job，漂了好几个提交都没被发现。**别手改 `client/Sources/ERContract`**，
+那是生成物；改完契约，本地跑一遍 `scripts/ci_client.py`（或单独跑生成器）
+再提交，不用再等 CI。
+
+**2026-09-14 起主场地从 Windows 搬到 r5s**（自家的 NanoPi R5S，Armbian 25.5.1 / Ubuntu 24.04 /
+aarch64 / 4 核 Cortex-A55 / 3.6G 内存 / NVMe 挂在 `/data`）。搬的理由是不占 Windows，
+外加它 7×24 不关机——夜间备稿任务不再依赖某台机器正好醒着。**这条对 Python 后端
+仍然成立**，上面那次搬场地只挪了 Swift/iOS 这一侧。
+用 Claude Code 的 **Remote Control** 驱动（全套餐可用，进程跑在 r5s 上，代码和数据不离开它），
+**必须挂在 `tmux` 里**：SSH 一断进程就没，会话当场下线。
+
+**r5s 上跑不了 `verify_phase5.py` 的 Swift 部分**（它内含 `swift test` 47 项），这是 r5s
+不装 Swift 的直接后果，不是回归——**这台 Mac 能跑**，但 `verify_phase5.py` 本身
+还没改成认这台机器，跑之前先看一眼它认不认得本地的 Swift。
+
+**r5s 上不装 Swift（2026-09-14 定）**：一整套 toolchain 好几百 MB，Cortex-A55 编 Swift 很慢，
+这条判断没变——r5s 仍然是 Python 后端的主场地，不是 Swift 的。
 
 **数据的主副本从 2026-09-14 起在 r5s**，Windows 那份是**冻结的备份，不要再启动服务**。
 两边各跑一次验收就会分叉（实测过：跑完 P3 之后两边的复习条目状态已经对不上）。
@@ -488,9 +519,11 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
 - 环境变量：`HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` 设为上述地址；`NO_PROXY` 设为 `localhost,127.0.0.1,::1`
 - 应用代码里的出站请求（LLM API、Bark 推送）走配置里的代理地址，不写死
 
-## Swift 工具链（P5 起；2026-09-14 后只在 Windows 上，且只是备用）
+## Swift 工具链（P5 起；2026-09-19 起主路径是 Mac，这套 Windows 的再降一级）
 
-**主路径是 CI**，见「开发场地」。下面这套留在 Windows 上应急，r5s 上不装。
+**主路径现在是这台 Mac**（Xcode 27 自带 Swift 6.4），见「开发场地」。
+下面这套留在 Windows 上应急——原来是「Windows 备用、CI 主路径」，
+现在 Mac 顶了 CI 的位置，Windows 排到了第三，r5s 仍然不装。
 
 2026-09-12 装在 **`D:\Software\Swift`**，Swift **6.3.3**，target `x86_64-unknown-windows-msvc`。
 靠 VS Community 2026（MSVC 14.51.36231）与 Windows SDK 10.0.26100.0 编译链接——
