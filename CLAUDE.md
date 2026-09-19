@@ -614,9 +614,11 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
   两个 Web 页令牌换了新的（不与主副本共用）。**`secrets.json` 没拷**，所以那边没有 API 密钥。
   快照用 `VACUUM INTO` 做的，不是 `cp`（有 WAL，直接拷可能不一致），三个库 `integrity_check` 全 ok。
 - **阿里云那台的现状**（2026-09-15）：`47.116.104.62`，Ubuntu 24.04 / x86_64 /
-  **实际可用内存 1.6G，无 swap** / 磁盘 40G。`ssh aliyun` 可直连（r5s 上配好了，
-  密钥 `~/.ssh/id_ed25519_aliyun`，与 GitHub 那把分开）。域名 **`reader.cntick.top`**。
-  app 容器实测 healthy、时区 CST、四个库迁移完成。
+  **实际可用内存 1.6G，无 swap** / 磁盘 40G。`ssh aliyun` 可直连——
+  **r5s 上密钥是 `~/.ssh/id_ed25519_aliyun`**（与 GitHub 那把分开）；
+  **Mac 上是另一把 `~/.ssh/id_rsa_aliyun`**（2026-09-19 配的，两台机器各自的
+  `~/.ssh/config` 里都有 `Host aliyun`，密钥不同、指向同一台服务器）。
+  域名 **`reader.cntick.top`**。app 容器实测 healthy、时区 CST、四个库迁移完成。
 - **备案拦截比我原先判断的更狠：高端口也挡，而且是按 SNI 掐 TLS**（2026-09-15 实测推翻前判）。
   原以为「未备案只挡 80/443，高端口可用」，实际是：`reader.cntick.top` 在 8443 上
   **先能用了四十分钟，随后被扫到并封掉**。
@@ -625,14 +627,17 @@ cloudflared 等），两条要守：**8000 端口已被占用**，本项目改�
   **带那个域名的 SNI**，一个字节都没有。同时明文 HTTP 打同一端口拿得到 Caddy 的 400。
   端口是通的、Caddy 是好的、MTU 正常（1472 DF 通）——**只有带那个 SNI 的 TLS 被中途丢弃**。
   注意 `SNI=example.com` 这个对照**不成立**：Caddy 只配了一个站点，对陌生 SNI 本来就中断握手。
-- **所以现在有两条路，都留着**（2026-09-15 定，用户选了 A+B 并行）：
-  - **A. Cloudflare Tunnel，当前在用**：`https://reader.cfoptick.com`，
+- **两条路都留着，2026-09-19 起 B 转正**（2026-09-15 定 A+B 并行，ICP 过审后按原计划切换）：
+  - **A. Cloudflare Tunnel，现在是备用**：`https://reader.cfoptick.com`，
     `/opt/appdata/cloudflared/`。**服务器一个入站端口都不开**，没有 SNI 可供识别，拦不到。
     实测端到端 200，今日包 1 MB / 3 篇文章 / 21 条复习，**延迟 0.85–1.4 秒**——
-    隧道连的是 Cloudflare 洛杉矶节点，流量绕太平洋一趟。
-  - **B. Caddy 直连，建好了但被挡着**：`https://reader.cntick.top:8443`，`/opt/appdata/caddy/`。
-    证书已签发（DNS-01，有效期到 2026-12-14），容器在跑，**等 ICP 过审就能用**。
-    通过之后把 `HTTPS_PORT` 改回 443、App 里换地址即可，这套东西一点不浪费。
+    隧道连的是 Cloudflare 洛杉矶节点，流量绕太平洋一趟。容器没停，出问题随时切回来。
+  - **B. Caddy 直连，2026-09-19 转正**：`https://reader.cntick.top`，`/opt/appdata/caddy/`。
+    `.env` 的 `HTTPS_PORT` 8443→443、`HTTP_PORT` 127.0.0.1:8080→80，
+    `docker compose up -d` 重建后验证：带 SNI 的握手拿到完整证书链（Let's Encrypt，
+    `CN=reader.cntick.top`），`curl .../health` 跟完 307 拿到 200。
+    证书到期仍是 2026-12-14。**App 里的服务器地址要手动从 cfoptick.com 换成 cntick.top**，
+    这一步不随服务端改动自动生效。细节见 `deploy.html` §7。
 - 证书**只能走 DNS-01**（未备案时 80/443 都不可达，HTTP-01 与 TLS-ALPN-01 都要那两个端口），
   而 DNS-01 要 Caddy 带 DNS 插件，官方镜像不带——`/opt/appdata/caddy/Dockerfile.caddy` 为此存在。
 - **在阿里云那台上构建，三条取包的路都要换成国内的**（2026-09-15 实测，命令存在服务器
