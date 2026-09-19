@@ -1979,10 +1979,112 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     </div>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
+      <h2>怎么结束的，以及欠下了什么</h2>
+      <span class="sec-note">2026-09-19</span>
+    </div>
+
+    <p class="lede">用户定的：<b>这个 Phase 到此为止。</b>
+    代码写完了、自动验收全绿，<b>而真机上那个症状还在</b>——
+    「快速切换选项卡就会很卡，还是会触发转圈」。推了三版（11、13、14），三版都没修好它。
+    <b>所以这个 Phase 的验收没有通过</b>，下面这一节照实写，不把「做到的」写成「跑通了」。</p>
+
+    <div class="callout">
+      <b>先说清楚哪些是有证据的，哪些不是。</b>这一条比下面任何一段都重要——
+      我在这三轮里反复犯的错，正是把「我修好了一个真的缺陷」当成了
+      「我修好了他看到的那个问题」。
+    </div>
+
+    <h3>确实修掉了，而且有证据</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th>缺陷</th><th>证据</th></tr>
+      <tr><td>一批发 534 条，而端点上限 500，每次 422、队列只会变长</td>
+        <td class="ok">用户自己的日志：构建 13 之后
+          <code>07:11:30 http.ok POST /v1/client/events status=200</code></td></tr>
+      <tr><td><code>revealed</code> 的入站上限被收紧（3 → 1），存档里 2 条老值
+        让 118 条作答永远进不来</td>
+        <td class="ok">线上混合批次实测 <code>accepted=2 failed=1</code>，
+          那条 <code>revealed=2</code> 收下了</td></tr>
+      <tr><td>批量端点的校验是全有全无的，逐条裁决从来没生效</td>
+        <td class="ok">同上；三个端点都验过，坏的那条只挡住自己</td></tr>
+      <tr><td>会合点里混着 365 条验收夹具，设备当成真历史收下</td>
+        <td class="ok">r5s 246 → 224、阿里云 776 → 411，
+          清理时**留下 4 笔有真事件支持的标记**没动</td></tr>
+      <tr><td><code>drain()</code> 不互斥、拉取重复收</td>
+        <td class="wait">改了、有回归测试，<b>但没有在真机日志上复验过</b></td></tr>
+    </table>
+    </div>
+
+    <h3>没修掉的，就是他报的那一个</h3>
+    <p><b>「快速切换选项卡就会很卡，还是会触发转圈」——构建 14 之后依然存在。</b>
+    我为它找过三批原因（网络批太大、同步并发、屏幕等在同步上、日志被读两遍），
+    每一批都是真的缺陷，<b>而没有一批被证明是它的成因</b>。</p>
+    <div class="callout">
+      <b>而这三轮里有一件我始终没有做到：让那台设备把症状发生时的样子告诉我。</b>
+      我拿到的一直是<b>事后的日志</b>——它能证明「某个请求失败了」，
+      证明不了「屏幕为什么在转」。
+      <br><br>
+      具体地说，下面这些我一次都没测过，而它们每一个都能单独造成「卡 ＋ 转圈」：
+      <br>· 切选项卡时 SwiftUI 到底重建了哪些视图、`.task` 被取消了几次；
+      <br>· 主线程上那几次重放实际花了多少毫秒（799 条是「应该很快」，不是量过的）；
+      <br>· <code>fetchDay()</code>／<code>fetchSentences()</code> 在隧道上的真实耗时，
+      以及取消之后有没有重来；
+      <br>· 那个转圈到底是哪一屏的哪个 <code>phase</code>。
+      <br><br>
+      <b>「我改对了代码」和「他不卡了」之间隔着一次观测，而那次观测我做不到。</b>
+    </div>
+
+    <h3>有一件事实要一起记着，它既不是借口也不能忽略</h3>
+    <p><b>用户那台设备上的本地日志一直没有重置过。</b>
+    构建 13 才有那个按钮，而用户报「bug 依然存在」时，设备上仍然可能压着构建 11
+    那天收下的 798 条（其中 240 条是夹具）。
+    这<b>不构成「其实已经修好了」</b>——我没有任何证据说它修好了；
+    它只是意味着<b>下一次复现必须先把设备恢复到干净状态</b>，否则测的是两件事叠在一起。</p>
+
+    <h3>真正该改的是做法，不是再猜一轮</h3>
+    <p>用户说了一句改变这件事的话：<b>「我有 mac 了可以测试了」</b>。</p>
+    <div class="callout">
+      <b>这三轮的形状是一样的：远程读日志 → 推断 → 出一版 → 症状还在。</b>
+      而 P6 §13 早就写过同一件事的另一面——
+      「模拟器上用鼠标点和真机上用拇指读判断不出同一批东西」，
+      当时的结论是「远程操控 runner 那条路试过、走死了」。
+      <br><br>
+      <b>有了 Mac，这条路第一次通了</b>：能装 Xcode、能跑 Instruments、
+      能在模拟器和真机上边点边看主线程耗时，
+      也能把 <code>swift build</code> 从「推一次等 CI 一分钟」变成本地几秒。
+      <b>所以下一步是搬场地，不是再猜一轮。</b>
+    </div>
+    <p>用户定的：<b>稍后开始把项目迁到 Mac。</b>
+    那是下一个 Phase 的事，这里只记结论，不提前规划（「只规划当前 Phase」）。</p>
+
+    <h3>这个 Phase 交付了什么</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">26</div>
+        <div class="fig-key">做完的活（①–㉖），§4–§12 全部落地</div></div>
+      <div class="fig"><div class="fig-val">231</div>
+        <div class="fig-key">自动验收，<b>零失败</b></div></div>
+      <div class="fig"><div class="fig-val">116</div>
+        <div class="fig-key">CI 上的 Core 测试</div></div>
+      <div class="fig"><div class="fig-val">0.5<span> MB</span></div>
+        <div class="fig-key">拆库后真正补不回来的那一份（原本混在 42 MB 里）</div></div>
+      <div class="fig"><div class="fig-val" style="color:var(--stop)">未通过</div>
+        <div class="fig-key"><b>人工验收</b>——症状仍在，三版没修好</div></div>
+    </div>
+    <p><b>所以这个 Phase 的状态是「代码完成、验收未通过、暂停」。</b>
+    它不是「做完了」。铁律那条「每个 Phase 结束由用户实际跑一遍验收清单，通过后才进下一个」
+    没有被满足，而这一次<b>不给它记例外</b>——前两次记名的例外都有交换条件
+    （P5 没有界面、P6–P8 要约人用真机），<b>这一次没有</b>：
+    只是我没修好，而修不好的原因是我看不见它。</p>
+  </section>
+
+
   <footer>
     <div>English Reader</div>
-    <div>Phase 9 · 重构 · 方案讨论稿</div>
-    <div>2026-09-17</div>
+    <div>Phase 9 · 重构 · 代码完成，验收未通过</div>
+    <div>2026-09-19</div>
   </footer>
 
 </div>

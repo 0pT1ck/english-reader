@@ -1384,6 +1384,15 @@
     </div>
 
     <div class="open">
+      <div><i>?</i><span><b>CI 的签名要换成「证书 ＋ 私钥存 secret、手动签名」。</b>
+      2026-09-19 记下。现在是云签名（<code>CODE_SIGN_STYLE: Automatic</code> 加
+      <code>-allowProvisioningUpdates</code>），而 CI 的机器每次都是新的、钥匙串是空的，
+      <b>所以每推一次构建就烧掉一张证书</b>——推到第 12 次账号到顶，
+      构建直接失败（<code>Your account has reached the maximum number of
+      certificates</code>）。09-19 吊销了我们建的那 10 张，<b>但那只是把计数清零，
+      再推 10 次会再满</b>。那个账号是朋友借的，清场要找人。
+      换成把一张分发证书和私钥存成仓库 secret、CI 导进临时钥匙串，才是常规做法。
+      <b>要朋友那边导一次</b>，所以不是我们单方面能做的。</span></div>
       <div><i>?</i><span><b>验收脚本要用自己的 learner，而不是本人那个。</b>
       2026-09-18 记下，起因见 <a href="./phase-9.html" style="color:var(--accent)">P9</a> §16 ㉖。
       验收会真的往会合点上报 <code>word.marked</code>——那是它该做的，
