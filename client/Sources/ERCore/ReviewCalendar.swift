@@ -33,7 +33,7 @@ public enum ReviewCalendar {
         case unknown     // 那天没有任何记录，重建不出来
     }
 
-    public struct Day: Sendable, Equatable {
+    public struct Day: Sendable, Equatable, Codable {
         public var day: String
         public var status: Status
         public var isToday: Bool

@@ -26,14 +26,24 @@ final class AppModel {
     /// 句子池的缓存（P9 §11）。**和今日包各自一个目录**——
     /// 两份内容不该互相覆盖，而 `DayCache` 实际上就是「一个文件 ＋ 一个版本号」。
     private(set) var sentenceCache: DayCache?
+    /// 打卡日历算出来的那份结果，**存盘而不止存内存**（2026-09-19，见下面
+    /// `calendar(days:)` 的注释）。复用 `DayCache` 现成的「一个文件 ＋ 一个
+    /// 版本号」——版本号当缓存键用，不是给服务端比对的。
+    private(set) var calendarCache: DayCache?
     private(set) var engine: SyncEngine?
 
     /// 事件日志（P9）。**设备上学习记录的第一副本**，屏幕上的每个数都由重放它算出来。
     private(set) var events: EventLog?
 
-    /// 重放出来的投影。记一条事件就重算一次——实测全部历史 375 条、
-    /// 一年 2.5 万条，重放是毫秒级的（`phase-9.html` §14 U3），
-    /// 所以不缓存、不做增量，**一个来源比一个快一点的缓存值钱**。
+    /// 重放出来的投影。记一条事件就重算一次。
+    ///
+    /// **「重放是毫秒级的」这句话曾经写在这里，而它没有一直成立**
+    /// （2026-09-19 真机上栽的:399 条事件、格式器与日历现建、日历那半再
+    /// 重复重放,单次日历计算实测 1135ms）。修完格式器缓存和真正的增量重放，
+    /// 单次全量重放现在确实是几十毫秒级——但那是「算得快」,不是「不用算」。
+    /// **投影本身依然每次重算,不缓存**：它的输入(整份日志)和输出都在内存里,
+    /// 一次会话里最多算一次,这个便宜。真正值得存盘的是下面日历那份——
+    /// 它要在两百多个空日子上重复求值,便宜的操作乘以四百天就不便宜了。
     private(set) var projection = Projection()
 
     /// 排期参数，今日包带下来的那一份。
@@ -108,6 +118,8 @@ final class AppModel {
             dayCache = try DayCache(directory: root.appendingPathComponent("day"))
             sentenceCache = try DayCache(
                 directory: root.appendingPathComponent("sentences"))
+            calendarCache = try DayCache(
+                directory: root.appendingPathComponent("calendar"))
             library = LibraryStore(directory: root.appendingPathComponent("library"))
             // 三天轮转在 init 里就发生（`FileLog` 自己 prune），所以这一行
             // 同时是「启动时清过期日志」那条决定的落点。
@@ -262,32 +274,53 @@ final class AppModel {
     var canSchedule: Bool { schedulerSettings != nil }
 
     /// 上一次算出来的日历，连同算它时用的那把钥匙。**答案没变就不用重算。**
-    ///
-    /// 2026-09-19 真机上又栽了一次坑 §7.6 那个形状：以为「一次前向重放」
-    /// 就够快，而它确实比「每天都从头重放」快，**但它仍然是每次进复习屏都要
-    /// 重新跑一遍的实打实的计算**——399 条事件、约 8 个有记录的日子，
-    /// 实测 869ms。真正的问题不是「算得慢」，是**同一个答案被反复算**:
-    /// 用户没做任何事、事件日志一个字节没变，切一次选项卡就重算一次。
+    /// 这是内存那一层，进程活着的时候有效;跨次启动那一层在磁盘上，见下面。
     ///
     /// **答案只在两件事上会变**:事件日志前进了（钥匙用
     /// `projection.throughLocalSequence`，投影每次重放都会更新它），
     /// 或者日界跨过去了（钥匙用今天的日期）。两个都没变，直接把上次的结果
-    /// 递出去——这才是「本地计算」这句话原本该兑现的样子。
-    private var calendarCache: (day: String, through: Int, span: Int,
-                                result: (days: [ReviewCalendar.Day], streak: Int))?
+    /// 递出去。
+    private var calendarMemoryCache: (day: String, through: Int, span: Int,
+                                      result: (days: [ReviewCalendar.Day], streak: Int))?
+
+    private struct PersistedCalendar: Codable {
+        var days: [ReviewCalendar.Day]
+        var streak: Int
+    }
 
     /// 打卡日历与连续天数，**由重放算出来**（P9 §11）。
     ///
     /// nil ＝ 服务端还没下发排期参数，那时算不出「那天该做多少」——
     /// 而一个编出来的日历比没有日历糟得多:它会把没做的日子画成绿的。
+    ///
+    /// **两层缓存,不是一层**（2026-09-19，用户提的问题:「没有变更的话直接
+    /// 用之前的数据不是很好吗」）。内存那层只在一次进程里有效——杀掉后台
+    /// 重开,内存里什么都没有,哪怕算得再快也还是要算一遍。而真正不该算的是
+    /// 「上次算过的答案,这次原样成立」这种情况,答案早就有了,只是没找地方放。
+    ///
+    /// 所以照着今日包、句子池那两份缓存的样子,**算完存盘,下次先读盘**。
+    /// 存的钥匙就是内存那层同一把（`day|through|span`），当「记一条事件」这件事
+    /// 本身就会触发 `refreshProjection()`（改了 `through`）时，旧的持久化缓存
+    /// 自然对不上钥匙、下次读盘时自己判定过期——不需要另外一条「失效」的路，
+    /// 失效和「钥匙对不上」是同一件事。
     func calendar(days span: Int = 7) -> (days: [ReviewCalendar.Day], streak: Int)? {
         guard let settings = schedulerSettings else { return nil }
         let today = ReviewCalendar.key(of: Date())
         let through = projection.throughLocalSequence
-        if let cache = calendarCache, cache.day == today, cache.through == through,
+        let key = "\(today)|\(through)|\(span)"
+
+        if let cache = calendarMemoryCache, cache.day == today, cache.through == through,
            cache.span == span {
             return cache.result
         }
+        if let store = calendarCache, store.etag() == key,
+           let data = store.load(),
+           let persisted = try? JSONDecoder().decode(PersistedCalendar.self, from: data) {
+            let result = (persisted.days, persisted.streak)
+            calendarMemoryCache = (today, through, span, result)
+            return result
+        }
+
         // **复用重放时那一份，不再自己读一遍盘**（2026-09-19）。
         //
         // 原本这里自己 `events.load()`——于是进一次复习屏要把日志整份读两遍、
@@ -299,7 +332,14 @@ final class AppModel {
         guard let load = lastLoad ?? (try? events?.load()) else { return nil }
         let result = ReviewCalendar.build(load, weightDecay: weightDecay,
                                           settings: settings, today: today, span: span)
-        calendarCache = (today, through, span, result)
+        calendarMemoryCache = (today, through, span, result)
+        // **存盘失败就算了**——同发件箱那条纪律:这是一份缓存,不是事实,
+        // 丢了的后果只是下次多算一遍,不该让复习屏因为一次写盘失败而打不开。
+        if let store = calendarCache,
+           let data = try? JSONEncoder().encode(
+               PersistedCalendar(days: result.days, streak: result.streak)) {
+            try? store.store(data, etag: key)
+        }
         return result
     }
 

@@ -157,6 +157,20 @@ public actor SyncEngine {
     /// 名字窄了而形状正合适。各自一个目录，所以两份内容不会互相覆盖。
     private let sentences: DayCache
 
+    /// 解码过的今日包/句子池，连同解出它的那份原始字节。
+    ///
+    /// **`cachedDay()`/`cachedSentences()` 以前每次都重新解码**（2026-09-19
+    /// 真机上跟日历那个坑同一天撞到的）：`ReviewModel.load()` 每次进复习屏
+    /// 都调一次，而今日包实测约 1 MB，`JSONDecoder` 解一遍要 28ms——
+    /// 文件没变,答案不会变,却每次都重解一遍。
+    ///
+    /// **拿原始字节整体比较来判断「变没变」，不猜版本号。** `Data` 的相等比较
+    /// 本质是内存比较，比重新跑一遍 JSON 解码器快得多，而且不会漏判——
+    /// 只要盘上的字节没变，判断就不会错。
+    private var cachedDayDecoded: (raw: Data, package: DayPackage)?
+    private var cachedSentencesDecoded: (raw: Data,
+                                         parsed: Components.Schemas.SentencePoolResponse)?
+
     /// - Parameter events: 事件日志。**P9 起它才是那五种事件的来源**；
     ///   发件箱退化成「遥测那几条的队列」。传 nil 是为了让老的调用点
     ///   （和只测传输的测试）还编得过，那时行为和 P9 之前一样。
@@ -195,7 +209,10 @@ public actor SyncEngine {
 
             if response.isNotModified, let cached = day.load() {
                 // 没变。本地那份就是最新的，一个字节都不用传。
-                return try DayPackage(raw: cached)
+                if let hit = cachedDayDecoded, hit.raw == cached { return hit.package }
+                let package = try DayPackage(raw: cached)
+                cachedDayDecoded = (cached, package)
+                return package
             }
             guard response.isOK else {
                 throw TransportError.server(
@@ -203,6 +220,10 @@ public actor SyncEngine {
                     body: String(decoding: response.body.prefix(400), as: UTF8.self))
             }
             let package = try DayPackage(raw: response.body)
+            // **顺手把内存缓存也换成这一份**——不换的话,这次网络拿到的新内容
+            // 存进了盘,但下一次 `cachedDay()` 手里的旧字节还没过期，会白解一遍
+            // 磁盘上其实已经更新过的那份。
+            cachedDayDecoded = (response.body, package)
             try day.store(response.body, etag: response.header("ETag"))
             try articles.remember(package.metadata)
             for article in package.articles where article.preparing == nil {
@@ -234,7 +255,10 @@ public actor SyncEngine {
     /// wrong answer, not a stale one.
     public func cachedDay() -> DayPackage? {
         guard let data = day.load() else { return nil }
-        return try? DayPackage(raw: data)
+        if let cached = cachedDayDecoded, cached.raw == data { return cached.package }
+        guard let result = try? DayPackage(raw: data) else { return nil }
+        cachedDayDecoded = (data, result)
+        return result
     }
 
     /// One article, from the cache when it is there and from the server when it
@@ -444,22 +468,29 @@ public actor SyncEngine {
             }
             let decoded = try JSONDecoder().decode(
                 Components.Schemas.SentencePoolResponse.self, from: response.body)
+            cachedSentencesDecoded = (response.body, decoded)
             try sentences.store(response.body)
             return decoded
         } catch let error as TransportError {
             // 离线就用盘上那份。**这正是存它的理由**——
             // 而拿不到又没有缓存时照实抛错，不装作「你没在学任何词」。
             guard case .offline = error, let cached = sentences.load() else { throw error }
-            return try JSONDecoder().decode(
+            if let hit = cachedSentencesDecoded, hit.raw == cached { return hit.parsed }
+            let decoded = try JSONDecoder().decode(
                 Components.Schemas.SentencePoolResponse.self, from: cached)
+            cachedSentencesDecoded = (cached, decoded)
+            return decoded
         }
     }
 
     /// 盘上那份，不碰网络。同 ``cachedDay``:先点亮屏幕，再在后面刷新。
     public func cachedSentences() -> Components.Schemas.SentencePoolResponse? {
         guard let data = sentences.load() else { return nil }
-        return try? JSONDecoder().decode(
-            Components.Schemas.SentencePoolResponse.self, from: data)
+        if let cached = cachedSentencesDecoded, cached.raw == data { return cached.parsed }
+        guard let result = try? JSONDecoder().decode(
+            Components.Schemas.SentencePoolResponse.self, from: data) else { return nil }
+        cachedSentencesDecoded = (data, result)
+        return result
     }
 
     public func library(shelf: String = "fresh", source: String? = nil)
