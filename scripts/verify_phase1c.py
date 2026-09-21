@@ -49,14 +49,20 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
 
         # --- 1. 义项集补全 --------------------------------------------- #
         print("\n1. 义项集")
-        from backend.modules.senses import repository, screening
+        from backend.modules.senses import repository, targets
 
         stats = repository.stats()
-        targets = len(screening.target_words())
-        check("1.1", "全部目标词都有义项",
-              stats["words"] >= targets and not repository.pending_words(),
-              f"{stats['words']} / {targets} 个词，{stats['senses']} 个义项，"
-              f"平均 {stats['per_word']}，待建 {len(repository.pending_words())}")
+        target_count = len(targets.target_headwords())
+        missing = repository.pending_words()
+        # **P10 改口径。** 原本守「全部目标词都有义项」，而义项换成柯林斯之后
+        # 有一批词词典里没有（或只有词组义），用户 2026-09-20 定了「暂时不管」。
+        # 所以改成守**覆盖率不塌**，而不是守一个已经不成立的「全部」。
+        # 「缺的正好是哪些」由 P10 自己的验收逐个比对。
+        check("1.1", "义项集覆盖了绝大多数目标词",
+              stats["words"] > target_count * 0.9,
+              f"{stats['words']} / {target_count} 个词有义项"
+              f"（{100 * stats['words'] // target_count}%），"
+              f"{stats['senses']} 个义项，平均 {stats['per_word']}，缺 {len(missing)} 个")
 
         distribution: dict[int, int] = {}
         for row in content.execute(
@@ -65,7 +71,16 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
             distribution[row["n"]] = row["c"]
         within = sum(c for n, c in distribution.items() if n <= 3)
         total = sum(distribution.values())
-        check("1.2", "粒度没有失控", within / total > 0.85,
+        # **P10 改口径。** 原本守「1–3 个义项的词占 85% 以上」，那是在防**模型**
+        # 乱拆——P1c 让模型按清单重建时给出过 7.0 个义项/词。现在义项来自柯林斯，
+        # 粒度是词典编辑分的（平均 3.55），那条阈值必红，而红的时候什么也没坏。
+        # 改成守**粒度的来源**：每一条义项都记得自己出自哪本词典。
+        sourced = content.execute(
+            "SELECT COUNT(*) n FROM senses WHERE source_dict IS NOT NULL"
+        ).fetchone()["n"]
+        check("1.2", "粒度出自词典，不是模型猜的",
+              sourced == stats["senses"],
+              f"{sourced} / {stats['senses']} 条带来源；"
               f"1–3 个义项的词占 {100 * within // total}%，"
               f"超过 5 个的 {sum(c for n, c in distribution.items() if n > 5)} 个")
 
@@ -83,44 +98,24 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
                  f"{thin} 只有一个义项。以 do 为例，「that will do」（够了）"
                  f"和「do the work」是两个概念，模型合成了一项——数量少，不值得为它卡验收")
 
-        # --- 2. 粗筛已停用 --------------------------------------------- #
-        print("\n2. 粗筛")
-        skipped = content.execute(
-            "SELECT COUNT(*) n FROM sense_screening WHERE needs_senses = 0"
-        ).fetchone()["n"]
-        built_of_skipped = content.execute(
-            "SELECT COUNT(DISTINCT s.headword) n FROM sense_screening c"
-            " JOIN senses s ON s.headword = c.headword WHERE c.needs_senses = 0"
-        ).fetchone()["n"]
-        check("2.1", "粗筛不再过滤（判为「简单」的词也建了义项）",
-              skipped > 0 and built_of_skipped == skipped,
-              f"曾判「简单」的 {skipped} 个词，现在 {built_of_skipped} 个有义项")
-
-        # --- 3. Wiktionary 清单 ---------------------------------------- #
-        print("\n3. 外部义项清单")
-        from backend.modules.senses import inventory
-
-        wikt = content.execute(
-            "SELECT COUNT(*) n, COUNT(DISTINCT headword) w,"
-            " SUM(is_dead) d FROM wiktionary_senses").fetchone()
-        check("3.1", "清单已导入", wikt["w"] > 6000,
-              f"{wikt['w']} 个词 / {wikt['n']} 条义项，其中已废弃 {wikt['d']} 条")
-        check("3.2", "覆盖率足够", wikt["w"] / max(1, len(screening.target_words())) > 0.95,
-              f"{100 * wikt['w'] // max(1, len(screening.target_words()))}%")
-
-        # Trimming per part of speech is what keeps `run`'s verb senses in the
-        # prompt; trimming the flat list would have handed over five adjective
-        # senses and nothing else.
-        run_cands = inventory.candidates("run")
-        check("3.3", "长词的清单按词性截断",
-              0 < len(run_cands) <= 40 and any(c.pos == "verb" for c in run_cands[:15]),
-              f"run 收敛到 {len(run_cands)} 条，前 15 条含动词义项")
+        # --- 2 与 3：粗筛和 Wiktionary 清单，P10 已删除 ------------- #
+        # 这里原本有四项：「粗筛不再过滤」，以及 Wiktionary 清单的已导入、
+        # 覆盖率、按词性截断。**两样东西 P10 连表带代码都删了**，
+        # 所以这四项随之消失——不是放宽守卫，是它们要防的事再也不会发生。
+        #   · 粗筛按中文释义数逗号判断多义性，实测把 65% 的多义词判成「简单」；
+        #   · Wiktionary 是「我们漏了什么」的对照清单，而柯林斯就是清单，
+        #     顺带了结 CC BY-SA 那个许可问题（仓库是公开的）。
+        # 理由见 phase-10.html §6。
 
         # --- 4. 旧数据归档 ---------------------------------------------- #
         print("\n4. 旧数据")
-        archived = content.execute("SELECT COUNT(*) n FROM senses_p1b").fetchone()["n"]
-        check("4.1", "P1b 的义项集已归档且未被覆盖", archived == 8837,
-              f"senses_p1b 共 {archived} 条")
+        # **P10 改口径。** 原本守 `senses_p1b` 恰好 8,837 条，而那张表是
+        # 「归档的归档」，P10 删了。守的那件事没变——**换掉的义项集要留得住**——
+        # 只是现在留在 `senses_pre_collins` 里（模型写的那 13,741 条）。
+        archived = content.execute(
+            "SELECT COUNT(*) n FROM senses_pre_collins").fetchone()["n"]
+        check("4.1", "上一版义项集已归档且未被覆盖", archived == 13741,
+              f"senses_pre_collins 共 {archived} 条（P1b/P1c 模型写的那套）")
 
         # --- 5. 接 API 生成 --------------------------------------------- #
         print("\n5. 生成")

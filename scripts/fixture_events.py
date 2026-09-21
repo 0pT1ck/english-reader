@@ -33,6 +33,7 @@ from typing import Any
 FIXTURE_SHAPES: tuple[str, ...] = (
     "v2-open-%", "v2-mark-%", "v2-prog-%",      # verify_phase2 §6
     "v2-ph-mark-%", "v2-ph-unmark-%",           # verify_phase2 词组那一节
+    "v2-ph-seed-%", "v2-ph-unseed-%",           # 同一节的另一对，漏了整整一年
     "k-%", "repro%", "rv-%",                    # 早年一次性探针
     "%probe%", "verify%",                       # 各 Phase 的验收探针
 )

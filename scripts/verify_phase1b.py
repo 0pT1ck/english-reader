@@ -218,12 +218,16 @@ def main() -> int:  # noqa: PLR0915 - a checklist reads better in one place
         # --- 7. senses ------------------------------------------------------ #
         print("\n7. 义项集")
         from backend.modules.senses import repository as senses
-        from backend.modules.senses import screening
+        from backend.modules.senses import targets
 
-        screen_stats = screening.stats()
-        check("7.1", "粗筛已跑",
-              screen_stats.get("total", 0) > 5000,
-              f"目标词 {screen_stats.get('total', 0)}，需建 {screen_stats.get('needs_senses', 0)}")
+        # **P10 改口径。** 原本守「粗筛已跑」，而粗筛连表带代码在 P10 删掉了：
+        # 它按中文释义里的逗号判断一个词多不多义，实测把 65% 的多义词判成了
+        # 「简单·跳过」。守卫没有删掉，改成守它当初真正想保证的那一半——
+        # **目标词这个概念是算得出来的**，而那从来不依赖粗筛，
+        # 它直接来自词典里的大纲标签（`targets.py`）。
+        target_count = len(targets.target_headwords())
+        check("7.1", "目标词算得出来",
+              target_count > 5000, f"大纲内 {target_count} 个词")
 
         sense_stats = senses.stats()
         if sense_stats["words"]:

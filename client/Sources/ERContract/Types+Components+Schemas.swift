@@ -2108,7 +2108,11 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/pos`.
             public var pos: Swift.String?
-            /// 用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文
+            /// 词性的中文说法（可数名词 / 及物动词）。P10 加：义项换成柯林斯之后 `pos` 里装的是它的语法标记（`N-COUNT`、`V-T`），信息量比 `n./vt.` 大得多，**但那串英文缩写摆在四六级考生的屏幕上是噪音**，所以中文单独一个字段，客户端显示这个
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sense/pos_zh`.
+            public var pos_zh: Swift.String?
+            /// 英文定义。P10 起是柯林斯 COBUILD 的整句式定义（`If you have an account with a bank, you have an arrangement to…`），它讲的是**这个词怎么用**，不只是它等于什么——而且用受限词汇写成，所以查词本身仍然是阅读输入，不是切换到中文。**原先这里写的是「用已知词写的英文概念定义」**，那描述的是模型写的上一套，平均 51 字符；柯林斯的平均 101 字符，客户端排版要按这个长度算
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/concept_en`.
             public var concept_en: Swift.String?
@@ -2165,6 +2169,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/gloss_zh`.
             public var gloss_zh: Components.Schemas.Sense.gloss_zhPayload?
+            /// 语域标签（FORMAL 正式 / INFORMAL 非正式 / BRIT 英 / OLD-FASHIONED 过时）。P10 从柯林斯带进来，**这个 Phase 只存不用**，留位置。它将来至少有两个用处：挑复习目标时避开非正式义项、生成文章时避开英式拼写——而在这之前，「这个义项算不算通用书面英语」只能问模型，跨 Phase 不变量里那条「不要问模型哪些义项值得学」正是为此写的。**不叫 `register`**——那个名字会遮住 pydantic `BaseModel` 自己的属性，pydantic 只发一条警告就继续，是会静默出问题的那种
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sense/register_label`.
+            public var register_label: Swift.String?
             /// 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/exam`.
@@ -2199,24 +2207,30 @@ extension Components {
             ///   - id:
             ///   - ordinal:
             ///   - pos: 词性（n. / vt. / vi.）。**只是说明，从不决定义项怎么分**——名词的 address（地址）和动词的 address（写地址）是同一个概念。这一列 P1b 起就在库里，2026-09-13 才带进契约：手机端的点词面板要显示它
-            ///   - concept_en: 用已知词写的英文概念定义——查词本身也是阅读输入，而不是切换到中文
+            ///   - pos_zh: 词性的中文说法（可数名词 / 及物动词）。P10 加：义项换成柯林斯之后 `pos` 里装的是它的语法标记（`N-COUNT`、`V-T`），信息量比 `n./vt.` 大得多，**但那串英文缩写摆在四六级考生的屏幕上是噪音**，所以中文单独一个字段，客户端显示这个
+            ///   - concept_en: 英文定义。P10 起是柯林斯 COBUILD 的整句式定义（`If you have an account with a bank, you have an arrangement to…`），它讲的是**这个词怎么用**，不只是它等于什么——而且用受限词汇写成，所以查词本身仍然是阅读输入，不是切换到中文。**原先这里写的是「用已知词写的英文概念定义」**，那描述的是模型写的上一套，平均 51 字符；柯林斯的平均 101 字符，客户端排版要按这个长度算
             ///   - gloss_zh: 中文释义
+            ///   - register_label: 语域标签（FORMAL 正式 / INFORMAL 非正式 / BRIT 英 / OLD-FASHIONED 过时）。P10 从柯林斯带进来，**这个 Phase 只存不用**，留位置。它将来至少有两个用处：挑复习目标时避开非正式义项、生成文章时避开英式拼写——而在这之前，「这个义项算不算通用书面英语」只能问模型，跨 Phase 不变量里那条「不要问模型哪些义项值得学」正是为此写的。**不叫 `register`**——那个名字会遮住 pydantic `BaseModel` 自己的属性，pydantic 只发一条警告就继续，是会静默出问题的那种
             ///   - exam: 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
             ///   - memory: 这个义项的记忆状态与到期时间。复习模块的位置，**整块为 null**——跨 Phase 不变量只允许留形状显而易见的位置，而记忆状态的形状不显而易见，所以留一个可整体为 null 的对象，而不是猜几个字段出来。由 capabilities.memory_state 说明它是「没数据」还是「没实现」
             public init(
                 id: Swift.Int,
                 ordinal: Swift.Int,
                 pos: Swift.String? = nil,
+                pos_zh: Swift.String? = nil,
                 concept_en: Swift.String? = nil,
                 gloss_zh: Components.Schemas.Sense.gloss_zhPayload? = nil,
+                register_label: Swift.String? = nil,
                 exam: Components.Schemas.SenseExam? = nil,
                 memory: Components.Schemas.Sense.memoryPayload? = nil
             ) {
                 self.id = id
                 self.ordinal = ordinal
                 self.pos = pos
+                self.pos_zh = pos_zh
                 self.concept_en = concept_en
                 self.gloss_zh = gloss_zh
+                self.register_label = register_label
                 self.exam = exam
                 self.memory = memory
             }
@@ -2224,8 +2238,10 @@ extension Components {
                 case id
                 case ordinal
                 case pos
+                case pos_zh
                 case concept_en
                 case gloss_zh
+                case register_label
                 case exam
                 case memory
             }

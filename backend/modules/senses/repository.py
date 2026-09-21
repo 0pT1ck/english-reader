@@ -23,6 +23,39 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+def _retire(conn: sqlite3.Connection, sense_id: int, reason: str) -> None:
+    """Move one sense into ``senses_retired``. **Column names, not ``SELECT *``.**
+
+    P9 wrote this as ``INSERT INTO senses_retired SELECT *, ?, ? FROM senses``,
+    which works exactly as long as the two tables have the same columns — and
+    ``senses_retired`` was created by ``CREATE TABLE … AS SELECT``, so it only
+    ever had the columns of the day it was created. P10 added seven to
+    ``senses`` and dropped two, and the first retirement after that failed
+    twice in a row, once in each direction ("has 16 columns but 21 values",
+    then "has 23 columns but 21 values").
+
+    Naming the columns makes the two tables free to differ: anything
+    ``senses_retired`` has and ``senses`` does not simply stays null.
+    **The retirement itself is unchanged** — a retired sense is moved, never
+    deleted, so an old annotation still resolves to something that can speak
+    for itself (P9 §8, and :func:`sense_by_id` is the reader).
+    """
+    columns = [row["name"] for row in conn.execute("PRAGMA table_info(senses)")]
+    quoted = ", ".join(columns)
+    placeholders = ", ".join("?" for _ in columns)
+    row = conn.execute(
+        f"SELECT {quoted} FROM senses WHERE id = ?", (sense_id,)  # noqa: S608
+    ).fetchone()
+    if row is None:
+        return
+    conn.execute(
+        f"INSERT INTO senses_retired ({quoted}, retired_at, retired_reason)"  # noqa: S608
+        f" VALUES ({placeholders}, ?, ?)",
+        (*tuple(row), _now(), reason),
+    )
+    conn.execute("DELETE FROM senses WHERE id = ?", (sense_id,))
+
+
 def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = "") -> int:
     """Store one word's sense set: update what is still there, retire what is not.
 
@@ -81,11 +114,7 @@ def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = ""
         # ① 先退休。这一步也把它们的 ordinal 让出来，
         #    否则下面重排序号会撞上 UNIQUE (headword, ordinal)。
         for key in retired_keys:
-            conn.execute(
-                "INSERT INTO senses_retired SELECT *, ?, ? FROM senses WHERE id = ?",
-                (_now(), "not in the new set", existing[key]["id"]),
-            )
-            conn.execute("DELETE FROM senses WHERE id = ?", (existing[key]["id"],))
+            _retire(conn, existing[key]["id"], "not in the new set")
 
         # ② 把留下来的序号先挪到负数。**两趟，因为一趟会撞。**
         #    把 #1 和 #2 对调时，中间必然有一刻两行都想要同一个序号。
@@ -163,6 +192,129 @@ def store_senses(headword: str, senses: list[dict[str, Any]], *, model: str = ""
     return len(senses)
 
 
+def store_dictionary_senses(headword: str, senses: list[dict[str, Any]], *,
+                            source_dict: str) -> tuple[int, int, int]:
+    """Store one word's senses as they come from a dictionary — P10.
+
+    Returns ``(inserted, updated, retired, examples)``.
+
+    **Why this exists next to** :func:`store_senses`. That one matches on a hash
+    of the English definition, which is the right key for text a *model* wrote:
+    rerun the generator and the wording changes, so matching on wording would
+    churn ids for no semantic reason. A dictionary is the opposite case — the
+    wording is fixed, so the hash never churns and never earns its keep, while
+    still promising that the day the dictionary is updated, a reworded
+    definition silently orphans every annotation pointing at it.
+
+    So here identity is the row id and nothing else, and a re-import finds its
+    row by **provenance**: which dictionary, which headword, which block. That
+    triple survives rewording, reordering and renumbering, which is exactly the
+    set of things a new edition does.
+
+    Everything else matches :func:`store_senses` deliberately — update in place,
+    retire what is gone rather than deleting it, roll back as a unit. Those are
+    properties of the inventory, not of how it was written; P9 §8 established
+    them and P10 keeps them.
+    """
+    conn = get_connection("content")
+    headword = (headword or "").strip().lower()
+
+    # **An empty list is a real instruction, not a no-op.** It means the
+    # dictionary no longer yields a single sense for this word, so everything
+    # this source put there before must retire. Returning early instead — which
+    # is what this did at first — leaves the previous import's rows behind as
+    # orphans that nothing will ever clean up, and they keep showing up in the
+    # annotator's candidate list. Found with `fro`, whose only block became a
+    # cross-reference once the pointer rule was fixed.
+    from backend.modules.senses import keys as sense_keys
+    assigned = sense_keys.assign_keys(headword, [s["concept_en"] for s in senses])
+
+    existing = {
+        row["source_block"]: dict(row)
+        for row in conn.execute(
+            "SELECT id, source_block, ordinal FROM senses"
+            " WHERE headword = ? AND source_dict = ?",
+            (headword, source_dict),
+        ).fetchall()
+    }
+    incoming_blocks = {int(s["source_block"]) for s in senses}
+    retired_ids = [row["id"] for block, row in existing.items()
+                   if block not in incoming_blocks]
+
+    inserted = updated = stored_examples = 0
+    try:
+        # ① Retire first, which also frees the ordinals — otherwise renumbering
+        #    below collides with UNIQUE (headword, ordinal).
+        for sense_id in retired_ids:
+            _retire(conn, sense_id, f"not in {source_dict}")
+
+        # ② Park the survivors on negative ordinals. Two passes, because
+        #    swapping #1 and #2 means both want the same number for an instant.
+        conn.execute(
+            "UPDATE senses SET ordinal = -id WHERE headword = ? AND source_dict = ?",
+            (headword, source_dict),
+        )
+
+        # ③ Update or insert, renumbering 1..N in document order.
+        for ordinal, (sense, key) in enumerate(zip(senses, assigned), start=1):
+            block = int(sense["source_block"])
+            row = existing.get(block)
+            values = (
+                ordinal, sense["concept_en"], sense.get("gloss_zh") or "",
+                sense.get("pos"), sense.get("pos_zh"), sense.get("register"),
+                sense.get("pattern"), sense.get("subject"),
+                sense.get("source_ordinal"),
+            )
+            if row is not None:
+                conn.execute(
+                    "UPDATE senses SET ordinal = ?, concept_en = ?, gloss_zh = ?,"
+                    " pos = ?, pos_zh = ?, register = ?, pattern = ?, subject = ?,"
+                    " source_ordinal = ?, sense_key = ? WHERE id = ?",
+                    (*values, key, row["id"]),
+                )
+                sense_id = row["id"]
+                updated += 1
+            else:
+                cursor = conn.execute(
+                    "INSERT INTO senses (headword, ordinal, concept_en, gloss_zh,"
+                    " pos, pos_zh, register, pattern, subject, source_ordinal,"
+                    " sense_key, source_dict, source_block, model, created_at)"
+                    " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (headword, *values, key, source_dict, block, source_dict, _now()),
+                )
+                sense_id = int(cursor.lastrowid or 0)
+                inserted += 1
+
+            # The dictionary's own example sentences. **Replaced, not appended**
+            # — a re-import must not stack a second copy, and these are the only
+            # rows in the table with this source, so nothing else is touched.
+            # Model-written examples (source `llm`) survive untouched, which is
+            # what keeps this from undoing the review sentence pool.
+            examples = sense.get("examples") or []
+            conn.execute(
+                "DELETE FROM sense_examples WHERE sense_id = ? AND source = ?",
+                (sense_id, source_dict),
+            )
+            if examples:
+                conn.executemany(
+                    "INSERT INTO sense_examples (sense_id, text_en, gloss_zh,"
+                    " source, created_at) VALUES (?,?,?,?,?)",
+                    [(sense_id, en, zh or None, source_dict, _now())
+                     for en, zh in examples],
+                )
+                stored_examples += len(examples)
+        conn.commit()
+    except Exception:
+        # Half an inventory is worse than the old one.
+        conn.rollback()
+        raise
+
+    if retired_ids:
+        events.emit("senses.replaced", headword=headword,
+                    previous_ids=retired_ids, count=len(senses))
+    return (inserted, updated, len(retired_ids), stored_examples)
+
+
 def sense_by_id(sense_id: int) -> dict[str, Any] | None:
     """按 id 取一个义项，**退休的也找得到**。
 
@@ -217,23 +369,20 @@ def senses_of(headword: str) -> list[dict[str, Any]]:
 
 
 def pending_words(limit: int = 20000) -> list[str]:
-    """Target words with no sense set yet — the job's input.
+    """Target words with no sense set — the fallback generator's input.
 
-    The screening verdict is deliberately ignored. It judged English polysemy by
-    counting commas in a Chinese gloss, and measuring it against an external
-    inventory showed that 65% of the words it dismissed as "simple" are in fact
-    polysemous — ``bank``, ``come``, ``do`` and ``be`` among them. Building
-    everything costs about twice the tokens and removes both the threshold and
-    the blind spot. The table is kept for reference, not for filtering.
+    **P10: this reads the syllabus, not a screening table.** It used to join
+    ``sense_screening``, whose verdicts were wrong often enough to be useless
+    (65% of the words it called "simple" are polysemous) and whose table is
+    gone. The question it answers is unchanged: which in-scope words still have
+    nothing.
     """
-    rows = get_connection("content").execute(
-        "SELECT s.headword FROM sense_screening s"
-        " LEFT JOIN senses n ON n.headword = s.headword"
-        " WHERE n.id IS NULL"
-        " GROUP BY s.headword ORDER BY s.headword LIMIT ?",
-        (limit,),
-    ).fetchall()
-    return [row["headword"] for row in rows]
+    from backend.modules.senses import targets
+
+    have = {row["headword"] for row in get_connection("content").execute(
+        "SELECT DISTINCT headword FROM senses")}
+    missing = [w for w in targets.target_headwords() if w not in have]
+    return missing[:limit]
 
 
 def add_examples(sense_id: int, examples: list[dict[str, str]], *, source: str = "llm") -> int:

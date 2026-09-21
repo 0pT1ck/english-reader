@@ -20,8 +20,8 @@
   </div>
   <div class="card stat">
     <span class="stat-label">需要建的词</span>
-    <span class="stat-value">{{ screening.needs_senses or 0 }}</span>
-    <span class="muted mono">目标词共 {{ screening.total or 0 }}</span>
+    <span class="stat-value">{{ targets or 0 }}</span>
+    <span class="muted mono">大纲内的目标词</span>
   </div>
   <div class="card stat">
     <span class="stat-label">例句</span>
@@ -30,27 +30,9 @@
   </div>
 </div>
 
-{% if screening %}
-<h2>粗筛</h2>
-<div class="scroll">
-  <table>
-    <thead><tr><th>类别</th><th>数量</th><th>处理</th></tr></thead>
-    <tbody>
-      {% for key, label in labels.items() %}
-      <tr>
-        <td>{{ label }}</td>
-        <td class="mono">{{ screening.get(key, 0) }}</td>
-        <td>{% if key == 'simple' %}<span class="muted">跳过，不花钱</span>{% else %}建{% endif %}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-{% endif %}
 
 <div class="card" style="margin-top:1rem">
   <div class="row">
-    <button onclick="screen(this)">跑粗筛</button>
     <button onclick="validate(this)">三层验证</button>
     <input type="text" id="probe" placeholder="查一个词，如 address" style="width:16rem">
     <button onclick="probe()">查</button>
@@ -58,8 +40,9 @@
     <label class="row" style="width:auto"><input type="checkbox" id="with-usages" style="width:auto"> 附真题用例</label>
   </div>
   <p class="muted" style="margin:0.8rem 0 0">
-    建义项集和补例句是<a href="/admin/llm">模型</a>页面上的批次任务（<code>sense_build</code> /
-    <code>sense_examples</code>），会按花费上限自动停。
+    义项集由 <code>scripts/import_collins.py</code> 从柯林斯导入（P10 起）。
+    <code>sense_build</code> 是<b>兜底</b>：只给词典里查不到的词用；
+    补例句仍是<a href="/admin/llm">模型</a>页面上的批次任务。
   </p>
 </div>
 
@@ -79,7 +62,7 @@
         <td class="muted">{{ s.topic or '' }}</td>
       </tr>
       {% else %}
-      <tr><td colspan="5" class="muted">还没有义项。先跑粗筛，再到模型页面建一个 sense_build 任务。</td></tr>
+      <tr><td colspan="5" class="muted">还没有义项。跑 scripts/import_collins.py 导入柯林斯。</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -101,15 +84,6 @@
         <summary>原始 JSON</summary><pre>${esc(JSON.stringify(data, null, 2))}</pre>
       </details>`;
     out.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-
-  async function screen(button) {
-    button.disabled = true;
-    try {
-      const r = await api('/senses/screen', { method: 'POST' });
-      toast(`目标词 ${r.total} 个，需要建义项的 ${r.needs_senses} 个`);
-      setTimeout(() => location.reload(), 1200);
-    } catch (e) { toast(e.message, true); button.disabled = false; }
   }
 
   async function validate(button) {

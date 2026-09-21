@@ -176,11 +176,20 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                     # 说明用，从不决定义项怎么分：名词的 address（地址）
                     # 和动词的 address（写地址）是同一个概念。
                     "pos": s["pos"],
+                    # Collins's own Chinese for the grammatical marker. **Show
+                    # this one**: since P10 `pos` carries `N-COUNT` / `V-T`,
+                    # which is more informative than `n./vt.` and completely
+                    # opaque to the reader this app is for.
+                    "pos_zh": s.get("pos_zh"),
                     # Layer ① proper: the English concept definition, written
                     # with words already known, so looking a word up is itself
                     # reading input rather than a switch into Chinese.
                     "concept_en": s["concept_en"],
                     "gloss_zh": s["gloss_zh"],
+                    # Stored, not used yet (P10 §6). Sent anyway because the
+                    # contract is additive and a client that wants to grey out
+                    # 非正式 senses should not need a server change to do it.
+                    "register_label": s.get("register"),
                     # Layer ③. Absent, not zero, until the exam corpus has been
                     # annotated — see capabilities().
                     #

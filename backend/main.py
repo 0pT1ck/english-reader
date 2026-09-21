@@ -29,23 +29,10 @@ from backend.core.db import apply_pending_restore, close_connections, run_migrat
 from backend.core.errors import install_error_handlers
 from backend.core.logging import MIGRATIONS as LOG_MIGRATIONS
 from backend.core.logging import get_logger, prune_logs, trace
-from backend.core.registry import install_modules
+from backend.core.registry import install_modules, run_core_migrations
 from backend.core import resplit
 
 log = get_logger("core.app")
-
-
-def _run_core_migrations() -> None:
-    """Schema owned by the framework itself.
-
-    Core is treated as three small modules rather than one, so that a future
-    change to, say, device tokens does not have to share a version number with
-    an unrelated change to the logging tables.
-    """
-    run_migrations("core.logging", LOG_MIGRATIONS)
-    run_migrations("core.config", runtime_config.MIGRATIONS)
-    run_migrations("core.auth", auth.MIGRATIONS)
-    run_migrations("core.tasks", tasks.MIGRATIONS)
 
 
 @asynccontextmanager
@@ -153,7 +140,7 @@ def create_app() -> FastAPI:
     # 已经切过的装机上它什么也不做（`pending()` 是空的），所以留在这里不花钱。
     split = resplit.run()
 
-    _run_core_migrations()
+    run_core_migrations()
 
     if split:
         log.warning(

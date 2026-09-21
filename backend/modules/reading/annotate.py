@@ -203,6 +203,15 @@ def _build_prompt(tokens: list[dict[str, Any]]) -> tuple[str, dict[int, list[dic
         for option in options:
             gloss = "／".join(option["gloss_zh"]) if isinstance(option["gloss_zh"], list) \
                 else str(option["gloss_zh"])
+            # **Order was measured, not assumed** (P10). Collins definitions
+            # are COBUILD full sentences averaging 101 characters against the
+            # old model-written 51, and many open with the same four words
+            # ("You use X when…"), so putting the Chinese first looked like an
+            # obvious win. Measured on one article it changed nothing —
+            # 14 "none of these fits" against 13 — so the English stays in
+            # front, where it has always been. The 4.6% is the model's own
+            # behaviour, not a layout problem: the same article annotated
+            # against the *old* inventory with this model gives the same 4.6%.
             lines.append(f"   {option['ordinal']}. {option['concept_en']} — {gloss}")
 
     lines.append("")
@@ -232,7 +241,13 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         provider,
         [{"role": "system", "content": SYSTEM},
          {"role": "user", "content": f"{INSTRUCTION}\n\n{prompt}"}],
-        max_tokens=min(4000, 60 * len(tokens) + 400),
+        # **上限跟着批次走，不再钉死在 4000**（P10）。
+        # 回复是 `{"12345": 7, …}`，一条约 11 个字符、不到 10 个 token；
+        # 60/条是宽裕的估计。而 P10 把批次从 35 加到了整篇一次
+        # （最长的文章 328 个实词），4000 的硬顶正好擦着这个量——
+        # **截断的后果是后半截词悄悄标不上**，只会表现为「没标完」，
+        # 不会报错。给足余量比省那点输出预算重要。
+        max_tokens=60 * len(tokens) + 400,
         temperature=0.1,
         json_mode=True,
     )

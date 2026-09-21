@@ -1,0 +1,778 @@
+<meta charset="utf-8">
+<title>Phase 11 词组与用法</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+  .wire { font-family:var(--f-mono); font-size:0.76rem; line-height:1.9; white-space:pre;
+         background:var(--surface); border:1px solid var(--rule); padding:1.1rem 1.2rem;
+         overflow-x:auto; color:var(--ink-mid); margin:0 0 1.6rem; }
+  .wire b { color:var(--ink); font-weight:500; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 11 · 方案讨论中，未定稿 · 2026-09-21</div>
+    <h1>词组与用法</h1>
+    <p class="standfirst">词组识别只认得出三分之一，认出来的没有释义。而查下去发现
+    <b>一多半根本不是词组，是某个义项的用法</b>——柯林斯早就把这两件事分开了，
+    我们一件都没做。这个 Phase 两件一起做。</p>
+    <p class="thesis">最要紧的一条是<b>「什么算词组」不再由我们写的词性规则决定</b>，
+    而是照一张现成的考纲短语表查表——<b>P10 那一手的同一个形状</b>：
+    义项集当年也想让模型重建，粒度控制不住，最后是直接导柯林斯，模型调用从 14,500 次降到 0。
+    <br><b>这份文档里所有的数都是 2026-09-21 在当前语料（498 篇）上现场量的</b>，
+    不是从 P2 §18 抄来的——那批数量于 2026-09-07/09，前提已经变了三样（§2）。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-10.html">Phase 10</a> ｜ 缺口的来历 <a href="./phase-2.html">Phase 2 §18</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>2026-09-21 讨论中。下面这些是用户已经拍板的，不再回头问。</b>
+    <br><br>
+    <b>③④ 两条 2026-09-21 当天先退回「未定」、当天重新定了（见下）——
+    退回的原因是它们不是用户拍的，是我读错一句话推出来的。</b>
+    用户原话是「<b>先不单独调用模型，我们直接单开一张表来存词组</b>」，
+    这句有两种读法：<b>(a) 不为词组新增模型调用</b>；
+    <b>(b) 不专门起一趟「判词组」的调用，而是折进已有的标注里</b>——
+    「单独」修饰的是调用的方式，不是调不调。<b>我选了 (a)，没问。</b>
+    然后又拿 ④ 推出了 ③（「不看句子就选不出是哪个意思，所以只能一行」），
+    用户是在这个前提下点头的。
+    <br><b>重新定的结果：④ 走「折进已有的标注」，③ 改成「词组一行 ＋ 义项子表」</b>，见下面 ③④ 两条。
+    <br><br>
+    <br>① <b>清单＝考纲表 ∩ 柯林斯</b>（2026-09-21 定）＝<b>1,712 个词组 / 2,793 条义项</b>，
+    语料命中 3,810 处、每篇 7.7 处。
+    <b>两边各自的失败模式被对方挡住</b>——柯林斯挡掉考纲表那 4,099 条垃圾
+    （<code>box inquire</code>、<code>manage to do sth.</code>），
+    考纲表挡掉柯林斯 PHRASE 块分段加粗拼出来的碎片（<code>on the</code> 242 处、
+    <code>is not</code> 128、<code>at a</code> 51）。
+    <b>「两本表都认」本身就是判据，不是权宜之计。</b>
+    <br>　 <b>两边只有一边收的，全部归档，不删</b>（2026-09-21 定）：
+    只有考纲表的 <b>4,099</b> ＋ 只有柯林斯的 <b>9,468</b> ＝ <b>13,567 条</b>，
+    存文本、来源、排除理由。<b>不存义项</b>——柯林斯那份 mdx 在 <code>data/dictionaries/</code>
+    躺着不会变，要捞回来重新解析是一条命令，而存一份副本就是又一处会漂移的东西。
+    <br>② <b>词组单开一张表</b>，像义项集一样——发号加溯源，不拿内容当身份（§5）；
+    <br>③ <b>词组表一行（身份），义项另开一张子表</b>，每条义项有自己的 id，
+    标记与复习都带着义项走；<b>屏幕上点开照旧把几个意思都列出来</b>——
+    当初说的「不挑」挑的是显示，那一层不变；
+    <br>④ <b>「这一处是哪个意思」折进已有的标注</b>，不另起一趟调用。
+    <b>不是新增调用</b>：标注本来就在逐句问模型「这个词在这句里是哪个意思」，词组只是多几个条目
+    （实测多 4.2%，见 §7）。已有 498 篇要补一趟，新文章零成本；
+    <br>⑤ 已有的 <b>3,421 条历史判定归档</b>，不出现在表里，<code>judge_phrases</code> 任务退休；
+    <br>⑤b <b>复习只做单向</b>：看词组、想意思。<b>不做中→英</b>（给「导致」，
+    <code>lead to</code>／<code>result in</code>／<code>contribute to</code> 全对，那是个坏题），
+    <b>不做拼写</b>（<code>take sth into account</code> 中间有变量，拼什么）；
+    <br>⑤c <b>给词组造句，按义项造</b>，每句存着是哪一条义项造的。
+    <b>而且是懒的</b>——只为你标记过的造，跟单词那边一样（<code>sentences.py</code>
+    的规划注释原话：one unit per sense that is short of sentences）；
+    <br>⑥ <b>【2026-09-21 傍晚：这一列可能整个不要了，见 §8】</b>原文是
+    「表里加一列标『可能是杂质』」。<b>交集口径 ＋ ⑪ 之后它没有对象了</b>——
+    <code>try to</code>、<code>be in</code> 归到用法那边，
+    <code>have to</code>、<code>kind of</code>、<code>make it</code> 用户定了认。待定；
+    <br>⑦ <b>范围＝服务端 ＋ 客户端 Core，界面留到下一个 Phase</b>（2026-09-21 定，跟 P10 同一个切法）；
+    <br>⑧ <b>这个 Phase 做两件事：词组 ＋ 用法</b>（2026-09-21 定，见 §10）。
+    <b>词组只收柯林斯的</b>（独立词条 ＋ PHRASE 块），考纲表退回去只当召回参考；
+    <b>用法是单词的用法，挂在 <code>senses</code> 的子表上</b>，不进词组表；
+    <br>⑨ <b>搭配串存原样，不还原屈折形</b>——实测要还原的只有 8.1%，
+    而一刀切还原会毁掉 15.9% 的被动信息（<code>is absorbed into</code>）和 7% 的名词化（<code>the allies</code>）；
+    <br>⑩ <b>复习里怎么用「用法」，用户说到时候再定</b>——不做成提示阶梯的一层，别自作主张；
+    <br>⑪ <b><code>have to</code>、<code>kind of</code>、<code>make it</code> 这类照认</b>
+    （2026-09-21 定）。它们高频到近乎语法（<code>have to</code> 语料里 134 处），
+    但两本表都收，自动判据挡不住，<b>用户定了认</b>——每篇多出十来处可点的词组；
+    <br>⑫ <b>词组的复习题由模型造句</b>（2026-09-21 定），
+    <b>不拿「你标记时所在那一句」凑合</b>。代价是标了之后要等造句跑完才进复习，
+    <b>而这跟单词那边的行为一致</b>（句子池本来就是标了才造）；
+    <br>⑬ <b><code>account for</code> 和 <code>account</code> 同一天都到期，不管</b>
+    （2026-09-21 定）。不做错开。
+    <br><br>
+    <b>③ 跟着 ④ 走</b>：④ 一改，义项就必须有 id，③ 也就跟着改了。
+    <br><br>
+    <b>讨论期间不写任何实现代码</b>，包括脚手架和示例。本文档里出现的表名与列名，
+    除了 §5 那张新表，都是<b>现在已经存在的东西</b>；量数用的探针脚本在临时目录，没有进仓库。
+  </div>
+
+  <div class="callout" style="margin-top:1.6rem">
+    <b>下次会话从这里开始。</b>这份文档是 2026-09-21 一整天讨论的全部产出，
+    <b>会话结束时清空了上下文，所以下面这些不要重新问、也不要重新量</b>。
+    <br><br>
+    <b>状态：方案讨论中，未定稿。不许动手，两个理由缺一不可</b>——
+    ① 铁律「方案必须充分讨论、达成一致才能定案，讨论期间不写任何实现代码」；
+    ② <b>P10 的全语料重标注还在跑</b>（2026-09-21 白天剩 41,321 个 token 未标），
+    而换词组识别要重算 <code>in_phrase</code> 与真题考频，
+    <b>考频的输入正是那一列 <code>sense_id</code></b>，两件事同时写 <code>content.db</code>
+    就是破「任何时候只有一份在被写」。
+    <br><br>
+    <b>已定的十三条在上面那个方框里</b>，逐条带着日期和理由，不要回头问。
+    <b>还没定的两条在 §8。</b>
+    <br><br>
+    <b>动手前按这个顺序读</b>：<b>§9</b>（判据是怎么来的——用户为什么做这个软件，
+    以及柯林斯把词组与用法分成四类）→ <b>§5</b>（三张表长什么样）→
+    <b>§8</b>（还欠什么）。§3、§4 是过程，知道结论就够。
+    <br><br>
+    <b>这次讨论里我犯过三个错，每个都写在原地了，记着形状免得重蹈：</b>
+    <br>① <b>把用户一句有歧义的话当成拍板</b>（③④，见方框开头）——
+    「先不单独调用模型」有两种读法，我选了一种没问，还拿它推出了第三条决定。
+    <b>退回重定花了半轮讨论。</b>
+    <br>② <b>照抄 CLAUDE.md 里一句过时的话</b>——「三级提示」，
+    而代码里 <code>maxReveal = 1</code>，是用户指出来的，<b>这句错话骗了一整轮</b>（§8）。
+    CLAUDE.md 已订正。<b>凡是要用 CLAUDE.md 里某句话当依据的，先去代码里对一眼。</b>
+    <br>③ <b>两次量错，都是当场被自己的数据打脸才发现的</b>（§10）。
+    <br><br>
+    <b>所有数据都能重新量出来</b>，来源三处：
+    <br>· <b>考纲短语表</b>——<code>https://raw.githubusercontent.com/2ndLA/english-phrases/main/lists/</code>
+    下的 <code>junior.txt</code> / <code>senior.txt</code> / <code>cet4.txt</code> / <code>cet6.txt</code>，
+    一行一条，取并集 5,811 条。<b>CC BY-SA 4.0，要署名。</b>
+    <br>· <b>柯林斯</b>——<code>data/dictionaries/collins-cobuild-2012.mdx</code>（本地，不在 git 里），
+    读法用 <code>mdict_utils.reader.MDX</code>，解析用现成的
+    <code>backend/modules/senses/collins.py</code>（<code>parse_entry</code> ＋
+    <code>_BLOCK_SPLIT</code> / <code>_BOLD</code> 取块内加粗）。
+    <br>· <b>语料</b>——<code>data/content.db</code> 的 <code>reading_tokens</code>
+    （带 <code>pos</code> 与 <code>headword</code>，所以筛法可以离线重跑，不用 spaCy）。
+    <br><b>量数的探针脚本没有进仓库</b>（讨论期不写脚手架），要复现就照上面三处重写。
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§1</span>
+      <h2>三个缺口，一个也不是新发现</h2>
+    </div>
+    <p class="lede">这三件事分别记在 P2 §18、P10 §1、P6 §7 里，都标着「量出来了，没动手」。
+    <b>它们凑在一起才是一个 Phase</b>：识别补上了而没有释义，等于点开一片空白；
+    两样都有而界面不认，等于用户一件也看不见。</p>
+
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>识别漏掉一整类</b>
+        <span>现行筛子只认「动词＋封闭小品词表」，40 个常见词组实测<b>只召回 35%</b>。
+        <code>such as</code> 154 处、<code>rather than</code> 108 处、<code>at least</code> 64 处、
+        <code>instead of</code> 54 处、<code>as well as</code> 52 处——<b>一处都没抓到</b>，
+        因为它们不是动词开头。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>认出来的没有像样的释义</b>
+        <span>P10 把义项集换成了柯林斯，<b>词组一条没收</b>（4,988 条词组义原样丢掉，是用户定的边界）。
+        所以 791 个已确认词组现在的中文来自 ECDICT，
+        而它给 <code>contribute to</code> 的是<b>「捐献」</b>——语料里 28 处没有一处是这个意思。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>界面整个不认</b>
+        <span>实查：<code>client/App/Sources</code> 里 <b>“phrase” 零命中</b>，
+        而 Core 里有 28 处、契约里 <code>Phrase</code> 结构和 <code>capabilities.phrases</code> 都在。
+        服务端下发了、Core 认得、App 全丢掉——这是 P6 §7 动跨 Phase 不变量时欠下的账。</span></span></div>
+    </div>
+
+    <h3>现在的规模（2026-09-21 实测）</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">3,421</div>
+        <div class="fig-key">现行筛子在 498 篇里提出的候选，判定后 <b>2,362 处是词组</b></div></div>
+      <div class="fig"><div class="fig-val">791</div>
+        <div class="fig-key">已确认的不同词组序列，<code>according to</code> 84 处居首</div></div>
+      <div class="fig"><div class="fig-val">35%</div>
+        <div class="fig-key">40 个常见词组 1,017 处的召回率</div></div>
+      <div class="fig"><div class="fig-val">0</div>
+        <div class="fig-key">iOS App 里认得词组的地方</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§2</span>
+      <h2>为什么全部重量一遍：旧文档的前提塌了三样</h2>
+    </div>
+    <p class="lede">P2 §18 那套数量于 2026-09-07/09。<b>用户 2026-09-21 定「以前的文档已经过时，重新调研」</b>，
+    这是对的，下面三条是重量之后才看清的。</p>
+    <div class="nots">
+      <div class="not"><i>一</i><span><b>「柯林斯对词组只覆盖 63.5%，所以下个 Phase 要下载牛津那两本」——前提是错的</b>
+        <span>柯林斯把短语动词当<b>独立词条</b>收，<code>account for</code>、<code>according to</code>、
+        <code>stick to</code> 都有自己的条目，<b>这样的多词词条一共 7,327 条</b>。
+        P10 当时数的 4,988 条只是挂在目标词下面的习语块那一半，
+        <b>这 7,327 条当年根本没进视野</b>。牛津那两本要不要下载，得重新判。</span></span></div>
+      <div class="not"><i>二</i><span><b>当年选 Wiktionary 的那个理由，柯林斯自己补上了</b>
+        <span>P2 §18 举的例子是 <code>stick to</code> 在 ECDICT 里只有「粘住」，
+        而语料里 9 处全是「坚持」。<b><code>stick to</code> 在柯林斯里有独立词条</b>。
+        而 Wiktionary 已在 P10 连表带代码删掉，这条路本来就没了。</span></span></div>
+      <div class="not"><i>三</i><span><b>「筛法 E 留住 21/22」在当前语料上不成立</b>
+        <span>E 有文档没记过的整类盲区，见 §3。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§3</span>
+      <h2>筛法重量：够不着，而且够不着的方式变了</h2>
+    </div>
+    <p class="lede">先复现现行筛法确认量法可信——<b>离线重跑得 3,421 处，与
+    <code>reading_phrases</code> 表里的行数一模一样</b>，后面几档的数才有意义。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>筛法</th><th>处数</th><th>每篇</th><th>不同序列</th><th>40 个已知词组的召回</th></tr>
+      <tr><td><b>A · 现行</b>（动词＋小品词）</td><td>3,421</td><td>6.9</td><td>1,015</td><td><b>35%</b></td></tr>
+      <tr><td>B · 词典全匹配不筛</td><td>17,649</td><td>35.4</td><td>4,981</td><td>—</td></tr>
+      <tr><td>C · 不含 AUX/PART ＋ 含实词</td><td>13,843</td><td>27.8</td><td>4,589</td><td>—</td></tr>
+      <tr><td><b>E</b> · C ＋ 首词非 DET/PRON ＋ 含 ADP/ADV</td><td>8,541</td><td>17.2</td><td>2,286</td><td><b>92%</b></td></tr>
+    </table>
+    </div>
+
+    <h3>E 的两个毛病，旧文档里没有</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>它也有整类盲区</b>
+        <span><code>in order to</code>(19 处)、<code>a variety of</code>(16)、
+        <code>a great deal of</code>(4) <b>一处都抓不到</b>——
+        「不含 PART」「首词非 DET」这两条排除规则正好把这一类整个切掉。</span></span></div>
+      <div class="not"><i>·</i><span><b>它会留下残肢</b>
+        <span>被排除的 <code>in order to</code> 变成了 <code>in order</code>（22 处），
+        <code>as well as</code> 旁边多出 <code>as well</code>（19 处），
+        <code>as a result of</code> 旁边多出 <code>as a result</code>（27 处）。
+        <b>筛掉一个词组，它把这个词组的一截留在了候选里。</b></span></span></div>
+    </div>
+    <p>E 比 A 多出 1,278 个序列 / 4,865 处，真假各半：真的有 <code>regardless of</code>、
+    <code>in other words</code>、<code>even though</code>、<code>known as</code>；
+    假的有 <code>more than</code>(149)、<code>part of</code>(122)、<code>years ago</code>(46)、
+    <code>at home</code>(18)。<b>这正是「筛子说了不算」的证据</b>——
+    它判的是词性长得像不像，而那不是我们要问的问题。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§4</span>
+      <h2>三个现成的轮子，选哪个</h2>
+    </div>
+    <div class="callout"><b>这一节的结论当天傍晚被改过，别照它动手。</b>
+    它记的是「考纲表当清单」那一版；<b>最终口径是「考纲表 ∩ 柯林斯」</b>（方框 ①），
+    因为柯林斯的 PHRASE 块是分段加粗的，单用会捞出 <code>on the</code>、<code>is not</code>
+    这类碎片，而考纲表单用会捞出 <code>box inquire</code> 这类不是英语的东西。
+    <b>这一节留着是为了说清两张表各自强在哪、弱在哪</b>——那才是取交集的理由。</div>
+    <p class="lede">用户 2026-09-21 问的那句<b>「没有现成的轮子吗」</b>，是这个 Phase 的转折点。
+    在那之前我在调筛子的参数——<b>而调参数就是在自己回答「什么算词组」，
+    那正好是 P1b 让模型写义项集时犯的错</b>。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>拿什么当清单</th><th>每篇几处</th><th>40 个里认得几个</th><th>谁在定义「什么算词组」</th></tr>
+      <tr><td>现行筛子</td><td>6.9</td><td>14</td><td>我们写的词性规则</td></tr>
+      <tr><td>放宽的筛子 E</td><td>17.2</td><td>37</td><td>我们写的词性规则</td></tr>
+      <tr><td>柯林斯多词词条 7,327 条</td><td>5.3</td><td>10</td><td>词典编辑</td></tr>
+      <tr><td><b>考纲短语表 5,811 条</b></td><td><b>15.6</b></td><td><b>39</b></td><td><b>考纲</b></td></tr>
+    </table>
+    </div>
+
+    <p><b>选考纲表的理由只有一条，但够了</b>：它的判据正好是「四六级要求你掌握的」，
+    和这个 App 的目的一模一样。柯林斯问的是「这算不算一个词条」——
+    所以它不收 <code>depend on</code>、<code>focus on</code>、<code>rely on</code>
+    这类介词只是动词固定搭配的组合；筛子问的是「词性长得像不像」。
+    <b>两个都不是我们要问的那个问题。</b></p>
+
+    <p class="lede">来源：<code>2ndLA/english-phrases</code>，一行一个短语，纯英文不带中文。
+    <b>分级表不累积</b>——「四级以内」要把 junior＋senior＋cet4 三张并起来，
+    这和当年 <code>the</code> 只带 <code>zk gk</code> 不带 <code>cet4</code> 是同一个坑（踩过的坑 §5.3）。</p>
+
+    <h3>它的三个毛病，要一起记住</h3>
+    <div class="nots">
+      <div class="not"><i>一</i><span><b>它也有杂质，而且是自动规则挑不出来的那种</b>
+        <span><code>try to</code>(92 处)、<code>be in</code>(91)、<code>that is</code>(77)、
+        <code>and that</code>(59)、<code>make it</code>(58)。作者在 README 里自己写着
+        部分短语是「网上零散收集」的——<b>这不是官方考纲的扫描件，是某人整理的表</b>。
+        两条自动规则都试过，都不行，见 §8。</span></span></div>
+      <div class="not"><i>二</i><span><b>它不带中文</b>
+        <span>所以释义还得另找，而账比换清单之前难看，见 §6。</span></span></div>
+      <div class="not"><i>三</i><span><b>许可证是 CC BY-SA 4.0，要署名</b>
+        <span>本仓库是公开的、又没有 LICENSE 文件。数据本身放 <code>data/</code>（不进 git），
+        但<b>署名这件事得有个落点</b>——写在这份文档和导入脚本的模块注释里。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§5</span>
+      <h2>表怎么建</h2>
+    </div>
+    <p class="lede">两张表分工：<b>词组本身</b>（新建，对标义项集）和<b>它在语料里的出现位置</b>
+    （已有的 <code>reading_phrases</code>，加一列指过去）。</p>
+
+    <div class="table-scroll">
+    <table>
+      <tr><th>列</th><th>装什么</th><th>为什么是这样</th></tr>
+      <tr><td><code>id</code></td><td><b>导入时发的号</b></td>
+        <td>架构铁律 5：标记指着它，一旦发出去不许变</td></tr>
+      <tr><td><code>text</code></td><td>规范形，如 <code>focus on</code></td>
+        <td>匹配时原形与表层形各查一次——<code>according to</code> 84 处当年全漏，
+          就是因为 spaCy 把 <code>according</code> 还原成 <code>accord</code></td></tr>
+      <tr><td><code>source</code> ＋ <code>source_key</code></td><td>从哪来（cet4／collins／ecdict）＋原始键</td>
+        <td><b>溯源，不是内容哈希</b>。重导入靠它对上号</td></tr>
+      <tr><td><code>level</code></td><td>初中／高中／四级／六级</td><td>考纲表白送的分级</td></tr>
+      <tr><td><code>suspect</code></td><td>可能是杂质</td><td>谁来填还没定，见 §8</td></tr>
+    </table>
+    </div>
+    <p><b>中文不在这张表上，在义项子表上</b>（2026-09-21 改，见 §7）——
+    一个词组有几条义项，标记和复习都带着义项走。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>义项子表的列</th><th>装什么</th><th>为什么</th></tr>
+      <tr><td><code>id</code></td><td>发的号</td><td>同上，标记指着它</td></tr>
+      <tr><td><code>phrase_id</code></td><td>属于哪个词组</td><td></td></tr>
+      <tr><td><code>ordinal</code></td><td>第几条</td><td>柯林斯的顺序，或分隔符切开的顺序</td></tr>
+      <tr><td><code>gloss_zh</code></td><td>这一条的中文</td><td></td></tr>
+      <tr><td><code>gloss_source</code></td><td>柯林斯／ECDICT</td>
+        <td>哪天要换掉 ECDICT 那批，一句 SQL 就找得出来</td></tr>
+    </table>
+    </div>
+
+    <h3>第三张：用法，挂在义项上</h3>
+    <p><b>不是挂在词上</b>——<code>contribute</code> 四条义项里有三条都带 <code>contribute to</code>，
+    字面一样、意思完全不同（做贡献／促成／撰稿）。挂在词那一层，这个对应关系就丢了，
+    <b>而它恰恰是最值钱的那部分</b>。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>表</th><th>行数</th><th>状态</th></tr>
+      <tr><td><code>senses</code></td><td>24,537</td><td>已有，用着</td></tr>
+      <tr><td><code>sense_examples</code></td><td>51,648</td><td><b>已有，一条没用</b>（P10 §9「只存不用」）</td></tr>
+      <tr><td><code>sense_collocations</code></td><td><b>5,584</b></td><td>新加，从柯林斯 WORD 块的加粗串来</td></tr>
+    </table>
+    </div>
+    <p>4,801 条义项（19.6%）带搭配。<b>搭配串存原样，不还原屈折形</b>，
+    因为实测只有 8.1% 是噪音：</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>形态</th><th>占比</th><th>例</th><th>处理</th></tr>
+      <tr><td>首词就是原形</td><td>45.3%</td><td><code>ability to</code></td><td>不用处理</td></tr>
+      <tr><td>词在中间</td><td>23.6%</td><td><code>by accident</code></td><td>不用处理</td></tr>
+      <tr><td>被动／系动词开头</td><td>15.9%</td><td><code>is absorbed into</code></td><td><b>是信息，别还原</b></td></tr>
+      <tr><td>首词跟词头对不上</td><td>7.0%</td><td><code>the allies</code></td><td><b>是信息（名词化）</b></td></tr>
+      <tr><td>首词是屈折形</td><td><b>8.1%</b></td><td><code>acts as</code>、<code>abounds with</code></td><td>唯一的噪音，455 个</td></tr>
+    </table>
+    </div>
+    <p><b>为什么不一刀切还原</b>：`-s` 只是柯林斯定义句主语的语法后果
+    （<i>If something contributes to…</i>），不是用法信息；而被动和名词化是。
+    要还原的那 455 个判据明确（首词 ＝ 词头＋屈折后缀），<b>哪天想单独处理随时能做，不用模型</b>。</p>
+
+    <p><b>发号加溯源这一条是照抄 P10 §5 的，不是新想的。</b>
+    那一节的结论是「身份不从内容推导」，而得出它的代价是全库义项 id 大换血、
+    98,162 条标注作废。<b>词组这张表现在还是空的——现在定对，就不用再付一次那个代价。</b></p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§6</span>
+      <h2>中文从哪来：覆盖不是问题，质量是</h2>
+    </div>
+    <div class="callout"><b>这一节的结论当天傍晚被推翻了，别照它动手。</b>
+    它算的是「ECDICT 兜底」那一版的账（八成词组的中文会来自 ECDICT）。
+    <b>最终是 ECDICT 的词组表整个退出</b>，词组的中文<b>只用柯林斯</b>（方框 ⑧），
+    理由见 §9：<code>contribute to → 捐献</code> 那类错，是拿错的盖掉库里本来对的。
+    <b>ECDICT 只留着判大纲</b>，它的 <code>tags</code> 仍是超纲判定的唯一来源，不能扔。
+    <b>这一节留着是为了记住 ECDICT 的词组表坏在哪</b>，那是它退出的证据。</div>
+    <p class="lede">换清单之后这笔账变难看了，因为考纲表收的正是柯林斯不收的那类。</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>来源</th><th>词组数</th><th>按出现处数</th></tr>
+      <tr><td>① 柯林斯有独立词条</td><td>377（27.0%）</td><td>1,329（17.1%）</td></tr>
+      <tr><td><b>② 只有 ECDICT</b></td><td><b>901（64.6%）</b></td><td><b>6,165（79.5%）</b></td></tr>
+      <tr><td>③ 两边都没有</td><td>116（8.3%）</td><td>265（3.4%）</td></tr>
+    </table>
+    </div>
+    <p>也就是说，<b>照现在的方案，屏幕上八成的词组面板显示的会是 ECDICT 那个质量</b>：</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span><code>lead to</code> → 导致, 通向<span>还行</span></span></div>
+      <div class="not"><i>·</i><span><code>contribute to</code> → 捐献<span><b>错的</b>，语料里 28 处都是「促成／有助于」</span></span></div>
+      <div class="not"><i>·</i><span><code>think of</code> → 考虑, 关心, 想起, 记起, 想像, 有...的看法<span>六个意思平铺，等于没说</span></span></div>
+    </div>
+    <p><b>这件事还没定</b>（§8）。它是这个方案目前最大的一个软肋。
+    <br><b>2026-09-21 补一条，把它的严重性往下调了一档</b>：中文可以<b>按分隔符切成义项</b>（§7），
+    <code>think of</code> 那种「六个意思平铺」切开之后就是六条能各自出题的义项。
+    <b>剩下的是切不开的那种</b>——<code>contribute to → 捐献</code> 只有一段，
+    切不切都是错的，<b>只有重写能治</b>。而重写也可以是懒的：标了才写，一个词组一次调用。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7</span>
+      <h2>语境判定折进标注，账是多少</h2>
+    </div>
+    <p class="lede">这一节原本写的是「不判语境的代价」。<b>2026-09-21 那条决定当天被推翻了</b>，
+    起因是用户一句话：<b>「如果只有一行，我标记 <code>think of</code>，怎么知道到底是哪个意思？」</b>
+    ——那一问戳的是跨 Phase 不变量：<b>进复习队列只有一条路，你自己标记</b>。
+    在「想起」那句标了 <code>think of</code>，信号是「想起这个用法我不会」，
+    而一张混着四个义项的卡会拿「有…的看法」也来考你，<b>那是系统替你做主</b>。</p>
+
+    <h3>为什么折进标注不算「新增调用」</h3>
+    <p>标注这条路<b>本来就在逐句问模型「这个词在这句里是哪个意思」</b>，给一串候选让它挑编号。
+    词组只是多几个条目，形状一模一样。而实测多出来的活很小：</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>语料里 7,759 处词组</th><th>处数</th><th>占比</th><th>要问模型吗</th></tr>
+      <tr><td>只有 1 条义项</td><td>2,999</td><td>38.7%</td><td><b>不问，直接填</b></td></tr>
+      <tr><td>一条义项都没有</td><td>265</td><td>3.4%</td><td><b>填 0，退回词典</b>（同单词那边的安全失败）</td></tr>
+      <tr><td>多义</td><td><b>4,495</b></td><td>57.9%</td><td>要问</td></tr>
+    </table>
+    </div>
+    <p>真正要问的每篇 <b>9.0 处</b>，而每篇实词约 216 个——<b>词组让标注多出 4.2%</b>。
+    已有 498 篇要补一趟；<b>新文章零成本</b>，跟着标注一起走。</p>
+    <p><b>白送两样</b>：① 正文点开词组，面板能说<b>「本句中是这个意思」</b>，
+    跟单词一模一样——那正是 P10 §1 抱怨的那件事；
+    ② 复习卡按<b>「词组＋义项」</b>出，和单词完全一致，
+    <b>不用为词组破 FSRS 那个例</b>（一张卡混几个义项、会一个就算全会）。</p>
+
+    <h3>行数</h3>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">5,811</div><div class="fig-key">词组表</div></div>
+      <div class="fig"><div class="fig-val">7,182</div><div class="fig-key">义项子表，平均每词组 1.24 条</div></div>
+      <div class="fig"><div class="fig-val">2,717</div><div class="fig-key">其中语料真正用到的（1,394 个词组，平均 1.95）</div></div>
+      <div class="fig"><div class="fig-val">2,088</div><div class="fig-key">一条义项都没有的词组，占全表 36%（§8）</div></div>
+    </div>
+    <p>义项从哪来：柯林斯有词条的 892 个给出 1,743 条（平均 1.95，词典编辑分好的）；
+    只有 ECDICT 的 2,831 个给出 5,439 条，<b>按分隔符切</b>。</p>
+    <p><b>按分隔符切这件事我判错过一次，当场被用户纠正</b>：我原说
+    <code>think of → 考虑, 关心, 想起, 记起, 想像, 有…的看法</code> 拆开是「六条垃圾义项」，
+    <b>而那六条确实是不同的意思</b>。复量之后的实情是两类混着——
+    <code>speak for</code>（代表…讲话／要求得到／订购）是三个真义项，
+    <code>hold office</code>（担任职务／任职）是同一个意思的两种说法。
+    <b>而在这个设计里同义重复几乎没有代价</b>（多几句答案不同措辞的句子），
+    <b>漏切才是恶性的</b>（模型拿着一串意思去造句，题面和答案对不上，就是 P10 §1 那道题）。
+    所以<b>宁可切碎一点</b>。</p>
+
+    <h3>那 3,421 条历史判定，归档之后仍然有用</h3>
+    <p>它们回答的是另一个问题（这一处<b>算不算</b>词组），而那个问题已经由考纲表接管。
+    但它是唯一一份「模型对同一批词组怎么看」的记录：
+    <b>567 个序列永远是词组、224 个永远不是、224 个两可</b>。
+    两可里绝大多数一边倒（<code>lead to</code> 56 比 5、<code>depend on</code> 34 比 2），
+    <b>而那 2 次多半是温度不为零的随机波动</b>（踩过的坑 §4.3b）。
+    哪天要回头验证标注给词组挑的义项准不准，它是现成的对照组。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§7b</span>
+      <h2>填 0 的意思是「这一处不是词组」</h2>
+    </div>
+    <p class="lede">2026-09-21，用户问了一句
+    <b>「<code>run into</code> 是跑进的时候，这个算固定搭配还是 <code>into</code> 的用法？」</b>
+    ——答案是后者，而它<b>纠正了我前一条的一个错误建议</b>。</p>
+    <p>我原本提议「给每个词组补一条字面义」，因为柯林斯的 <code>run into</code> 只有四条
+    （遇到问题／意外碰到／车辆撞上／费用高达），<b>没有「跑进」</b>，
+    于是 <code>He ran into the room</code> 那一处对不上任何一条。
+    <b>那个提议是错的：字面用法不是 <code>run into</code> 的一个意思，那里根本没有 <code>run into</code>。</b></p>
+    <div class="nots">
+      <div class="not"><i>一</i><span><b>介词换得掉，就说明它属于后面那个名词短语</b>
+        <span><code>ran into / out of / across / toward</code> the room 都成立，意思跟着空间关系变；
+        而 <code>ran into an old friend</code> 的 <code>into</code> 换不得。</span></span></div>
+      <div class="not"><i>二</i><span><b>回答得了「在哪」，就说明它是地点状语</b>
+        <span>Where did he run? → into the room ✓；→ into an old friend ✗。</span></span></div>
+    </div>
+    <p><b>所以正确的语义是：标注器填 0 ＝ 这一处不是词组。</b>
+    不整体渲染，<code>run</code> 和 <code>into</code> 各自显示自己的义项——它们本来就各自标注过。
+    <br><b>而这把我们以为放弃了的东西白送了回来</b>：「这一处算不算词组」的判定
+    成了义项标注的副产品。不用单独问，问「是哪个意思」时，<b>「都不是」这个答案就是它</b>。</p>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§8</span>
+      <h2>还没定的，只剩两条</h2>
+    </div>
+    <p class="lede">2026-09-21 收工时的状态。<b>其余都在上面的方框里定了</b>，
+    下面这两条之外不要再开新问题，除非用户提。</p>
+    <div class="checks">
+      <div class="check"><span class="check-n">1</span><span class="check-what">
+        <b>复习一个单词时，它的搭配摆在哪一步</b>
+        <span>这就是方框 ⑩ 说的那件事。「用法」＝某条义项的搭配，
+        比如 <code>contribute</code> 的「促成」那条带着 <code>contributes to</code>。
+        现在复习一个单词是「给一句英文 → 你答这里是什么意思 → 答案是中文」，
+        <b>问题是那行搭配摆在哪一刻</b>：题面上（等于先给线索）、答案里（顺便告诉你怎么用）、
+        还是点「不确定」才出来。
+        <br><b>我提过第三种，用户否了</b>：「复习不当提示的一层，到时候我告诉你怎么做。」
+        <b>等他开口，不要替他设计。</b></span></span></div>
+      <div class="check"><span class="check-n">2</span><span class="check-what">
+        <b><code>suspect</code> 那一列还加不加</b>
+        <span>当初加它是为了剔 <code>and that</code>、<code>try to</code> 这类。
+        <b>现在它没有对象了</b>：<code>try to</code>、<code>be in</code> 归到用法那边去了；
+        <code>have to</code>(134 处)、<code>kind of</code>(75)、<code>make it</code>(58)
+        还在词组表里，<b>而用户定了认</b>（方框 ⑪）。
+        <br><b>我的建议是不加</b>——「标了之后还认不认」这个行为本身也没设计，
+        加一个没人填也没人读的字段，正是架构铁律那句
+        <b>「一条没有验法的规矩只是一句愿望」</b>。
+        真撞上不想认的，再走版本化迁移加它，这个项目本来就是这么加东西的。
+        <b>用户想留也行，铁律允许为未来预留字段。没定。</b></span></span></div>
+    </div>
+
+    <h3>已经答掉、留着不删的几条</h3>
+    <p class="lede">留在这里是为了<b>下次会话不会有人重新问一遍</b>。</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>范围到哪</b>
+        <span>已定：<b>只做服务端 ＋ Core，界面下一个 Phase</b>。
+        所以 P6 §7 那笔账这个 Phase 还是不还，
+        <b>做完之后用户在手机上看不到任何变化</b>——这是认下的，不是忘了。</span></span></div>
+      <div class="not"><i>·</i><span><b>提示对词组是什么</b>
+        <span><b>这条问错了。</b>我一直说「三级提示」，实际只有一级——
+        是用户指出来的：「我们的提示里面好像压根没有三级，点击不清楚，就只有一级，就是原文。」
+        <code>Hints.swift</code> 的 <code>maxReveal = 1</code>，
+        <code>phase-7.html</code> 写着「Core 的提示阶梯要跟着改：三级压成一级」，
+        理由是看义想词那条链的中间一级会提前泄题。
+        <b>而 CLAUDE.md 的 P7 那一行当时还写着「三级提示」，骗过了一整轮讨论</b>
+        （踩过的坑 §7.1 的同一个形状，已订正）。
+        <br>压成一级之后这条自己答完了：<b>考你用模型造的句子</b>（⑫），
+        <b>提示用你标记它时所在的那一句</b>——P7 定过「标记必然发生在某一句上，
+        那一句无条件算提示」。两边正好配上，不用新设计。</span></span></div>
+      <div class="not"><i>·</i><span><b>那 2,085 个零义项的词组还入不入表 / 柯林斯 7,327 条要不要进 / ECDICT 那批要不要重写中文</b>
+        <span>三条<b>都随交集口径作废或已回答</b>：清单＝考纲表 ∩ 柯林斯，
+        ECDICT 的词组表整个退出（只留着判大纲，它的 <code>tags</code>
+        仍是超纲判定的唯一来源）。</span></span></div>
+      <div class="not"><i>·</i><span><b>词组的复习</b>
+        <span>方向单向（⑤b）、卡按词组＋义项、句子由模型造（⑫）、
+        与组成词同日到期不管（⑬）——<b>全定了</b>。
+        <b>只剩「句子池那三条规则要不要为词组加第四条」</b>——
+        词组唯一现成的句子是它在语料里那处原句，而按规则那是提示不是考题；
+        ⑫ 定了造句之后，这条其实也不需要了，<b>但没有明确说过，实施时确认一次</b>。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§9</span>
+      <h2>词组与用法分家，以及这个软件为什么存在</h2>
+    </div>
+    <p class="lede">2026-09-21，用户在讨论中途说了一段话，<b>它是判据，不是背景</b>，
+    所以原样记在这里：</p>
+    <div class="callout">初中时英语非常好，老师都拿文章来教我，<b>教每个生词的用法</b>。
+    高中的时候老师只会让我背单词，<b>而我一个也背不住</b>。现在我上大学，
+    我想找回我的初中的感受，<b>这也是我做这个软件的初衷</b>。</div>
+    <p>顺着这句往回看，柯林斯的结构<b>就是那套教法</b>：它没有「单词表」和「词组表」两张表，
+    它只有词条 → 义项 → 每条义项的用法与固定说法。
+    而用户同时指出「词组和用法是两个东西」——<b>柯林斯自己也是这么分的，用块的类型</b>。
+    P10 §4 的注释早就记下过这一条：<i>ability 自己的义项加粗了 <code>ability to</code>，
+    那是搭配模式，不是词组</i>。</p>
+
+    <h3>语料里的 1,394 个「词组」，按柯林斯怎么看它分四堆</h3>
+    <div class="table-scroll">
+    <table>
+      <tr><th></th><th>个数</th><th>处数</th><th>占比</th><th>例</th><th>结论</th></tr>
+      <tr><td>① 独立词条</td><td>377</td><td>1,329</td><td>17.1%</td>
+        <td><code>according to</code> · <code>account for</code> · <code>per cent</code></td>
+        <td rowspan="2"><b>是词组</b><br>共 729 个 / 50.8%</td></tr>
+      <tr><td>② PHRASE 块</td><td>352</td><td>2,615</td><td>33.7%</td>
+        <td><code>rather than</code> · <code>at least</code> · <code>for example</code></td></tr>
+      <tr><td>③ WORD 块加粗</td><td>176</td><td>1,934</td><td>24.9%</td>
+        <td><code>such as</code> · <code>try to</code> · <code>be able to</code></td>
+        <td><b>是用法</b>，进 <code>sense_collocations</code></td></tr>
+      <tr><td>④ 柯林斯没提过</td><td>489</td><td>1,881</td><td>24.2%</td>
+        <td><code>lead to</code> · <code>focus on</code> · <code>come from</code></td>
+        <td><b>都不是</b>，删掉</td></tr>
+    </table>
+    </div>
+
+    <h3>④ 为什么能放心删：两本词典判得一模一样</h3>
+    <p>触发点是用户问「<code>contribute to</code> 只有 ECDICT 里有释义吗」。查下来：</p>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>柯林斯与 Wiktionary 都不收 <code>contribute to</code></b>
+        <span>同样不收的还有 <code>depend on</code>、<code>focus on</code>、<code>rely on</code>、
+        <code>refer to</code>、<code>belong to</code>——<b>六个组合两本词典判得完全一致</b>。
+        它们不是词组，是动词的用法，介词只是补足语。</span></span></div>
+      <div class="not"><i>·</i><span><b>而正确的中文早就在我们库里</b>
+        <span>柯林斯把四个意思挂在 <code>contribute</code> 下面，P10 全导进来了。
+        语料里标注器<b>已经挑对了</b>：25 处「促成」、6 处「做贡献」、1 处「捐献」。
+        <b>ECDICT 那条「捐献」贴上去，是拿错的盖掉对的。</b></span></span></div>
+    </div>
+
+    <h3>顺带查出 P10 的一个洞</h3>
+    <p><code>rather than</code> 在语料里 34 处，标注器全挑了次优的那条义项。
+    <b>不是模型的问题，是候选里没有正确答案</b>：柯林斯 <code>rather</code> 的第 ① 条
+    「而非；胜于；而不是」标记是 <code>PREP-PHRASE</code>，
+    <b>而 <code>PREP-PHRASE</code> 含 <code>PHRASE</code> 这个串</b>，
+    被 P10 的判据 2 判成词组义，跟那 4,988 条一起扔了。
+    <code>at least</code>、<code>in part</code>、<code>for the most part</code> 同样。</p>
+    <p>这正是 P10 §1 自己写的那句话：<b>不是模型判错，是集合里没有对的。</b>
+    而 <code>import_collins.py</code> 的模块注释也早写着这个数是哪个 Phase 的起点——
+    <b>就是这个 Phase</b>。</p>
+
+    <h3>这个洞多大，以及要不要「顺手补」</h3>
+    <p>2026-09-21 量过。目标词里被判成词组义而扔掉的块共 <b>4,963 条</b>：</p>
+    <div class="table-scroll">
+    <table>
+      <tr><th>标记</th><th>条数</th><th>例</th><th>是什么</th></tr>
+      <tr><td><code>PHRASE</code></td><td>4,416</td>
+        <td><code>like a glove</code> · <code>the ball is in your court</code></td><td>真词组</td></tr>
+      <tr><td><code>CONVENTION</code></td><td>207</td><td><code>so long</code> · <code>nice work</code></td><td>真词组</td></tr>
+      <tr><td><code>PHRASAL VERB</code></td><td>123</td><td><code>foul up</code> · <code>flag down</code></td><td>真词组</td></tr>
+      <tr><td><b><code>PREP-PHRASE</code></b></td><td><b>126</b></td>
+        <td><code>rather than</code> · <code>complete with</code> · <code>in regard to</code></td>
+        <td rowspan="2"><b>这些才是被误扔的「用法」</b>，合计约 174 条</td></tr>
+      <tr><td><code>PHR-CONJ</code> / <code>PHR-MODAL</code> 等</td><td>48</td>
+        <td><code>as long as</code> · <code>would rather</code></td></tr>
+    </table>
+    </div>
+    <p><b>结论：不用额外动作，做词组表就把它堵上了。</b>
+    4,789 条本来就是词组，这个 Phase 要收；而那 174 条里大部分会被词组表接住——
+    <code>rather than</code> 就在交集清单里，<b>而正文里一个词落在词组中时，
+    显示的是词组的意思、不是它自己的</b>（<code>Display.swift</code> 写死的规矩）。
+    <br><b>残余</b>是「那个组合没进交集清单」的情况（<code>complete with</code>、
+    <code>in regard to</code> 这类），量级一百多条，<b>实施时逐条看</b>。
+    <br>这一条曾被我问成「要不要顺手补」——<b>问得不对，它不是额外的事，它就是这个 Phase</b>。</p>
+
+    <h3>两条降级</h3>
+    <div class="nots">
+      <div class="not"><i>一</i><span><b>ECDICT 的词组表退出，只留着判大纲</b>
+        <span>证据够了：<code>contribute to → 捐献</code>、<code>stick to → 粘住</code>、
+        <code>think of</code> 六个意思平铺、318,207 条词组里只有 6 条带考纲标签、词频全是 0。
+        <b>它不是词典编辑做的，是聚合来的。</b>
+        <br><b>但它的单词那半边不能扔</b>——「这个词是不是四级词」靠的就是它的
+        <code>tags</code>，整个超纲判定建在上面。</span></span></div>
+      <div class="not"><i>二</i><span><b>考纲短语表从「清单」退回「召回参考」</b>
+        <span>它 39/40 的召回仍然是真的，但 36% 的条目没有任何词典背书
+        （46% 是 <code>manage to do sth.</code> 这种句型框架，其余四本词典全查不到）。
+        <b>清单改由柯林斯出，考纲表留着回答「柯林斯有没有漏掉高频的」。</b>
+        CC BY-SA 4.0 的署名义务随之减轻，但只要还用它就仍然要署名。</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§10</span>
+      <h2>这次量数自己犯的两个错，记在这里</h2>
+    </div>
+    <p class="lede">两个都是当场发现并重来的，<b>但它们都是「差一点就把噪音写成结论」</b>，
+    和坑 §4.3 是同一个形状。</p>
+    <div class="nots">
+      <div class="not"><i>一</i><span><b>真值数少了，得出「召回 −12%」这种荒唐数</b>
+        <span>第一版按原样表层形数「真实出现次数」，而筛法会把
+        <code>focused on</code> 归到 <code>focus on</code>，于是动词类的真值被数少，
+        抓到的比真实的还多。改成<b>用与筛法同一套变体规则算真值</b>之后才得到 35% / 92%。</span></span></div>
+      <div class="not"><i>二</i><span><b>柯林斯覆盖率量错对象，量出 14.3%</b>
+        <span>第一版只在「挂在词条下的习语块」里找，还用了「加粗里出现全部组成词就算」这种松匹配，
+        于是 <code>call for</code> 对上了「没必要；不该」。
+        <b>是那条明显错配让我去看原始数据的</b>，才发现短语动词是独立词条。
+        <br>顺带：习语块那一半<b>不能直接当清单用</b>——柯林斯对
+        <code>on someone's account</code> 这种中间有变量的词组是<b>分段加粗</b>的，
+        拼起来会得到 <code>in a</code>、<code>on the</code>、<code>is not</code> 这种碎片。</span></span></div>
+    </div>
+  </section>
+
+  <footer>
+    <div>English Reader</div>
+    <div>Phase 11 · 词组与用法 · 全走柯林斯 · 词组表＋义项子表 · 用法挂在义项上</div>
+    <div>2026-09-21 讨论中，未定稿</div>
+  </footer>
+
+</div>

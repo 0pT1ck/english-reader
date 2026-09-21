@@ -148,8 +148,20 @@ struct ArticleRenderer {
             let senses = entry.senses.prefix(4)
             for sense in senses {
                 var line = "  \(sense.ordinal). "
-                if let concept = sense.concept_en { line += concept + "  " }
+                // Part of speech in Chinese (P10). The `pos` field carries
+                // Collins's grammatical marker since the inventory changed —
+                // `N-COUNT`, `V-T` — which is precise and unreadable; the
+                // dictionary ships its own Chinese for it, so show that.
+                if let pos = sense.pos_zh, !pos.isEmpty { line += Ink.dim("[\(pos)] ") }
                 line += Self.gloss(sense.gloss_zh)
+                // **Chinese first, English after, and the English clipped.**
+                // Collins writes COBUILD full-sentence definitions averaging
+                // 101 characters against the 51 of the model-written set they
+                // replaced; four of them unclipped is a wall of text in a
+                // terminal. The full definition is one `--json` away.
+                if let concept = sense.concept_en, !concept.isEmpty {
+                    line += "  " + Ink.dim(Self.clip(concept, 88))
+                }
                 if let exam = sense.exam {
                     line += Ink.dim("  〔真题 \(exam.frequency) 次"
                         + (exam.share.map { "，占 \($0)%" } ?? "") + "〕")
@@ -182,6 +194,14 @@ struct ArticleRenderer {
     /// gives it both slots and fills one. Not worth normalising on the server:
     /// the shape reflects real data, where some entries carry several glosses
     /// and some carry one line.
+    /// Cut a definition down to terminal width, on a word boundary.
+    static func clip(_ text: String, _ limit: Int) -> String {
+        guard text.count > limit else { return text }
+        let head = text.prefix(limit)
+        guard let space = head.lastIndex(of: " ") else { return String(head) + "…" }
+        return String(head[..<space]) + "…"
+    }
+
     static func gloss(_ value: Components.Schemas.Sense.gloss_zhPayload?) -> String {
         guard let value else { return "" }
         if let list = value.value1 { return list.joined(separator: "；") }

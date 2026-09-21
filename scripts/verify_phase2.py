@@ -603,6 +603,17 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                     " SELECT item_type, item_key, sense_id, pool FROM study_states"
                     " WHERE item_key = ?", (word, word)).fetchall()]
 
+            # **自己种一条组成词的记录，不靠「今天碰巧有」**（坑 §4.1）。
+            # 这条检查要证明的是「标词组不牵动组成词」，而没有组成词的记录时
+            # 它什么也证明不了——原文只能报一句「这条检查等于没查」，
+            # 而那在学习记录清空之后就是常态（P10 清空过一次）。
+            stamp0 = str(int(time.time()))
+            client.post("/v1/client/events", headers=head, json={"events": [
+                {"idem_key": f"v2-ph-seed-{stamp0}", "type": "word.marked",
+                 "payload": {"article_id": phrase_row["article_id"], "item_type": "word",
+                             "item_key": word, "headword": word,
+                             "sense_id": 0, "kind": "unknown"}}]})
+
             before = word_records()
             stamp2 = str(int(time.time()))
             client.post("/v1/client/events", headers=head, json={"events": [
@@ -621,6 +632,13 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                   if after == before and before
                   else (f"「{word}」名下一条记录都没有，这条检查等于没查"
                         if after == before else f"「{word}」的记录被牵连改动了"))
+
+            # 种下的那条组成词标记用完就撤，前后各清一次的规矩在这里是
+            # 「造完即拆」——留着它会让下一轮的 `before` 不再是干净的起点。
+            client.post("/v1/client/events", headers=head, json={"events": [
+                {"idem_key": f"v2-ph-unseed-{stamp0}", "type": "word.unmarked",
+                 "payload": {"item_type": "word", "item_key": word,
+                             "headword": word, "sense_id": 0}}]})
 
             # And taking it back takes it out of the queue again, which is the
             # same invariant read backwards.

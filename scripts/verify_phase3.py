@@ -209,7 +209,22 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         print("\n5. 句子池")
 
         pool_rows = conn.execute("SELECT COUNT(*) FROM review_sentences").fetchone()[0]
-        check("5.1", "池子里有句子", pool_rows > 0, f"{pool_rows} 条")
+        # **句子池是学习记录的函数，不是内容的函数**——只为标记过的词生成。
+        # 所以「池子里有没有句子」取决于有没有人标过词，而那是会归零的
+        # （P10 就把学习记录整个清空了）。原来这里直接断言 > 0，于是清空之后
+        # 报红，而红的时候什么也没坏——正是坑 §4.1 说的「只在某些日子能过
+        # 的验收脚本等于没有」。
+        # 改成条件断言：**有标记的词才要求有句子**，没有就说清楚跳过的理由。
+        marked = get_connection("events").execute(
+            "SELECT COUNT(DISTINCT item_key) n FROM study_marks").fetchone()["n"]
+        if marked:
+            check("5.1", "标记过的词，池子里有句子", pool_rows > 0,
+                  f"{marked} 个标记过的条目，{pool_rows} 条句子")
+        else:
+            check("5.1", "句子池与标记一致（没有标记，也就没有句子）",
+                  pool_rows == 0,
+                  f"{pool_rows} 条。**没有标记过的词，所以这一项无从验证**——"
+                  "句子只为标记过的词生成")
 
         bad = []
         for row in conn.execute(
@@ -232,11 +247,18 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         sample = conn.execute(
             "SELECT item_key, sense_id FROM review_sentences GROUP BY item_key, sense_id LIMIT 1"
         ).fetchone()
-        q, h = sentences.split_pools(sample["item_key"], sample["sense_id"], finished)
-        overlap = {x["id"] for x in q} & {x["id"] for x in h}
-        check("5.4", "考句池与提示池不重叠，且是算出来的不是存的",
-              not overlap,
-              "读过的文章里的句子是提示，其余是考题——多读一篇就自动搬家，没有要维护的字段")
+        if sample is None:
+            # 同 5.1：句子池是学习记录的函数。没有句子就分不出两个池子，
+            # **而「分不出」和「分错了」是两件事**——原来这里直接下标取 None，
+            # 整个脚本当场崩掉，那比报红更糟：后面十几项一项都没跑。
+            check("5.4", "考句池与提示池的划分（没有句子，无从验证）", True,
+                  "池子是空的——句子只为标记过的词生成，而学习记录已清空")
+        else:
+            q, h = sentences.split_pools(sample["item_key"], sample["sense_id"], finished)
+            overlap = {x["id"] for x in q} & {x["id"] for x in h}
+            check("5.4", "考句池与提示池不重叠，且是算出来的不是存的",
+                  not overlap,
+                  "读过的文章里的句子是提示，其余是考题——多读一篇就自动搬家，没有要维护的字段")
 
         # --- 6. 契约 -------------------------------------------------------- #
         print("\n6. 客户端契约")
@@ -305,15 +327,23 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # 改成守始终成立的那一半:词表要说得清**服务端确实知道的那部分**——
         # 标记、出处、句子池深度，外加**设备报的词池与服务端存档各说什么**。
         # 排期去设备上看，那是它算的。
-        check("6.8", "词表说得清服务端确实知道的那部分，且两边的词池并排可比",
-              over.status_code == 200 and bool(rows6)
-              and all(k in rows6[0] for k in
-                      ("mark_label", "pool_reported", "pool_archive",
-                       "pool_disagrees", "pool_total", "from_title"))
-              and "snapshot" in body6,
-              f"{len(rows6)} 条，每条带标记、出处、句子数，"
-              f"以及设备报的词池与服务端存档两列——对不上就看得见"
-              if rows6 else "取不到")
+        # **分两种情况，因为「没有词」和「词表坏了」是两件事。**
+        # 原来这里要求 `rows6` 非空，于是学习记录一清空就报红——而端点、
+        # 字段、快照全都好好的。坑 §4.1：只在某些日子能过的验收等于没有。
+        if rows6:
+            check("6.8", "词表说得清服务端确实知道的那部分，且两边的词池并排可比",
+                  over.status_code == 200
+                  and all(k in rows6[0] for k in
+                          ("mark_label", "pool_reported", "pool_archive",
+                           "pool_disagrees", "pool_total", "from_title"))
+                  and "snapshot" in body6,
+                  f"{len(rows6)} 条，每条带标记、出处、句子数，"
+                  f"以及设备报的词池与服务端存档两列——对不上就看得见")
+        else:
+            check("6.8", "词表端点可用（现在没有标记过的词，所以是空的）",
+                  over.status_code == 200 and "snapshot" in body6,
+                  "HTTP 200 且带快照字段。**空列表不等于坏**——"
+                  "学习记录清空之后本来就没有词可列")
 
         if rows6:
             one = rows6[0]

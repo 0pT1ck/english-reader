@@ -11,7 +11,7 @@ from backend.admin.templating import render, require_page_auth
 from backend.core import auth
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger, trace
-from backend.modules.senses import repository, screening, validation
+from backend.modules.senses import repository, targets, validation
 from backend.modules.vocabulary import repository as dictionary
 
 log = get_logger("senses")
@@ -22,15 +22,8 @@ pages_router = APIRouter()
 
 @admin_router.get("/senses/stats", summary="义项集统计")
 async def stats() -> dict[str, Any]:
-    return {"senses": repository.stats(), "screening": screening.stats()}
-
-
-@admin_router.post("/senses/screen", summary="跑一遍粗筛")
-async def run_screening() -> dict[str, Any]:
-    if not dictionary.is_imported():
-        raise InvalidRequest("词典尚未导入，请先运行导入脚本")
-    with trace():
-        return screening.run()
+    return {"senses": repository.stats(),
+            "targets": len(targets.target_headwords())}
 
 
 @admin_router.get("/senses/word/{word}", summary="查一个词的义项集")
@@ -106,8 +99,7 @@ async def page(request: Request) -> Response:
         request,
         "senses.html",
         stats=repository.stats(),
-        screening=screening.stats(),
-        labels=screening.CATEGORY_LABELS,
+        targets=len(targets.target_headwords()),
         samples=samples,
         dictionary_ready=dictionary.is_imported(),
     )

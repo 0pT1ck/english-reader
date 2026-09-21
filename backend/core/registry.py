@@ -46,8 +46,9 @@ from dataclasses import dataclass, field
 from types import ModuleType
 from typing import TYPE_CHECKING, Any
 
-from backend.core import events, tasks
+from backend.core import events, runtime_config, tasks
 from backend.core.db import Migration, run_migrations
+from backend.core.logging import MIGRATIONS as LOG_MIGRATIONS
 from backend.core.logging import get_logger
 from backend.core.tasks import Task
 
@@ -55,6 +56,29 @@ if TYPE_CHECKING:  # pragma: no cover
     from fastapi import APIRouter, FastAPI
 
 log = get_logger("core.registry")
+
+
+def run_core_migrations() -> None:
+    """Schema owned by the framework itself, not by any feature module.
+
+    Core is treated as four small modules rather than one, so that a change to,
+    say, device tokens does not share a version number with an unrelated change
+    to the logging tables.
+
+    **This lives here, not in `main`, because scripts need it too.** Importing
+    `backend.main` runs `create_app()` at module scope — which installs every
+    module and starts the scheduler, and 踩过的坑 §4.6 is the story of a script
+    that did exactly that, triggered a real nightly generation and then killed
+    it halfway by exiting. A one-off script wants the tables, not the
+    application. P10 found this the mild way: `import_collins.py` ran with no
+    `logs` table, so every log line it produced went nowhere.
+    """
+    from backend.core import auth
+
+    run_migrations("core.logging", LOG_MIGRATIONS)
+    run_migrations("core.config", runtime_config.MIGRATIONS)
+    run_migrations("core.auth", auth.MIGRATIONS)
+    run_migrations("core.tasks", tasks.MIGRATIONS)
 
 MODULES_PACKAGE = "backend.modules"
 

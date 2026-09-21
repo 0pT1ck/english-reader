@@ -106,6 +106,102 @@ def _stable_sense_keys(conn: sqlite3.Connection) -> None:
     )
 
 
+def _collins_inventory(conn: sqlite3.Connection) -> None:
+    """P10: clear the way for a dictionary-sourced inventory.
+
+    **What changes about identity.** Until now a sense was identified by a hash
+    of its English definition (P9 §8), because the definitions were written by a
+    model and a rerun reworded them. Collins is a fixed book: the hash never
+    changes, so the mechanism does nothing — except guarantee that the day the
+    dictionary is updated, **every annotation in the corpus is silently
+    invalidated by a reworded definition**. That is precisely what P10 is paying
+    to fix once, so it must not be rebuilt on the way out.
+
+    Identity is now the row id, handed out at import and never derived from
+    anything. What the dictionary printed lives in three provenance columns
+    instead, and *those* are what a re-import matches on:
+
+    * ``source_dict``  which dictionary and edition;
+    * ``source_block`` position in document order — **the stable one**;
+    * ``source_ordinal`` the number Collins printed, which is *not* unique
+      within an entry (``take`` restarts numbering per section and has two
+      blocks labelled 1), so it is recorded but never matched on.
+
+    ``ordinal`` keeps its old meaning — 1..N within a word, dense — because the
+    contract sends it to clients and the annotator asks the model to pick one.
+
+    **The old inventory is archived, not dropped.** 13,741 rows at a few
+    megabytes, and the alternative is losing the ability to answer "what did
+    this word used to say" the first time an annotation looks wrong.
+    """
+    conn.execute("CREATE TABLE IF NOT EXISTS senses_pre_collins AS SELECT * FROM senses")
+    archived = conn.execute("SELECT COUNT(*) FROM senses_pre_collins").fetchone()[0]
+
+    # Everything hanging off the old ids goes too: examples cascade from senses,
+    # and the retirement table describes senses that no longer exist in a
+    # numbering scheme that no longer applies.
+    conn.execute("DELETE FROM senses")
+    conn.execute("DELETE FROM senses_retired")
+
+    for column, decl in (
+        ("source_dict", "TEXT"),
+        ("source_block", "INTEGER"),
+        ("source_ordinal", "INTEGER"),
+        ("pos_zh", "TEXT"),        # 可数名词 — show this, never `N-COUNT`
+        ("register", "TEXT"),      # FORMAL / BRIT / INFORMAL — stored, unused
+        ("pattern", "TEXT"),       # ADJ n, ADV after v
+        ("subject", "TEXT"),       # 医学, 法律
+    ):
+        conn.execute(f"ALTER TABLE senses ADD COLUMN {column} {decl}")
+
+    # P1c's traceability columns: they recorded which Wiktionary senses a
+    # generated sense covered, and that table is going away with this phase.
+    for column in ("covers", "source"):
+        try:
+            conn.execute(f"ALTER TABLE senses DROP COLUMN {column}")
+        except sqlite3.OperationalError:  # already gone, or never added
+            pass
+
+    # The provenance triple is what an import matches on. Partial, so the rows
+    # that predate a source (there are none now, but the fallback generator can
+    # still make some) do not collide on NULL.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_senses_provenance"
+        " ON senses (source_dict, headword, source_block)"
+        " WHERE source_dict IS NOT NULL"
+    )
+
+    log.info(
+        "senses.collins.prepared",
+        f"归档了 {archived} 条模型写的义项，senses 清空待导入柯林斯",
+        archived=archived,
+    )
+
+
+def _sync_retired_columns(conn: sqlite3.Connection) -> None:
+    """Give ``senses_retired`` the columns ``senses`` grew in migration 5.
+
+    **Found by retiring something.** That table was created by
+    ``CREATE TABLE … AS SELECT`` in P9, which copies the columns of the day and
+    then never hears about another one. Migration 5 added seven columns to
+    ``senses``; the first retirement after that failed with *"table
+    senses_retired has 16 columns but 21 values were supplied"*.
+
+    The failure was loud, which is the only reason this is a footnote rather
+    than an entry in 踩过的坑 — the retirement path inserts ``SELECT *``, so a
+    column count mismatch cannot pass silently. Had it been column-by-column,
+    the new fields would simply have been dropped on retirement and nobody
+    would have known until someone looked up a retired sense.
+    """
+    have = {row["name"] for row in conn.execute("PRAGMA table_info(senses_retired)")}
+    for row in conn.execute("PRAGMA table_info(senses)"):
+        if row["name"] not in have:
+            conn.execute(
+                f"ALTER TABLE senses_retired ADD COLUMN {row['name']} {row['type'] or 'TEXT'}"
+            )
+    log.info("senses.retired.columns_synced", "senses_retired 的列已与 senses 对齐")
+
+
 MIGRATIONS = [
     Migration(
         version=1,
@@ -125,7 +221,13 @@ MIGRATIONS = [
             headword       TEXT    NOT NULL,
             ordinal        INTEGER NOT NULL,   -- 1 is the main sense
             concept_en     TEXT    NOT NULL,
-            gloss_zh       TEXT    NOT NULL,   -- JSON list, 2-3 entries
+            -- P1b–P1c: a JSON list of 2–3 short glosses, written by a model.
+            -- P10: **one string, as Collins prints it** — 「（银行等的）账户」
+            -- — because the parenthetical is what says *when* the sense
+            -- applies, and splitting it across a list loses that. Readers
+            -- handle both (`senses_of` falls back, the contract declares
+            -- `list[str] | str`), so the change needed no client work.
+            gloss_zh       TEXT    NOT NULL,
             -- Informational only. Part of speech never decides a split: the
             -- noun and the verb `address` (地址 / 写地址) are one concept.
             pos            TEXT,
@@ -236,5 +338,47 @@ MIGRATIONS = [
         name="stable sense keys, a retirement table, and a permanent key map",
         database="content",
         apply=_stable_sense_keys,
+    ),
+    Migration(
+        version=5,
+        name="archive the model-written inventory and make room for Collins",
+        database="content",
+        apply=_collins_inventory,
+    ),
+    Migration(
+        version=6,
+        name="keep senses_retired in step with senses",
+        database="content",
+        apply=_sync_retired_columns,
+    ),
+    Migration(
+        version=7,
+        name="drop the coarse screen, the Wiktionary checklist and the P1b archive",
+        database="content",
+        apply="""
+        -- The coarse screen (P1b). It answered "is this word polysemous enough
+        -- to be worth paying for" by counting commas in a Chinese gloss, and
+        -- P1c measured it against an external inventory: **65% of the 3,640
+        -- words it dismissed as "simple" are polysemous** — `bank`, `come`,
+        -- `do`, `be`, `positive` among them. It has not filtered anything since
+        -- P1c; P10 removes the question entirely, because a dictionary either
+        -- has the word or it does not. `targets.py` keeps the half that was
+        -- always sound: which words are in scope at all.
+        DROP TABLE IF EXISTS sense_screening;
+
+        -- The Wiktionary checklist (P1c), 70,131 rows. It existed to answer
+        -- "does our sense set miss anything" when the senses were written by a
+        -- model with nothing to check against. Collins *is* the checklist now,
+        -- and a better one. **Dropping it also closes a licensing question**:
+        -- CC BY-SA is share-alike, and the main document listed this table as
+        -- "stored, unused, grey" — a repository that is public.
+        DROP TABLE IF EXISTS wiktionary_senses;
+
+        -- The P1b archive, 8,837 rows: an archive of an archive. What it was
+        -- kept for — comparing "model alone" against "model with a checklist" —
+        -- was settled in P1c §11, and the current archive is
+        -- `senses_pre_collins`.
+        DROP TABLE IF EXISTS senses_p1b;
+        """,
     ),
 ]
