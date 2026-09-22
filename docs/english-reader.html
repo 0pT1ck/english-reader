@@ -1301,7 +1301,7 @@
             <b>验收欠到设置那个 Phase 做完、一起推 TestFlight 时补</b>，
             代价与理由见 <a href="./phase-6.html" style="color:var(--accent)">Phase 6 文档</a> §13</td>
           </tr>
-          <tr class="now">
+          <tr>
             <td class="phase"><b>P7 界面 · 复习</b></td>
             <td>复习那几屏搬到手机上：出题、三级提示、双向作答、当天完成判定。
             Core 里全都实现了、也测过了，这个 Phase 是给它们画界面。<br>
@@ -1328,7 +1328,53 @@
             方案见 <a href="./phase-8.html" style="color:var(--accent)">Phase 8 文档</a>，39 条决定</td>
             <td>实施 2026-09-15 完成。机器验过的：<code>swift test</code>、
             iOS 编译、装得上起得来不闪退、P0 32 项、P1b 28 项、P1c 15 项、P3 44 项。<br>
-            <b>人用一遍那 26 项还欠着</b>，三个 Phase 一起在 TestFlight 上还</td>
+            <b>人用一遍那 26 项还欠着</b>，三个 Phase 一起在 TestFlight 上还。
+            <b>2026-09-16 三个 Phase 一次还清，三十项全过</b></td>
+          </tr>
+          <tr>
+            <td class="phase"><b>P9 重构</b></td>
+            <td>用户定的<b>完全重构，包括改铁律</b>，不考虑改动大小与破坏性。那条线是
+            <b>服务端只管生文，客户端拿到文、学习、把进度汇报回去</b>。
+            起因是复习页转圈、刷新几次才回到 13/13——那两个数来自服务端。
+            架构铁律与跨 Phase 不变量照此重写，服务端的学习逻辑连同 Web 阅读页、
+            Web 复习页一起删掉。方案与实施见
+            <a href="./phase-9.html" style="color:var(--accent)">Phase 9 文档</a></td>
+            <td><b>自动 231 项零失败</b>、CI <code>swift test</code> 116 项、两条 workflow 都绿、
+            阿里云重建上线。<b>但 Phase 结束那一刻真机那个症状没修好</b>
+            （「快速切换选项卡就会很卡，还是会触发转圈」），推了三版都还在，
+            <b>所以当时不算完成，也不记例外</b>。<b>同一天搬到 Mac 之后当场查出六层原因并修好</b>，
+            每一层都用 <code>xcrun devicectl</code> 连真机实测过，见
+            <a href="./phase-9.html" style="color:var(--accent)">§17</a>「同一天后续」</td>
+          </tr>
+          <tr>
+            <td class="phase"><b>P10 义项大清洗</b></td>
+            <td>义项集整体换成<b>柯林斯 COBUILD 高阶英汉双解</b>，全语料重标注，旧的全部归档。
+            <b>单词全收、词组全不收</b>（判据穷举过 110 种标记）。
+            <b>动了架构铁律 5</b>——义项 id 全变，破例的三个条件写在
+            <a href="./phase-10.html" style="color:var(--accent)">§7</a>，
+            其中第三条「义项身份重新设计」是破例的前提而不是顺带重构：
+            身份不再从内容推导，而是导入时发的号，靠「词典 + 词 + 块号」对上号，
+            <b>所以下一次换词典是映射工作，不再是全体失效</b>。
+            方案与实施见 <a href="./phase-10.html" style="color:var(--accent)">Phase 10 文档</a></td>
+            <td><b>2026-09-22 验收通过。</b>导入 24,537 条 / 6,918 词、例句 51,648 条、
+            <b>重标注 107,466 个实词 token</b>、<b>真题考频重算 9,366 个义项</b>（换之前 7,107）。
+            自动 19 项 + 八套回归全过、<code>ci_client.py</code> 9 项全过；
+            人工 A0 / M1 / M2 / B3 全做完，<b>怎么跑的与三条边界见
+            <a href="./phase-10.html" style="color:var(--accent)">§17</a></b>。
+            M2 直接跟词典原文对拍；B3 盲判分歧样本新 48 / 都行 33 / 旧 19，
+            <b>但那个实验一次变了两样，且三方独立判断做不到</b>。
+            <b>M1 挖出三个 ercli 缺陷</b>，其中 <code>read</code> 从 P9 起就没跑完过一次</td>
+          </tr>
+          <tr class="now">
+            <td class="phase"><b>P11 词组与用法</b></td>
+            <td><b>方案讨论中，未定稿。</b>P10 只收单词义，词组那一半整个留给了这里。
+            清单＝<b>考纲表 ∩ 柯林斯</b>（1,712 个词组 / 2,793 条义项），
+            <b>词组与用法一起做</b>——用法是某个义项的搭配，挂 <code>senses</code> 子表；
+            三张新表；语境判定折进已有的标注，不新增调用。<b>范围不含界面。</b>
+            已拍板十三条、还差两条，见
+            <a href="./phase-11.html" style="color:var(--accent)">Phase 11 文档</a></td>
+            <td>还没定。<b>方案定稿之前不写任何实现代码</b>（铁律）。
+            <b>原先「实施要等重标注跑完」这个前提已经消失</b>——重标注 2026-09-21 跑完了</td>
           </tr>
         </tbody>
       </table>
