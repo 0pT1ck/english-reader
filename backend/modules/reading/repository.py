@@ -518,6 +518,45 @@ def declined_tokens(limit: int = 200) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
+def unannotated_phrases(article_id: int) -> list[dict[str, Any]]:
+    """Phrase occurrences still waiting to be told which sense they carry.
+
+    The mirror of :func:`unannotated_tokens`, and the three states mean the same
+    things: ``NULL`` not asked, ``0`` asked and **this occurrence is not the
+    phrase** (P11 §7b — ``He ran into the room``), a real id otherwise.
+    """
+    rows = get_connection("content").execute(
+        "SELECT p.*, s.seq AS sentence_seq FROM reading_phrases p"
+        " JOIN reading_sentences s ON s.id = p.sentence_id"
+        " WHERE p.article_id = ? AND p.sense_id IS NULL ORDER BY p.start_seq",
+        (article_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def phrase_senses_of(phrase_id: int) -> list[dict[str, Any]]:
+    """One phrase's senses, in the order Collins printed them."""
+    rows = get_connection("content").execute(
+        "SELECT id, ordinal, gloss_zh, concept_en, pos_zh FROM phrase_senses"
+        " WHERE phrase_id = ? ORDER BY ordinal",
+        (phrase_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def pending_phrase_count(article_id: int) -> int:
+    """Phrase occurrences in this article nobody has decided about yet."""
+    return int(get_connection("content").execute(
+        "SELECT COUNT(*) FROM reading_phrases WHERE article_id = ? AND sense_id IS NULL",
+        (article_id,),
+    ).fetchone()[0])
+
+
+def set_phrase_sense(row_id: int, sense_id: int) -> None:
+    get_connection("content").execute(
+        "UPDATE reading_phrases SET sense_id = ? WHERE id = ?", (sense_id, row_id))
+
+
 def set_token_sense(token_id: int, sense_id: int, ordinal: int | None) -> None:
     conn = get_connection("content")
     conn.execute(

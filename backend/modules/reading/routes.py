@@ -25,11 +25,12 @@ from backend.core import auth, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
+from backend.modules.phrases import occurrences
+from backend.modules.phrases import repository as phrase_repository
 from backend.modules.reading import (
     annotate,
     difficulty,
     ingest,
-    phrases,
     recompute,
     repository,
     service,
@@ -305,18 +306,19 @@ async def admin_recompute() -> dict[str, Any]:
     return recompute.recompute_all()
 
 
-@admin_router.post("/reading/phrases/scan", summary="扫描并判断词组")
+@admin_router.post("/reading/phrases/scan", summary="按清单重扫词组出现位置")
 async def admin_scan_phrases(payload: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Find phrase candidates in every ready article, then queue the judgement.
+    """Rebuild where the listed phrases occur. **No model, no judgement.**
 
-    The finding half is structural and free — it reads tokens that are already
-    stored, so retrofitting the whole corpus never touches the expensive sense
-    annotation. Only the candidates go to a model.
+    P11 replaced both halves of the old job: the list decides what is a phrase,
+    and which sense an occurrence carries is answered by the annotator along
+    with the words (决定 ④). So this is a table lookup over stored tokens —
+    free, exact, and the same answer every time it runs.
     """
     ids = (payload or {}).get("article_ids")
     if not ids:
         ids = [r["id"] for r in repository.list_articles(shelf="all", limit=10000)]
-    return phrases.scan_and_judge([int(i) for i in ids])
+    return occurrences.rebuild([int(i) for i in ids])
 
 
 @admin_router.post("/reading/phrases/settle", summary="给落在词组里的 token 打标记")
@@ -330,22 +332,21 @@ async def admin_settle_phrases() -> dict[str, Any]:
     corpus in one go, and because the recount is what makes the correction
     visible.
     """
-    flagged = phrases.mark_tokens_in_phrases()
+    flagged = occurrences.mark_tokens()
     return {"tokens_flagged": flagged, "exam_frequency": repository.recount_exam_frequency()}
 
 
 @admin_router.get("/reading/phrases", summary="词组识别概览")
 async def admin_phrases(limit: int = Query(40, ge=1, le=500)) -> dict[str, Any]:
     rows = get_connection("content").execute(
-        "SELECT phrase, verdict, COUNT(*) AS n FROM reading_phrases"
-        " WHERE verdict IS NOT NULL GROUP BY phrase, verdict ORDER BY n DESC LIMIT ?",
-        (limit * 4,),
+        "SELECT phrase, COUNT(*) AS n,"
+        " SUM(CASE WHEN sense_id > 0 THEN 1 ELSE 0 END) AS as_phrase,"
+        " SUM(CASE WHEN sense_id = -1 THEN 1 ELSE 0 END) AS not_phrase,"
+        " SUM(CASE WHEN sense_id IS NULL THEN 1 ELSE 0 END) AS pending"
+        " FROM reading_phrases GROUP BY phrase ORDER BY n DESC LIMIT ?",
+        (limit,),
     ).fetchall()
-    return {
-        "stats": phrases.stats(),
-        "confirmed": [dict(r) for r in rows if r["verdict"] == 1][:limit],
-        "rejected": [dict(r) for r in rows if r["verdict"] == 0][:limit],
-    }
+    return {"stats": phrase_repository.stats(), "occurrences": [dict(r) for r in rows]}
 
 
 @admin_router.get("/reading/missing-senses", summary="标注时没有贴合义项的词")

@@ -108,8 +108,11 @@ async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
     而响应里的 `reported_at` 为空正是在说这件事:不是「你没在学任何词」，
     是「服务端还不知道」。
 
-    **只给词，不给词组。** 复习有意跳过词组（`verify_phase3` 2.2），
-    而句子池本来也是按词与义项建的——词组拿不到句子。
+    **词组也在里面了**（P11 决定 ⑮）。在那之前这里只给词，理由写着「复习有意
+    跳过词组」——而真正的理由是**词组拿不到句子**：句子池是按词与义项建的，
+    一个标过的词组进了队列就会占着「共几条」那个分母却永远问不出题，
+    13/13 因此永远到不了。⑫ 给词组造句之后那个理由消失了，规则本身
+    （没有句子池的条目不进队列）仍然成立，只是它现在守在该守的地方。
 
     **它取代了 `/reviews`，而不是补充它。** 那个端点带着队列、方向、权重、进度，
     全是学习状态；它在同一个 Phase 删掉了（§11）。这一个只带内容。
@@ -117,25 +120,29 @@ async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
     learner_id = auth.learner_for_device(device_id)
     status = progress_module.snapshot_status(learner_id)
     rows = get_connection("events").execute(
-        "SELECT item_key, sense_id FROM learner_pool"
-        " WHERE learner_id = ? AND item_type = 'word' AND pool != 'new'"
-        " ORDER BY item_key, sense_id",
+        "SELECT item_type, item_key, sense_id FROM learner_pool"
+        " WHERE learner_id = ? AND pool != 'new'"
+        " ORDER BY item_type, item_key, sense_id",
         (learner_id,),
     ).fetchall()
 
     items: list[dict[str, Any]] = []
     for row in rows:
+        item_type = str(row["item_type"] or "word")
         item_key, sense_id = str(row["item_key"]), int(row["sense_id"])
         items.append({
-            "item_type": "word",
+            "item_type": item_type,
             "item_key": item_key,
             "sense_id": sense_id,
-            "word": session.word_of(item_key),
+            # 词组没有「这个词的全部义项」那一栏：它的义项在词组表里，
+            # 而卡片要的那条由 `sense_of` 的回落给出（P11 决定 ⑭）。
+            "word": session.word_of(item_key) if item_type == "word" else None,
             "sense": session.sense_of(sense_id),
             # **不分池。** `_rows` 是那张表的原样读取，而 `split_pools` 是
             # 它上面那层判断——搬走的正是那一层。
             "sentences": [sentences.as_card(s)
-                          for s in sentences._rows(item_key, sense_id)],
+                          for s in sentences._rows(item_key, sense_id,
+                                                   item_type=item_type)],
         })
 
     log.info(

@@ -154,6 +154,11 @@ struct ConnectionScreen: View {
             case .malformed(let detail):
                 probe = .broken("回来的内容看不懂——可能不是这个服务：\(detail.prefix(80))")
                 app.log?.write(.warn, "connection.probe.malformed", "响应看不懂")
+            case .upgradeRequired:
+                // 连通性探针上看到它，说的是**服务端是好的、这份 App 旧了**，
+                // 所以措辞不能是「连不上」——那会把人送去查网络（P11 决定 ⑲）。
+                probe = .broken("这份 App 太旧了，服务端不收——请更新到最新版本")
+                app.log?.write(.warn, "connection.probe.upgrade", "契约版本太旧")
             }
         } catch {
             probe = .broken(error.localizedDescription)

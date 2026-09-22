@@ -46,7 +46,8 @@ def _merge_study_tables(conn: sqlite3.Connection) -> None:
     year of reading, with review's columns grown onto them, it is not. This is the
     only free moment there will be.
 
-    ``sense_id`` stays, and is always 0 for a phrase. That is a column only some
+    ``sense_id`` stays. **It was always 0 for a phrase until P11 决定 ③**, which
+    gave phrases senses of their own; it is now a real id for both. That is a column only some
     types use, which is an ordinary shape; splitting further to avoid it would
     be the worse trade.
 
@@ -139,6 +140,28 @@ def _merge_study_tables(conn: sqlite3.Connection) -> None:
             f"学习记录迁移前后行数对不上：迁移前 {before}，迁移后 {after}。"
             "已回滚，迁移前的自动备份在 data/backups/ 下。"
         )
+
+def _relink_phrase_occurrences(conn: sqlite3.Connection) -> None:
+    """Point occurrences at the phrase list, and drop the old verdict columns."""
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(reading_phrases)")}
+    if "phrase_id" not in columns:
+        conn.execute("ALTER TABLE reading_phrases ADD COLUMN phrase_id INTEGER"
+                     " REFERENCES phrase_list(id)")
+    if "sense_id" not in columns:
+        # NULL 还没问过 / 0 问过了，这一处不是词组（§7b 的 `ran into the room`）
+        # / >0 这一处用的是这条义项。三种状态缺一不可。
+        conn.execute("ALTER TABLE reading_phrases ADD COLUMN sense_id INTEGER")
+    # 索引先拆，否则删列被它挡住。
+    for index in ("idx_phrases_article", "idx_phrases_pending"):
+        conn.execute(f"DROP INDEX IF EXISTS {index}")
+    for column in ("verdict", "judged_at"):
+        if column in columns:
+            conn.execute(f"ALTER TABLE reading_phrases DROP COLUMN {column}")  # noqa: S608
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_phrases_article"
+                 " ON reading_phrases (article_id)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_phrases_sense"
+                 " ON reading_phrases (article_id, sense_id)")
+
 
 MIGRATIONS = [
     Migration(
@@ -450,5 +473,20 @@ MIGRATIONS = [
         ALTER TABLE reading_articles ADD COLUMN topic      TEXT;
         ALTER TABLE reading_articles ADD COLUMN summary_zh TEXT;
         """,
+    ),
+    Migration(
+        version=7,
+        name="occurrences point at the phrase list, and carry a sense",
+        database="content",
+        # P11。这张表以前记的是「结构筛提了一个候选，模型判它算不算词组」，
+        # 两件事现在都不做了：**清单说了它是不是词组**（考纲表 ∩ 柯林斯），
+        # 而「这一处用的是哪个意思」跟单词一样由标注回答（决定 ④）。
+        #
+        # 写成函数而不是一段 SQL，有两个理由，都是撞出来的：
+        # ① `DROP COLUMN` 会被**指着那一列的索引**挡下来，而报错信息
+        #    （no such column: verdict）听起来像是列不存在，正好反过来；
+        # ② 第一次跑到一半就是这么失败的，加列成功、删列失败、迁移没记上，
+        #    重跑就撞 duplicate column——**所以它必须自己看一眼现状**。
+        apply=lambda conn: _relink_phrase_occurrences(conn),
     ),
 ]

@@ -76,12 +76,19 @@ public struct PhraseDisplay: Equatable, Sendable {
     /// selecting and marking happen to the whole of it, on every client.
     public let startSeq: Int
     public let endSeq: Int
+    /// **这一处用的是哪条义项**（P11 决定 ③）。词组从「一个整体一行中文」
+    /// 变成了「一个整体带几条义项」，而标记跟着义项走，跟单词一模一样。
+    public let senseId: Int
+    /// 这一处那条义项上的标记。**不是「这个词组被标过没有」**——
+    /// 标过 `think of` 的「想起」不等于 `think of` 的「考虑」也标过。
     public let mark: MarkKind?
 
-    public init(phrase: String, startSeq: Int, endSeq: Int, mark: MarkKind?) {
+    public init(phrase: String, startSeq: Int, endSeq: Int,
+                senseId: Int = 0, mark: MarkKind?) {
         self.phrase = phrase
         self.startSeq = startSeq
         self.endSeq = endSeq
+        self.senseId = senseId
         self.mark = mark
     }
 
@@ -120,12 +127,17 @@ public struct ArticleDisplay: Sendable {
         let glossary = article.glossary?.additionalProperties ?? [:]
         let phraseList = article.phrases ?? []
 
-        self.phrases = phraseList.map {
-            PhraseDisplay(
-                phrase: $0.phrase,
-                startSeq: $0.start_seq,
-                endSeq: $0.end_seq,
-                mark: $0.mark.flatMap(MarkKind.init(rawValue:))
+        self.phrases = phraseList.map { phrase in
+            // 服务端只下发「这一处确实是词组」的那些（`sense_id > 0`），
+            // 所以这里不用再判一次；`0` 只会在老缓存里出现。
+            let senseId = phrase.sense_id ?? 0
+            return PhraseDisplay(
+                phrase: phrase.phrase,
+                startSeq: phrase.start_seq,
+                endSeq: phrase.end_seq,
+                senseId: senseId,
+                mark: phrase.marks?.additionalProperties[String(senseId)]
+                    .flatMap(MarkKind.init(rawValue:))
             )
         }
         let phrases = self.phrases

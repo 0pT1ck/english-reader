@@ -54,12 +54,18 @@ extension OutboxEntry {
                               "article_id": .int(articleId)])
     }
 
-    /// Mark a word's sense, or a phrase.
+    /// Mark a word's sense, or a phrase's sense.
     ///
-    /// A phrase is an item in its own right and carries sense 0: not knowing
-    /// `account for` says nothing about whether `account` is known, and letting
-    /// one mark stand for both would drop a word the reader understands
-    /// perfectly well into the review queue.
+    /// A phrase is an item in its own right: not knowing `account for` says
+    /// nothing about whether `account` is known, and letting one mark stand for
+    /// both would drop a word the reader understands perfectly well into the
+    /// review queue.
+    ///
+    /// **It carries a sense id like a word does** (P11 决定 ③). Until then a
+    /// phrase was one line of Chinese and marked it with sense 0, which meant
+    /// marking `think of` in 「想起」 also volunteered 「有…的看法」 for review
+    /// — the system choosing for the learner, while the 跨 Phase 不变量 says the
+    /// mark is the learner's own signal about one meaning.
     public static func marked(_ key: String, senseId: Int = 0, kind: MarkKind,
                               itemType: String = "word",
                               articleId: Int? = nil, sentenceId: Int? = nil,

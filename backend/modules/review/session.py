@@ -126,6 +126,15 @@ def sense_of(sense_id: int) -> dict[str, Any] | None:
 
     row = senses_repo.sense_by_id(sense_id)
     if row is None:
+        # **P11 决定 ⑭ 的另一半。** 词组义项和单词义项共用一个号段，所以一个
+        # 查不到的号可能是词组的。没有这一层回落，词组复习卡的释义栏就是空的；
+        # 有了它而**没有**共用号段，才是真正危险的那种——那时候查出来的会是
+        # 另一个词的意思，不报错，只是中文错了。
+        from backend.modules.phrases import repository as phrase_repo
+
+        phrase = phrase_repo.sense_by_id(sense_id)
+        if phrase is not None:
+            return phrase
         return None
     import json
     item = dict(row)

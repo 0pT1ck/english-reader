@@ -587,6 +587,14 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Capabilities/phrases`.
             public var phrases: Swift.Bool
+            /// 词组有没有义项集（P11）。为假时词组只有一个整体，空的 senses 意思是「服务端还没导」而不是「这个词组只有一个意思」
+            ///
+            /// - Remark: Generated from `#/components/schemas/Capabilities/phrase_senses`.
+            public var phrase_senses: Swift.Bool?
+            /// 义项的搭配（用法）导进来没有。**P11 只存只发，复习里一处不用**——怎么用是界面 Phase 的事，那时这一位已经是真的了，不用再等一轮服务端发版
+            ///
+            /// - Remark: Generated from `#/components/schemas/Capabilities/collocations`.
+            public var collocations: Swift.Bool?
             /// Creates a new `Capabilities`.
             ///
             /// - Parameters:
@@ -595,18 +603,24 @@ extension Components {
             ///   - proper_noun_notes: 专有名词的一句话说明
             ///   - exam_frequency: 真题考频。为假时 exam 整块缺席而不是为零——零会被读成「真题里从没出现过」，那是另一回事
             ///   - phrases: 词组识别跑过没有。为假时，空的 phrases 列表意思是「还没看过」而不是「这篇没有词组」
+            ///   - phrase_senses: 词组有没有义项集（P11）。为假时词组只有一个整体，空的 senses 意思是「服务端还没导」而不是「这个词组只有一个意思」
+            ///   - collocations: 义项的搭配（用法）导进来没有。**P11 只存只发，复习里一处不用**——怎么用是界面 Phase 的事，那时这一位已经是真的了，不用再等一轮服务端发版
             public init(
                 level_estimate: Swift.Bool,
                 memory_state: Swift.Bool,
                 proper_noun_notes: Swift.Bool,
                 exam_frequency: Swift.Bool,
-                phrases: Swift.Bool
+                phrases: Swift.Bool,
+                phrase_senses: Swift.Bool? = nil,
+                collocations: Swift.Bool? = nil
             ) {
                 self.level_estimate = level_estimate
                 self.memory_state = memory_state
                 self.proper_noun_notes = proper_noun_notes
                 self.exam_frequency = exam_frequency
                 self.phrases = phrases
+                self.phrase_senses = phrase_senses
+                self.collocations = collocations
             }
             public enum CodingKeys: String, CodingKey {
                 case level_estimate
@@ -614,6 +628,8 @@ extension Components {
                 case proper_noun_notes
                 case exam_frequency
                 case phrases
+                case phrase_senses
+                case collocations
             }
         }
         /// One reported interaction.
@@ -1562,10 +1578,22 @@ extension Components {
         /// 不变量 fixes one half of that: selection and marking happen to the phrase as
         /// a whole, on every client.
         ///
+        /// **P11 gave it senses** (决定 ③). Before that a phrase was one line of
+        /// Chinese, and marking `think of` meant "one of these five meanings, we will
+        /// not ask which" — which is the system deciding for the reader, and 跨 Phase
+        /// 不变量 says the mark is the reader's own signal. `translation` and
+        /// `definition` are gone: they were ECDICT's flat gloss, which is where
+        /// `contribute to → 捐献` came from — wrong Chinese covering up the right
+        /// Chinese that was already in the library.
+        ///
         /// - Remark: Generated from `#/components/schemas/Phrase`.
         public struct Phrase: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Phrase/phrase`.
             public var phrase: Swift.String
+            /// 词组表的号。客户端拿它把这一处和 senses 对上
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/phrase_id`.
+            public var phrase_id: Swift.Int
             /// 原文里的样子，含中间的空格
             ///
             /// - Remark: Generated from `#/components/schemas/Phrase/surface`.
@@ -1574,55 +1602,171 @@ extension Components {
             public var start_seq: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Phrase/end_seq`.
             public var end_seq: Swift.Int
-            /// - Remark: Generated from `#/components/schemas/Phrase/translation`.
-            public var translation: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/Phrase/definition`.
-            public var definition: Swift.String?
-            /// unknown 不认识 / fuzzy 模糊，没标是 null
+            /// 这个词组的全部义项，点开照旧都列出来
             ///
-            /// - Remark: Generated from `#/components/schemas/Phrase/mark`.
-            public var mark: Swift.String?
-            /// - Remark: Generated from `#/components/schemas/Phrase/state`.
-            public var state: Components.Schemas.ItemState?
+            /// - Remark: Generated from `#/components/schemas/Phrase/senses`.
+            public var senses: [Components.Schemas.PhraseSense]?
+            /// **这一处用的是哪一条**，标注器判的。三种值：`null` 还没标注过；**`-1` 意思是「这一处不是词组」**——`He ran into the room` 里 `run` 和 `into` 各是各的，客户端不整体渲染，两个词各显示自己的义项（P11 §7b）；正数才是义项 id。**服务端只下发正数那些**，另外两种根本不出现在 phrases 列表里，所以客户端不用自己判——写在这里是因为断线重放老数据时它可能见到
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/sense_id`.
+            public var sense_id: Swift.Int?
+            /// 这个词组上的全部标记，按义项 id，跟单词那边同一个形状
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/marks`.
+            public struct marksPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Swift.String]
+                /// Creates a new `marksPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Swift.String] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// 这个词组上的全部标记，按义项 id，跟单词那边同一个形状
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/marks`.
+            public var marks: Components.Schemas.Phrase.marksPayload?
+            /// 这个词组各义项的词池位置，按义项 id
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/states`.
+            public struct statesPayload: Codable, Hashable, Sendable {
+                /// A container of undocumented properties.
+                public var additionalProperties: [String: Components.Schemas.ItemState]
+                /// Creates a new `statesPayload`.
+                ///
+                /// - Parameters:
+                ///   - additionalProperties: A container of undocumented properties.
+                public init(additionalProperties: [String: Components.Schemas.ItemState] = .init()) {
+                    self.additionalProperties = additionalProperties
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeAdditionalProperties(additionalProperties)
+                }
+            }
+            /// 这个词组各义项的词池位置，按义项 id
+            ///
+            /// - Remark: Generated from `#/components/schemas/Phrase/states`.
+            public var states: Components.Schemas.Phrase.statesPayload?
             /// Creates a new `Phrase`.
             ///
             /// - Parameters:
             ///   - phrase:
+            ///   - phrase_id: 词组表的号。客户端拿它把这一处和 senses 对上
             ///   - surface: 原文里的样子，含中间的空格
             ///   - start_seq:
             ///   - end_seq:
-            ///   - translation:
-            ///   - definition:
-            ///   - mark: unknown 不认识 / fuzzy 模糊，没标是 null
-            ///   - state:
+            ///   - senses: 这个词组的全部义项，点开照旧都列出来
+            ///   - sense_id: **这一处用的是哪一条**，标注器判的。三种值：`null` 还没标注过；**`-1` 意思是「这一处不是词组」**——`He ran into the room` 里 `run` 和 `into` 各是各的，客户端不整体渲染，两个词各显示自己的义项（P11 §7b）；正数才是义项 id。**服务端只下发正数那些**，另外两种根本不出现在 phrases 列表里，所以客户端不用自己判——写在这里是因为断线重放老数据时它可能见到
+            ///   - marks: 这个词组上的全部标记，按义项 id，跟单词那边同一个形状
+            ///   - states: 这个词组各义项的词池位置，按义项 id
             public init(
                 phrase: Swift.String,
+                phrase_id: Swift.Int,
                 surface: Swift.String,
                 start_seq: Swift.Int,
                 end_seq: Swift.Int,
-                translation: Swift.String? = nil,
-                definition: Swift.String? = nil,
-                mark: Swift.String? = nil,
-                state: Components.Schemas.ItemState? = nil
+                senses: [Components.Schemas.PhraseSense]? = nil,
+                sense_id: Swift.Int? = nil,
+                marks: Components.Schemas.Phrase.marksPayload? = nil,
+                states: Components.Schemas.Phrase.statesPayload? = nil
             ) {
                 self.phrase = phrase
+                self.phrase_id = phrase_id
                 self.surface = surface
                 self.start_seq = start_seq
                 self.end_seq = end_seq
-                self.translation = translation
-                self.definition = definition
-                self.mark = mark
-                self.state = state
+                self.senses = senses
+                self.sense_id = sense_id
+                self.marks = marks
+                self.states = states
             }
             public enum CodingKeys: String, CodingKey {
                 case phrase
+                case phrase_id
                 case surface
                 case start_seq
                 case end_seq
-                case translation
-                case definition
-                case mark
-                case state
+                case senses
+                case sense_id
+                case marks
+                case states
+            }
+        }
+        /// One meaning of a phrase, as Collins prints it.
+        ///
+        /// **The id is permanent** (架构铁律 5): a mark on `account for` 的「占比例」
+        /// keys on it, and it lives on the device. It is drawn from the same number
+        /// space as word sense ids, so a client that looks a sense up by bare id can
+        /// never be handed the wrong meaning — see `phrases/ids.py`.
+        ///
+        /// - Remark: Generated from `#/components/schemas/PhraseSense`.
+        public struct PhraseSense: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/id`.
+            public var id: Swift.Int
+            /// 柯林斯印的顺序
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/ordinal`.
+            public var ordinal: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/gloss_zh`.
+            public var gloss_zh: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/concept_en`.
+            public var concept_en: Swift.String?
+            /// 词性的中文，如 短语动词
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/pos_zh`.
+            public var pos_zh: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/register_label`.
+            public var register_label: Swift.String?
+            /// 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
+            ///
+            /// - Remark: Generated from `#/components/schemas/PhraseSense/exam`.
+            public var exam: Components.Schemas.SenseExam?
+            /// Creates a new `PhraseSense`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - ordinal: 柯林斯印的顺序
+            ///   - gloss_zh:
+            ///   - concept_en:
+            ///   - pos_zh: 词性的中文，如 短语动词
+            ///   - register_label:
+            ///   - exam: 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
+            public init(
+                id: Swift.Int,
+                ordinal: Swift.Int,
+                gloss_zh: Swift.String,
+                concept_en: Swift.String? = nil,
+                pos_zh: Swift.String? = nil,
+                register_label: Swift.String? = nil,
+                exam: Components.Schemas.SenseExam? = nil
+            ) {
+                self.id = id
+                self.ordinal = ordinal
+                self.gloss_zh = gloss_zh
+                self.concept_en = concept_en
+                self.pos_zh = pos_zh
+                self.register_label = register_label
+                self.exam = exam
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case ordinal
+                case gloss_zh
+                case concept_en
+                case pos_zh
+                case register_label
+                case exam
             }
         }
         /// - Remark: Generated from `#/components/schemas/PoolEntryIn`.
@@ -2169,6 +2313,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/gloss_zh`.
             public var gloss_zh: Components.Schemas.Sense.gloss_zhPayload?
+            /// 这条义项的搭配，柯林斯加粗的那些（`contribute` 的「促成」带着 `contribute to`）。**挂在义项上不是挂在词上**——`contribute` 四条义项里三条都加粗 `contribute to`，意思分别是做贡献／促成／撰稿，挂在词那一层这个对应关系就没了。**原样，不还原屈折形**：`is absorbed into` 的被动和 `the allies` 的名词化都是信息。空列表分不出「这条义项没有搭配」和「服务端没导」，看 capabilities.collocations
+            ///
+            /// - Remark: Generated from `#/components/schemas/Sense/collocations`.
+            public var collocations: [Swift.String]?
             /// 语域标签（FORMAL 正式 / INFORMAL 非正式 / BRIT 英 / OLD-FASHIONED 过时）。P10 从柯林斯带进来，**这个 Phase 只存不用**，留位置。它将来至少有两个用处：挑复习目标时避开非正式义项、生成文章时避开英式拼写——而在这之前，「这个义项算不算通用书面英语」只能问模型，跨 Phase 不变量里那条「不要问模型哪些义项值得学」正是为此写的。**不叫 `register`**——那个名字会遮住 pydantic `BaseModel` 自己的属性，pydantic 只发一条警告就继续，是会静默出问题的那种
             ///
             /// - Remark: Generated from `#/components/schemas/Sense/register_label`.
@@ -2210,6 +2358,7 @@ extension Components {
             ///   - pos_zh: 词性的中文说法（可数名词 / 及物动词）。P10 加：义项换成柯林斯之后 `pos` 里装的是它的语法标记（`N-COUNT`、`V-T`），信息量比 `n./vt.` 大得多，**但那串英文缩写摆在四六级考生的屏幕上是噪音**，所以中文单独一个字段，客户端显示这个
             ///   - concept_en: 英文定义。P10 起是柯林斯 COBUILD 的整句式定义（`If you have an account with a bank, you have an arrangement to…`），它讲的是**这个词怎么用**，不只是它等于什么——而且用受限词汇写成，所以查词本身仍然是阅读输入，不是切换到中文。**原先这里写的是「用已知词写的英文概念定义」**，那描述的是模型写的上一套，平均 51 字符；柯林斯的平均 101 字符，客户端排版要按这个长度算
             ///   - gloss_zh: 中文释义
+            ///   - collocations: 这条义项的搭配，柯林斯加粗的那些（`contribute` 的「促成」带着 `contribute to`）。**挂在义项上不是挂在词上**——`contribute` 四条义项里三条都加粗 `contribute to`，意思分别是做贡献／促成／撰稿，挂在词那一层这个对应关系就没了。**原样，不还原屈折形**：`is absorbed into` 的被动和 `the allies` 的名词化都是信息。空列表分不出「这条义项没有搭配」和「服务端没导」，看 capabilities.collocations
             ///   - register_label: 语域标签（FORMAL 正式 / INFORMAL 非正式 / BRIT 英 / OLD-FASHIONED 过时）。P10 从柯林斯带进来，**这个 Phase 只存不用**，留位置。它将来至少有两个用处：挑复习目标时避开非正式义项、生成文章时避开英式拼写——而在这之前，「这个义项算不算通用书面英语」只能问模型，跨 Phase 不变量里那条「不要问模型哪些义项值得学」正是为此写的。**不叫 `register`**——那个名字会遮住 pydantic `BaseModel` 自己的属性，pydantic 只发一条警告就继续，是会静默出问题的那种
             ///   - exam: 真题考频。整块缺席而不是为零，看 capabilities.exam_frequency
             ///   - memory: 这个义项的记忆状态与到期时间。复习模块的位置，**整块为 null**——跨 Phase 不变量只允许留形状显而易见的位置，而记忆状态的形状不显而易见，所以留一个可整体为 null 的对象，而不是猜几个字段出来。由 capabilities.memory_state 说明它是「没数据」还是「没实现」
@@ -2220,6 +2369,7 @@ extension Components {
                 pos_zh: Swift.String? = nil,
                 concept_en: Swift.String? = nil,
                 gloss_zh: Components.Schemas.Sense.gloss_zhPayload? = nil,
+                collocations: [Swift.String]? = nil,
                 register_label: Swift.String? = nil,
                 exam: Components.Schemas.SenseExam? = nil,
                 memory: Components.Schemas.Sense.memoryPayload? = nil
@@ -2230,6 +2380,7 @@ extension Components {
                 self.pos_zh = pos_zh
                 self.concept_en = concept_en
                 self.gloss_zh = gloss_zh
+                self.collocations = collocations
                 self.register_label = register_label
                 self.exam = exam
                 self.memory = memory
@@ -2241,6 +2392,7 @@ extension Components {
                 case pos_zh
                 case concept_en
                 case gloss_zh
+                case collocations
                 case register_label
                 case exam
                 case memory

@@ -229,6 +229,18 @@ register(
         secret=True,  # the path component is the push credential
     ),
     ConfigSpec(
+        key="min_contract_version",
+        default=0,
+        value_type="int",
+        title="客户端契约版本下限",
+        description="低于这个版本的客户端一律拒绝（HTTP 426），只拦 /v1/client/ 那一半。"
+        "0 ＝ 不拦。**发版顺序是先发客户端、再把这个数调上去**——反过来就是把自己"
+        "锁在外面，而唯一能改这个设置的开发者选项也在手机上。"
+        "客户端当前发的版本号见 ERCore/Transport.swift 的 ContractVersion.current。",
+        group="api",
+        order=10,
+    ),
+    ConfigSpec(
         key="alert_dedupe_minutes",
         default=30,
         value_type="int",

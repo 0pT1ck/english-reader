@@ -241,7 +241,11 @@ public struct Projection: Sendable, Equatable {
                 revealed: Self.int(event.payload["revealed"]) ?? 0,
                 easy: Self.bool(event.payload["easy"]) ?? false
             )
-            round = round.applying(answer, weightDecay: weightDecay)
+            // 词组只问一个方向（P11 决定 ⑤b）。判据是条目类型，不是内容——
+            // 一个从服务端来的词组卡和一个本地重放出来的必须走同一条路，
+            // 否则同一条事件日志在两台设备上会重放出不同的状态。
+            round = round.applying(answer, weightDecay: weightDecay,
+                                   singleDirection: key.itemType == "phrase")
             rounds[key] = Round(day: day, bucket: bucket, capped: capped, state: round)
 
             guard round.done else { break }
@@ -447,17 +451,16 @@ extension Projection {
     ///   - now: 判到期用的时刻。传进来而不是读时钟，这样排期能被测。
     public func todayQueue(day: String, now: Date) -> [QueueEntry] {
         var entries: [QueueEntry] = []
-        // **只取词，不取词组。** 镜像服务端 `session.collect` 那句
-        // `study_states WHERE item_type = 'word'`——复习有意跳过词组
-        // （`verify_phase3` 2.2 守的就是「它是被有意跳过的，不是碰巧没查到」），
-        // 而 P6 定的界面初版也不认词组。
+        // **词组也在里面了**（P11 决定 ⑮）。这里原先有一句
+        // `key.itemType == "word"`，注释写的理由是「复习有意跳过词组」——
+        // 而真正的理由是**词组拿不到句子**：句子池按词与义项建，一个标过的
+        // 词组进了队列就会占着「共」那个数却永远问不出来，13/13 因此到不了。
         //
-        // **少了这一句，标过的词组会被拉进复习队列**，而那一屏没有能问它的题:
-        // 句子池是按词与义项建的，词组拿不到句子，于是它会占着「共」那个数
-        // 却永远问不出来——13/13 因此永远到不了。2026-09-18 对照
-        // `verify_phase3` 2.2 时发现的，那时这一句还没有。
-        for (key, item) in items
-        where item.pool == .reviewing && key.itemType == "word" {
+        // ⑫ 给词组造句之后那个理由消失了，**而规则本身仍然成立**:
+        // 没有句子池的条目不进当天的名单。它守在 `ReviewDay.assemble` 那一句
+        // `guard let item = content[entry.key]` 上，按内容判，不按类型判——
+        // 一个还没造完句的**单词**同样该等着，而按类型判的版本放它进来。
+        for (key, item) in items where item.pool == .reviewing {
             // **今天已经问过的，桶和封顶按那一轮开始时定的来。**
             // 它答完之后会有一个未来的到期时间，而那不该让它从今天的名单上消失——
             // 服务端那边它是一行带着 `done_at` 的队列行，照样在今天的名单里。

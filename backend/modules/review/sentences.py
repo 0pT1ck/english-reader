@@ -56,13 +56,22 @@ MIN_WORDS, MAX_WORDS = 8, 30
 # Harvest — free sentences the corpus already has
 # --------------------------------------------------------------------------- #
 
-def harvest(item_key: str, sense_id: int, *, limit: int = 20) -> int:
+def harvest(item_key: str, sense_id: int, *, limit: int = 20,
+            item_type: str = "word") -> int:
     """Copy every corpus occurrence of this sense into the pool.
 
     Cheap and exact: the sense annotation already says which occurrences carry
     this meaning, so nothing has to be inferred. Tokens flagged ``in_phrase``
     are skipped — their sense annotation describes a word that was never there.
+
+    **For a phrase the flag is read the other way round** (P11): those very
+    tokens are where the phrase is, so the phrase path harvests the occurrence
+    table instead. The comment above is exactly the reason it cannot share the
+    word query — one says "not here", the other says "here".
     """
+    if item_type == "phrase":
+        return _harvest_phrase(item_key, sense_id, limit=limit)
+
     conn = get_connection("content")
     rows = conn.execute(
         """
@@ -104,8 +113,26 @@ def locate(text: str, item_key: str) -> tuple[int, int, str] | None:
 
     Returns ``None`` when the word is not actually there — which is the single
     most common way a generated sentence fails.
+
+    **A phrase is located as a run of tokens**, and the whole run is what gets
+    blanked: 跨 Phase 不变量 says a phrase is selected and marked as one thing,
+    and a card that blanked only ``account`` of ``account for`` would be asking
+    a different question from the one the learner marked.
     """
-    for sentence in analyzer.analyze(text):
+    parsed = analyzer.analyze(text)
+    wanted = item_key.lower().split()
+    if len(wanted) > 1:
+        for sentence in parsed:
+            tokens = [t for t in sentence.tokens if t.is_word]
+            for start in range(len(tokens) - len(wanted) + 1):
+                span = tokens[start:start + len(wanted)]
+                surfaces = [t.text.lower() for t in span]
+                lemmas = [(t.headword or t.text).lower() for t in span]
+                if wanted in (surfaces, lemmas):
+                    return (span[0].char_start, span[-1].char_end,
+                            text[span[0].char_start:span[-1].char_end])
+        return None
+    for sentence in parsed:
         for token in sentence.tokens:
             if (token.headword or "").lower() == item_key.lower():
                 return token.char_start, token.char_end, token.text
@@ -152,20 +179,29 @@ def validate(text: str, item_key: str, concept: str = "") -> tuple[bool, str]:
 SYSTEM = "你在为中国的英语学习者制作例句。只输出句子，一行一句。"
 
 
-def prompt_for(word: str, pos: str, concept: str, gloss: list[str], count: int) -> str:
+def prompt_for(word: str, pos: str, concept: str, gloss: list[str], count: int,
+               *, item_type: str = "word") -> str:
     """The prompt measured at 96% machine-valid on 2026-09-09.
 
     Kept close to what was measured. Note what it does *not* do: it never asks
     the model to check itself, and it asks for more sentences than are needed
     rather than for "good" ones — this project has three times shown that models
     are deaf to quantity-and-quality instructions but fine with plain volume.
+
+    **A phrase changes one word of it** (P11 决定 ⑫): the label. Everything the
+    prompt actually constrains — length, vocabulary, one scene per sentence, no
+    Chinese, no explaining the item — applies unchanged, and rewriting a
+    measured prompt to say the same things differently would throw away the
+    measurement.
     """
+    label = "词组" if item_type == "phrase" else "词"
     return (
-        f"词：{word}（{pos or '不限'}）\n"
+        f"{label}：{word}（{pos or '不限'}）\n"
         f"这个义项的英文定义：{concept}\n"
         f"中文对应：{' / '.join(gloss) if gloss else '（无）'}\n\n"
-        f"请写 {count} 个英文句子，每一句都用 {word} 的这个义项（不是它的其他意思）。\n\n"
-        "要求：\n"
+        f"请写 {count} 个英文句子，每一句都用 {word} 的这个义项（不是它的其他意思）。\n"
+        + (f"{word} 必须整体出现，中间不要插入别的词。\n\n" if item_type == "phrase" else "\n")
+        + "要求：\n"
         f"- 每句 {MIN_WORDS} 到 {MAX_WORDS} 个词\n"
         f"- 除了 {word} 本身，句子里其他所有词都必须是常见词——中考、高考、大学英语四级或六级"
         "词表范围之内。不要用专业术语、生僻词，不要用少见的人名地名\n"
@@ -190,47 +226,58 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     target = int(runtime_config.get("review_pool_target"))
     wanted = params.get("senses")
     if wanted:
-        pairs = [(str(w["item_key"]), int(w["sense_id"])) for w in wanted]
+        pairs = [(str(w.get("item_type") or "word"), str(w["item_key"]),
+                  int(w["sense_id"])) for w in wanted]
     else:
         # **照上报的词池快照挑，不照服务端那份存档**（P9 §7）。
         #
         # 造句子是工厂的活，而「哪些词在学」是学习记录——服务端不推它，用设备
         # 报上来的那个值。存档那一份（`study_states.pool`）现在只由标记事件维护，
         # 拿它来排生成会给已经毕业的词继续造句，而给真正在学的词漏掉。
+        # **词组也在里面**（P11 决定 ⑤c／⑫）：标了才造，跟单词同一条规矩。
         rows = get_connection("events").execute(
             """
-            SELECT p.item_key, p.sense_id FROM learner_pool p
-             WHERE p.learner_id = ? AND p.item_type = 'word' AND p.pool = 'reviewing'
+            SELECT p.item_type, p.item_key, p.sense_id FROM learner_pool p
+             WHERE p.learner_id = ? AND p.pool = 'reviewing'
                AND p.sense_id > 0
                AND (SELECT COUNT(*) FROM review_sentences r
-                     WHERE r.item_key = p.item_key AND r.sense_id = p.sense_id) < ?
+                     WHERE r.item_type = p.item_type AND r.item_key = p.item_key
+                       AND r.sense_id = p.sense_id) < ?
              LIMIT ?
             """,
             (int(params.get("learner_id", 1)), target, int(params.get("limit", 200))),
         ).fetchall()
-        pairs = [(r["item_key"], int(r["sense_id"])) for r in rows]
+        pairs = [(str(r["item_type"] or "word"), r["item_key"], int(r["sense_id"]))
+                 for r in rows]
 
     units = []
-    for item_key, sense_id in pairs:
-        harvest(item_key, sense_id)          # free sentences first, then ask for the rest
+    for item_type, item_key, sense_id in pairs:
+        # free sentences first, then ask for the rest
+        harvest(item_key, sense_id, item_type=item_type)
         have = get_connection("content").execute(
-            "SELECT COUNT(*) FROM review_sentences WHERE item_key=? AND sense_id=?"
-            " AND source='generated'",
-            (item_key, sense_id),
+            "SELECT COUNT(*) FROM review_sentences WHERE item_type=? AND item_key=?"
+            " AND sense_id=? AND source='generated'",
+            (item_type, item_key, sense_id),
         ).fetchone()[0]
         if have >= target:
             continue
         units.append((f"{item_key}#{sense_id}",
-                      {"item_key": item_key, "sense_id": sense_id}))
+                      {"item_type": item_type, "item_key": item_key,
+                       "sense_id": sense_id}))
     return units
 
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
     item_key, sense_id = payload["item_key"], int(payload["sense_id"])
-    # `sense_by_id` 2026-09-17 真的做出来了（P9 §8），所以那个 `hasattr` 的
-    # 预留可以撤了。它**退休的义项也找得到**——造例句这一路正是会遇到旧义项 id
-    # 的地方:词标记在两个月前，而义项集后来重建过。
-    sense = senses.sense_by_id(sense_id)
+    item_type = str(payload.get("item_type") or "word")
+    if item_type == "phrase":
+        from backend.modules.phrases import repository as phrase_repo
+        sense = phrase_repo.sense_by_id(sense_id)
+    else:
+        # `sense_by_id` 2026-09-17 真的做出来了（P9 §8），所以那个 `hasattr` 的
+        # 预留可以撤了。它**退休的义项也找得到**——造例句这一路正是会遇到旧义项
+        # id 的地方:词标记在两个月前，而义项集后来重建过。
+        sense = senses.sense_by_id(sense_id)
     if not sense:
         return jobs.ItemOutcome(result="义项不存在，跳过")
 
@@ -243,8 +290,9 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
     completion = client.complete(
         provider,
         [{"role": "system", "content": SYSTEM},
-         {"role": "user", "content": prompt_for(item_key, sense.get("pos") or "",
-                                                sense.get("concept_en") or "", gloss, count)}],
+         {"role": "user", "content": prompt_for(
+             item_key, sense.get("pos_zh") or sense.get("pos") or "",
+             sense.get("concept_en") or "", gloss, count, item_type=item_type)}],
         max_tokens=3000,
         temperature=0.8,
     )
@@ -266,8 +314,8 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         cursor = conn.execute(
             "INSERT OR IGNORE INTO review_sentences (item_type, item_key, sense_id, text,"
             " blank_start, blank_end, surface, source, model, created_at)"
-            " VALUES ('word',?,?,?,?,?,?,'generated',?,?)",
-            (item_key, sense_id, line, start, end, surface,
+            " VALUES (?,?,?,?,?,?,?,'generated',?,?)",
+            (item_type, item_key, sense_id, line, start, end, surface,
              completion.model, repository.now_iso()),
         )
         kept += cursor.rowcount
@@ -345,16 +393,67 @@ def as_card(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _rows(item_key: str, sense_id: int) -> list[dict[str, Any]]:
+def _rows(item_key: str, sense_id: int, *,
+          item_type: str = "word") -> list[dict[str, Any]]:
     # The title rides along so a hint can say where it came from. It is a join
     # rather than a column: the article may be renamed, and a copy would drift.
+    #
+    # **`item_type` is part of the key, not decoration** (P11): a phrase sense id
+    # and a word sense id are drawn from one number space and so can never
+    # collide, but `item_key` alone can — nothing stops a phrase being spelled
+    # like a word once phrases with one word exist. Keying on all three is what
+    # the table's own UNIQUE constraint does.
     rows = get_connection("content").execute(
         "SELECT r.*, a.title AS article_title FROM review_sentences r"
         "  LEFT JOIN reading_articles a ON a.id = r.article_id"
-        " WHERE r.item_key = ? AND r.sense_id = ? ORDER BY r.id",
-        (item_key, sense_id),
+        " WHERE r.item_type = ? AND r.item_key = ? AND r.sense_id = ? ORDER BY r.id",
+        (item_type, item_key, sense_id),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+def _harvest_phrase(item_key: str, sense_id: int, *, limit: int = 20) -> int:
+    """Corpus sentences where this phrase carries this sense.
+
+    The blank covers the whole phrase, from the first token's character to the
+    last token's — the invariant again: one unit, one blank.
+    """
+    conn = get_connection("content")
+    rows = conn.execute(
+        """
+        SELECT p.surface, p.article_id, s.id AS sentence_id, s.text,
+               s.char_start AS s_start,
+               (SELECT t.char_start FROM reading_tokens t
+                 WHERE t.article_id = p.article_id AND t.seq = p.start_seq) AS c_start,
+               (SELECT t.char_end FROM reading_tokens t
+                 WHERE t.article_id = p.article_id AND t.seq = p.end_seq) AS c_end
+          FROM reading_phrases p
+          JOIN reading_sentences s ON s.id = p.sentence_id
+         WHERE p.phrase = ? AND p.sense_id = ?
+         ORDER BY p.id LIMIT ?
+        """,
+        (item_key, sense_id, limit),
+    ).fetchall()
+
+    kept = 0
+    for row in rows:
+        if row["c_start"] is None or row["c_end"] is None:
+            continue
+        start = int(row["c_start"]) - int(row["s_start"])
+        end = int(row["c_end"]) - int(row["s_start"])
+        text = str(row["text"])
+        if start < 0 or end > len(text) or start >= end:
+            continue
+        cursor = conn.execute(
+            "INSERT OR IGNORE INTO review_sentences (item_type, item_key, sense_id,"
+            " text, blank_start, blank_end, surface, source, article_id, sentence_id,"
+            " created_at) VALUES ('phrase',?,?,?,?,?,?,'corpus',?,?,?)",
+            (item_key, sense_id, text, start, end, text[start:end],
+             int(row["article_id"]), int(row["sentence_id"]), repository.now_iso()),
+        )
+        kept += cursor.rowcount
+    conn.commit()
+    return kept
 
 
 def split_pools(item_key: str, sense_id: int, finished: set[int],

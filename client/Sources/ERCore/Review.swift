@@ -99,7 +99,11 @@ extension ReviewItemState {
     /// description.
     ///
     /// - Parameter weightDecay: from the server's payload, never a constant here.
-    public func applying(_ answer: ReviewAnswer, weightDecay: Double) -> ReviewItemState {
+    /// - Parameter singleDirection: 这个条目只问一个方向。**词组就是这样**
+    ///   （P11 决定 ⑤b）：看词组想意思问得了，反过来「给『导致』想英文」是道坏题——
+    ///   `lead to`／`result in`／`contribute to` 全对，而卡片只认一个答案。
+    public func applying(_ answer: ReviewAnswer, weightDecay: Double,
+                         singleDirection: Bool = false) -> ReviewItemState {
         var next = self
         next.asks += 1
         if !answer.passed { next.misses += 1 }
@@ -109,6 +113,9 @@ extension ReviewItemState {
         next.easy = (easy || answer.easy) && next.misses == 0
 
         switch (answer.passed, direction) {
+        case (true, .wordToSense) where singleDirection:
+            // 只有一个方向的条目，答对第一向就算走完这一轮——**没有第二向可解锁**。
+            next.done = true
         case (true, .wordToSense):
             // Unlocked, then put back in the pool rather than asked straight
             // away — the gap is the point of asking the other way round.

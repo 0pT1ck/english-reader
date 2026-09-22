@@ -265,6 +265,7 @@ final class LibraryModel {
             "令牌不对或已吊销，到设置里换一个"
         case .server(let status, _): "服务器出错了（HTTP \(status)）"
         case .malformed(let detail): "服务器回的东西看不懂：\(detail)"
+        case .upgradeRequired: "这份 App 太旧了，服务端不收——请更新到最新版本"
         }
     }
 }

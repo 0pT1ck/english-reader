@@ -82,6 +82,10 @@ final class ReaderModel {
                 phase = .failed("服务器出错了（HTTP \(status)）")
             case .malformed(let detail):
                 phase = .failed("服务器回的东西看不懂：\(detail)")
+            case .upgradeRequired:
+                // **不重试。** 版本不够在重新装一版之前不会变，
+                // 而重试就是 P9 §17 那个一直转的圈（P11 决定 ⑲）。
+                phase = .failed("这份 App 太旧了，服务端不收——请更新到最新版本")
             }
         } catch is CancellationError {
             // 同 `ReviewModel`：取消不是故障，回到 loading 让上层再试。

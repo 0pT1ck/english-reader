@@ -131,9 +131,12 @@ func record(_ entry: OutboxEntry) throws {
 let articleCache = try ArticleCache(directory: stateDirectory.appendingPathComponent("articles"))
 let dayCache = try DayCache(directory: stateDirectory.appendingPathComponent("day"))
 
-let transport: any Transport = flag("offline")
-    ? OfflineTransport()
-    : URLSessionTransport(baseURL: baseURL, token: token)
+// **每一条请求都盖上契约版本**（P11 决定 ⑲）。包一层而不是逐处加，
+// 因为要求就是「每一条」——漏掉一条，服务端就有一条路看不出这份客户端多旧，
+// 而那条路正是会出错的那条。
+let transport: any Transport = VersionedTransport(
+    flag("offline") ? OfflineTransport()
+                    : URLSessionTransport(baseURL: baseURL, token: token))
 let engine = SyncEngine(transport: transport, outbox: outbox, events: events,
                         articles: articleCache, day: dayCache)
 
@@ -224,9 +227,12 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
     switch display.target(at: seq) {
     case .phrase(let phrase):
         // 词组是一个整体，就按一个整体标记——点它的任何一半都一样。
-        try record(.marked(phrase.phrase, kind: kind, itemType: "phrase",
-                                  articleId: id))
-        print(Ink.red("标记词组：\(phrase.phrase)") + Ink.dim("（\(kind.rawValue)）"))
+        // **而标的是这一处用的那条义项**（P11 决定 ③）：在「另外」那句标了
+        // `in addition` 不等于它别的意思也不会——跟单词那边一模一样。
+        try record(.marked(phrase.phrase, senseId: phrase.senseId, kind: kind,
+                           itemType: "phrase", articleId: id))
+        print(Ink.red("标记词组：\(phrase.phrase)")
+              + Ink.dim("（义项 \(phrase.senseId)，\(kind.rawValue)）"))
     case .word(let headword, _):
         let senseId = (article.tokens ?? [])
             .first { $0.seq == seq }?.sense_id ?? 0
@@ -770,6 +776,13 @@ do {
         exit(1)
     case .malformed(let detail):
         print(Ink.red("回应跟契约对不上：\(detail)"))
+        exit(1)
+    case .upgradeRequired(let detail):
+        // **不重试，也不丢发件箱。** 服务端说这份客户端太旧了，而那在重新
+        // 编译之前不会变——重试只会一直转圈（P9 §17 的形状）。
+        print(Ink.red("这份客户端太旧了，服务端不收："))
+        print(Ink.dim(detail))
+        print(Ink.dim("发件箱里那 \(outbox.count) 条一条没丢，更新之后 ercli sync 照样上报。"))
         exit(1)
     }
 } catch {

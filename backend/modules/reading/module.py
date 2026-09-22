@@ -8,7 +8,7 @@ its own right.
 
 What this module contributes, all from inside this directory:
 
-* eight tables (articles, sentences, tokens, phrases, study marks, study
+* eight tables (articles, sentences, tokens, phrase occurrences, study marks, study
   states, progress, client events) via its own migrations
 * the first ``/v1/client`` endpoints in the project
 * admin endpoints and two console pages
@@ -30,7 +30,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.reading import annotate, phrases, repository, routes
+from backend.modules.reading import annotate, repository, routes
 from backend.modules.reading.schema import MIGRATIONS
 
 log = get_logger("reading")
@@ -130,7 +130,6 @@ runtime_config.register(
 
 def _register_workers() -> None:
     jobs.register_worker(annotate.WORKER)
-    jobs.register_worker(phrases.WORKER)
 
 
 def on_senses_replaced(event: Event) -> None:

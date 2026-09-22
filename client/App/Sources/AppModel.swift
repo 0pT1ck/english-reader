@@ -154,7 +154,11 @@ final class AppModel {
             return
         }
         engine = SyncEngine(
-            transport: IOSTransport(baseURL: url, token: connection.token, log: log),
+            // 契约版本那一层在 Core 里（P11 决定 ⑲）。**App 这一侧只有这一行**——
+            // 界面这个 Phase 不动（决定 ⑦），但不发这个头的客户端会被服务端
+            // 按「太旧」挡下来，那不是界面变化，是连得上连不上的问题。
+            transport: VersionedTransport(
+                IOSTransport(baseURL: url, token: connection.token, log: log)),
             outbox: outbox, events: events, articles: cache, day: dayCache,
             sentences: sentenceCache
         )

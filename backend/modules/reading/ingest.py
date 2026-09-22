@@ -221,6 +221,19 @@ def ingest(source: str, source_ref: str, title: str, body: str, *,
             )
             raise
 
+        # **词组在标注之前扫，不在之后**（P11 决定 ④）。这一步是查表，
+        # 不花钱也不问模型，但它必须先于标注发生——标注器把词组当成同一批里
+        # 的几个条目一起问，扫在后面就等于每篇文章都要再排一趟调用，
+        # 而 ④ 的全部意思就是不再多排那一趟。
+        try:
+            from backend.modules.phrases import occurrences
+            occurrences.rebuild([article_id])
+        except Exception:  # noqa: BLE001 - 词组扫描不该拦住一篇文章
+            log.exception(
+                "phrases.scan.failed",
+                f"文章 {article_id} 的词组扫描失败，不影响阅读",
+                article_id=article_id)
+
         repository.set_status(article_id, "annotating")
         log.info(
             "article.analysed",
@@ -246,15 +259,11 @@ def finalise_if_annotated(article_id: int) -> bool:
     done, total = repository.annotation_progress(article_id)
     if total and done < total:
         return False
-    # Structural only — no model, so it costs nothing and the judgement can be
-    # queued whenever. An article is readable before its phrases are judged;
-    # they simply do not show until they are.
-    try:
-        from backend.modules.reading import phrases
-        phrases.find_candidates(article_id)
-    except Exception:  # noqa: BLE001 - a phrase scan must never block an article
-        log.exception("phrases.scan.failed", f"文章 {article_id} 的词组扫描失败，不影响阅读",
-                      article_id=article_id)
+    # **词组也要答完。** 一处没答的词组在屏幕上是看不见的（客户端只画有义项
+    # 的那些），所以「答了一半就 ready」不会有任何症状——直到读者点了一个
+    # 本该是词组的地方，看到的是半个词自己的释义。
+    if repository.pending_phrase_count(article_id):
+        return False
     repository.set_status(article_id, "ready")
     log.info("article.ready", f"文章 {article_id} 已就绪", article_id=article_id)
     events.emit("article.ready", article_id=article_id)

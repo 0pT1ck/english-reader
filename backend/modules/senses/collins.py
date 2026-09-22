@@ -277,6 +277,15 @@ class CollinsSense:
     examples: list[tuple[str, str]] = field(default_factory=list)
     """``(english, chinese)`` pairs. ``sense_examples`` has been empty for a
     year; these fill it."""
+    bolds: list[str] = field(default_factory=list)
+    """The block's emboldened runs, **each kept separate**.
+
+    P11 needs them to tell which phrase a block is about, and separateness is
+    the whole point: Collins emboldens a phrase with a variable in the middle in
+    pieces (``take`` … ``into account``), so joining them first is how
+    ``on one's account`` gets matched to ``on account`` 赊账 (P11 §13).
+    :func:`classify` only ever asks how many there are, so this changes nothing
+    for P10."""
 
 
 def is_hollow(html: str) -> bool:
@@ -422,6 +431,7 @@ def parse_entry(headword: str, html: str) -> list[CollinsSense]:
             pattern=_text(pattern_match.group(1)) if pattern_match else "",
             subject=_text(field_match.group(1)) if field_match else "",
             examples=examples,
+            bolds=bolds,
         ))
 
     return out

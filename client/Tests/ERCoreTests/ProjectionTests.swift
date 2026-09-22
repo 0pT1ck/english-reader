@@ -424,14 +424,19 @@ struct ProjectionTests {
                 "它确实已经排到将来了——这正是会让现算出错的那个条件")
     }
 
-    /// 镜像服务端 `session.collect` 那句 `item_type = 'word'`。
+    /// **这条断言 2026-09-22 到期了**（P11 决定 ⑮），改成守始终成立的那一半。
     ///
-    /// **复习有意跳过词组**（`verify_phase3` 2.2 守的是「它是被有意跳过的，
-    /// 不是碰巧没查到」），而 P6 定的界面初版也不认词组。
-    /// 少了这一条，标过的词组会占着「共」那个数却永远问不出来——
-    /// 句子池是按词与义项建的，词组拿不到句子，于是 13/13 永远到不了。
-    @Test("标过的词组进词池，但不进复习队列")
-    func phrasesStayOutOfTheQueue() {
+    /// 它原本守「词组不进复习队列」，理由写的是「复习有意跳过词组」。
+    /// 而真正的理由是**词组拿不到句子**：句子池按词与义项建，一个标过的词组
+    /// 进了队列就会占着「共」那个数却永远问不出来，13/13 因此到不了。
+    /// ⑫ 给词组造句之后那个理由消失了。
+    ///
+    /// **始终成立的那一半是「没有句子就出不了题」**，而它守在
+    /// `ReviewDay.assemble` 上、按内容判——一个还没造完句的**单词**同样该等着，
+    /// 而按类型判的旧版本会放它进来。所以这里改成断言两件事：
+    /// 词组进得了队列，以及没有句子时它进不了当天的名单。
+    @Test("标过的词组进队列，但没有句子就出不了题")
+    func phrasesEnterTheQueueButNeedSentences() async throws {
         let projection = Self.replay([
             (.marked, ["item_key": .string("account for"),
                        "item_type": .string("phrase"), "kind": .string("unknown")],
@@ -446,10 +451,15 @@ struct ProjectionTests {
                 "也照旧上报给服务端:生文要避开它")
 
         let queue = projection.todayQueue(day: "2026-01-05", now: Self.now)
-        #expect(queue.count == 1, "队列里只该有那个词，实际 \(queue.count) 条")
-        #expect(queue.first?.key.itemType == "word")
-        #expect(projection.progress(day: "2026-01-05", now: Self.now).total(.today) == 1,
-                "词组不许占着「共」那个数")
+        #expect(queue.count == 2, "词和词组都该在队列里，实际 \(queue.count) 条")
+        #expect(queue.contains { $0.key.itemType == "phrase" }, "词组进得了队列了（⑮）")
+
+        // 没有句子池 → 一条都组装不出来，而且这不是静默丢弃:
+        // `awaitingContent` 把它数出来，屏幕上说得出「还有 2 条在等句子」。
+        let day = ReviewDay.assemble(pool: nil, projection: projection,
+                                     day: "2026-01-05", now: Self.now)
+        #expect(day.entries.isEmpty, "没有句子就出不了题——按内容判，不按类型判")
+        #expect(day.awaitingContent == 2, "等句子的条目要数得出来，实际 \(day.awaitingContent)")
     }
 
     /// `verify_phase3` 1.6 在服务端守的是「记忆状态存进库再取出来还是同一张卡」。

@@ -113,11 +113,19 @@ struct ArticleRenderer {
             let row = (article.phrases ?? []).first { $0.phrase == phrase.phrase }
             var out = [Ink.bold("词组：\(phrase.phrase)")]
             out.append(Ink.dim("  这是一个整体——点它的任何一半都到这里"))
-            if let translation = row?.translation { out.append("  \(translation)") }
-            if let definition = row?.definition { out.append(Ink.dim("  \(definition)")) }
-            if let mark = phrase.mark { out.append(Ink.red("  已标记：\(mark.rawValue)")) }
-            if let state = row?.state {
-                out.append(Ink.dim("  词池：\(state.pool)，遇见 \(state.encounters) 次"))
+            // **几条义项全列出来，这一处用的那条标出来**（P11 决定 ③）。
+            // 当初说的「不挑」挑的是显示，那一层没变；变的是标记跟着义项走，
+            // 所以屏幕上必须说得出你标的是哪一个意思。
+            for sense in row?.senses ?? [] {
+                let here = sense.id == phrase.senseId ? Ink.bold("▸ ") : "  "
+                var line = "\(here)\(sense.ordinal). \(sense.gloss_zh)"
+                if let mark = row?.marks?.additionalProperties[String(sense.id)] {
+                    line += Ink.red("  [已标记：\(mark)]")
+                }
+                if let state = row?.states?.additionalProperties[String(sense.id)] {
+                    line += Ink.dim("  词池 \(state.pool)，遇见 \(state.encounters) 次")
+                }
+                out.append(line)
             }
             return out.joined(separator: "\n")
 

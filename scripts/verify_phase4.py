@@ -312,11 +312,15 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         check("B5.1", "没有备好却打不开的文章", stuck == 0,
               f"{stuck} 篇停在半路——标注没跑完的文章在货架上看着正常，点开是空的")
 
+        # **P11 换了这个问题的问法**：从前是「模型判过这一处算不算词组没有」
+        # （`verdict`），现在是「标注答过这一处用的是哪个意思没有」（`sense_id`）。
+        # 列换了，而断言守的那件事一个字没变——**没答过的词组不会显示，
+        # 而且不会报错**，所以它必须有人守。
         unjudged = conn.execute(
-            "SELECT COUNT(*) AS n FROM reading_phrases WHERE verdict IS NULL"
+            "SELECT COUNT(*) AS n FROM reading_phrases WHERE sense_id IS NULL"
         ).fetchone()["n"]
-        check("B5.2", "备好的文章连词组也判过了", unjudged == 0,
-              f"{unjudged} 处待判——没判过的词组不会显示，而且不会报错")
+        check("B5.2", "备好的文章连词组也标注过了", unjudged == 0,
+              f"{unjudged} 处没答——没答过的词组不会显示，而且不会报错")
 
         # --- C. 今日包与离线闭环 ------------------------------------------- #
         print("\nC. 今日包与离线闭环")

@@ -136,26 +136,13 @@ def parts_of_speech(headword: str) -> frozenset[str]:
     return frozenset(found)
 
 
-@lru_cache(maxsize=20000)
-def phrase_entry(phrase: str) -> dict[str, Any] | None:
-    """Look up one multi-word entry.
-
-    Separate from :func:`lookup` because the tables are separate, and they are
-    separate because no operation ever wants both at once — see the migration
-    note. Cached for the same reason as ``lookup``: one article asks about the
-    same handful of phrases repeatedly.
-    """
-    try:
-        row = get_connection("dictionary").execute(
-            "SELECT phrase, word_count, head, translation, definition, collins, oxford"
-            " FROM phrases WHERE phrase = ?",
-            (phrase.lower(),),
-        ).fetchone()
-    except sqlite3.Error:
-        return None
-    return dict(row) if row else None
-
-
+#: **ECDICT 的词组表 2026-09-22 退出了**（P11 决定 ⑧）。这里原先有一个按词组查
+#: ECDICT 中文的函数，而那正是 `contribute to → 捐献` 的来源：**拿错的盖掉库里
+#: 本来对的**（柯林斯把「促成」挂在 contribute 下面，语料里标注器也挑对了）。
+#: 词组的中文现在只来自柯林斯，见 `backend/modules/phrases/`。
+#:
+#: **单词那半边不能扔**：`words.tags` 是超纲判定的唯一来源。下面这个计数只是
+#: 管理台的一行统计，不参与任何释义。
 def phrase_count() -> int:
     try:
         return int(get_connection("dictionary").execute(
@@ -249,7 +236,6 @@ def clear_caches() -> None:
     from backend.modules.vocabulary import spelling
 
     lookup.cache_clear()
-    phrase_entry.cache_clear()
     resolve_surface.cache_clear()
     tags_of.cache_clear()
     parts_of_speech.cache_clear()

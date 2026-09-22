@@ -70,6 +70,16 @@ class Capabilities(BaseModel):
     phrases: bool = Field(
         description="词组识别跑过没有。为假时，空的 phrases 列表意思是「还没看过」而不是「这篇没有词组」"
     )
+    phrase_senses: bool = Field(
+        default=False,
+        description="词组有没有义项集（P11）。为假时词组只有一个整体，"
+        "空的 senses 意思是「服务端还没导」而不是「这个词组只有一个意思」",
+    )
+    collocations: bool = Field(
+        default=False,
+        description="义项的搭配（用法）导进来没有。**P11 只存只发，复习里一处不用**——"
+        "怎么用是界面 Phase 的事，那时这一位已经是真的了，不用再等一轮服务端发版",
+    )
 
 
 class ItemState(BaseModel):

@@ -19,8 +19,8 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from backend.admin.routes import admin_api, admin_pages
 from backend.core import auth, events, notifications, runtime_config, tasks
@@ -116,6 +116,50 @@ def create_app() -> FastAPI:
                 elapsed_ms=elapsed_ms,
             )
             return response
+
+    @app.middleware("http")
+    async def _require_contract_version(request: Request, call_next) -> Response:
+        """Turn away clients whose contract is older than the server's floor.
+
+        **This is what makes "clients must be current" a rule instead of a wish**
+        (P11 决定 ⑲). Since 2026-09-22 the API may delete fields and change what
+        one means, and a client that missed the change does not crash — it shows
+        the wrong thing, quietly. 426 stops it at the door instead.
+
+        Three things it deliberately does not do:
+
+        * **it does not trust a missing header.** No header means a client built
+          before the header existed, which is the oldest kind there is. Reading
+          it as "unknown, let it through" would wave through exactly the clients
+          this exists to stop;
+        * **it does not touch `/v1/admin/`.** Those go through another
+          credential (架构铁律 6's recorded exception), and a phone whose app is
+          too old is precisely when the developer options are needed;
+        * **it does not touch `/health`.** A liveness probe that fails because
+          of a version floor reports an outage that is not happening.
+        """
+        path = request.url.path
+        if path.startswith("/v1/client/"):
+            floor = int(runtime_config.get("min_contract_version"))
+            if floor > 0:
+                try:
+                    sent = int(request.headers.get("X-Contract-Version") or 0)
+                except ValueError:
+                    sent = 0
+                if sent < floor:
+                    log.info(
+                        "client.version.rejected",
+                        f"客户端契约版本 {sent} 低于下限 {floor}，拒绝",
+                        path=path, sent=sent, floor=floor,
+                    )
+                    return JSONResponse(
+                        status_code=426,
+                        content={"error": "upgrade_required",
+                                 "message": f"这份客户端太旧了（契约版本 {sent}，"
+                                            f"服务端要求至少 {floor}），请更新 App。",
+                                 "min_contract_version": floor},
+                    )
+        return await call_next(request)
 
     @app.get("/health", tags=["system"], summary="健康检查")
     async def health() -> dict[str, object]:

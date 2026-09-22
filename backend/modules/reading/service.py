@@ -23,7 +23,8 @@ from backend.core import auth, events, runtime_config
 from backend.core.db import get_connection
 from backend.core.errors import InvalidRequest
 from backend.core.logging import get_logger
-from backend.modules.reading import difficulty, ingest, phrases, repository
+from backend.modules.phrases import repository as phrase_repository
+from backend.modules.reading import difficulty, ingest, repository
 from backend.modules.senses import repository as senses
 from backend.modules.vocabulary import repository as dictionary
 
@@ -57,8 +58,12 @@ def capabilities() -> dict[str, bool]:
         " AND status = 'ready'"
     ).fetchone()[0])
     judged_phrases = int(conn.execute(
-        "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NOT NULL"
+        "SELECT COUNT(*) FROM reading_phrases WHERE sense_id IS NOT NULL"
     ).fetchone()[0])
+    phrase_senses = int(conn.execute(
+        "SELECT COUNT(*) FROM phrase_senses").fetchone()[0])
+    collocations = int(conn.execute(
+        "SELECT COUNT(*) FROM sense_collocations").fetchone()[0])
     return {
         # The ability estimate. Fills learner.level, difficulty.for_you and
         # token.root_known. Belonged to the archived P3; not scheduled since the
@@ -78,6 +83,10 @@ def capabilities() -> dict[str, bool]:
         # field is absent rather than zero, because a zero here would read as
         # "never appears in the exams", which is a different claim.
         "exam_frequency": annotated_exams >= 400,
+        # P11。**两位分别回答两件事**：词组有没有义项集，义项有没有搭配。
+        # 合成一位的话，客户端分不出「这个词组只有一个意思」和「服务端还没导」。
+        "phrase_senses": phrase_senses > 0,
+        "collocations": collocations > 0,
         # Whether the phrase pass has run at all. An article with an empty
         # `phrases` list is otherwise ambiguous — no phrases in this text, or
         # nobody has looked yet — and those two should not render the same.
@@ -151,6 +160,12 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
     marks = repository.marks_for(learner_id, headwords)
     states = repository.states_for(learner_id, headwords)
 
+    # 一次把这一篇要用到的搭配全取出来（P11 决定 ⑰：**只发不用**）。
+    # 逐个义项去查会变成每篇几百次小查询，而这里只要一条 IN。
+    all_sense_ids = [int(s["id"]) for headword in headwords
+                     for s in senses.senses_of(headword)]
+    collocations = phrase_repository.collocations_for(all_sense_ids)
+
     glossary: dict[str, Any] = {}
     for headword in sorted(headwords):
         entry = dictionary.lookup(headword)
@@ -190,6 +205,10 @@ def _glossary(learner_id: int, tokens: list[dict[str, Any]]) -> dict[str, Any]:
                     # contract is additive and a client that wants to grey out
                     # 非正式 senses should not need a server change to do it.
                     "register_label": s.get("register"),
+                    # 这条义项的搭配（用法）。**P11 只存只发**：复习里一处不用，
+                    # 摆在作答之后的揭晓屏是界面 Phase 的事——
+                    # 而字段现在就得在，否则那个 Phase 要先回来改一轮契约。
+                    "collocations": collocations.get(int(s["id"]), []),
                     # Layer ③. Absent, not zero, until the exam corpus has been
                     # annotated — see capabilities().
                     #
@@ -264,7 +283,7 @@ def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
     underline and two background colours are already spoken for) while the
     native client will have its own answer.
     """
-    found = phrases.confirmed_for(article_id)
+    found = phrase_repository.for_article(article_id)
     if not found:
         return []
     keys = {p["phrase"] for p in found}
@@ -272,13 +291,17 @@ def _phrase_payload(learner_id: int, article_id: int) -> list[dict[str, Any]]:
     states = repository.states_for(learner_id, keys, item_type="phrase")
     out = []
     for item in found:
-        state = states.get((item["phrase"], 0))
-        out.append({
-            **item,
-            "mark": marks.get((item["phrase"], 0)),
-            "state": ({"pool": state["pool"], "encounters": state["encounters"]}
-                      if state else None),
-        })
+        # **按义项分，跟单词那边同一个形状**（P11 决定 ③）。键是义项 id 的字符串，
+        # 而这里带上的是这个词组**全部**义项的标记，不只是这一处用的那条——
+        # 少了它，点开面板说不出「你标过这个词组的另一个意思」，
+        # 而学习者会把自己明明标过的东西读成「App 忘了」。
+        item_marks = {str(sense_id): kind
+                      for (key, sense_id), kind in marks.items() if key == item["phrase"]}
+        item_states = {
+            str(sense_id): {"pool": state["pool"], "encounters": state["encounters"]}
+            for (key, sense_id), state in states.items() if key == item["phrase"]
+        }
+        out.append({**item, "marks": item_marks, "states": item_states})
     return out
 
 
@@ -500,14 +523,21 @@ def _item_of(payload: dict[str, Any]) -> tuple[str, str, int]:
     the new one is optional — a client that predates phrases sends exactly what
     it always sent and is understood.
 
-    ``sense_id`` is always 0 for a phrase: a phrase is not one meaning of
-    something else.
+    **``sense_id`` counts for a phrase too, as of P11 决定 ③.** It used to be
+    forced to 0 here, with the reason "a phrase is not one meaning of something
+    else" — true, and beside the point: a phrase has meanings of its own, and
+    ``think of`` has five. Zeroing it made marking 「想起」 volunteer
+    「有…的看法」 for review as well, which is the system choosing for the
+    learner while the 跨 Phase 不变量 says the mark is the learner's own signal.
+
+    A client that predates phrase senses sends 0 and still works — that is one
+    item keyed on (phrase, 0), exactly what it used to get.
     """
     item_type = str(payload.get("item_type") or "word")
     if item_type not in repository.ITEM_TYPES:
         raise InvalidRequest("未知的条目类型", item_type=item_type)
     key = str(payload.get("item_key") or payload["headword"]).lower()
-    sense_id = 0 if item_type == "phrase" else int(payload.get("sense_id") or 0)
+    sense_id = int(payload.get("sense_id") or 0)
     return item_type, key, sense_id
 
 

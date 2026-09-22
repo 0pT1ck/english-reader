@@ -25,6 +25,21 @@ reply is short, and every reply is validated before it is stored.
 Two shortcuts run before the model is called at all, because they are free and
 exact: a word with no sense set is recorded as sense 0, and a word with exactly
 one sense is recorded as that sense. Only genuinely ambiguous words cost tokens.
+
+**Phrases ride along here rather than in a pass of their own** (P11 决定 ④).
+The question is identical in shape — *which of these numbered meanings is this,
+in this sentence* — so a phrase occurrence is one more item in the same batch,
+and the same shortcuts apply. Measured on the corpus it adds 3.7 decisions per
+article against roughly 216 words, and nothing at all for articles ingested
+after the list exists.
+
+**For a phrase, 0 means something stronger than it does for a word.** For a word
+it means "we have no sense that fits, go and read the dictionary". For a phrase
+it means **this is not the phrase here** — ``He ran into the room`` is ``run``
+followed by a place, not ``run into`` (P11 §7b). Nothing is highlighted, and the
+two words keep the senses they were annotated with individually. So the judgement
+P2 paid for separately ("is this run of words a unit") comes out of this one for
+free: it is the answer "none of the above".
 """
 
 from __future__ import annotations
@@ -61,11 +76,22 @@ INSTRUCTION = """\
 如果候选义项里**没有一条贴合这句的用法，就填 0**。
 填 0 是正当答案，不是失败——我们据此补全义项集。
 不要为了给出答案而挑一个最接近的：挑错了会让读者看到错的释义，
-而填 0 只是让他退回去看词典。"""
+而填 0 只是让他退回去看词典。
+
+**词组（编号带 p 的那些）判断的是另一件事**：
+这两三个词在这句话里**是不是作为一个固定说法出现**。
+是的话选它用的那个义项；
+如果它们只是碰巧挨在一起（He ran into the room 里的 ran into 是「跑进某处」，
+不是词组 run into「偶然碰见」），**填 0**。"""
 
 
 def _prefill(article_id: int) -> tuple[int, int]:
-    """Settle everything that does not need a model. Returns (no-sense, single)."""
+    """Settle everything that does not need a model. Returns (no-sense, single).
+
+    Covers phrase occurrences too: a phrase with one sense is that sense, and a
+    phrase with none — which 验收 7 says cannot happen, but a guard that only
+    holds when the data is right is not a guard — is recorded as 0.
+    """
     pending = repository.unannotated_tokens(article_id)
     no_sense = single = 0
     for token in pending:
@@ -81,6 +107,19 @@ def _prefill(article_id: int) -> tuple[int, int]:
             repository.set_token_sense(int(token["id"]), int(options[0]["id"]),
                                        int(options[0]["ordinal"]))
             single += 1
+
+    # **词组只用得上第一条捷径，用不了第二条。**
+    # 单词那条「只有一个义项就直接填」成立，是因为这个词确实在这句里；
+    # 而词组的第一个问题是**它在这儿到底算不算一个词组**，一个义项的词组
+    # 照样可能只是两个碰巧挨着的词。实测：`talk about` 在柯林斯里只有
+    # 「这才叫…；真是」（Talk about lucky!）一条，于是预填把语料里每一句
+    # 平常的 `talked about` 都标成了那个意思——**不报错，只是全错**。
+    for row in repository.unannotated_phrases(article_id):
+        options = repository.phrase_senses_of(int(row["phrase_id"] or 0))
+        if not options:
+            repository.set_phrase_sense(int(row["id"]), NO_SENSE_FITS)
+            no_sense += 1
+
     repository.commit()
     return no_sense, single
 
@@ -111,9 +150,17 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
             )
 
         remaining = repository.unannotated_tokens(article_id)
-        if not remaining:
+        phrases = repository.unannotated_phrases(article_id)
+        if not remaining and not phrases:
             ingest.finalise_if_annotated(article_id)
             continue
+
+        # Phrases are attached to the batch that carries their sentence, so the
+        # model sees the sentence it is judging. Any left over (their sentence
+        # had no ambiguous word in it) go in a batch of their own.
+        by_sentence: dict[int, list[dict[str, Any]]] = {}
+        for row in phrases:
+            by_sentence.setdefault(int(row["sentence_id"]), []).append(row)
 
         current: list[dict[str, Any]] = []
         for position, token in enumerate(remaining):
@@ -124,20 +171,35 @@ def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
             last = position == len(remaining) - 1
             at_boundary = last or token["sentence_id"] != remaining[position + 1]["sentence_id"]
             if len(current) >= size and at_boundary:
-                batches.append(_batch(article_id, current))
+                batches.append(_batch(article_id, current, by_sentence))
                 current = []
         if current:
-            batches.append(_batch(article_id, current))
+            batches.append(_batch(article_id, current, by_sentence))
+
+        leftover = [row for rows in by_sentence.values() for row in rows]
+        if leftover:
+            batches.append(_batch(article_id, [], {-1: leftover}))
 
     return batches
 
 
-def _batch(article_id: int, tokens: list[dict[str, Any]]) -> tuple[str, dict[str, Any]]:
-    first, last = tokens[0], tokens[-1]
-    key = f"文章 {article_id} 句 {first['sentence_seq'] + 1}–{last['sentence_seq'] + 1}"
+def _batch(article_id: int, tokens: list[dict[str, Any]],
+           by_sentence: dict[int, list[dict[str, Any]]]) -> tuple[str, dict[str, Any]]:
+    """One call's worth of work. Consumes the phrase rows it takes."""
+    sentences = {int(t["sentence_id"]) for t in tokens} or set(by_sentence)
+    phrases: list[dict[str, Any]] = []
+    for sentence_id in sentences:
+        phrases.extend(by_sentence.pop(sentence_id, []))
+
+    if tokens:
+        first, last = tokens[0], tokens[-1]
+        key = f"文章 {article_id} 句 {first['sentence_seq'] + 1}–{last['sentence_seq'] + 1}"
+    else:
+        key = f"文章 {article_id} 词组 {len(phrases)} 处"
     return key, {
         "article_id": article_id,
         "token_ids": [int(t["id"]) for t in tokens],
+        "phrase_ids": [int(p["id"]) for p in phrases],
     }
 
 
@@ -182,8 +244,35 @@ def _load_tokens(token_ids: list[int]) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def _build_prompt(tokens: list[dict[str, Any]]) -> tuple[str, dict[int, list[dict[str, Any]]]]:
+def _load_phrases(row_ids: list[int]) -> list[dict[str, Any]]:
+    if not row_ids:
+        return []
+    placeholders = ",".join("?" * len(row_ids))
+    rows = get_connection("content").execute(
+        "SELECT p.*, s.seq AS sentence_seq, s.text AS sentence_text"  # noqa: S608
+        f" FROM reading_phrases p JOIN reading_sentences s ON s.id = p.sentence_id"
+        f" WHERE p.id IN ({placeholders}) ORDER BY p.start_seq",
+        row_ids,
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _build_prompt(tokens: list[dict[str, Any]], phrases: list[dict[str, Any]],
+                  ) -> tuple[str, dict[int, list[dict[str, Any]]],
+                             dict[int, list[dict[str, Any]]]]:
     sentences = _sentences_for([int(t["id"]) for t in tokens])
+    seen = {int(s["id"]) for s in sentences}
+    for row in phrases:
+        # A phrase can be the only thing left to ask about in its sentence, and
+        # a judgement about a phrase without its sentence is a judgement about
+        # nothing.
+        if int(row["sentence_id"]) not in seen:
+            seen.add(int(row["sentence_id"]))
+            sentences.append({"id": int(row["sentence_id"]),
+                              "seq": int(row["sentence_seq"]),
+                              "text": str(row["sentence_text"])})
+    sentences.sort(key=lambda s: int(s["seq"]))
+
     lines = ["原文："]
     for sentence in sentences:
         lines.append(f"[{sentence['seq'] + 1}] {sentence['text'].strip()}")
@@ -214,13 +303,29 @@ def _build_prompt(tokens: list[dict[str, Any]]) -> tuple[str, dict[int, list[dic
             # against the *old* inventory with this model gives the same 4.6%.
             lines.append(f"   {option['ordinal']}. {option['concept_en']} — {gloss}")
 
+    options_by_phrase: dict[int, list[dict[str, Any]]] = {}
+    if phrases:
+        lines.append("")
+        lines.append("需要判断的词组：")
+        for row in phrases:
+            options = repository.phrase_senses_of(int(row["phrase_id"] or 0))
+            options_by_phrase[int(row["id"])] = options
+            lines.append(
+                f"#p{row['id']} {row['surface']}"
+                f"（第 {int(row['sentence_seq']) + 1} 句，词组 {row['phrase']}）"
+            )
+            for option in options:
+                lines.append(f"   {option['ordinal']}. {option['gloss_zh']}"
+                             + (f" — {option['concept_en']}" if option["concept_en"] else ""))
+
+    example = f'"{tokens[0]["id"]}": 1' if tokens else f'"p{phrases[0]["id"]}": 1'
     lines.append("")
     lines.append(
-        '只输出 JSON，键是 # 后面的编号（字符串），值是义项序号（整数，'
-        '没有贴合的填 0）：{"' + str(tokens[0]["id"]) + '": 1, ...}'
+        '只输出 JSON，键是 # 后面的编号（字符串，词组的带 p），'
+        '值是义项序号（整数，没有贴合的填 0）：{' + example + ', ...}'
     )
-    lines.append("每一个词都必须出现在结果里。不要输出任何解释。")
-    return "\n".join(lines), options_by_token
+    lines.append("每一个词和词组都必须出现在结果里。不要输出任何解释。")
+    return "\n".join(lines), options_by_token, options_by_phrase
 
 
 def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
@@ -232,11 +337,13 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
     wanted = set(payload["token_ids"])
     tokens = [t for t in _load_tokens(payload["token_ids"])
               if int(t["id"]) in wanted and t["sense_id"] is None]
-    if not tokens:
+    phrase_ids = [int(i) for i in payload.get("phrase_ids") or []]
+    phrases = [p for p in _load_phrases(phrase_ids) if p["sense_id"] is None]
+    if not tokens and not phrases:
         ingest.finalise_if_annotated(article_id)
         return jobs.ItemOutcome()
 
-    prompt, options_by_token = _build_prompt(tokens)
+    prompt, options_by_token, options_by_phrase = _build_prompt(tokens, phrases)
     completion = client.complete(
         provider,
         [{"role": "system", "content": SYSTEM},
@@ -247,7 +354,7 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         # （最长的文章 328 个实词），4000 的硬顶正好擦着这个量——
         # **截断的后果是后半截词悄悄标不上**，只会表现为「没标完」，
         # 不会报错。给足余量比省那点输出预算重要。
-        max_tokens=60 * len(tokens) + 400,
+        max_tokens=60 * (len(tokens) + len(phrases)) + 400,
         temperature=0.1,
         json_mode=True,
     )
@@ -257,13 +364,36 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
     stored = rejected = 0
     declined: list[int] = []
     for raw_key, raw_value in data.items():
+        key = str(raw_key).lstrip("#")
         try:
-            token_id = int(str(raw_key).lstrip("#"))
             ordinal = int(raw_value)
+            is_phrase = key[:1] in ("p", "P")
+            item_id = int(key[1:] if is_phrase else key)
         except (TypeError, ValueError):
             rejected += 1
             continue
 
+        if is_phrase:
+            options = options_by_phrase.get(item_id)
+            if not options:
+                rejected += 1
+                continue
+            if ordinal == 0:
+                # **Not a failure: the strongest answer this prompt can give.**
+                # These two words are not the phrase here, so nothing is joined
+                # and each keeps its own sense (P11 §7b).
+                repository.set_phrase_sense(item_id, NO_SENSE_FITS)
+                stored += 1
+                continue
+            match = next((o for o in options if int(o["ordinal"]) == ordinal), None)
+            if match is None:
+                rejected += 1
+                continue
+            repository.set_phrase_sense(item_id, int(match["id"]))
+            stored += 1
+            continue
+
+        token_id = item_id
         options = options_by_token.get(token_id)
         if not options:
             rejected += 1

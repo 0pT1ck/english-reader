@@ -1,4 +1,4 @@
-"""Re-annotate the whole corpus against the new sense inventory — P10.
+"""Re-annotate the whole corpus — P10 的义项，P11 的词组。
 
 Usage::
 
@@ -40,7 +40,8 @@ from backend.core.db import get_connection  # noqa: E402
 from backend.core.registry import run_core_migrations  # noqa: E402
 from backend.modules.llm import jobs, providers  # noqa: E402
 from backend.modules.llm import module as _llm_module  # noqa: E402,F401
-from backend.modules.reading import annotate, phrases  # noqa: E402
+from backend.modules.phrases import module as _phrases_module  # noqa: E402,F401
+from backend.modules.reading import annotate  # noqa: E402
 from backend.modules.reading import module as _reading_module  # noqa: E402,F401
 from backend.modules.senses import module as _senses_module  # noqa: E402,F401
 
@@ -57,7 +58,6 @@ def main() -> int:
 
     # `on_startup` does this for the server; a script has to do it itself.
     jobs.register_worker(annotate.WORKER)
-    jobs.register_worker(phrases.WORKER)
 
     conn = get_connection("content")
     if args.reset:
@@ -68,9 +68,15 @@ def main() -> int:
         conn.commit()
         print(f"清空了 {cleared:,} 条旧标注")
 
+    # **词组也算「待标注」**（P11 决定 ④）。少了后半句，一篇词全标完、
+    # 词组一处没答的文章会被当成做完了——而那正是看不见的那一半：
+    # 客户端只画有义项的词组，所以屏幕上什么都不会少，只是词组全都不见了。
     article_ids = [row[0] for row in conn.execute(
-        "SELECT DISTINCT article_id FROM reading_tokens"
-        " WHERE kind = 'content' AND sense_id IS NULL ORDER BY article_id"
+        "SELECT article_id FROM reading_tokens"
+        " WHERE kind = 'content' AND sense_id IS NULL"
+        " UNION"
+        " SELECT article_id FROM reading_phrases WHERE sense_id IS NULL"
+        " ORDER BY article_id"
     )]
     if args.limit:
         article_ids = article_ids[:args.limit]

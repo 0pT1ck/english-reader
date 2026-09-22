@@ -148,6 +148,14 @@ class Sense(BaseModel):
         "平均 51 字符；柯林斯的平均 101 字符，客户端排版要按这个长度算",
     )
     gloss_zh: list[str] | str | None = Field(default=None, description="中文释义")
+    collocations: list[str] = Field(
+        default_factory=list,
+        description="这条义项的搭配，柯林斯加粗的那些（`contribute` 的「促成」带着 "
+        "`contribute to`）。**挂在义项上不是挂在词上**——`contribute` 四条义项里三条"
+        "都加粗 `contribute to`，意思分别是做贡献／促成／撰稿，挂在词那一层这个对应关系就没了。"
+        "**原样，不还原屈折形**：`is absorbed into` 的被动和 `the allies` 的名词化都是信息。"
+        "空列表分不出「这条义项没有搭配」和「服务端没导」，看 capabilities.collocations",
+    )
     register_label: str | None = Field(
         default=None,
         description="语域标签（FORMAL 正式 / INFORMAL 非正式 / BRIT 英 / OLD-FASHIONED 过时）。"
@@ -200,6 +208,25 @@ class GlossaryEntry(BaseModel):
     states: dict[str, ItemState] = Field(description="这个词各义项的词池位置，按义项 id")
 
 
+class PhraseSense(BaseModel):
+    """One meaning of a phrase, as Collins prints it.
+
+    **The id is permanent** (架构铁律 5): a mark on `account for` 的「占比例」
+    keys on it, and it lives on the device. It is drawn from the same number
+    space as word sense ids, so a client that looks a sense up by bare id can
+    never be handed the wrong meaning — see `phrases/ids.py`.
+    """
+
+    id: int
+    ordinal: int = Field(description="柯林斯印的顺序")
+    gloss_zh: str
+    concept_en: str | None = None
+    pos_zh: str | None = Field(default=None, description="词性的中文，如 短语动词")
+    register_label: str | None = None
+    exam: SenseExam | None = Field(
+        default=None, description="真题考频。整块缺席而不是为零，看 capabilities.exam_frequency")
+
+
 class Phrase(BaseModel):
     """A phrase is an item in its own right.
 
@@ -211,16 +238,36 @@ class Phrase(BaseModel):
     The span is sent; how to show it is the client's business — but 跨 Phase
     不变量 fixes one half of that: selection and marking happen to the phrase as
     a whole, on every client.
+
+    **P11 gave it senses** (决定 ③). Before that a phrase was one line of
+    Chinese, and marking `think of` meant "one of these five meanings, we will
+    not ask which" — which is the system deciding for the reader, and 跨 Phase
+    不变量 says the mark is the reader's own signal. `translation` and
+    `definition` are gone: they were ECDICT's flat gloss, which is where
+    `contribute to → 捐献` came from — wrong Chinese covering up the right
+    Chinese that was already in the library.
     """
 
     phrase: str
+    phrase_id: int = Field(description="词组表的号。客户端拿它把这一处和 senses 对上")
     surface: str = Field(description="原文里的样子，含中间的空格")
     start_seq: int
     end_seq: int
-    translation: str | None = None
-    definition: str | None = None
-    mark: str | None = Field(default=None, description="unknown 不认识 / fuzzy 模糊，没标是 null")
-    state: ItemState | None = None
+    senses: list[PhraseSense] = Field(
+        default_factory=list, description="这个词组的全部义项，点开照旧都列出来")
+    sense_id: int | None = Field(
+        default=None,
+        description="**这一处用的是哪一条**，标注器判的。三种值：`null` 还没标注过；"
+        "**`-1` 意思是「这一处不是词组」**——`He ran into the room` 里 `run` 和 `into` "
+        "各是各的，客户端不整体渲染，两个词各显示自己的义项（P11 §7b）；"
+        "正数才是义项 id。**服务端只下发正数那些**，另外两种根本不出现在 phrases 列表里，"
+        "所以客户端不用自己判——写在这里是因为断线重放老数据时它可能见到",
+    )
+    marks: dict[str, str] = Field(
+        default_factory=dict,
+        description="这个词组上的全部标记，按义项 id，跟单词那边同一个形状")
+    states: dict[str, ItemState] = Field(
+        default_factory=dict, description="这个词组各义项的词池位置，按义项 id")
 
 
 class Sentence(BaseModel):

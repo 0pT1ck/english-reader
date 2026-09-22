@@ -294,7 +294,10 @@
     <b>下次会话从这里开始。</b>这份文档是 2026-09-21 一整天 ＋ 2026-09-22 续谈的全部产出，
     <b>09-21 那次会话结束时清空了上下文，所以下面这些不要重新问、也不要重新量</b>。
     <br><br>
-    <b>状态：五块都写完了，等用户确认定稿。这是当前 Phase</b>（2026-09-22 起，P10 验收通过之后）。
+    <b>状态：方案 2026-09-22 定稿，同日动手，<b>代码完成、自动验收全绿</b>，
+    欠人工三项与部署。</b>这是当前 Phase。<b>先读 §18 实施结果</b>——
+    它记着做出来的数、路上撞到的五件事，以及<b>三处「方案写的和实际做的不一样」</b>
+    （§15／§16 已按实际改过，别再照旧口径动手）。
     <b>不许动手的理由现在只剩一条</b>：铁律「方案必须充分讨论、达成一致才能定案，
     讨论期间不写任何实现代码」。<b>方案定稿之后要问一句要不要推</b>，不自动推。
     <br><br>
@@ -310,16 +313,16 @@
     <b>已定的二十二条在上面那个方框里</b>，逐条带着日期和理由，不要回头问。
     <b>§8 那两条 2026-09-22 都定掉了</b>（⑯ 不加 <code>suspect</code>、⑰ 用法只建表不进复习），
     那一节留着是为了记住它们当初为什么是问题。
-    <b>2026-09-22 新开了五节</b>：§11 契约变更（⑱ 让「只增不减」不再是约束，
+    <b>2026-09-22 新开了六节</b>：§11 契约变更（⑱ 让「只增不减」不再是约束，
     ⑲ 给「必须是最新版本」补上执行点）、§12 旧数据怎么收场、
     §13 词组的中文从哪解析出来（四档对号规则）、§14 调用次数与跑不完怎么办、
-    <b>§15 实施步骤 ／ §16 验收清单 ／ §17 明确不做</b>。
-    <br><b>到这一步方案的五块就齐了。</b>
+    <b>§15 实施步骤 ／ §16 验收清单 ／ §17 明确不做 ／ §18 实施结果</b>。
     <br><br>
     <b>动手前按这个顺序读</b>：<b>§9</b>（判据是怎么来的——用户为什么做这个软件，
     以及柯林斯把词组与用法分成四类）→ <b>§5</b>（三张表长什么样）→
     <b>§8</b>（还欠什么）→ <b>§11</b>（契约要改成什么样，含版本握手的三个坑）→
-    <b>§15</b>（照着做）。<b>动手时 §15 与 §16 是主文件</b>，
+    <b>§18</b>（实施结果：做出来的数与撞到的五件事）→ <b>§15</b>（照着做）。
+    <b>动手时 §15 与 §16 是主文件</b>，
     §13 是它要用的规则，§12 是它要收拾的旧账。§3、§4 是过程，知道结论就够。
     <br><br>
     <b>这次讨论里我犯过三个错，每个都写在原地了，记着形状免得重蹈：</b>
@@ -1195,18 +1198,25 @@
         <span><b>别手改 <code>client/Sources/ERContract</code></b>，那是生成物。
         本地跑一遍 <code>scripts/ci_client.py</code> 就知道漂没漂</span></span></div>
       <div class="step"><span class="step-n">3.2</span><span class="step-what">
-        <b><code>sense_of</code> 加回落；<b>两处</b> <code>item_type = 'word'</code> 过滤都要改</b>
-        <span><b>这一步最容易只做一半。</b><code>review/routes.py:118</code>
-        是下发句子池，<code>progress/module.py:201</code> 是「服务端知道你在学哪些东西」的入口——
-        <b>只改前者，句子池照样是空的</b></span></span></div>
+        <b><code>sense_of</code> 加回落；<code>/sentences</code> 那处过滤改掉</b>
+        <span><b>【2026-09-22 实施订正：只有一处，不是两处】</b>方案原本写「两处
+        <code>item_type = 'word'</code> 都要改」，点名了 <code>progress/module.py:201</code>。
+        <b>那一处必须不改</b>——它是 <code>words_in_progress()</code>，生成器的排除名单，
+        改了就是让生成器把 <code>account for</code> 当成一个要避开的「词」（验收 31 守的正是它）。
+        真正要改的是 <code>review/routes.py</code> 里下发句子池那一处，
+        加上客户端 <code>Projection.swift</code> 那一句</span></span></div>
       <div class="step"><span class="step-n">3.3</span><span class="step-what">
         <b>词组造句 ＋ 提示句</b><span>造句按义项造、懒的（⑤c／⑫）。
         <b>提示句要反着来</b>：<code>sentences.harvest</code> 现在明写着
         「跳过 <code>in_phrase</code> 的 token」，而词组的原句正在那些位置上——
         §8 那句「实施时确认一次」说的就是这处</span></span></div>
       <div class="step"><span class="step-n">3.4</span><span class="step-what">
-        <b><code>judge_phrases</code> 退休 ＋ <code>verify_phase2</code> 7.9 改断言</b>
-        <span>改成守「每一处词组要么有义项、要么明确填了 0」（§12 二）</span></span></div>
+        <b><code>judge_phrases</code> 退休 ＋ <code>verify_phase2</code> 7.7–7.14 整节改写</b>
+        <span>改成守「每一处词组要么有义项、要么明确判成不是词组」（§12 二）。
+        <b>【实施订正】到期的不止 7.9，是一整节</b>（7.7 候选、7.8 噪音名单、
+        7.10 上下文、7.11 下发、7.14 统计口径）；而
+        <b><code>verify_phase3</code> 2.2 根本不存在了</b>——P9 §12 把那套 1–4 节
+        换掉的时候就没了，方案里「改写它」这条无事可做</span></span></div>
       <div class="step"><span class="step-n">3.5</span><span class="step-what">
         <b>版本握手服务端那半（⑲）</b><span>只拦 <code>/v1/client/…</code>；
         没有版本头 ＝ 最老；管理接口与 <code>/health</code> 不拦</span></span></div>
@@ -1274,8 +1284,11 @@
     <h3>语料</h3>
     <div class="checks">
       <div class="check"><span class="check-n">10</span><span class="check-what">
-        <b>语料里每一处词组，要么有义项 id，要么明确是 0</b>
-        <span>替掉到期的 <code>verify_phase2</code> 7.9。
+        <b>语料里每一处词组，要么有义项 id，要么明确判成「这一处不是词组」</b>
+        <span><b>【实施订正：那个值是 -1，不是 0】</b>这个代码库里
+        <code>annotate.NO_SENSE_FITS = -1</code> 才是「问过了、都不贴合」，
+        而 <code>0</code> 早就被「这个词根本没有义项集」占着。两处用反了的后果是
+        下发过滤放行了本该丢掉的行。替掉到期的 <code>verify_phase2</code> 7.9。
         <b>它同时是「补标注跑完了没有」的判据</b>——㉒ 允许分批跑，
         <b>分批期间它会红，那不是回归</b></span></span></div>
       <div class="check"><span class="check-n">11</span><span class="check-what">
@@ -1308,14 +1321,19 @@
     <h3>复习这条链</h3>
     <div class="checks">
       <div class="check"><span class="check-n">19</span><span class="check-what">
-        <b>两处 <code>item_type = 'word'</code> 过滤都改了</b>
-        <span>读源码断言：句子池那处与词池快照那处（§15 3.2）</span></span></div>
+        <b><code>/sentences</code> 不再按类型过滤，词组也下发</b>
+        <span>读源码断言。<b>【订正】只有这一处该改</b>——
+        生成器那处的 <code>word</code> 过滤必须留着，见验收 31 与 §15 3.2</span></span></div>
       <div class="check"><span class="check-n">20</span><span class="check-what">
         <b>上报的词池快照包含词组</b>
         <span>断了这一环，症状是「标了词组，复习里永远不出现」，而且一个错都不报</span></span></div>
       <div class="check"><span class="check-n">21</span><span class="check-what">
         <b>标过的词组进队列；没有句子池的不进</b>
-        <span>替掉 <code>verify_phase3</code> 2.2（⑮）</span></span></div>
+        <span>⑮。<b>【订正】不是替 <code>verify_phase3</code> 2.2</b>（那条 P9 就没了），
+        而是改写 Core 的 <code>ProjectionTests</code> 那条同名断言。
+        <b>断言要看代码不能看注释</b>——第一版写成「源码里不许出现
+        <code>key.itemType == "word"</code>」，而新注释里正好引用了这句话，
+        于是断言红着而代码是对的</span></span></div>
       <div class="check"><span class="check-n">22</span><span class="check-what">
         <b>词组卡只有方向 1，不出拼写题</b><span>⑤b</span></span></div>
       <div class="check"><span class="check-n">23</span><span class="check-what">
@@ -1413,6 +1431,104 @@
         那个数描述的是文章对大纲，不是文章对你</span></div>
       <div class="not"><i>✗</i><span><b>词组的词族</b></span></div>
     </div>
+  </section>
+
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§18</span>
+      <h2>实施结果，与路上撞到的五件事</h2>
+      <span class="sec-note">2026-09-22，代码完成</span>
+    </div>
+    <p class="lede">方案定稿当天动的手。§15 的五个阶段做完了前四个，
+    <b>第五阶段只差人工三项与部署</b>——用户定了人工最后跑。</p>
+
+    <h3>做出来的东西</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th></th><th>结果</th></tr></thead>
+      <tbody>
+        <tr><td>清单</td><td><b>2,170 个词组 / 3,232 条义项</b>。
+            A 档 1,014 ＋ B 档 654 直接收；B*／C／D 共 1,211 条逐条判过，收 589、拒 530</td></tr>
+        <tr><td>语料</td><td><b>4,219 处</b>：判为词组 2,856、
+            <b>判为「这一处不是词组」1,363（32%）</b>——语境判定不是橡皮图章</td></tr>
+        <tr><td>用法</td><td>4,954 条搭配，挂在 4,450 条义项上</td></tr>
+        <tr><td>考频</td><td>词组义项 681 条有考频；单词考频重算成 9,471 条
+            （原 9,366——被误排除的 token 从 4,929 降到 1,429，新识别更准）</td></tr>
+        <tr><td>归档</td><td>9,901 条（只有一边收的）＋ 3,458 条旧判定</td></tr>
+        <tr><td>自动验收</td><td><code>verify_phase11.py</code> <b>27/27</b>；
+            回归 P0 32 · P1b 28 · P1c 11 · P2 48 · P3 29 · P4 41 · P5 21 · P9 38 · P10 19 全过；
+            <code>swift test</code> 117；<code>ci_app.py</code> 9/9</td></tr>
+      </tbody>
+    </table></div>
+    <p><b><code>ci_client.py</code> 8/9，唯一红的 L0.3 是「契约生成物与已提交的不一致」</b>——
+    那正是改了契约还没提交的必然状态（铁律：Phase 中途不提交），提交后自动变绿。</p>
+
+    <h3>一、B 档不干净，而**抽样看不出来、对照一次就看出来了**</h3>
+    <p>㉑ 第一次跑，30 条阳性对照<b>错了 6 条</b>。查下去：<b>六条全是模型对的</b>，
+    错的是我的对照——B 档里混着两种块：</p>
+    <div class="nots">
+      <div class="not"><i>碎片</i><span><code>as far as</code> ＋ <code>is concerned</code>
+        是<b>一个</b>词组被分段加粗，所以 <code>as far as</code> 只是半个
+        （<code>for all</code> ＋ <code>are worth</code>、<code>as if</code> ＋
+        <code>own the place</code> 同理）</span></div>
+      <div class="not"><i>合住</i><span><code>beside yourself with</code> ／
+        <code>beside the point</code> 是<b>两个</b>词组挤在一块，
+        而那一块的中文「非常；极度」只描述前者</span></div>
+    </div>
+    <p style="margin-top:1rem">两种都会让读者点开看到**不是这个词组的中文**，正是这个项目最怕的错。
+    <b>§13 抽样 14 条全对，没看出任何一种</b>；对照跑一次就照出来了。
+    规则因此细分出 <b>B* 档</b>：一个加粗串只有在它是那块加粗的<b>全部</b>时才算干净，
+    否则交给判定。改完对照 <b>29/30 ＋ 30/30</b>，而 B* 实际判下来 <b>360 对 18</b>——
+    它确实很干净，<b>但那是判完才知道的</b>。</p>
+
+    <h3>二、表名撞车：<code>phrases</code> 两个库里各有一张</h3>
+    <p>ECDICT 在 <code>dictionary.db</code> 里本来就有一张 <code>phrases</code>（31.8 万行），
+    而每个连接都挂着所有库——不带库名的 <code>phrases</code> 解析到哪一张，
+    取决于连接是从哪个库开的。已改名 <code>phrase_list</code>。</p>
+    <p><b>判定脚本崩的那一次正是撞上它</b>，而且是最能说明问题的形式：那个进程在改名<b>之前</b>
+    启动，跑的是旧代码 <code>SELECT ... FROM phrases</code>，改名之后这条语句
+    <b>解析到了 ECDICT 那张表</b>，报的是「no such column: text」——
+    一个听起来像「表结构错了」的错，实际是「读错表了」。</p>
+
+    <h3>三、单义词组不能预填</h3>
+    <p>标注器对单词有条捷径：只有一个义项就直接填，不问模型。<b>对词组不成立</b>——
+    词组的第一个问题是「它在这儿到底算不算一个词组」。实测：
+    <code>talk about</code> 在柯林斯里只有「这才叫…；真是」（Talk about lucky!）一条，
+    于是预填把语料里每一句平常的 <code>talked about</code> 都标成了那个意思。
+    <b>不报错，全错。</b>取消这条捷径之后它正确地判成了「这一处不是词组」。</p>
+
+    <h3>四、一个不存在的类别名，让判断静默失效</h3>
+    <p>扫描器里写着 <code>BREAKING_KINDS = frozenset({"punct"})</code>——
+    <b>而这个项目里标点的 kind 叫 <code>nonword</code></b>（<code>ingest._classify</code>）。
+    于是「跨标点就断开」这个判断永远不成立，语料里抓出了 <code>at - home</code>、
+    <code>talked about .</code> 这种跨逗号跨破折号的 span。
+    <b>一个永远不等于任何东西的名字不会报错，只会让判断静默失效</b>——
+    坑 §6.7「分不出两种情况的断言等于没有断言」的同一族。改成正面列举
+    <code>{"content","function","proper"}</code>，4,309 → 4,219 处。</p>
+
+    <h3>五、服务端在给词组的 <code>sense_id</code> 强制清零</h3>
+    <p><code>service.py</code> 里有一行 <code>sense_id = 0 if item_type == "phrase" else …</code>，
+    注释写着「a phrase is not one meaning of something else」。这话对，但不相干：
+    词组有它自己的几个意思。不改这一行，⑮ 那条链的最后一环就断了——
+    客户端老老实实发来 43816，服务端记成 0。</p>
+
+    <h3>三条与方案不符的，已按实际改进方案（§15／§16）</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>「两处 <code>item_type='word'</code> 过滤」只有一处</b>要改。
+        另一处是生成器的排除名单，改了就坏（验收 31 守它）</span></div>
+      <div class="not"><i>2</i><span><b>「填 0」应为「填 -1」</b>。
+        这个库里 <code>-1</code> ＝ 问过了都不贴合，<code>0</code> ＝ 根本没有义项集。
+        契约与下发过滤都按 -1 订正了</span></div>
+      <div class="not"><i>3</i><span><b><code>verify_phase3</code> 2.2 早就不存在</b>
+        （P9 §12 换掉了 1–4 节），要改写的是 Core 的 <code>ProjectionTests</code> 那条同名断言</span></div>
+    </div>
+
+    <h3>还欠什么</h3>
+    <p><b>人工三项 M1／M2／M3</b>（用户定了最后跑）与<b>部署</b>（§15 5.2／5.3：
+    先发客户端、再拧 <code>min_contract_version</code>、重建镜像、开回夜间备稿）。
+    <b>版本下限现在是 0，也就是不拦</b>——发版顺序要求它最后才调上去。</p>
+    <div class="callout"><b>跑 M1 的人注意一件事</b>：<code>ercli review</code>
+    在没有 TTY 的时候会自己作答，用管道跑（<code>| head</code>、<code>&gt; /dev/null</code>）
+    会把当天的卡片消耗掉，然后下一次看到的是「今天的复习 0 条」。手动走，别接管道。</div>
   </section>
 
   <footer>

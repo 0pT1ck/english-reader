@@ -154,4 +154,24 @@ struct ReviewStateTests {
         let none = draw.pick(from: items, weight: \.weight, isOpen: { _ in false }, random: 0.5)
         #expect(none == nil, "都做完了就该是 nil，而不是硬挑一个")
     }
+
+    /// P11 决定 ⑤b：**词组只做单向**。
+    ///
+    /// 「看词组想意思」问得了；反过来给「导致」让你想英文是道坏题——
+    /// `lead to`／`result in`／`contribute to` 全对，而卡片只认一个答案。
+    /// 所以答对第一向就走完这一轮，**没有第二向可解锁**。
+    @Test("词组答对第一向就算走完，不解锁第二向")
+    func phrasesAreAskedOneWayOnly() {
+        let pass = ReviewAnswer(passed: true, revealed: 0, easy: false)
+
+        let word = ReviewItemState().applying(pass, weightDecay: 0.5)
+        #expect(word.direction == .senseToWord, "单词照旧解锁看义想词")
+        #expect(!word.done)
+
+        let phrase = ReviewItemState().applying(pass, weightDecay: 0.5,
+                                                singleDirection: true)
+        #expect(phrase.done, "词组答对就走完了")
+        #expect(phrase.direction == .wordToSense, "方向不动——没有第二向")
+        #expect(phrase.asks == 1, "问过几次照旧累加，那个数就是成绩")
+    }
 }

@@ -493,63 +493,72 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # --- 7c. 词组 ------------------------------------------------------ #
         print("\n7c. 词组")
 
-        from backend.modules.reading import phrases as phrase_module
+        # **整节 2026-09-22 重写**（P11）。它原本验的是「结构筛提候选 + 模型逐处
+        # 判它算不算词组」那一套，而 P11 把两件事都换掉了：清单（考纲表 ∩ 柯林斯）
+        # 说什么是词组，标注说这一处用的是哪个意思。**旧断言删掉会丢守卫，
+        # 留着会天天报假警**——所以照坑 §8 那条办，改成守始终成立的那一半。
+        from backend.modules.phrases import repository as phrase_module
 
         conn = get_connection("content")
         pstats = phrase_module.stats()
+        occurrences = conn.execute("SELECT COUNT(*) FROM reading_phrases").fetchone()[0]
         article_count = len(repository.list_articles(shelf="all", limit=10000))
 
-        check("7.7", "词组候选已扫出来",
-              pstats["candidates"] > 100,
-              f"{pstats['candidates']} 处候选，平均每篇 "
-              f"{pstats['candidates'] / max(1, article_count):.1f} 处")
+        check("7.7", "词组出现位置已按清单扫出来",
+              occurrences > 100 and pstats["phrases"] > 100,
+              f"清单 {pstats['phrases']} 个词组，语料 {occurrences} 处，平均每篇 "
+              f"{occurrences / max(1, article_count):.1f} 处")
 
-        # The structural filter is what keeps dictionary noise out: `to be`,
-        # `the world` and `there is` all have dictionary entries, and none of
-        # them starts with a verb.
+        # **换了挡噪音的东西，所以换了名单。** 从前靠「必须是动词+小品词」的结构
+        # 筛挡住 `to be`、`the world`；现在靠交集口径——柯林斯不收它们。
+        # 注意 `that is` 与 `such as` 从名单里拿掉了：**它们现在是清单上的真词组**，
+        # 两本表都收，留在名单里就是拿一条旧口径去红一条新事实。
         noise = conn.execute(
             "SELECT COUNT(*) FROM reading_phrases WHERE phrase IN"
-            " ('to be','have been','the world','there is','that is','such as')"
+            " ('to be','have been','the world','there is','of the','in a')"
         ).fetchone()[0]
-        check("7.8", "词典噪音没有进候选",
+        check("7.8", "词典噪音进不了清单",
               noise == 0,
-              "动词+小品词的结构预筛挡住了 to be / the world / there is 这类"
+              "考纲表 ∩ 柯林斯 挡住了 to be / the world / there is 这类"
               if noise == 0 else f"{noise} 处噪音混进来了")
 
-        # **Waits, rather than reading the count once.** This script ingests an
-        # article of its own, ingestion proposes phrase candidates, and judging
-        # them is an async job — so the first read happens while the script's
-        # own work is still in flight, and the check fails on a number it
-        # created itself moments earlier. Measured 2026-09-12: five pending
-        # during the run, zero a few seconds after it. 坑 §4.6 is the sibling
-        # of this one — a verify script tripping over what it set in motion.
-        #
-        # Bounded, because a wait with no exit is how a check becomes a hang.
-        pending = pstats["pending"]
+        # **等，带上限**（坑 §4.4b）。这个脚本自己入库一篇文章，入库会扫出它的
+        # 词组，而回答「这一处是哪个意思」要过一趟标注——第一次读数时那批还在
+        # 路上。等待条件是数据库里的行数，不是日志里的一句话（坑 §7.2）。
+        def unanswered() -> int:
+            return int(conn.execute(
+                "SELECT COUNT(*) FROM reading_phrases WHERE sense_id IS NULL"
+            ).fetchone()[0])
+
+        pending = unanswered()
         if pending:
             deadline = time.time() + 120
             while pending and time.time() < deadline:
                 time.sleep(5)
-                pending = conn.execute(
-                    "SELECT COUNT(*) FROM reading_phrases WHERE verdict IS NULL"
-                ).fetchone()[0]
-            pstats = phrase_module.stats()
+                pending = unanswered()
 
-        check("7.9", "候选已逐处判断过",
-              pstats["pending"] == 0 and pstats["confirmed"] > 0,
-              f"判为词组 {pstats['confirmed']} 处（{pstats['distinct']} 个不同），"
-              f"判为字面用法 {pstats['rejected']} 处，待判 {pstats['pending']}"
-              + ("" if not pending else "——等了两分钟还没判完，"
-                 "要么模型那条路断了，要么这个上限该调"))
+        settled = conn.execute(
+            "SELECT SUM(sense_id > 0), SUM(sense_id = -1) FROM reading_phrases"
+        ).fetchone()
+        check("7.9", "每一处词组要么有义项，要么明确判成「这一处不是词组」",
+              pending == 0 and int(settled[0] or 0) > 0,
+              f"是词组 {settled[0]} 处，不是词组 {settled[1]} 处，悬着 {pending} 处"
+              + ("" if not pending else "——等了两分钟还没标完，"
+                 "要么模型那条路断了，要么补标注还没跑（分批跑的中途，这不是回归）"))
 
         # The judgement has to be per occurrence, not per string — `look at` is
         # a phrase in one sentence and two words in the next. If every
         # occurrence of a sequence got the same verdict, the model is matching
         # strings and the sentence is doing nothing.
+        context_dependent = int(conn.execute(
+            "SELECT COUNT(*) FROM (SELECT phrase FROM reading_phrases"
+            " WHERE sense_id IS NOT NULL GROUP BY phrase"
+            " HAVING SUM(sense_id > 0) > 0 AND SUM(sense_id = -1) > 0)"
+        ).fetchone()[0])
         check("7.10", "判断是按上下文做的，不是按字符串",
-              pstats["context_dependent"] > 0,
-              f"{pstats['context_dependent']} 个序列在不同句子里得到了不同判定"
-              if pstats["context_dependent"] else "每个序列的判定都一样，句子没起作用")
+              context_dependent > 0,
+              f"{context_dependent} 个词组在不同句子里得到了不同答案"
+              if context_dependent else "每个词组的答案都一样，句子没起作用")
 
         # A confirmed phrase that (a) has a gloss to show and (b) contains a
         # word the learner already has records for — otherwise "the word's rows
@@ -558,8 +567,8 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
         # be able to fail before passing means anything.
         select_phrase = (
             "SELECT p.article_id, p.phrase, p.start_seq, p.end_seq FROM reading_phrases p"
-            " JOIN phrases d ON d.phrase = p.phrase"
-            " WHERE p.verdict = 1 AND d.translation IS NOT NULL{extra}"
+            " JOIN phrase_senses s ON s.id = p.sense_id"
+            " WHERE p.sense_id > 0{extra}"
             " ORDER BY p.article_id LIMIT 1"
         )
         phrase_row = conn.execute(select_phrase.format(
@@ -577,13 +586,16 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
             sample = spans.get(phrase_row["phrase"])
             covered = [t for t in payload["tokens"]
                        if sample and sample["start_seq"] <= t["seq"] <= sample["end_seq"]]
-            check("7.11", "词组随文章下发：跨度、释义，两半都标了 in_phrase",
+            here = next((x for x in (sample.get("senses") or [])
+                         if x["id"] == sample.get("sense_id")), None) if sample else None
+            check("7.11", "词组随文章下发：跨度、几条义项、这一处是哪条，两半都标了 in_phrase",
                   bool(sample and sample["end_seq"] > sample["start_seq"]
-                       and sample["translation"] and len(covered) >= 2
+                       and sample.get("senses") and here and len(covered) >= 2
                        and all(t["in_phrase"] for t in covered)),
                   f"{len(payload['phrases'])} 处，例如 {sample['surface']} → "
-                  f"{sample['translation']}（token {sample['start_seq']}–{sample['end_seq']} "
-                  "都指向它，点任一半都开词组面板）" if sample else "这篇没有下发词组")
+                  f"「{here['gloss_zh']}」（共 {len(sample['senses'])} 条义项，"
+                  f"token {sample['start_seq']}–{sample['end_seq']} 都指向它）"
+                  if sample and here else "这篇没有下发词组")
 
             # The separation the design insists on, tested by doing it: mark the
             # phrase, then look at every record belonging to the word inside it.
@@ -661,9 +673,11 @@ def main() -> int:  # noqa: PLR0912,PLR0915 - a checklist reads better in one pl
                              headers=admin_head).json()
         leftover_phrases = [i["headword"] for i in missing.get("items", [])
                             if i["headword"] in ("get", "least", "known")]
+        in_phrase = int(conn.execute(
+            "SELECT COUNT(*) FROM reading_tokens WHERE in_phrase = 1").fetchone()[0])
         check("7.14", "考频清账后，漏义项报告里不再有词组",
-              not leftover_phrases and pstats["tokens_in_phrase"] > 0,
-              f"{pstats['tokens_in_phrase']} 个 token 标为落在词组里，"
+              not leftover_phrases and in_phrase > 0,
+              f"{in_phrase} 个 token 标为落在词组里，"
               f"报告剩 {len(missing.get('items', []))} 个词，都是真缺口"
               if not leftover_phrases else f"仍混着词组：{leftover_phrases}")
 
