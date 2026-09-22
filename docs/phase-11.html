@@ -1535,10 +1535,32 @@
     号段交集为 0；<b>从公网 <code>reader.cntick.top</code> 拉一次今日包</b>，
     词组带着义项和考频下来了（`had to` → 「需要;必须;不得不」，考频 96），
     <code>capabilities</code> 三位都是 true。</p>
-    <div class="callout"><b><code>min_contract_version</code> 留在 0，也就是不拦。</b>
-    发版顺序是先发客户端、再拧服务端下限，而 <b>App 这个 Phase 不发</b>（决定 ⑦）——
-    现在就拧上去，手机上那版立刻连不上，而唯一能改这个设置的开发者选项也在手机上。
-    <b>下一个界面 Phase 发 App 的时候再拧。</b></div>
+    <h3>版本关卡当天就武装了（⑲）</h3>
+    <p>本来打算留到下一个界面 Phase——⑦ 说 App 这个 Phase 不发，而发版顺序是
+    先发客户端、再拧服务端下限。<b>用户当天要了一版 TestFlight</b>
+    （构建 <code>202609222030</code>，版本 0.1；App 那一侧只有两处改动：
+    请求带契约版本号、426 时说人话），装上确认能用之后，
+    <code>min_contract_version</code> 就从 0 拧到了 <b>2</b>。</p>
+    <p><b>拧完在公网上验了四种情形，不是在本地</b>：</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>请求</th><th>结果</th><th>为什么该是这样</th></tr></thead>
+      <tbody>
+        <tr><td>不带版本头</td><td class="num"><b>426</b></td>
+            <td>当成最老。放行的话，<b>最该拦的那一批正好绕过去</b></td></tr>
+        <tr><td><code>X-Contract-Version: 1</code></td><td class="num"><b>426</b></td>
+            <td>报文是人话：「这份客户端太旧了（契约版本 1，服务端要求至少 2），请更新 App。」</td></tr>
+        <tr><td><code>X-Contract-Version: 2</code></td><td class="num">401</td>
+            <td>过了版本关，卡在令牌——关卡没有误伤新客户端</td></tr>
+        <tr><td><code>/health</code></td><td class="num">200</td>
+            <td>探针不受影响，不会把版本问题报成宕机</td></tr>
+        <tr><td><code>/v1/admin/…</code></td><td class="num">401</td>
+            <td>走另一把凭证，不被版本拦——<b>版本太旧正是最需要开发者选项的时候</b></td></tr>
+      </tbody>
+    </table></div>
+    <div class="callout"><b>「把自己锁在外面」这个顾虑，实际上不成立。</b>
+    §11 六 坑二 写的是「唯一能改这个设置的开发者选项也在手机上」——
+    <b>而这个开关在服务器上</b>，真锁了从 Mac 上 <code>ssh</code> 一条命令就退回 0。
+    顺序仍然要守（先发客户端再拧），但代价是「手机暂时连不上」，不是「没救了」。</div>
 
     <h3>怎么结束的</h3>
     <p>2026-09-22，用户定：<b>「验收太复杂了。直接宣布本 Phase 结束，我日后体验中慢慢验收。」</b>
