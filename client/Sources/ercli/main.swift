@@ -122,7 +122,10 @@ func record(_ entry: OutboxEntry) throws {
         try events.append(kind: kind, payload: entry.payload,
                           idemKey: entry.idemKey, occurredAt: entry.occurredAt)
     } else {
-        try record(entry)
+        // **写发件箱，不是再调一次自己。** 这里原本写的是 `try record(entry)`，
+        // 于是任何一条遥测事件（打开文章、点词）都会无限递归，栈满即 SIGBUS——
+        // 而它崩在 stdout 冲刷之前，看起来像「正文渲染到一半断了」。
+        _ = try outbox.append(entry)
     }
 }
 let articleCache = try ArticleCache(directory: stateDirectory.appendingPathComponent("articles"))
@@ -266,7 +269,14 @@ func finish(_ id: Int) async throws {
         + Ink.dim("——遇见次数 +1，词池位置不动；标记过的才进复习队列"))
 }
 
-func sync() async throws {
+/// 把发件箱和事件日志报上去。
+///
+/// **不能叫 `sync`。** 叫那个名字的话，`try await sync()` 会解析到 POSIX 的
+/// `sync(2)`（Darwin 导出的 C 函数，把文件系统缓冲刷到磁盘）——它不 async
+/// 也不 throw，于是命令静默变成空操作：没有输出、退出码 0、发件箱一条不少。
+/// 编译器为此发过两条警告（「`await` 里没有 async 操作」「`try` 里没有会抛的
+/// 调用」），而警告没人看。命令名仍然是 `ercli sync`，改的只是函数名。
+func pushPending() async throws {
     requireToken()
     let report = try await engine.drain()
     if report.offline {
@@ -742,7 +752,7 @@ do {
         try await library(positionals.dropFirst().first)
     case "review": try await review()
     case "spell": try await spell()
-    case "sync": try await sync()
+    case "sync": try await pushPending()
     case "cache": try showCache()
     case "walk": try await walk()
     default: usage()

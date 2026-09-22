@@ -50,3 +50,6 @@ client/App/Info.plist
 # 经 Mac 或 Samba 共享拷贝时产生的资源叉，内容是二进制垃圾，不是我们写的东西。
 ._*
 .DS_Store
+
+# ercli 的本地状态目录（发件箱、事件日志、缓存）——每台机器自己的，不进仓库
+.ercli/

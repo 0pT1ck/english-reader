@@ -145,7 +145,20 @@ struct ArticleRenderer {
             // Layer ① the English concept, ② the dictionary pile, ③ exam counts.
             // Printed in that order because looking a word up is meant to be
             // reading input rather than a switch into Chinese.
-            let senses = entry.senses.prefix(4)
+            // **本句中标注的那条一定要露面。** 按序号取前四条会把它藏起来——
+            // `gross sales` 里选中的是第 5 条「（尤指金额）总的，毛的」，而前四条
+            // 讲的是「严重的 / 粗俗的 / 恶心的 / 臃肿的」，读者看到的全是错的意思。
+            // 这正是换义项集之后唯一人眼验得了的那件事（P10 §11 的 C2）。
+            // 取原始 token 而不是 `token`(TokenDisplay)——**Core 的显示投影
+            // 不带 sense_id**，所以「这句里是哪条」在那一层拿不到。
+            let raw = (article.tokens ?? []).first { $0.seq == seq }
+            let chosen = raw?.sense_id.flatMap { id -> ERContract.Components.Schemas.Sense? in
+                id > 0 ? entry.senses.first { $0.id == id } : nil
+            }
+            var senses = Array(entry.senses.prefix(4))
+            if let chosen, !senses.contains(where: { $0.id == chosen.id }) {
+                senses.append(chosen)
+            }
             for sense in senses {
                 var line = "  \(sense.ordinal). "
                 // Part of speech in Chinese (P10). The `pos` field carries
@@ -166,6 +179,9 @@ struct ArticleRenderer {
                     line += Ink.dim("  〔真题 \(exam.frequency) 次"
                         + (exam.share.map { "，占 \($0)%" } ?? "") + "〕")
                 }
+                if sense.id == chosen?.id {
+                    line += Ink.bold("  ← 本句中是这条")
+                }
                 if entry.marks.additionalProperties[String(sense.id)] != nil {
                     line += Ink.red("  ← 你标记过这个义项")
                 }
@@ -173,6 +189,9 @@ struct ArticleRenderer {
             }
             if entry.senses.count > senses.count {
                 out.append(Ink.dim("  …还有 \(entry.senses.count - senses.count) 个义项"))
+            }
+            if raw?.sense_id == -1 {
+                out.append(Ink.dim("  这句里没有贴合的义项——退回上面的词典释义"))
             }
             if entry.senses.isEmpty, let translation = entry.translation {
                 out.append("  " + translation)

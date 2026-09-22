@@ -1395,10 +1395,137 @@
     </div>
   </section>
 
+  <section>
+    <div class="sec-head">
+      <span class="sec-mark">§17</span>
+      <h2>验收怎么跑的，结果是什么（2026-09-22）</h2>
+    </div>
+
+    <p><b>自动那一半全过</b>：<code>verify_phase10.py</code> 19 项、5 项只记录；回归
+    P0 32 / P1b 28 / P1c 11 / P2 48 / P3 29 / P4 41 / P5 21 / P9 38，零失败；
+    <code>scripts/ci_client.py</code> 9 项全过。</p>
+
+    <p><b>A13 一开始是红的，而它抓到的不是清空没做干净</b>：是
+    <code>verify_phase2</code> 的词组探针没清理干净。<code>fixture_events.py</code> 的
+    <code>FIXTURE_SHAPES</code> 收着 <code>v2-ph-mark-%</code> / <code>v2-ph-unmark-%</code>，
+    <b>却漏了同一节的 <code>v2-ph-seed-%</code> / <code>v2-ph-unseed-%</code></b>——
+    那对探针每跑一次就往 <code>events.db</code> 留一条 <code>come</code> 的
+    <code>study_states</code>，安静待了一年。清理清单是按形状匹配的，<b>漏一个形状就是永久漏</b>。</p>
+
+    <p><b>真题考频是补算的</b>：重标注跑完时还是 0，跑
+    <code>recount_exam_frequency()</code> 之后 <b>9,366 个义项在真题里出现过</b>
+    （换之前 7,107），落在已确认词组里的 1,508 个 token 没计入。</p>
+
+    <h3>M2：直接跟词典原文对拍，不是翻管理台看「像不像」</h3>
+    <p>方案里 M2 写的是「翻管理台抽查」，实际做的比那硬：<b>另写一份解析，从
+    柯林斯 mdx 原文取块，再和库里逐条比</b>（不复用
+    <code>backend/modules/senses/collins.py</code>——复用只能证明解析器是确定的，
+    证明不了它读对了）。比四样：中文逐字一致、英文定义是原文的一部分、
+    词性标记对得上、词组块一条都没漏进来。</p>
+    <div class="checks">
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>take</b><span>词典 53 块（词组类 7），库里 45 条，全部对上</span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>run</b><span>词典 59 块（词组类 14），库里 43 条，全部对上</span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>address</b><span>词典 8 块（词组类 0），库里 8 条，全部对上。
+        排第一的是「地址」（考频 2），真题里真正常用的是第八条
+        <b>「对付；处理」（考频 37）</b>——这正是这个项目当初要的那张表</span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>丢掉的块都说得出理由</b><span>24 个：21 个词组类标记、3 个没有中文释义的空壳。
+        <b>没有一个是「不知道为什么丢了」</b></span></span></div>
+    </div>
+    <p><b>阳性对照四种已知错误全部报出来</b>（中文截断、词性漏进定义、HTML 实体没解码、
+    英文漏词），阴性对照不报。<b>没有这一步，「全部对上」只是「报零」。</b></p>
+
+    <h3>M1：用 ercli 走一遍，挖出三个真缺陷</h3>
+    <p>十个词全部正确，外加 <code>lasting</code> 标成 −1「没有贴合的义项」——
+    那是 5.8% 那一类的安全失败。最有说服力的是 <b><code>gross sales</code> 里的
+    <code>gross</code> 标中了排第 5 的「（尤指金额）总的，毛的」</b>，
+    而前四条讲的是「严重的 / 粗俗的 / 恶心的 / 臃肿的」。</p>
+    <p>但这一项<b>先挖出三个缺陷，每一个都让 ercli 的一个命令彻底不能用</b>：</p>
+    <div class="checks">
+      <div class="check"><span class="check-n">1</span><span class="check-what">
+        <b><code>ercli read</code> 每次都崩（SIGBUS）</b>
+        <span><code>record()</code> 的 else 分支写成了 <code>try record(entry)</code>——
+        调自己，本该写发件箱。任何一条遥测事件都会无限递归把栈撑爆。
+        崩在 stdout 冲刷之前，看起来像「正文渲染到一半断了」，而且断点每次不同。
+        <code>git log -L</code> 指到 <b>f94d795（P9）</b>，也就是说从 P9 起它就没跑完过一次</span></span></div>
+      <div class="check"><span class="check-n">2</span><span class="check-what">
+        <b><code>ercli look</code> 把答案藏起来</b>
+        <span>按序号取前四条，而 <code>gross</code> 在这句里是第 5 条——
+        读者看到的四条全是错的意思。<b>这恰好是 P10 唯一人眼验得了的那件事。</b>
+        改成本句选中的那条一定出现并标出来；标 −1 时明说。
+        顺带查清：<b>手机 App 没有这个问题</b>，<code>LookupSheet.swift</code>
+        有 <code>contextSenseId</code>、按真题占比排序、不截断</span></span></div>
+      <div class="check"><span class="check-n">3</span><span class="check-what">
+        <b><code>ercli sync</code> 是个空操作</b>
+        <span>它调的不是这个文件里的 <code>func sync()</code>，而是
+        <b>POSIX 的 <code>sync(2)</code></b>（Darwin 导出的 C 函数，刷文件系统缓冲）。
+        没输出、退出码 0、发件箱一条不少。<b>编译器早就在 main.swift:751 发了两条警告</b>
+        ——「await 里没有 async 操作」「try 里没有会抛的调用」，那正是重载选错的指纹。
+        函数改名 <code>pushPending()</code>，命令名不变</span></span></div>
+    </div>
+    <p>修完整条链走通：标记落在<b>本句那条义项</b>（不是第一条）→ 读完 → 上报 16 条全部收下，
+    服务端 <code>study_states</code> 是 <code>reviewing</code>、<code>encounters=1</code>。
+    这同时把两条跨 Phase 不变量验了：<b>记账只在读完那一刻</b>、<b>进队列只有标记这一条路</b>。</p>
+
+    <h3>B3：新旧标注盲判</h3>
+    <p>新旧 token id 没变（B6 验过），所以按 id 直接对拍。旧标注取自
+    <code>data/backups/content-20260920-063551-before-senses-v5.db</code>。
+    <b>逐字比没有意义</b>——两套义项集出自不同来源，同一个意思几乎从不写得一样，
+    所以用汉字集合的 Jaccard 做粗筛，只为把「八成真的换了意思」的捞出来。
+    新旧都标了的 90,857 个 token 里，相似度 ≤ 0.2 的有 <b>22,249 个（24.5%）</b>，
+    从中抽 100 道（一个词最多两处，覆盖 93 个词），另加 15 道阳性对照
+    （把新义项换成同一个词里意思差得最远的一条）。</p>
+    <div class="checks">
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>阳性对照 14 / 15 选中真标注，0 次选中假选项</b>
+        <span>剩下 1 道答「两个都不对」。<b>判法分得出对错，所以后面的数能读</b></span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>位置偏好很小</b><span>A/B 对调重判，115 道里 100 道答案不变（87%），只有 4 道翻转</span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>一百道分歧：新 48 / 两个都说得通 33 / 旧 19</b>
+        <span>扣掉位置偏好（两次一致的 85 道）是 新 46 / both 27 / 旧 12</span></span></div>
+      <div class="check"><span class="check-n">✓</span><span class="check-what">
+        <b>长度基线排除了「不读句子也能猜」</b>
+        <span>柯林斯的中文普遍更长：<b>「一律选更长的」能拿到 83% 的「同意新标注」</b>，
+        而模型只给了 48%——它显然在读句子</span></span></div>
+    </div>
+    <p><b>输的那 19 道性质分两半</b>：一半是真的标错了（<code>thought</code> 标成「斟酌；沉思」、
+    <code>choice</code> 标成「选定的人」、<code>young</code> 的名词用法标成形容词、
+    <code>generally</code> 标成「笼统地」、<code>media</code> 标成「表现方式」），
+    另一半只是柯林斯啰嗦（<code>garden</code> 带一长串括注），意思没错。</p>
+
+    <div class="callout"><p><b>结论的边界，三条都要一起记</b>：
+    ① <b>这个实验一次变了两样东西</b>——义项集（模型写的 → 柯林斯）和标注模型
+    （deepseek → gemini-3.8-flash-high）。所以「新的更好」说的是这个组合，不是柯林斯单独的功劳，
+    <b>也分不出输掉的那些该怪谁</b>。
+    ② <b>「三方独立判断」这次做不到</b>：P3 那次用了三个不同的模型，而现在只有一条路调得通
+    （CLAUDE.md「模型与中转站」）。同一个模型跑三遍不是三个判断者。
+    实际只有<b>模型盲判两遍（含对调）＋ 我读了 19 道</b>，
+    而我那一遍<b>不是盲的</b>（读的时候已经知道答案键）。
+    ③ 抽样只覆盖<b>分歧最大的那 24.5%</b>，不是全体标注的合格率。</p></div>
+
+    <div class="callout"><p><b>我在这一项上把答案键写反过一次，整份结论一度是反的。</b>
+    取样时 <code>flip</code> 为真时 A 装的是旧释义，键却写成 <code>new="A"</code>。
+    <b>阳性对照那一半的键是对的</b>，所以 14/15 不受影响；错的只有 100 道真题的新旧归属。
+    抓到它的是交叉核对：<code>reserve</code> 的「（野生生物）保护区」、<code>approach</code> 的
+    「探讨；处理；对待」在新义项集里<b>逐字存在</b>，而我却把它们当成「旧标注」在报，
+    5 个词 5 次逐字撞上。<b>而它本来早该露头</b>——长度基线算出「新标注是更短的那个」，
+    与柯林斯明明更长矛盾，我当时写了句「方向和我猜的相反」就放过去了。
+    <b>反常的数字要当场追。</b>脚本已修（<code>scripts/b3_sample.py</code>），
+    注释里写着这段。</p></div>
+
+    <p>工具留在仓库里，因为<b>词一多要重验</b>（主文档 §M）：
+    <code>scripts/b3_sample.py</code> 取样、<code>scripts/b3_judge.py</code> 盲判并算长度基线、
+    <code>scripts/b3_score.py</code> 记分。</p>
+  </section>
+
   <footer>
     <div>English Reader</div>
     <div>Phase 10 · 义项大清洗 · 换成柯林斯 · 单词收词组不收 · 旧的全部归档</div>
-    <div>2026-09-20 定案，实施中</div>
+    <div>2026-09-20 定案 · 2026-09-21 重标注跑完 · 2026-09-22 验收通过（§17）</div>
   </footer>
 
 </div>
