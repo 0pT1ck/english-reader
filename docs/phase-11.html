@@ -1522,10 +1522,27 @@
         （P9 §12 换掉了 1–4 节），要改写的是 Core 的 <code>ProjectionTests</code> 那条同名断言</span></div>
     </div>
 
+    <h3>部署（2026-09-22 当天做了）</h3>
+    <p>用户定了「直接 push 并部署，阿里云那份数据已经没啥用了」，
+    于是没等人工验收就上了线。<b>照 §15 5.2／5.3 走的</b>：
+    推代码 → 停容器 → 换 <code>content.db</code>（旧的留成 <code>content.db.pre-p11</code>）
+    → <code>git pull</code>（挂代理）→ <code>/root/build-er.sh</code> 重建镜像
+    → 起容器 → 开回夜间备稿。</p>
+    <p><b>核实过四样，不靠记忆</b>：容器 healthy；
+    <code>docker exec … grep -c phrase_list</code> 数得出来、老的
+    <code>reading/phrases.py</code> 在镜像里已经不存在；库里 2,170 词组 / 3,232 义项、
+    号段交集为 0；<b>从公网 <code>reader.cntick.top</code> 拉一次今日包</b>，
+    词组带着义项和考频下来了（`had to` → 「需要;必须;不得不」，考频 96），
+    <code>capabilities</code> 三位都是 true。</p>
+    <div class="callout"><b><code>min_contract_version</code> 留在 0，也就是不拦。</b>
+    发版顺序是先发客户端、再拧服务端下限，而 <b>App 这个 Phase 不发</b>（决定 ⑦）——
+    现在就拧上去，手机上那版立刻连不上，而唯一能改这个设置的开发者选项也在手机上。
+    <b>下一个界面 Phase 发 App 的时候再拧。</b></div>
+
     <h3>还欠什么</h3>
-    <p><b>人工三项 M1／M2／M3</b>（用户定了最后跑）与<b>部署</b>（§15 5.2／5.3：
-    先发客户端、再拧 <code>min_contract_version</code>、重建镜像、开回夜间备稿）。
-    <b>版本下限现在是 0，也就是不拦</b>——发版顺序要求它最后才调上去。</p>
+    <p><b>只剩人工三项 M1／M2／M3</b>（用户定了最后跑）。
+    <b>所以这个 Phase 还没有验收通过</b>——已经上线的是「代码完成、自动验收全绿」的那一半，
+    两件事别读成一件。</p>
     <div class="callout"><b>跑 M1 的人注意一件事</b>：<code>ercli review</code>
     在没有 TTY 的时候会自己作答，用管道跑（<code>| head</code>、<code>&gt; /dev/null</code>）
     会把当天的卡片消耗掉，然后下一次看到的是「今天的复习 0 条」。手动走，别接管道。</div>
