@@ -1,0 +1,1154 @@
+<meta charset="utf-8">
+<title>Phase 12 完善客户端</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+
+<style>
+  :root {
+    --ground:#FAFAFC; --surface:#FFFFFF; --surface-sub:#F2F2F7;
+    --ink:#1B1D26; --ink-mid:#4E5364; --ink-soft:#757B8E;
+    --rule:#E3E4ED; --rule-soft:#EDEEF4;
+    --accent:#37429B; --accent-soft:#E8EAF7;
+    --mark:#B37A0C; --mark-soft:#FBF2DE;
+    --stop:#A33A3A; --good:#2F7A4F;
+    --f-serif:"Newsreader",Georgia,serif;
+    --f-sans:"PingFang SC","HarmonyOS Sans SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --f-mix:"Newsreader","PingFang SC","HarmonyOS Sans SC","Microsoft YaHei",serif;
+    --f-mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",monospace;
+    --col:45rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+      --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+      --rule:#2A2D3B; --rule-soft:#22252F;
+      --accent:#98A1EE; --accent-soft:#232741;
+      --mark:#DFAB49; --mark-soft:#2C2718;
+      --stop:#E08585; --good:#6BC191;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground:#101119; --surface:#171922; --surface-sub:#1D202B;
+    --ink:#E7E8F0; --ink-mid:#ADB2C4; --ink-soft:#868CA0;
+    --rule:#2A2D3B; --rule-soft:#22252F;
+    --accent:#98A1EE; --accent-soft:#232741;
+    --mark:#DFAB49; --mark-soft:#2C2718;
+    --stop:#E08585; --good:#6BC191;
+  }
+  * { box-sizing:border-box; }
+  body { background:var(--ground); color:var(--ink); font-family:var(--f-sans);
+         font-size:16px; line-height:1.75; -webkit-font-smoothing:antialiased;
+         padding:0 1.5rem 6rem; }
+  .wrap { max-width:var(--col); margin:0 auto; }
+  .masthead { padding:4.5rem 0 0; display:flex; flex-direction:column; gap:1.1rem; }
+  .eyebrow { font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+             letter-spacing:0.14em; text-transform:uppercase; color:var(--ink-soft); }
+  h1 { font-family:var(--f-serif); font-size:clamp(2.4rem,7.5vw,3.4rem); font-weight:500;
+       letter-spacing:-0.02em; line-height:1.05; margin:0; text-wrap:balance; }
+  .standfirst { font-family:var(--f-mix); font-size:1.18rem; line-height:1.6;
+                color:var(--ink-mid); margin:0; max-width:34rem; text-wrap:pretty; }
+  .thesis { font-family:var(--f-mix); font-size:1rem; margin:0; padding-left:1.1rem;
+            border-left:2px solid var(--accent); max-width:34rem; }
+  .parent { font-size:0.83rem; color:var(--ink-soft); font-family:var(--f-mono); }
+  .parent a { color:var(--accent); text-decoration:none; border-bottom:1px solid var(--rule); }
+  section { margin-top:4rem; }
+  .sec-head { display:flex; align-items:baseline; gap:0.85rem; padding-bottom:0.7rem;
+              border-bottom:1px solid var(--ink); margin-bottom:1.6rem; }
+  .sec-mark { font-family:var(--f-mono); font-size:0.78rem; font-weight:600;
+              color:var(--accent); letter-spacing:0.06em; }
+  h2 { font-family:var(--f-mix); font-size:1.32rem; font-weight:600;
+       letter-spacing:-0.01em; margin:0; line-height:1.3; }
+  .sec-note { margin-left:auto; font-size:0.78rem; color:var(--ink-soft);
+              font-family:var(--f-mono); }
+  h3 { font-family:var(--f-mix); font-size:1.02rem; font-weight:600; margin:2rem 0 0.8rem; }
+  h3:first-of-type { margin-top:0.4rem; }
+  .lede { font-family:var(--f-mix); color:var(--ink-mid); margin:0 0 1.6rem; max-width:36rem; }
+  p { margin:0 0 1rem; } p:last-child { margin-bottom:0; }
+  .table-scroll { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; min-width:28rem; }
+  th { text-align:left; font-family:var(--f-mono); font-size:0.7rem; font-weight:500;
+       letter-spacing:0.1em; text-transform:uppercase; color:var(--ink-soft);
+       padding:0 0.9rem 0.55rem 0; border-bottom:1px solid var(--ink); white-space:nowrap; }
+  td { padding:0.62rem 0.9rem 0.62rem 0; border-bottom:1px solid var(--rule-soft);
+       vertical-align:baseline; color:var(--ink-mid); }
+  td:first-child { color:var(--ink); }
+  td.topic { font-family:var(--f-mono); font-size:0.82rem; color:var(--accent); white-space:nowrap; }
+  td.num { font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  td.ok { color:var(--good); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.wait { color:var(--mark); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  td.none { color:var(--ink-soft); font-family:var(--f-mono); font-size:0.78rem; white-space:nowrap; }
+  .steps { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+           border:1px solid var(--rule); }
+  .step { background:var(--surface); padding:0.95rem 1.1rem; display:grid;
+          grid-template-columns:1.9rem 1fr; gap:0.9rem; align-items:baseline; }
+  .step-n { font-family:var(--f-mono); font-size:0.76rem; color:var(--accent); }
+  .step-what { font-size:0.93rem; }
+  .step-what b { display:block; font-weight:600; font-size:0.97rem;
+                 font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .step-what span { color:var(--ink-mid); }
+  pre { font-family:var(--f-mono); font-size:0.79rem; line-height:1.75;
+        background:var(--surface); border:1px solid var(--rule); padding:1rem 1.15rem;
+        overflow-x:auto; margin:0 0 1rem; color:var(--ink-mid); white-space:pre-wrap; }
+  pre b { color:var(--ink); font-weight:500; }
+  .nots { display:flex; flex-direction:column; gap:0.8rem; }
+  .not { display:grid; grid-template-columns:1.2rem 1fr; gap:0.7rem;
+         align-items:baseline; font-size:0.93rem; }
+  .not i { font-style:normal; font-family:var(--f-mono); font-size:0.85rem; color:var(--stop); }
+  .not b { font-weight:600; } .not span { color:var(--ink-mid); }
+  .checks { display:flex; flex-direction:column; gap:1px; background:var(--rule);
+            border:1px solid var(--rule); }
+  .check { background:var(--surface); padding:0.9rem 1.1rem; display:grid;
+           grid-template-columns:1.8rem 1fr; gap:0.8rem; align-items:baseline; }
+  .check-n { font-family:var(--f-mono); font-size:0.75rem; color:var(--ink-soft); }
+  .check-what { font-size:0.93rem; }
+  .check-what b { display:block; font-weight:600; font-size:0.96rem;
+                  font-family:var(--f-mix); margin-bottom:0.15rem; }
+  .check-what span { color:var(--ink-mid); }
+  code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
+         padding:0.08em 0.32em; border-radius:2px; }
+  .figures { display:grid; grid-template-columns:repeat(auto-fit,minmax(8rem,1fr));
+             gap:1px; background:var(--rule); border:1px solid var(--rule); margin:2.5rem 0 0; }
+  .fig { background:var(--surface); padding:1rem 0.9rem 1.1rem; display:flex;
+         flex-direction:column; gap:0.25rem; }
+  .fig-val { font-family:var(--f-mono); font-size:1.25rem; font-weight:500;
+             font-variant-numeric:tabular-nums; color:var(--ink); line-height:1.2; }
+  .fig-val span { font-size:0.78rem; font-weight:400; color:var(--ink-soft); }
+  .fig-key { font-size:0.76rem; color:var(--ink-soft); line-height:1.4; }
+  .callout { background:var(--mark-soft); border-left:2px solid var(--mark);
+             padding:1rem 1.2rem; margin:0 0 1.6rem; font-size:0.93rem; }
+  .callout b { font-weight:600; }
+  footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
+           font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
+           gap:0.5rem 1.5rem; font-family:var(--f-mono); }
+  @media (max-width:34rem) {
+    body { padding:0 1.15rem 4rem; }
+    .step, .check { grid-template-columns:1fr; gap:0.2rem; }
+  }
+  .shot { margin:2.2rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; background:var(--surface); }
+  .shot figcaption { margin-top:.8rem; text-align:center; color:var(--ink-soft);
+                     font-size:.86rem; line-height:1.65; }
+  .wire { font-family:var(--f-mono); font-size:0.76rem; line-height:1.9; white-space:pre;
+         background:var(--surface); border:1px solid var(--rule); padding:1.1rem 1.2rem;
+         overflow-x:auto; color:var(--ink-mid); margin:0 0 1.6rem; }
+  .wire b { color:var(--ink); font-weight:500; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="eyebrow">Phase 12 · 方案定稿，尚未动手 · 2026-09-22 ／ 09-23</div>
+    <h1>完善客户端</h1>
+    <p class="standfirst">词组做完了，而手机上一个像素都没变。
+    <b>P6 §7 那笔破了跨 Phase 不变量的账，从 P6 一直欠到 P11</b>，这个 Phase 把它还掉，
+    顺带收拾真机上用出来的五条。</p>
+    <p class="thesis">主线只有一件事：<b>把词组端到界面上</b>。
+    它的前提两天前才刚成立——P6 当年关掉它的理由是「词组识别的判定质量不可信」
+    （同一篇文章问三次给 37／28／34 个，交集只有 19），
+    而 P11 用一本词典把那个理由整个消掉了。
+    <br><b>这个 Phase 的改动几乎全在 <code>client/App/Sources/</code></b>：
+    Core 已经实现、服务端已经下发、<code>ercli</code> 已经渲染得出来，
+    <b>关着的只有 iOS App 这一层</b>。
+    <br><b>文档里所有的数都是 2026-09-22 在本机那份 P11 导入后的
+    <code>content.db</code> 上现场量的</b>，不是从别处抄的。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-11.html">Phase 11</a> ｜ 欠账的来历 <a href="./phase-6.html">Phase 6 §7</a></p>
+  </header>
+
+  <div class="callout" style="margin-top:2.5rem">
+    <b>2026-09-22 开谈、2026-09-23 定稿。下面十八条都是用户拍板的，不再回头问。</b>
+    <br><br>
+    ① <b>主线是词组端上界面</b>——还 P6 §7 那笔账。不是「顺带做一点」，是这个 Phase 的骨架；
+    <br>② <b>点词组里的某个词，走 B</b>：词组的义项在上，
+    <b>「这个词本身」折叠在下</b>，展开才显示。
+    <b>展开之后不画「本句中」那条高亮</b>——那条标注是在不知道自己在词组里的情况下做的，
+    显示一个已知可能错的高亮比不显示更糟（§3）；
+    <br>　 用户原本想的是「直接不管，因为这就是个词组」，当天改了主意：
+    <b>「如果一个词在词组中的意思就是他本身就有的义项，就返回这个词组的义项＋
+    这个词组的其他义项＋点击这个词本来就该出来的内容。如果这个词在这个词组里
+    完全不是他本来的意思，就只返回这个词组的义项。」</b>
+    <b>这条规则要的判据库里没有</b>（§3 量了三条现成的路，全不成立），
+    所以这个 Phase 做 B ——<b>不判，但把位置腾出来</b>；
+    <br>③ <b>标记过的词组用虚线</b>，跨两个词整体画，中间的空格也在里面。
+    <b>具体的美术方案以后再定</b>（用户原话「暂时也用虚线」）；
+    <br>④ <b>词组的标记滑块三档</b>，跟单词一样（不认识／模糊／认识）；
+    <br>⑤ <b>复习的「共 N 条」词组与单词混在一起数</b>，不分开显示；
+    <br>⑥ <b>词组的揭晓屏给这个词组的全部义项</b>。这是本 Phase 唯一一处服务端改动，
+    <b>要动契约</b>，<code>ContractVersion.current</code> 与
+    <code>min_contract_version</code> 一起加一，<b>发版顺序先客户端再拧服务端</b>（§6）；
+    <br>⑦ <b>顺带修 <code>pos</code> → <code>pos_zh</code></b>，点词面板与揭晓屏两处。
+    这是 P10 留在界面这一侧的现役缺陷，不单开一个 Phase（§8）；
+    <br>⑧ <b>列表卡片的中文概括改两行，提示词一个字不动</b>（§7 一）；
+    <br>⑨ <b>阅读器头部的概括改左对齐</b>，
+    <b>「话题 · 词数」那一行保持左右分居</b>（§7 二）；
+    <br>⑩ <b>阅读器标题先试 B1</b>（让系统的大标题折行），
+    <b>不行再转 C</b>（自绘标题 ＋ 自己驱动栏内标题）。
+    用户定了两条都写进方案、动手时先做 B1（§7 三）；
+    <br>⑪ <b>三处详情页进去时藏掉标签栏</b>，并重新量阅读器底部的留白。
+    设置那几个子页不藏（§7 四）；
+    <br>⑫ <b>点词面板整个重画</b>（§4）：<b>音标跟在词后面</b>，不单独占一行；
+    <b>默认那一屏＝本句中的释义 ＋ 有考频的常见义项</b>；
+    <b>没考频的往下滑才出来</b>；<b>再往下是用法</b>。
+    <br>　 这一条<b>顺带答掉了「义项列表要不要折叠」那笔欠账</b>——
+    不是折叠按钮，是排版。<b>但它有两处要用户再拍一次</b>：
+    一条有考频的都没有时默认给什么（<code>with</code> 就是这一类，
+    而它正是用户举的例子），以及用法贴在义项下面还是底部一整块（§4）。
+    <br>　 <b>2026-09-23 两处都答了</b>：
+    <b>⑫a 一条有考频的都没有时，全部列出来</b>（<code>with</code> 就是 21 行）；
+    <b>⑫b 面板分两个状态</b>——<b>默认那一屏不带用法</b>，
+    <b>往上滑展开详细列表时，用法贴在各自那条义项下面</b>（§4 ② 的 a 画法）。
+    <b>这两条合在一起撞上了 P6 决定 26（面板最多半屏）</b>，见 §4 末尾。
+    <br>⑫c <b>展开那一档允许超过半屏，决定 26 只管默认那一档</b>（2026-09-23 定）。
+    放下是阅读，拉起来是查词典。<b>认下的代价</b>：展开时看不到正文，
+    也点不了下一个词（决定 25 的点穿只开到默认那一档）——收回来就恢复；
+    <br>⑬ <b>词组的复习卡不新开类型，放进 <code>WordCard</code></b>（2026-09-23 定）。
+    我原先倾向新开一个 <code>PhraseCard</code>，理由是名字和内容会说反话；用户定了放在一起。
+    <b>执行上要守一条</b>：把 <code>WordCard</code> 的文档注释（现在写着
+    「The whole word」）改成说明它也装词组，<b>让契约自己把这件事说清楚</b>，
+    不留一个会误导下一个读代码的人的名字；
+    <br>⑭ <b>词组面板里「这个词本身」放在其他释义上面</b>（2026-09-23 定）。
+    于是它紧跟在默认那一屏的下沿——<b>我把这一行算进默认高度</b>，不用往上滑就点得到；
+    <br>⑮ <b>配色方案和动画，用户打算整体重构，但不在这个 Phase</b>（2026-09-23）。
+    所以这个 Phase 画的所有新东西（词组的虚线、面板的分段）<b>都照现有的配色和动画来</b>，
+    不为「反正要重构」提前发明新样式。记进主文档 §M；
+    <br>⑯ <b>标记必须落在一条真实的义项上</b>（2026-09-23 定，§4 末尾）。
+    起因是真机上标了人名 Green：记下的是「义项 0」，<b>永远出不了题、永远不会被复习</b>，
+    而屏幕上虚线照亮。能点的词里一半以上会这样。分三种处理：
+    <b>人名地名</b>——面板写「人名」，不给普通词的意思，不给滑块；
+    <b>本句中没判出义项但有义项列表的</b>（<code>with</code>、标注判「都不贴合」的）——
+    <b>在列表里点哪一条就标哪一条</b>；
+    <b>连义项列表都没有的</b>——不给滑块，写一句为什么。
+    <b>规则放进 Core</b>，App 和 <code>ercli</code> 共用（后者有同一个毛病）；
+    <br>⑰ <b>§9 建议不做的四样，都不做</b>（2026-09-23 定）：读完之后的收尾屏、
+    同词第二次出现的提示、<code>max_batch</code> 由服务端下发、词典例句进复习；
+    <br>⑱ <b>列表卡片的概括两行、每张一样高</b>（<code>reservesSpace: true</code>，
+    跟标题那行一致；2026-09-23 定）。
+  </div>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§1</span>
+      <h2>起点：一笔从 P6 欠到 P11 的账，加五条用出来的</h2>
+      <span class="sec-note">范围</span></div>
+
+    <p class="lede">这个 Phase 的内容来自两处，性质完全不同：一处是文档里点着名
+    「留到界面 Phase」的欠账，另一处是用户这两天在真机上用出来的。
+    前者有据可查，后者只有他看得见。</p>
+
+    <h3>那笔账：界面初版完全不认词组</h3>
+    <p>P6 §7 是这个项目少数几次<b>明写着「这一条动了跨 Phase 不变量」还照做的决定</b>之一（另一次是 P10 换义项集）。
+    不变量原话是「词组是一个整体，就按一个整体渲染——这条对所有客户端都成立，
+    将来的原生端也算」，而 P6 把它在界面上关掉了。</p>
+    <p>当时的理由站得住：<b>词组识别本身判不准</b>。P2 实测同一篇文章问三次，
+    提出 37／28／34 个词组，并集 50、交集 19，稳定率 38%；只有 42% 在词典里查得到，
+    还有 23 个在原文里根本找不到那个字符串。
+    <b>在判得准之前，把它端到界面上只是把不可信的东西显示得更确信。</b></p>
+    <p>认下的代价当时写了三笔，六个 Phase 以来一直在兑现：</p>
+    <div class="nots">
+      <div class="not"><i>①</i><span>点 <code>account for</code> 里的
+        <code>account</code> 按普通单词处理，<b>释义可能不贴合</b>——
+        <code>in_phrase</code> 那个字段 Core 返回了而界面不读</span></div>
+      <div class="not"><i>②</i><span><b>词组无法标记</b>，所以词组这一支在客户端上等于关闭，
+        永远不进复习队列</span></div>
+      <div class="not"><i>③</i><span>正文里<b>词组不会整体高亮</b></span></div>
+    </div>
+    <p style="margin-top:1rem"><b>P11 把那个理由消掉了</b>：清单不再由我们写的词性规则产生，
+    而是<b>考纲表 ∩ 柯林斯</b>——2,170 个词组、3,232 条义项，语料 4,219 处逐处判过，
+    其中 1,363 处（32%）判为「这一处不是词组」。同一个问题问一本词典，
+    每次的答案都一样。<b>关掉它的前提没有了，所以这笔账现在还得起。</b></p>
+
+    <h3>五条用出来的</h3>
+    <p>P11 是以「日后体验中慢慢验收」结束的（铁律的第三次记名例外）。
+    这五条就是那个「日后」的第一批产物，<b>全部来自 2026-09-22 晚上的两张真机截图</b>：</p>
+    <div class="table-scroll"><table>
+      <tr><th>症状</th><th>在哪</th><th>是什么性质</th></tr>
+      <tr><td>列表卡片的中文概括显示不全</td><td class="topic">列表</td>
+          <td>显示层，<b>不是模型</b>（§7 一）</td></tr>
+      <tr><td>阅读器里那句概括没有左对齐</td><td class="topic">阅读器</td>
+          <td><b>照草图做的</b>，草图上只有一行所以看不出（§7 二）</td></tr>
+      <tr><td>英文大标题显示不全</td><td class="topic">阅读器</td>
+          <td>决定 16 与草图的冲突，系统行为（§7 三）</td></tr>
+      <tr><td>进了文章，底下的标签栏不消失</td><td class="topic">三处</td>
+          <td><b>从 P6 起就没做过</b>，一处都没写（§7 四）</td></tr>
+      <tr><td>正文被标签栏压掉半行</td><td class="topic">阅读器</td>
+          <td>上一条的连带，底部留白按旧尺寸算的（§7 四）</td></tr>
+    </table></div>
+
+    <h3>范围</h3>
+    <p><b>改动几乎全在 <code>client/App/Sources/</code></b>。服务端只有一处
+    （词组的揭晓屏卡片，§6），Core 大概率一行不用改——§2 会说清楚为什么。
+    <b>这跟 P6／P7／P8 那三个界面 Phase 是同一个形状，所以那三次的代价也照样适用</b>：
+    模拟器和 CI 验不了真机上的东西，验收要真的用手指走一遍。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§2</span>
+      <h2>词组这条链上，只有 App 这一层是关着的</h2>
+      <span class="sec-note">代码盘点</span></div>
+
+    <p class="lede">P6 §7 当年估的工作量是「高亮能跨两个词，加一个字段的读取」。
+    读完代码，这句话大体是对的，但比它多几处——多出来的部分全是 P11 新加的
+    （词组有了义项、有了标记、有了复习）。</p>
+
+    <h3>已经好了的，一处都不用动</h3>
+    <div class="table-scroll"><table>
+      <tr><th>东西</th><th>在哪</th><th>证据</th></tr>
+      <tr><td>整体命中：点任一半选中整体</td><td class="topic">Core</td>
+          <td><code>Display.swift</code> 的 <code>selection(at:)</code>，
+              命中就返回 <code>.phrase</code></td></tr>
+      <tr><td>词在词组里就<b>不给它自己的义项</b></td><td class="topic">Core</td>
+          <td>同上，注释写着理由：那条标注是在不知情下做的</td></tr>
+      <tr><td>词组只问一个方向</td><td class="topic">Core</td>
+          <td><code>Projection.swift:248</code>
+              <code>singleDirection: key.itemType == "phrase"</code></td></tr>
+      <tr><td>词组进当天的复习名单</td><td class="topic">Core</td>
+          <td><code>todayQueue</code>，P11 ⑮ 删掉了那句挡它的判断</td></tr>
+      <tr><td>词组的句子池，<b>整串一起挖空</b></td><td class="topic">服务端</td>
+          <td><code>review/sentences.py</code> 的 <code>_harvest_phrase</code></td></tr>
+      <tr><td>复习卡的中文能落到词组表</td><td class="topic">服务端</td>
+          <td><code>session.py</code> 的 <code>sense_of</code> 回落（P11 ⑭）</td></tr>
+      <tr><td>整体渲染长什么样，有现成参照</td><td class="topic">ercli</td>
+          <td><code>Render.swift</code> 的 <code>词组：xxx</code> 那一段</td></tr>
+    </table></div>
+
+    <h3>阅读那半边的数据，全部已经在下发里</h3>
+    <p><b>这一条是实测查的，不是看契约推的</b>——两者差一层，而这个项目在
+    「方案写了但代码没写」上栽过（坑 §8）。</p>
+    <div class="nots">
+      <div class="not"><i>✓</i><span><code>_glossary()</code> 收的是这篇文章里
+        <b>全部 headword，不过滤 <code>in_phrase</code></b>。所以 B 那块折叠区要的
+        「<code>account</code> 这个词本身」的完整资料——音标、全部义项、考频占比、
+        词典退路——<b>现在就在今日包里躺着</b>，服务端一行不用改</span></div>
+      <div class="not"><i>✓</i><span><code>_phrase_payload()</code> 给每个词组带着
+        <b>全部义项</b>、按义项 id 的标记与词池位置、考频占比、
+        <code>pos_zh</code>、<code>register_label</code></span></div>
+      <div class="not"><i>✓</i><span>服务端<b>只下发 <code>sense_id &gt; 0</code> 的词组</b>：
+        <code>-1</code>（这一处不是词组）和 <code>null</code>（还没判）根本不出现。
+        <b>所以客户端不用自己判这件事</b>，也不该写那段判断</span></div>
+    </div>
+
+    <h3>缺口：四处，全在 App</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>正文不认词组</b>
+        <span><code>ArticleText.swift</code> 只按 token 铺 <code>tokenSeq</code>，
+        <code>ReaderModel.tap(seq:)</code> 直接查 <code>tokensBySeq</code>，
+        <b>一次都没调用过 Core 的 <code>selection(at:)</code></b>。
+        所以点任一半开的是那个词，不是词组</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>点词面板里没有词组这回事</b>
+        <span><code>LookupItem</code> 的字段是
+        <code>headword / phonetic / senses / contextSenseId</code>——
+        它描述的是一个单词。词组要么共用这个结构（那 <code>headword</code> 装什么），
+        要么面板改成两种形态</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>词组的揭晓屏有个真窟窿</b>
+        <span><code>review/routes.py:139</code> 写着
+        <code>word_of(item_key) if item_type == "word" else None</code>——
+        <b>词组没有音标、没有「常见释义」那一列</b>，只有被考的那一条。
+        不是漏了：<code>WordCard</code> 这个形状对词组本来就不成立</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what">
+        <b>拼写那一轮会把词组带进去</b>
+        <span>P11 ⑤b 已定词组不拼写（<code>take sth into account</code> 中间有变量，
+        拼什么），<code>SpellingScreen</code> 要跳过它们</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§3</span>
+      <h2>点词组里的那个词，给什么</h2>
+      <span class="sec-note">决定 ②</span></div>
+
+    <p class="lede">这是这个 Phase 里唯一一处「用户想要的行为，数据支撑不了」的地方。
+    值得把它记全，因为<b>三条看起来现成的判据全部不成立，而且每一条都是实测出来的</b>——
+    不写下来，下次讨论还会从同一个地方重新出发。</p>
+
+    <h3>用户要的规则</h3>
+    <p>分两种情况：<b>这个词在词组里用的就是它本身的某条义项</b>时，
+    给「词组的这条义项 ＋ 这个词组的其他义项 ＋ 点这个词本来就该出来的内容」；
+    <b>完全不是它本来的意思</b>时，只给词组的义项。</p>
+    <p>规则本身是对的，而且它正好对着 P10 §1 那道原始的题的残余：
+    <code>take into account</code> 里的 <code>account</code>，
+    「本句中」现在指的是不知情标注出来的那条（可能是「账目」）。
+    <b>问题在于「是不是本身的义项」这个判断，库里答不出来。</b></p>
+
+    <h3>三条死路，逐条实测</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">✗</span><span class="step-what">
+        <b>溯源三元组：零匹配，而且是按构造对不上</b>
+        <span><code>phrase_senses</code> 和 <code>senses</code> 都带着
+        「哪本词典／哪个词条／第几块」，看起来一 join 就知道这条词组义是不是同时
+        也是这个词的一条义项。<b>3,232 条里零匹配</b>——P10 导单词义项时跳过的
+        正是词组类的块，P11 收的正好就是那些块。
+        <code>term</code> 的单词义项从第 2 块开始，第 0、1 块去了
+        <code>in terms of</code>。<b>两个集合是互补的，永远不会相交</b></span></span></div>
+      <div class="step"><span class="step-n">✗</span><span class="step-what">
+        <b>用法表：只够 12.5%，而且假阳性长在最要命的地方</b>
+        <span>拿 2,170 个词组去对组成词的 4,954 条搭配，只有 <b>272 个（12.5%）</b>对得上。
+        更糟的是<code>a piece of cake</code> 会匹配上 <code>piece</code> 的
+        <code>piece of</code>——<b>那恰恰是最不能用本义解释的一种词组</b>。
+        坑 §6.7 那个形状：一个分不出两种情况的判据</span></span></div>
+      <div class="step"><span class="step-n">✗</span><span class="step-what">
+        <b>tier 分档：它答的是另一个问题</b>
+        <span><code>a piece of cake</code> 是 B 档、<code>take account of</code> 是 B* 档，
+        而 <code>on fire</code>、<code>take a joke</code>、<code>small scale</code>
+        同样是 B／D 档却真的是本义。<b>tier 记的是「中文从哪解析出来的」，
+        不是「意思是不是组合出来的」</b></span></span></div>
+    </div>
+
+    <h3>所以真要这条规则，只有一条路，而它是内容工厂的活</h3>
+    <p>这个判断是语义的，<b>只有模型答得了</b>。而按架构铁律 3（API 是离线形状）
+    和铁律 1（客户端不产出内容），<b>它必须预先算好、随内容下发</b>，不能点开的时候现场问。</p>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">4,223</div>
+        <div class="fig-key">(词组义项 × 实词) 对，要判的就是这些</div></div>
+      <div class="fig"><div class="fig-val">2,170<span> 次</span></div>
+        <div class="fig-key">按词组打包的调用数，合批还能再降</div></div>
+      <div class="fig"><div class="fig-val">32</div>
+        <div class="fig-key">全是功能词的词组，点开没有实词可查</div></div>
+      <div class="fig"><div class="fig-val">768</div>
+        <div class="fig-key">含两个以上实词的，一个词组要判好几次</div></div>
+    </div>
+    <p style="margin-top:1.6rem"><b>这个 Phase 不做它</b>（§13）。它要跑模型、要建表、
+    要改契约、要重新下发，是一次内容生产——混进界面 Phase 就是 P6 §13
+    那种「一次欠三样、塌了一起塌」的形状。<b>记进主文档 §M。</b></p>
+
+    <h3>B：不判，但把位置腾出来</h3>
+    <p class="wire"><b>点 account（它在 take into account 里）</b>
+
+┌──────────────────────────────┐
+│ <b>take into account</b>              │
+│ 短语                          │
+│                               │
+│ <b>考虑到；把…计算在内</b>   考频 12  │  ← 词组的义项，其他义项也列在这
+│                               │
+│ ───────────────────────────── │
+│ <b>▸ account 这个词本身</b>          │  ← 折叠着，点一下才展开
+│ ───────────────────────────── │
+│    不认识 · 模糊 · 认识        │  ← 滑块标的是<b>这个词组</b>
+└──────────────────────────────┘</p>
+    <p>展开之后底下长出 <code>account</code> 完整的单词面板——音标、全部义项、
+    考频占比，就是现在点一个普通词看到的东西。
+    <b>唯一不一样的是不画「本句中」那条高亮</b>（决定 ②）。</p>
+    <p><b>B 不是 A 的替代品，是 A 的前半段。</b>判据做出来之后，
+    这块区从「默认折叠」变成「按数据决定折不折、并且高亮指得对」，
+    <b>界面这一层一行不用重写</b>。</p>
+    <p><b>认下的代价</b>：<code>look after</code> 里点 <code>look</code>，
+    展开之后仍然是「看」的那一堆义项。它是噪音，但<b>是用户自己找来的噪音</b>——
+    默认折叠意味着不展开就看不到它。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§4</span>
+      <h2>点词面板重画</h2>
+      <span class="sec-note">决定 ⑫</span></div>
+
+    <p class="lede">用户 2026-09-22 当晚提的第二件事，原话：
+    <b>「音标不要单独占一行，而是跟在点开的词后面……
+    然后点开默认显示在本句中的释义、有频率的常见义项。
+    没有频率的往上滑会跟在下面出来。再往下就是用法。」</b>
+    <br>它顺带答掉了「义项列表太长要不要折叠」那条欠账——
+    <b>答案不是一个折叠按钮，是一条排版规则</b>：屏幕的第一屏就是取舍本身。</p>
+
+    <h3>要的样子</h3>
+    <p class="wire"><b>contribute /kənˈtrɪbjuːt/</b>                 🔊
+<i>（音标跟在词后面这条，来自用户点 with 时的截图；</i>
+<i>这里用 contribute 举例，是因为它同时有三段内容。）</i>
+
+<b>本句中</b>
+促成；促使；是导致…的原因之一
+<i>If one factor contributes to an event…</i>
+
+<b>常见释义 · 考频</b>
+促成；促使；是导致…的原因之一        31%
+（为…）做贡献                      10%
+────────────── 默认高度切在这里 ──────────────
+<b>其他释义</b>
+（为报刊、书籍等）撰稿
+…
+
+<b>用法</b>
+contributes to  ／  contribute to  ／  contribute to
+<i>（三条长得几乎一样，各属一条义项——② 说的就是这个）</i>
+
+<b>不认识 · 模糊 · 认识</b>                 ← 钉在底部不滚</p>
+
+    <h3>四条变化，逐条</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>音标跟在词后面</b>
+        <span>现在它在 <code>heading</code> 里单独占第二行
+        （<code>LookupSheet.swift</code>）。挪到同一行、baseline 对齐。
+        <b>「超纲」那个小标签也在这一行</b>（决定 28 留的位置），
+        朗读按钮仍在最右</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>默认那一屏＝本句中 ＋ 有考频的义项</b>
+        <span>判据是 <code>exam.share &gt; 0</code>，跟现在
+        <code>examShareText</code> 用的是同一个。<b>排序不用改</b>——
+        <code>LookupItem.ordered()</code> 本来就是「有考频的按占比降序在前，
+        没考频的按词典序在后」（P6 决定 21）</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>没考频的滑下去才出来，而且另起一段</b>
+        <span>加一个小标题（<b>其他释义</b>），<b>并且不画考频那一列</b>——
+        现在那一列对它们全是「—」，一列占着地方只为说「没有」</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what">
+        <b>用法在最下面</b>
+        <span>数据现成：<code>Sense.collocations</code> 在契约里、服务端按义项发。
+        <b>但画法有个坑，见下</b></span></span></div>
+    </div>
+
+    <h3>数据说了三件事，其中一件正好打在那个例子上</h3>
+
+    <div class="callout">
+      <b>① <code>with</code> 这个词，新规则下默认那一屏是空的。</b>
+      它有 <b>21 条义项，有考频的是 0 条</b>；语料里出现 <b>1,146 次，
+      全部 <code>kind=function</code>、全部没标注过</b>（标注只做实词）。
+      所以「本句中」也是空的，会回落到词典释义那一堆。
+      <br><b>而这不是个别现象：6,918 个词里 2,187 个（31.6%）一条有考频的义项都没有。</b>
+      <br><br><b>所以这条规则必须先回答「一条都没有时默认显示什么」</b>，
+      否则三分之一的词点开看到的是一个空白的「常见释义」标题。
+      三个选项：<b>(a) 退回词典原序的前 N 条</b>（N 待定，倾向 3）；
+      <b>(b) 全列出来</b>（<code>with</code> 就是 21 行）；
+      <b>(c) 只给词典释义那一堆，义项列表整个滑下去</b>。
+      <b>倾向 (a)</b>——它对功能词和对「没考过的生僻词」都说得通，
+      而 (b) 在 <code>with</code> 上就破了。
+      <br><b>2026-09-23 用户定：(b) 全部列出来。</b>
+      没有考频的时候没有分档的依据，那就不分——比按一个拍出来的 N 截断更诚实。
+      <b>连带一处</b>：这类词的列表没有考频可排，标题不该再写「常见释义 · 考频」，
+      考频那一列也不画。
+      <br><b>根子上的解法是给功能词也做语境标注</b>，那是内容侧的活，不在这个 Phase。
+    </div>
+
+    <div class="callout">
+      <b>② 用法必须带着它那条义项一起显示，否则就把 P11 特意保住的东西丢了。</b>
+      <code>contribute</code> 三条义项<b>全都带着 <code>contribute to</code></b>：
+      「（为…）做贡献」（考频 10）、「促成」（31）、「撰稿」（0）。
+      契约注释写的就是这件事——「挂在义项上不是挂在词上……挂在词那一层
+      这个对应关系就没了」。
+      <br><b>底部一整块平铺的话，读者会看到 <code>contribute to</code> 重复三次</b>，
+      既看不出区别，还像个 bug。两种画法：
+      <br>　<b>(a) 用法贴在它那条义项下面</b>（小一号字）。对应关系不会丢，
+      而代价是<b>默认那一屏会被撑长</b>，因为有考频的义项也带用法。
+      <br>　<b>(b) 底部一整块，每条用法标着它属于哪条义项</b>。合乎「再往下就是用法」这个顺序，
+      但本质上是把义项列表又列了一遍。
+      <br><b>我倾向 (a)</b>，理由就是 <code>contribute</code> 那三行——
+      贴在义项下面时它们各自有上下文，平铺时它们互相矛盾。
+      <b>但顺序是用户定的，所以这条要你拍。</b>
+      <br><b>2026-09-23 用户定：两个都要，按状态分。</b>
+      默认那一屏<b>不带用法</b>（它是给「读到一半想知道这个词」用的，要短）；
+      <b>往上滑展开详细列表时，用法按 (a) 贴在各自那条义项下面</b>。
+      这样 <code>contribute to</code> 那三行各在各的义项底下，不会平铺在一起互相矛盾。
+    </div>
+
+    <div class="callout">
+      <b>③ 「默认那一屏」有时候装不下。</b>
+      <code>take</code> 45 条义项里 <b>25 条有考频</b>，
+      <code>run</code> 43 条里 12 条。默认高度仍然<b>封顶在半屏</b>（P6 决定 26），
+      超过就在面板里滚——<b>这条不变，只是要知道它会被撞到</b>。
+      <br>每词有考频义项的分布：0 条 2,187 词、1 条 2,602、2 条 1,080、
+      3 条 485，<b>8 条以上只有 99 词</b>。所以绝大多数时候默认那一屏很短。
+    </div>
+
+    <h3>默认高度怎么量</h3>
+    <p>现在 <code>detent</code> 量的是<b>全部内容</b>的高度
+    （<code>onGeometryChange</code> 拿 <code>contentHeight</code>），
+    要改成<b>量到「有考频那一段结束」为止</b>。</p>
+    <p><b>已知的毛病照旧存在，而且缓解也照旧</b>：那段注释写着
+    「自适应那一档依赖量出来的内容高度，而那个值在面板刚呈现、内容还没排完时会偏小——
+    真机上第一次点词，面板只有三分之一屏……量不准是治不干净的（那是时机问题），
+    <b>能拖大就不是问题</b>」。<b>两档（自适应 ＋ 半屏）必须留着</b>，
+    换锚点不换这个结构。</p>
+
+    <h3>词组面板照同一套，差三处</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>没有音标</b>——第一行是词组本身 ＋
+        <code>pos_zh</code>（短语动词／短语／短语介词）</span></div>
+      <div class="not"><i>·</i><span><b>没有用法</b>——用法是单词义项的属性，
+        词组没有这张子表</span></div>
+      <div class="not"><i>·</i><span><b>多一块</b>「这个词本身」折叠区（§3），
+        <b>位置在其他释义上面</b>（决定 ⑭）——紧跟在默认那一屏的下沿，
+        这一行算进默认高度，不用往上滑就点得到</span></div>
+    </div>
+    <p style="margin-top:1rem"><b>词组这边「有考频」同样不是稳的</b>：
+    3,232 条词组义项里只有 681 条有考频（21%），
+    所以上面 ① 那条退路对词组面板一样要用。</p>
+
+    <h3>两个状态，以及它们撞上的那条旧决定</h3>
+    <div class="table-scroll"><table>
+      <tr><th>状态</th><th>怎么进</th><th>显示什么</th></tr>
+      <tr><td><b>默认</b></td><td class="topic">点词</td>
+          <td>词 ＋ 音标、本句中、有考频的义项（<b>无考频时全部</b>）。<b>不带用法</b></td></tr>
+      <tr><td><b>展开</b></td><td class="topic">往上滑</td>
+          <td>同上，<b>每条义项下面贴着它的用法</b>；再往下是其他释义（也带用法）。
+              词组面板的「这个词本身」在其他释义上面（决定 ⑭）</td></tr>
+    </table></div>
+    <p style="margin-top:1rem"><b>「往上滑」要真能触发展开，展开那一档就得比默认那一屏高。</b>
+    而 P6 <b>决定 26</b> 定的是「面板按内容自适应高度，<b>最多半屏</b>」——
+    现在的两档（自适应、半屏）都在这条线以内。</p>
+    <p><b>有两类词，默认那一屏自己就顶到半屏了</b>：有考频的义项多的
+    （<code>take</code> 25 条、<code>run</code> 12 条），和 ⑫a 带进来的
+    「一条考频都没有、全部列出来」的（<code>with</code> 21 行）。
+    <b>这两类词上默认 ＝ 半屏 ＝ 展开，没有「往上滑」这个动作可做，用法永远出不来</b>——
+    而它们大概正是全天点得最多的那批。</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>展开那一档允许超过半屏，决定 26 只管默认那一档</b>
+        <span>放下是阅读，拉起来是查词典。<b>代价</b>：展开时看不到正文、
+        也点不了下一个词（点穿现在只开到半屏那一档，决定 25）。
+        <b>倾向这条</b>——它只破决定 26 的一半，而破的那一刻用户本来就在读词典。
+        <b>2026-09-23 用户定：走这条（决定 ⑫c）</b></span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>展开不靠拖高，靠在面板里滚过默认那一段的底部</b>
+        <span>不破决定 26。但滚动途中内容突然变长会跳；
+        而且默认就装得下的短词没东西可滚，于是展不开——
+        得再配一种触发，两套并存</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>默认那一屏封顶在 N 条，永远留出往上滑的空间</b>
+        <span>又一个拍出来的数，<b>而且直接跟 ⑫a（全部列出来）打架</b></span></span></div>
+    </div>
+
+    <h3>标了也白标：一半以上能点的词（决定 ⑯）</h3>
+    <p><b>2026-09-23 早上的真机截图撞出来的。</b>用户在
+    「A New Life for an Old Market」里把 <b>Green</b> 标成了不认识——
+    而那个 Green 是<b>人名</b>（David Green，副镇长）。</p>
+    <p><b>它是怎么死的</b>，三步，每步都查过：</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>记下的是「义项 0」</b>
+        <span>这篇的 5 个 Green 全是 <code>kind=proper</code>、义项为空。
+        面板找不到「本句中」，拿颜色 green 的词典释义顶上；
+        滑块标的是 <code>token.sense_id ?? 0</code>
+        （<code>ReaderModel.swift</code>）。阿里云 <code>events.db</code> 实查：
+        <code>study_states</code> 里 <code>green</code>、<code>sense_id=0</code>、
+        <code>pool=reviewing</code></span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>造不出句子</b>
+        <span>从语料里找：没有 token 标着义项 0。让模型造：
+        <code>sense_by_id(0)</code> 查不到，任务记一句「义项不存在，跳过」
+        （<code>review/sentences.py</code> 的 <code>_run</code>）</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>没句子就不进当天名单</b>
+        <span><code>ReviewDay.swift:108</code> 的
+        <code>guard let item = content[entry.key] else { continue }</code>。
+        <b>于是它永远待在词池里、永远不会被问到</b>——
+        而滑块动了、正文五处全亮了虚线，<b>每一样反馈都在说「标上了」</b></span></span></div>
+    </div>
+    <p style="margin-top:1rem"><b>规模</b>（本机语料，能点的 token 按「这一处有没有真义项」分）：</p>
+    <div class="table-scroll"><table>
+      <tr><th>这一类</th><th>token 数</th><th>现在标了会怎样</th><th>⑯ 之后</th></tr>
+      <tr><td>专有名词（人名地名）</td><td class="num">6,779</td>
+          <td>死标记，<b>面板还给错的意思</b></td><td>写「人名」，不给释义，不给滑块</td></tr>
+      <tr><td>功能词（从不标注）</td><td class="num">89,996</td>
+          <td>死标记</td><td>在列表里点哪条标哪条</td></tr>
+      <tr><td>标注判「都不贴合」（-1）</td><td class="num">6,332</td>
+          <td>死标记</td><td>在列表里点哪条标哪条</td></tr>
+      <tr><td>没有义项集（0）</td><td class="num">9,872</td>
+          <td>死标记</td><td>不给滑块，写一句为什么</td></tr>
+      <tr><td><b>有真义项</b></td><td class="num">92,792</td>
+          <td class="ok">正常</td><td>不变（决定 19）</td></tr>
+    </table></div>
+    <p style="margin-top:1rem"><b>能点的词里 55% 标了是白标。</b>目前只死了这一条，
+    因为 P10 刚清空过学习记录——再用下去会一直积。
+    <b>这是这个项目最怕的那种形状</b>：没有报错、没有日志，界面给了全部「成功了」的反馈。</p>
+    <p><b>「一个都不贴合」那一类最值得让人来选。</b>模型说候选里没有贴合的，
+    而用户读着句子可能觉得某一条就是——这时候该人说了算。
+    <b>顺带答掉了 §9 那条「你标过的义项加个记号」</b>：
+    列表每一行本来就要能点、能显示自己的标记状态，那个记号是这一步的副产品。</p>
+    <p><b>规则放进 Core，不放在 App。</b>「这一处能不能标、标在哪条义项上」
+    现在两个客户端各写了一遍，<b>而且写得一样错</b>——
+    <code>ercli</code> 的 <code>mark()</code>（<code>main.swift:238</code>）
+    也是 <code>sense_id ?? 0</code>。坑 §5.1 那个形状：
+    三方各写一遍，只有一方是对的；这次是两方各写一遍，一方都不对。
+    Core 的 <code>ArticleDisplay.target(at:)</code> 现在对人名也返回 <code>.word</code>，
+    要让它能说出「这是专有名词」和「这一处没有义项」。</p>
+    <p><b>已经在词池里的那条 <code>green(0)</code></b>：用户把滑块滑回「认识」就撤掉了；
+    不撤也不碍事，它只是一直不会出现。<b>不为它写迁移</b>——只有一条，而且主人知道。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§5</span>
+      <h2>词组的四处界面</h2>
+      <span class="sec-note">主线</span></div>
+
+    <h3>一、正文：虚线，跨两个词整体画</h3>
+    <p><b>静止状态仍然不画系统预标的记号</b>（P6 决定 11 不变）：目标词、超纲词、
+    派生词、专有名词一律不画。<b>只画你自己标记过的</b>，词组也一样——
+    标过之后才有记号，<b>用虚线，跟单词那两档暂时不分</b>（决定 ③，美术以后再定）。</p>
+    <p>新的是<b>那条线要跨两个词、连中间的空格一起</b>。跨 Phase 不变量原话：
+    「一处词组渲染成一个元素，两个词连同中间的空格都在里面」。
+    现在正文是 <code>NSAttributedString</code> 铺在 <code>UITextView</code> 上，
+    按 token 给 range——<b>词组要的是一个覆盖 <code>startSeq…endSeq</code> 的连续 range</b>，
+    Core 的 <code>PhraseDisplay</code> 正好给的就是这两个数。</p>
+    <p><b>一个词被两种记号同时盯上时，词组赢。</b>Core 已经这么算了
+    （<code>Display.swift</code>：词在词组里就不显示自己的标记，
+    注释写着理由「点哪儿都开词组，在那儿画词自己的标记是在说另一件事」）。
+    界面照着 Core 的结果画就行，<b>不要在界面层再写一遍这个优先级</b>——
+    坑 §5.1 那条「三方各写了一遍，只有一方是对的」就是这么来的。</p>
+
+    <h3>二、点词面板：词组是另一种形态，不是单词的特例</h3>
+    <p><code>LookupItem</code> 现在描述的是一个单词。词组硬塞进去的话，
+    <code>headword</code> 要装 <code>take into account</code>、
+    <code>senses</code> 要装 <code>PhraseSense</code>（那是另一个类型）、
+    <code>phonetic</code> 恒为空。<b>建议把它拆成两种形态</b>，
+    由 Core 的 <code>selection(at:)</code> 决定走哪一种——
+    那个函数本来就返回 <code>.word</code> ／ <code>.phrase</code> 两支。</p>
+    <p>词组面板从上到下：<b>词组本身</b>（原文里的样子，含中间的空格）→
+    <b>词性的中文</b>（短语动词／短语／短语介词，`pos_zh`）→
+    <b>义项列表</b>（全部义项，按考频降序，跟单词那边同一条排序规则）→
+    <b>「这个词本身」折叠区</b>（§3）→ <b>三档滑块</b>（决定 ④）。</p>
+    <p><b>「你标过这个词组的另一个意思」这件事，数据是下发着的</b>——
+    <code>_phrase_payload()</code> 带的是这个词组<b>全部</b>义项上的标记，
+    不只是这一处用的那条。服务端那段注释写的理由是「少了它，
+    点开面板说不出『你标过这个词组的另一个意思』，而学习者会把自己明明标过的东西
+    读成『App 忘了』」。<b>单词那边有同样的数据、同样没显示</b>，见 §9。</p>
+
+    <h3>三、复习：只问一个方向，混在一起数</h3>
+    <div class="nots">
+      <div class="not"><i>·</i><span><b>方向</b>：词组只问「看词组、想意思」。
+        Core 已经这么算了（<code>Projection.swift:248</code>），
+        <b>界面要做的是别画那个反向的壳</b>——一张不会有方向 2 的卡片，
+        不该在屏幕上留一个永远不亮的位置</span></div>
+      <div class="not"><i>·</i><span><b>计数</b>：「共 N 条」词组与单词混在一起
+        （决定 ⑤）。这条是用户定的，<b>不要自作主张分开显示</b></span></div>
+      <div class="not"><i>·</i><span><b>揭晓屏</b>：给这个词组的全部义项（决定 ⑥）。
+        这是唯一一处要动服务端与契约的地方，见 §6</span></div>
+      <div class="not"><i>·</i><span><b>出题的句子</b>：词组的句子是
+        <b>整串一起挖空</b>的（P11 ⑫，服务端已实现）。界面上那个空格要够长——
+        一个按单词宽度画的下划线配 <code>take sth into account</code> 会很奇怪</span></div>
+    </div>
+
+    <h3>四、拼写：跳过词组</h3>
+    <p>P11 ⑤b 已定，理由是 <code>take sth into account</code> 中间有变量。
+    <b>做法要列举允许的，不要列举排除的</b>——写成「只有
+    <code>item_type == "word"</code> 才进拼写」，而不是「遇到 phrase 就跳过」。
+    坑 §6.9 那条刚在 P11 栽过一次：
+    <code>BREAKING_KINDS = {"punct"}</code> 是个这个项目里不存在的类别名，
+    判断永远不成立、静默全放行。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§6</span>
+      <h2>契约怎么改，以及发版顺序</h2>
+      <span class="sec-note">决定 ⑥</span></div>
+
+    <p class="lede">只有一处。阅读那半边一行不用改——§2 已经实测过了。</p>
+
+    <h3>那一处：词组的复习卡</h3>
+    <p>现在 <code>ReviewItem.word</code> 是 <code>WordCard</code>，
+    而 <code>routes.py:139</code> 对词组填 <code>None</code>。
+    <b>要让揭晓屏列出词组的全部义项，就得有个地方装它们。</b>两种形状：</p>
+    <div class="table-scroll"><table>
+      <tr><th>做法</th><th>好处</th><th>代价</th></tr>
+      <tr><td><b>新开一个 <code>PhraseCard</code></b>，与 <code>word</code> 并列</td>
+          <td>两种条目各说各的，<code>phonetic</code> 这类不成立的字段不用出现</td>
+          <td>契约多一个类型，客户端多一条分支</td></tr>
+      <tr><td>让 <code>WordCard</code> 也装词组</td>
+          <td>客户端一条分支都不用加</td>
+          <td><b>它叫 WordCard 而装着词组</b>——名字和内容说反话，
+              正是这个项目反复栽的那一类</td></tr>
+    </table></div>
+    <p style="margin-top:1rem">我原先建议新开 <code>PhraseCard</code>。
+    <b>2026-09-23 用户定：不新开，放进 <code>WordCard</code></b>（决定 ⑬）。
+    形状上装得下——词组的 <code>headword</code> 放词组文本、<code>phonetic</code>
+    与 <code>translation</code> 为空、<code>senses</code> 放词组义项
+    （<code>id / ordinal / pos / concept_en / gloss_zh / exam_frequency / share</code>
+    两边都有）。<b>要做的是把它的注释改掉</b>：现在写着「The whole word, as the reveal
+    screen shows it」，改成说明词组也走这里、哪些字段对词组恒为空——
+    <b>名字留着，但契约里得有一句话说破它</b>，否则下一个读代码的人会按名字理解它。</p>
+
+    <h3>版本握手</h3>
+    <p>铁律 7 的「只增不减」2026-09-22 作废了，<b>但执行点还在</b>：
+    <code>ContractVersion.current</code>（在 <code>ERCore/Transport.swift</code>）
+    与服务端的 <code>min_contract_version</code> <b>一起加一，变成 3</b>。</p>
+    <p><b>顺序不能反：先发客户端，再拧服务端。</b>反了的代价是「手机暂时连不上」——
+    <b>不是没救</b>，那个开关在服务器上，<code>ssh</code> 一条命令就退回去。
+    P11 ⑲ 已经在公网上验过四种情形（不带头 426、版本 1 426、版本 2 放行、
+    <code>/health</code> 与管理接口不拦），这次照走。</p>
+    <p><b>这一步排在最后。</b>词组上界面那一大块不依赖新契约——
+    阅读那条链的数据已经全在了，所以<b>揭晓屏那一处可以最后做、最后发</b>，
+    前面所有工作都能在现行契约（版本 2）上跑完。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§7</span>
+      <h2>真机上用出来的五条</h2>
+      <span class="sec-note">决定 ⑧⑨⑩⑪</span></div>
+
+    <p class="lede">两张截图，2026-09-22 晚上。
+    <b>每一条都先查了数或查了代码再下结论</b>——其中两条查完之后结论跟第一直觉相反。</p>
+
+    <h3>一、列表卡片的概括显示不全：不该动模型</h3>
+    <p>用户问的是「是直接限制 AI 返回的字数，还是有什么别的办法」。<b>三个数回答它：</b></p>
+    <div class="figures">
+      <div class="fig"><div class="fig-val">30<span> 字</span></div>
+        <div class="fig-key">提示词里<b>早就有</b>这条上限（<code>pipeline.py:110</code>）</div></div>
+      <div class="fig"><div class="fig-val">28.4<span> 字</span></div>
+        <div class="fig-key">库里 30 条概括的平均长度，<b>29 条在 30 字以内</b></div></div>
+      <div class="fig"><div class="fig-val">21<span> 字</span></div>
+        <div class="fig-key">屏幕上截断的位置。<b>模型守到 30 字也照样显示不全</b></div></div>
+    </div>
+    <p style="margin-top:1.6rem">所以瓶颈是 <code>LibraryScreen.swift:111</code> 的
+    <code>.lineLimit(1)</code>，不是模型。<b>改成两行</b>（约 42 字），
+    连那条 40 字的越界样本都装得下，而且<b>对已有的全部文章立刻生效，不花一次调用</b>。</p>
+    <p><b>压低上限那条路不走</b>，三个理由：坑 §1.1 摆着（模型对数量约束只能大概比划，
+    这批就有一条越界 33%），所以显示层无论如何都得兜得住；20 字会把概括写空
+    （「小镇修缮老集市重获新生」丢掉了「革新经营」那一半）；
+    <b>存量文章不会跟着变</b>，要重写摘要就是每篇一次调用。</p>
+    <p><b>要不要跟标题一样用 <code>reservesSpace: true</code></b>：
+    跟了所有卡片一样高、列表整齐，代价是短概括下面空一行；不跟则卡片高度不齐。
+    <b>2026-09-23 用户定：跟，每张一样高</b>（决定 ⑱）。</p>
+
+    <h3>二、阅读器里那句概括没左对齐：是照草图做的</h3>
+    <p><code>ReaderScreen.swift:114</code> 的
+    <code>.frame(maxWidth: .infinity, alignment: .trailing)</code> <b>不是手滑</b>——
+    2026-09-13 的草图（<code>docs/phase-6/02-reader.png</code>）上，
+    ⑤ 那句中文概括就是贴着右边的，跟 ⑥话题在左、⑦词数在右对称。</p>
+    <p><b>草图上看不出问题，是因为那句只有一行。</b>一行右对齐是一条干净的线；
+    两行右对齐，左边就参差了——<b>中文没有英文那种词间空隙来吸收这种参差</b>，
+    所以比英文更别扭。现在这句 28 字，正好跨两行。</p>
+    <p><b>改成左对齐，而「话题 · 词数」那一行保持左右分居</b>（决定 ⑨，用户定的）。
+    那一行的左右是有信息含义的，不跟着一起改。</p>
+    <p style="margin-top:1rem"><b>这一条值得单记一句</b>：如果不去翻那张草图，
+    这就会被当成一个 bug 改掉，而它其实是一个<b>已经被真实使用推翻的设计</b>。
+    两者要改的代码一样，但记进文档的话不一样。</p>
+
+    <h3>三、英文大标题显示不全：决定 16 与草图的冲突</h3>
+    <p>标题现在交给<b>导航栏的大标题</b>（<code>.navigationTitle</code> ＋
+    <code>.navigationBarTitleDisplayMode(.large)</code>），这是 P6 决定 16，
+    理由写着「滚过去之后系统自己把它缩进栏里，自己画做不到」。
+    <b>而 iOS 的导航栏大标题是单行截断，不折行</b>——这是系统行为，不是我们的参数。</p>
+    <p><b>草图④画的是另一回事</b>：标题画在内容区，跨两行，完整。
+    也就是说当初为了拿那个动画，偏离了草图，而代价直到真机上才看见。</p>
+    <p><b>用户明确说喜欢那个动画</b>（原话：「划上去自动变成上面那一栏的标题固定住」），
+    所以不能靠放弃它来解决。两条路都写进来，<b>动手时先做 B1</b>：</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">B1</span><span class="step-what">
+        <b>让系统那个大标题自己折行</b>
+        <span>动画原样保留，因为还是它。<b>风险不在「找不找得到那个 label」</b>——
+        找不到就退回今天这个截断的样子，看得见。
+        <b>风险在「做到一半」</b>：导航栏大标题那块的高度是系统排的，
+        放开行数之后它是跟着长高，还是把第二行裁掉、或者压到正文上面去，<b>不知道</b>。
+        压上去和裁掉都比截断更糟。<b>所以这是动手第一件事，不是最后一件</b>——
+        它不行的话下面那条要重画整个头部</span></span></div>
+      <div class="step"><span class="step-n">C</span><span class="step-what">
+        <b>自绘标题 ＋ 自己驱动栏内标题</b>
+        <span>标题画进内容区、想占几行占几行；滚到它离开屏幕时让栏里的标题淡进来固定住。
+        不碰系统视图层级，坏了一眼看得出。
+        <b>不确定的是像不像</b>——Apple 那个是大标题一边缩一边滑进栏里，
+        我们做的是「大的滚走、小的淡入」。<b>用户喜欢的正是那个动画，
+        所以「像不像」就是这条路的成败</b></span></span></div>
+    </div>
+
+    <h3>四、标签栏不消失：三处都没做过</h3>
+    <p><b>全项目 grep 不到一处 <code>.toolbar(.hidden, for: .tabBar)</code></b>。
+    不是坏了，是从 P6 起就没做过；P8 那次三个 Phase 一起的真机验收三十项也没抓到它。</p>
+    <p><b>同一个形状漏了三处</b>，三个都是从标签页推进去的详情页：</p>
+    <div class="table-scroll"><table>
+      <tr><th>屏</th><th>从哪推进去</th><th>该不该藏</th></tr>
+      <tr><td><code>ReaderScreen</code></td><td class="topic">阅读列表</td>
+          <td class="ok">藏（沉浸式阅读）</td></tr>
+      <tr><td><code>ReviewSessionScreen</code></td><td class="topic">ReviewScreen:20</td>
+          <td class="ok">藏（作答）</td></tr>
+      <tr><td><code>SpellingScreen</code></td><td class="topic">ReviewScreen:81</td>
+          <td class="ok">藏（作答）</td></tr>
+      <tr><td>设置那几个子页</td><td class="topic">SettingsScreen</td>
+          <td class="none">不藏（列表式子页，iOS 惯例）</td></tr>
+    </table></div>
+    <p style="margin-top:1rem"><b>修的时候三处一起</b>，别只修截图里那一处。</p>
+
+    <h3>五、正文被标签栏压掉半行</h3>
+    <p>上一条的连带：<code>ReaderScreen</code> 写的是
+    <code>.padding(.bottom, 40)</code>，而 iOS 26 那个浮动的玻璃标签栏比 40pt 高。
+    <b>标签栏在阅读器里藏掉之后这条基本自己就好了</b>，
+    但「读完了」按钮底下还得留够，<b>要在真机上重新量一次</b>，不照旧值猜。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§8</span>
+      <h2>顺带修的现役缺陷：屏幕上现在显示的是 N-COUNT</h2>
+      <span class="sec-note">决定 ⑦</span></div>
+
+    <p>P10 §8 用「!」标着一条：<b>词性要用中文，不能用柯林斯的英文缩写</b>。
+    原文写的是「那就必须取它的中文（可数名词），不能直接摆 <code>N-COUNT</code> 上去——
+    屏幕上一串英文缩写对四六级考生是噪音」。</p>
+    <p><b>P10 做了服务端和 Core，界面这一半落在了这里，从 09-20 起一直没修。</b>
+    两处：<code>LookupSheet.swift:48</code> 的 <code>posText</code> 取的是
+    <code>sense.pos</code>，<code>ReviewSessionScreen.swift:170</code> 同样。
+    契约里 <code>pos_zh</code> 早就有了，服务端也在发。</p>
+    <p><b>顺带一条边界</b>：<code>pos_zh</code> 可能为空（库里那一列允许为空），
+    现有代码对 <code>pos</code> 已经做了「空字符串当没有」的处理，
+    理由注释写着「一个空的词性标签在屏幕上就是一块无法解释的空白」。
+    <b>换字段的时候把那条保住</b>，别只换取值不换判空。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§9</span>
+      <h2>文档里点名「留到界面 Phase」的那些，收哪几条</h2>
+      <span class="sec-note">2026-09-23 全部定了</span></div>
+
+    <p class="lede">这些不是新想出来的，每一条都是前几个 Phase 明确写着「等界面那个 Phase」
+    的欠账。<b>而这个 Phase 就是那个界面 Phase</b>，所以它们要么现在收，
+    要么明说不收——不能再往后推一遍而不给理由。</p>
+
+    <h3>建议收的三条</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">✓</span><span class="step-what">
+        <b>用法（搭配）显示出来</b>
+        <span>P11 ⑩ <b>已经点名这个 Phase</b>：「出现时机＝作答之后的揭晓屏，
+        跟其他义项一起列，而那是界面 Phase 的事」。数据 4,954 条挂在 4,450 条义项上，
+        <code>capabilities.collocations</code> 已经是 true，
+        <b>P11 存了发了，一处不用</b>。收它等于把 P11 的一半产出接上电</span></span></div>
+      <div class="step"><span class="step-n">✓</span><span class="step-what">
+        <b>义项列表太长，要不要折叠 —— 已经答了，见 §4</b>
+        <span>P10 §8 留的：一个词从 1.9 条义项变成 3.6 条，<code>take</code> 有 43 条。
+        当时查过代码确认「不会缺」（<code>ForEach</code> 全量、外面套 ScrollView），
+        并写着「但『不缺』和『好用』是两回事……是界面那个 Phase 的事」。
+        <b>2026-09-22 用户直接给了答案，而且不是折叠</b>：
+        默认那一屏只给有考频的，其余滑下去（决定 ⑫）。
+        <b>留在这里是为了标明这笔欠账已结清</b>，做法在 §4</span></span></div>
+      <div class="step"><span class="step-n">✓</span><span class="step-what">
+        <b>「你标过这个词的别的义项」 —— 并进了决定 ⑯</b>
+        <span>主文档 §M 记着，2026-09-13 定的初版从简。
+        <b>数据一直下发着</b>——<code>glossary.marks</code> 带的是这个词全部义项上的标记，
+        契约注释写的理由是「没有它，学习者会把一个自己明明标过的词读成『App 忘了』」。
+        <b>就是在义项列表左边加个记号，后端一行不用动</b>。
+        而且词组那边是同一件事、同一份数据（§5 二），<b>一起做比分两次便宜</b></span></span></div>
+    </div>
+
+    <h3>不收的四条，理由各不相同 —— 2026-09-23 用户定：都不做（决定 ⑰）</h3>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>读完之后的收尾界面</b>——
+        P6 决定 14 定了不做，§M 记着「等真读上一阵子再定」。
+        <b>它现在仍然是个产品问题不是欠账</b>：要显示「这篇的 25 个目标词你标了 3 个」，
+        而那最容易把体验拉回「背单词」，正是 §J 要避开的。<b>真读上一阵子这件事才刚开始</b></span></div>
+      <div class="not"><i>×</i><span><b>同词第二次出现的说明</b>——
+        P7 明确没做的三样里剩的那样。<b>没有新证据说它现在要紧</b>，
+        而这个 Phase 已经够大了</span></div>
+      <div class="not"><i>×</i><span><b>批量上限由服务端下发（<code>max_batch</code>）</b>——
+        §M 记着，服务端写 500、客户端硬编码 200，同一个数字两处各写一遍。
+        <b>它是真欠账，但跟这个 Phase 没关系</b>，而且要单独动一次契约。
+        <b>留在 §M</b></span></div>
+      <div class="not"><i>×</i><span><b>词典例句进复习</b>——
+        P10 §9 说得很清楚：要先回答一个<b>新规则问题</b>，
+        「生成的句子永远是考题、读过的文章里的句子是提示」，
+        而词典例句是第三类，规则没为它写过。<b>不该塞进一个已经很大的 Phase</b></span></div>
+    </div>
+
+    <h3>一条已经不成立的，顺手改掉</h3>
+    <p>主文档 §M 里有一条：「<code>article.progress</code> 这个事件还没有客户端发过，
+    真正需要它的是界面那个 Phase」。<b>P6 决定 15 已经做掉了</b>——
+    <code>ReaderModel.swift:222</code> 的 <code>reportProgress()</code>
+    在退出文章时发这条事件，<code>ReaderScreen</code> 的 <code>onDisappear</code> 调它、
+    紧接着 <code>drain()</code>。<b>这个 Phase 顺手把 §M 那条改掉</b>，
+    免得下次又有人照着它去「补」一个已经在的东西。</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§10</span>
+      <h2>还没定的</h2>
+      <span class="sec-note">只剩动手时当场答的</span></div>
+
+    <p class="lede"><b>要用户拍的，2026-09-23 已经全部拍完了。</b>下面两条不是决定，
+    是只有写出来跑一次才知道的事实——方案里已经写好了两种结果各自怎么办。</p>
+
+    <div class="nots">
+      <div class="not"><i>?</i><span><b>B1 到底行不行</b>——§7 三那条。
+        <b>它是动手第一件事</b>：不行的话头部要整个重画，
+        而那会影响概括对齐（决定 ⑨）落在哪儿</span></div>
+      <div class="not"><i>?</i><span><b>一个词组在一篇文章里出现好几次</b>，
+        每一处都独立标记吗，还是标了一处处处都亮。
+        <b>单词那边的答案是后者</b>（标记按 headword ＋ 义项，不按 token），
+        词组照理一样（标记按 <code>item_key</code> ＝ 词组文本），
+        <b>但没验过正文上是不是每一处都会跟着亮</b></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§11</span>
+      <h2>实施步骤</h2>
+      <span class="sec-note">顺序是有理由的</span></div>
+
+    <p class="lede">排序有两条原则：<b>不确定的先做</b>（B1 不行的话头部要重画，
+    那会牵动别的），<b>不依赖新契约的先做</b>（阅读那条链在现行契约上就能全部跑完，
+    所以版本号那一步排在最后，前面出了问题不必回滚发版）。</p>
+
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>先试 B1：让导航栏的大标题折行</b>
+        <span>成了就往下走，不成当场转 C（自绘标题 ＋ 自己驱动栏内标题）。
+        <b>这一步的产出是一个明确的答案，不是一个「大概能行」</b>——
+        在模拟器上看它是长高了、裁掉了、还是压到正文上了</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>把五条用出来的收掉</b>
+        <span>标签栏三处、底部留白重量、概括左对齐、卡片两行、
+        顺带 <code>pos_zh</code> 两处。<b>都便宜，而且都是已知坏的</b>——
+        先修掉它们，后面在模拟器上反复看词组的时候，看到的就是一个干净的界面</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>正文认词组</b>
+        <span><code>ArticleText</code> 按 <code>startSeq…endSeq</code> 铺一段连续的 range；
+        <code>ReaderModel.tap</code> 改成走 Core 的 <code>selection(at:)</code>。
+        <b>这一步做完，点任一半开的就是词组</b>——但面板还不会画它</span></span></div>
+      <div class="step"><span class="step-n">4a</span><span class="step-what">
+        <b>先在 Core 里立「标记必须落在真义项上」这条规则</b>
+        <span>决定 ⑯。<code>ArticleDisplay</code> 要能说出三件事：这是专有名词、
+        这一处没有义项但词有义项列表、这个词根本没有义项。
+        <b>先写 <code>swift test</code> 再改</b>，然后 App 与 <code>ercli</code> 都改成照它走——
+        后者 <code>main.swift:238</code> 有同一个 <code>?? 0</code></span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what">
+        <b>点词面板认两种形态</b>
+        <span>词组面板 ＋ §3 那块折叠区 ＋ 三档滑块。
+        <b>标记落下去要能在正文上看见</b>（虚线跨两词），否则就是 P2 那个
+        「标记后正文毫无反应」的老 bug 换个地方再犯一次</span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what">
+        <b>词组走通复习那条链</b>
+        <span>拼写跳过（正面列举）、方向只有一个、「共 N 条」混着数。
+        <b>这一步之前揭晓屏还是缺的</b>，用现行契约能验到「出题、作答、计数」为止</span></span></div>
+      <div class="step"><span class="step-n">6</span><span class="step-what">
+        <b>§9 那三条一起做</b>
+        <span>用法显示、义项折叠、「标过别的义项」的记号。
+        <b>都在同一块面板上</b>，分三次做要把那块布局改三遍</span></span></div>
+      <div class="step"><span class="step-n">7</span><span class="step-what">
+        <b>契约那一处：<code>PhraseCard</code> ＋ 揭晓屏</b>
+        <span>服务端改 <code>routes.py</code>、重新生成 <code>ERContract</code>
+        （<b>别手改那个目录，它是生成物</b>）、客户端读它。
+        <code>ContractVersion.current</code> 加到 3</span></span></div>
+      <div class="step"><span class="step-n">8</span><span class="step-what">
+        <b>本地跑全套，再推 CI</b>
+        <span><code>scripts/ci_client.py</code>、<code>ci_app.py</code>、
+        九个 Phase 的回归。<b>Mac 上本地就能跑</b>，不用推一次等 CI</span></span></div>
+      <div class="step"><span class="step-n">9</span><span class="step-what">
+        <b>发版：先客户端，再拧服务端</b>
+        <span><code>ci_testflight.py --upload</code> 发一版 → 装上确认能用 →
+        再把阿里云的 <code>min_contract_version</code> 从 2 拧到 3 →
+        在公网上验四种情形。<b>顺序反了手机会暂时连不上</b>，
+        虽然 <code>ssh</code> 一条命令能退回去</span></span></div>
+      <div class="step"><span class="step-n">10</span><span class="step-what">
+        <b>用户在真机上跑验收</b>
+        <span>铁律：每个 Phase 由用户实际跑一遍。
+        <b>P11 那次是记名例外，这次不该再是</b></span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§12</span>
+      <h2>验收清单</h2>
+      <span class="sec-note">机器六项 · 人工九项</span></div>
+
+    <p class="lede">这个 Phase 大半在手机上，<b>Python 验不了</b>——
+    跟 P8 同一个判断，所以不新写 <code>verify_phase12.py</code>，
+    服务端那一处半加进现有脚本。<b>机器那五项是 P6 §13 留下的硬缓解，必须守住。</b></p>
+
+    <h3>机器</h3>
+    <div class="checks">
+      <div class="check"><span class="check-n">A1</span><span class="check-what">
+        <b><code>scripts/ci_client.py</code> 全过</b>
+        <span>含 <code>swift test</code>，以及<b>「契约生成物与已提交的一致」</b>那一项——
+        它逮到过一次真的漂移（2026-09-19）</span></span></div>
+      <div class="check"><span class="check-n">A2</span><span class="check-what">
+        <b><code>scripts/ci_app.py</code> 全过</b>
+        <span><b>编得过、装得上、起得来、不闪退</b>——四样机器验得了的</span></span></div>
+      <div class="check"><span class="check-n">A3</span><span class="check-what">
+        <b>九个 Phase 的回归零失败</b>
+        <span>P0 / P1b / P1c / P2 / P3 / P4 / P5 / P9 / P10 / P11</span></span></div>
+      <div class="check"><span class="check-n">A4</span><span class="check-what">
+        <b>服务端那一处：词组的复习卡带着全部义项</b>
+        <span>加进 <code>verify_phase11.py</code>。
+        <b>要阴性＋阳性对照</b>：一个多义词组（<code>beside yourself with</code> 那一类）
+        必须列出不止一条，否则「有值」和「值对」分不开</span></span></div>
+      <div class="check"><span class="check-n">A6</span><span class="check-what">
+        <b>Core：凡是能标上的，都落在真义项上</b>
+        <span><code>swift test</code> 新增。<b>阴性＋阳性对照</b>：
+        专有名词、功能词、-1、0 四种各一个样本必须标不出义项 ≤ 0 的记录；
+        有真义项的那一种必须照旧标在「本句中」那一条上——
+        只测前一半的话，一个「什么都不让标」的实现也会过</span></span></div>
+      <div class="check"><span class="check-n">A5</span><span class="check-what">
+        <b>版本关卡四种情形</b>
+        <span>发 3 放行、发 2 回 426、不带头回 426、<code>/health</code> 与管理接口不拦。
+        <b>在公网上验，不在本地</b>（P11 ⑲ 那次就是这么验的）</span></span></div>
+    </div>
+
+    <h3>人工，真机</h3>
+    <div class="checks">
+      <div class="check"><span class="check-n">M1</span><span class="check-what">
+        <b>词组在正文里整体亮，点任一半选中整体</b>
+        <span>找一篇有 <code>account for</code> 这类的文章。
+        <b>点前半个词和点后半个词，开出来的要是同一个面板</b></span></span></div>
+      <div class="check"><span class="check-n">M2</span><span class="check-what">
+        <b>标记一个词组，正文当场有反应</b>
+        <span>虚线<b>跨两个词、连中间的空格</b>；撤销之后退回去。
+        <b>这一条是 P2 那个老 bug 的复查</b>：标记后正文毫无反应当年被记进坑列表</span></span></div>
+      <div class="check"><span class="check-n">M3</span><span class="check-what">
+        <b>点词组里的那个词，折叠区在、展开对</b>
+        <span>展开之后是那个词的完整面板，
+        <b>而且没有「本句中」那条高亮</b>（决定 ②）</span></span></div>
+      <div class="check"><span class="check-n">M4</span><span class="check-what">
+        <b>词组走完复习一整轮</b>
+        <span>出题时<b>整串一起挖空</b>、<b>只问一个方向</b>、
+        揭晓屏<b>列出全部义项</b>、<b>拼写那一轮里一个词组都没有</b>。
+        <b>这一条顺带给了 P11 M1 那件事第二双眼睛</b>——
+        P11 是「我自己用 ercli 走过，但那是同一双眼睛」结束的</span></span></div>
+      <div class="check"><span class="check-n">M5</span><span class="check-what">
+        <b>「共 N 条」混着数，当天做完归零</b>
+        <span>标一个词组、标一个单词，看那个数是不是加了 2</span></span></div>
+      <div class="check"><span class="check-n">M6</span><span class="check-what">
+        <b>五条用出来的，逐条看一眼</b>
+        <span>标题完整（或 C 那个动画像不像）、概括左对齐、卡片两行、
+        三处详情页没有标签栏、正文最后一行不被压住</span></span></div>
+      <div class="check"><span class="check-n">M7</span><span class="check-what">
+        <b>词性是中文</b>
+        <span>点词面板与揭晓屏两处，<b>都不许再出现 <code>N-COUNT</code></b>；
+        <code>pos_zh</code> 为空的那些不留空白</span></span></div>
+      <div class="check"><span class="check-n">M9</span><span class="check-what">
+        <b>白标的四种，各点一次</b>
+        <span>点一个人名：写着「人名」、没有「绿色的」、没有滑块。
+        点 <code>with</code>：在列表里点一条能标上，那一行显示标过了。
+        点一个没有义项的词：没有滑块，有一句说明。
+        <b>然后去复习里看</b>：刚才标的那几条，第二天真的出题了</span></span></div>
+      <div class="check"><span class="check-n">M8</span><span class="check-what">
+        <b>§9 那三条各看一眼</b>
+        <span>用法显示出来了、长义项列表折得住、
+        标过别的义项的词有记号</span></span></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><span class="sec-mark">§13</span>
+      <h2>明确不做</h2>
+      <span class="sec-note">边界</span></div>
+
+    <p class="lede">写下来，免得下次讨论重开。</p>
+    <div class="nots">
+      <div class="not"><i>×</i><span><b>「这个词在词组里是不是本义」那个判据</b>——
+        §3 量过了：4,223 对、约 2,170 次调用、要建表要改契约。
+        <b>它是内容工厂的活，不属于界面 Phase</b>。记进主文档 §M，
+        <b>而 B 已经把它的位置腾好了</b></span></div>
+      <div class="not"><i>×</i><span><b>词组的中→英与拼写</b>——P11 ⑤b 已定，
+        这里重申是因为界面上要保证它们不出现</span></div>
+      <div class="not"><i>×</i><span><b>词组与它的组成词错开到期</b>——P11 ⑬ 已定不做</span></div>
+      <div class="not"><i>×</i><span><b>词组的美术方案</b>——虚线之外的画法（两档怎么分、
+        跟单词的记号怎么区别）<b>用户定了以后再说</b></span></div>
+      <div class="not"><i>×</i><span><b>配色方案与动画的重构</b>——用户 2026-09-23 说打算整体重构，
+        <b>不在这个 Phase</b>。上面那条「词组的美术方案」大概率会并进去。
+        这个 Phase 新画的东西一律照现有配色与动画，记进主文档 §M</span></div>
+      <div class="not"><i>×</i><span><b>读完之后的收尾界面</b>（§9）</span></div>
+      <div class="not"><i>×</i><span><b>同词第二次出现的说明</b>（§9）</span></div>
+      <div class="not"><i>×</i><span><b>批量上限由服务端下发</b>（§9，留在 §M）</span></div>
+      <div class="not"><i>×</i><span><b>词典例句进复习</b>（§9，要先答一个新规则问题）</span></div>
+      <div class="not"><i>×</i><span><b>按语料使用情况裁剪义项长尾</b>——
+        P10 §9 记进 §M 的，<b>§4 那套排版是显示层的缓解，不是裁剪</b></span></div>
+      <div class="not"><i>×</i><span><b>账号、多用户、字体行距页边距、深色手动切换</b>——
+        P8 §12 已经划出去过一次，这个 Phase 不翻案</span></div>
+      <div class="not"><i>×</i><span><b>XCUITest 截图测试</b>——
+        P8 的理由照旧成立：它只验得了「画出来了」，验不了「好不好用」，
+        而它本身要维护</span></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>English Reader</span>
+    <span>Phase 12 · 完善客户端 · 词组上界面 ＋ 五条用出来的</span>
+    <span>2026-09-22 开谈 · 2026-09-23 定稿 · 尚未动手</span>
+  </footer>
+
+</div>
