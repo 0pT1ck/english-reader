@@ -28,7 +28,10 @@ struct ReviewSessionScreen: View {
         .reviewBackground()
         .navigationTitle("复习")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("不再复习这个词？", isPresented: $confirmingDismiss,
+        // 作答是沉浸式的，不要标签栏（P12 决定 ⑪，三处一起，见 `SpellingScreen`）。
+        .toolbar(.hidden, for: .tabBar)
+        .confirmationDialog(model.card?.item_type == "phrase" ? "不再复习这个词组？" : "不再复习这个词？",
+                            isPresented: $confirmingDismiss,
                             titleVisibility: .visible) {
             Button("我已经会了", role: .destructive) { model.dismissCurrent(app) }
             Button("算了", role: .cancel) {}
@@ -61,7 +64,8 @@ struct ReviewSessionScreen: View {
                     // P7 决定 22 留的空壳，P8 填上。代价当时写得很清楚：
                     // **词一旦标了，只能等 FSRS 慢慢放过它**——而这条出口
                     // 整条路本来就是通的，缺的只是这个菜单项。
-                    Button("这个词我已经会了", systemImage: "checkmark.circle") {
+                    Button(model.card?.item_type == "phrase" ? "这个词组我已经会了" : "这个词我已经会了",
+                           systemImage: "checkmark.circle") {
                         confirmingDismiss = true
                     }
                     .disabled(model.card == nil)
@@ -125,7 +129,9 @@ struct ReviewSessionScreen: View {
                 if let word = card.word, let senses = word.senses, !senses.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
-                            Text("常见释义 · 考频").font(.caption).foregroundStyle(.secondary)
+                            // 一条考频都没有时不写「考频」（同点词面板，P12 决定 ⑫a）。
+                            Text(senses.contains { ($0.share ?? 0) > 0 } ? "常见释义 · 考频" : "释义")
+                                .font(.caption).foregroundStyle(.secondary)
                             if let phonetic = word.phonetic, !phonetic.isEmpty {
                                 Text("/\(phonetic)/").font(.caption).foregroundStyle(.secondary)
                             }
@@ -137,10 +143,14 @@ struct ReviewSessionScreen: View {
                                 Text(line(sense))
                                     .font(.callout)
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                Text(sense.share.map { String(format: "%.0f%%", $0) } ?? "—")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
+                                // 没考频的不画「—」（P12 决定 ⑫，跟点词面板同一条）：
+                                // 一列占着地方只为说「没有」。
+                                if let share = sense.share, share > 0 {
+                                    Text(String(format: "%.0f%%", share))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .monospacedDigit()
+                                }
                             }
                         }
                     }
@@ -163,11 +173,13 @@ struct ReviewSessionScreen: View {
         }
     }
 
+    /// 词性取中文、取短（P12 决定 ⑦）：原先取的是 `pos`，揭晓屏上显示 `N-COUNT`。
+    /// 契约 3 起 `WordSense` 才有 `pos_zh`——点词面板那边早就有，这边一直没有。
     private func line(_ sense: Components.Schemas.WordSense) -> String {
         let gloss: String
         if let list = sense.gloss_zh?.value1 { gloss = list.joined(separator: ", ") }
         else { gloss = sense.gloss_zh?.value2 ?? "" }
-        guard let pos = sense.pos, !pos.isEmpty else { return gloss }
+        guard let pos = PartOfSpeech.short(sense.pos_zh) else { return gloss }
         return "\(pos) \(gloss)"
     }
 

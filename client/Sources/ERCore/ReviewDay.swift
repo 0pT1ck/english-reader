@@ -68,6 +68,10 @@ public struct ReviewDay: Sendable {
     public func spellingWords() -> [SpellingWord] {
         var seen = Set<String>()
         return entries
+            // **只有单词进拼写**（P11 决定 ⑤b：`take sth into account` 中间有变量，拼什么）。
+            // P11 定了而这里没跟上，2026-09-23 才发现。**正面列举允许的类型**（坑 §6.9）——
+            // 写成「排除 phrase」的话，哪天多一种条目就静默混进来。
+            .filter { $0.key.itemType == "word" }
             .sorted { ($0.key.key, $0.key.senseId) < ($1.key.key, $1.key.senseId) }
             .filter { seen.insert($0.key.key).inserted }
             .map { SpellingWord(key: $0.key.key,

@@ -30,6 +30,14 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 
 func flag(_ name: String) -> Bool { arguments.contains("--\(name)") }
 
+/// `--name value` 形式的参数值。
+func option(_ name: String) -> String? {
+    guard let index = arguments.firstIndex(of: "--\(name)"), index + 1 < arguments.count else {
+        return nil
+    }
+    return arguments[index + 1]
+}
+
 /// 一句人话的失败。
 ///
 /// **和 `TransportError` 分开**:那个说的是「网或服务端怎么了」，
@@ -60,7 +68,7 @@ let positionals: [String] = {
         if skipNext { skipNext = false; continue }
         if argument.hasPrefix("--") {
             // These take a value; the rest are plain flags.
-            skipNext = ["--server", "--token", "--state", "--answers", "--clear"]
+            skipNext = ["--server", "--token", "--state", "--answers", "--clear", "--sense"]
                 .contains(argument)
             continue
         }
@@ -89,7 +97,9 @@ func usage() {
       ercli library [来源]     书架：不带参数看生成文，cet4 / cet6 / kaoyan 看真题
       ercli read <编号>        读一篇：正文带标注，可以查词、标记、读完
       ercli look <编号> <序号> 查一个词（序号就是正文里 ⟨n⟩ 那个数字）
-      ercli mark <编号> <序号> [--fuzzy]   标记；对词组会整体标记
+      ercli mark <编号> <序号> [--fuzzy] [--sense <义项号>]
+                               标记；对词组会整体标记。这一处没判出义项时
+                               （功能词、标注判「都不贴合」的）要用 --sense 指定标哪条
       ercli unmark <编号> <序号>   撤销标记
       ercli finish <编号>      读完，记账
       ercli review             走一遍今天的复习
@@ -233,9 +243,38 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
                            itemType: "phrase", articleId: id))
         print(Ink.red("标记词组：\(phrase.phrase)")
               + Ink.dim("（义项 \(phrase.senseId)，\(kind.rawValue)）"))
-    case .word(let headword, _):
-        let senseId = (article.tokens ?? [])
-            .first { $0.seq == seq }?.sense_id ?? 0
+    case .word(let headword, let display):
+        // **标记必须落在一条真实的义项上**（P12 决定 ⑯）。这里原来是
+        // `sense_id ?? 0`——跟 App 一样的写法、一样的错：功能词、人名、
+        // 没判出义项的，全记成义项 0，永远进不了复习。
+        let token = (article.tokens ?? []).first { $0.seq == seq }
+        let senses = article.glossary?.additionalProperties[headword]?.senses ?? []
+        let chosen = option("sense").flatMap(Int.init)
+        let target = MarkTarget.resolve(kind: token?.kind ?? "", senseId: token?.sense_id,
+                                        senseIds: senses.map(\.id),
+                                        inPhrase: display.inPhrase)
+        let senseId: Int
+        switch target {
+        case .contextSense(let id):
+            senseId = chosen ?? id
+        case .pickFromList:
+            guard let chosen else {
+                print(Ink.dim("这一处没判出是哪个义项，用 --sense 指定标哪条："))
+                for sense in senses {
+                    let pos = PartOfSpeech.short(sense.pos_zh).map { "[\($0)] " } ?? ""
+                    print("  \(sense.id)  \(pos)\(ArticleRenderer.gloss(sense.gloss_zh))")
+                }
+                return
+            }
+            senseId = chosen
+        case .properNoun:
+            print(Ink.dim("「\(token?.surface ?? headword)」是专有名词，不标记")); return
+        case .noSenses:
+            print(Ink.dim("「\(headword)」还没有义项，标了进不了复习")); return
+        }
+        guard senses.contains(where: { $0.id == senseId }) else {
+            throw CLIError("义项 \(senseId) 不是「\(headword)」的")
+        }
         try record(.marked(headword, senseId: senseId, kind: kind, articleId: id))
         print(Ink.red("标记：\(headword)") + Ink.dim("（义项 \(senseId)，\(kind.rawValue)）"))
     case nil:

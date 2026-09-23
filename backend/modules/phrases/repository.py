@@ -223,6 +223,17 @@ def collocations_for(sense_ids: list[int]) -> dict[int, list[str]]:
     return out
 
 
+def senses_of_phrase(phrase: str) -> list[dict[str, Any]]:
+    """Every sense of one phrase, in 柯林斯's order. For the reveal card (P12)."""
+    rows = _conn().execute(
+        "SELECT s.id, s.ordinal, s.gloss_zh, s.concept_en, s.pos, s.pos_zh,"
+        " s.exam_frequency FROM phrase_senses s JOIN phrase_list p ON p.id = s.phrase_id"
+        " WHERE p.text = ? ORDER BY s.ordinal",
+        (phrase,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def sense_by_id(sense_id: int) -> dict[str, Any] | None:
     """One phrase sense, in the shape a review card renders.
 

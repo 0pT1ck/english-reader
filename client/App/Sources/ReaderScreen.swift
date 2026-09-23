@@ -14,14 +14,45 @@ struct ReaderScreen: View {
     @State private var model = ReaderModel()
     @State private var scrolledTo: Int?
     @State private var viewportHeight: CGFloat = 0
+    /// 正文里那个大标题有多高，以及它是不是已经滚出去了——栏里的小标题
+    /// 看这个决定出不出现（决定 ⑩ 的 C）。
+    @State private var titleHeight: CGFloat = 0
+    @State private var titleScrolledAway = false
+    /// 打开时要对准的那一段（上次读到的位置），**在用户自己开始滑之前**反复对准。
+    @State private var pendingAnchor: Int?
 
     private static let headerID = -1
+    /// 「回到顶部」那个浮钮的边长与离底距离。正文的底部留白由它俩算出来。
+    private static let backToTopSize: CGFloat = 44
+    private static let backToTopInset: CGFloat = 24
 
     var body: some View {
         content
+            // **标题自己画，栏里那个小标题自己管**（P12 决定 ⑩，方案 §7 三的 C）。
+            //
+            // 原来交给导航栏的大标题（P6 决定 16），为的是「往上滑，大标题缩进栏里
+            // 固定住」那个系统动画。而 iOS 的大标题是单行截断的，长标题只剩
+            // 「A New Life for an Old…」。先试的 B1（放开那个 label 的行数）
+            // 2026-09-23 在模拟器上对照过：折行了，但系统给那一块的高度是写死的
+            // 一行，第二行被裁掉、省略号也没了——看起来像标题本来就这么长，
+            // 比截断更糟。所以转 C：正文顶上画完整的标题，滚出去之后
+            // 栏里的小标题淡进来。`navigationTitle` 仍然设着，
+            // 返回按钮长按的菜单和旁白要用它；它不在栏里显示，因为 `.principal` 占了那个位置。
             .navigationTitle(card.title)
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar { optionsMenu }
+            .navigationBarTitleDisplayMode(.inline)
+            // 读文章是沉浸式的，不要标签栏（P12 决定 ⑪）。原先它一直浮在正文上，
+            // 最后一行被那个玻璃胶囊压掉半行。三处一起，见 `SpellingScreen`。
+            .toolbar(.hidden, for: .tabBar)
+            .toolbar {
+                optionsMenu
+                ToolbarItem(placement: .principal) {
+                    Text(card.title)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .opacity(titleScrolledAway ? 1 : 0)
+                        .animation(.easeInOut(duration: 0.2), value: titleScrolledAway)
+                }
+            }
             .task { await start() }
             .onDisappear {
                 model.reportProgress(app: app)
@@ -33,9 +64,9 @@ struct ReaderScreen: View {
             }
             .sheet(isPresented: lookupBinding) {
                 if let item = model.lookup {
-                    LookupSheet(item: item, maxHeight: viewportHeight / 2) {
-                        model.setMark($0, app: app)
-                    }
+                    LookupSheet(item: item, maxHeight: viewportHeight / 2,
+                                onSelect: { model.select($0) },
+                                onMark: { model.setMark($0, app: app) })
                 }
             }
     }
@@ -62,6 +93,7 @@ struct ReaderScreen: View {
     }
 
     private var reader: some View {
+        ScrollViewReader { proxy in
         ScrollView {
             // **VStack 而不是 LazyVStack。**每段是一个 `UITextView`，而懒加载
             // 意味着它们在滚动到跟前时才测量——于是恢复上次位置那一下，
@@ -73,8 +105,8 @@ struct ReaderScreen: View {
                 ForEach(model.paragraphs) { paragraph in
                     ParagraphTextView(
                         paragraph: paragraph,
-                        marks: model.marks,
-                        selected: model.selectedSeq,
+                        marks: model.markSpans,
+                        selected: model.selectedSpan,
                         scale: app.preferences.fontScale,
                         onTap: { model.tap(seq: $0, app: app) }
                     )
@@ -85,7 +117,11 @@ struct ReaderScreen: View {
             }
             .scrollTargetLayout()
             .padding(.horizontal, 20)
-            .padding(.bottom, 40)
+            // **底部留白要让「读完了」滚得出浮钮的范围**（P12 决定 ⑪）。原先是 40，
+            // 那时标签栏占着底部、滚动区在它上面结束；标签栏藏掉之后滚动区一直到屏幕底，
+            // 2026-09-23 模拟器上「读完了」正好停在「回到顶部」底下被压住。
+            // 从浮钮尺寸算，不再填一个新的魔法数。
+            .padding(.bottom, Self.backToTopSize + Self.backToTopInset + 16)
         }
         .scrollPosition(id: $scrolledTo)
         // 面板开着时正文不能滚（决定 24）。
@@ -99,23 +135,59 @@ struct ReaderScreen: View {
         .onChange(of: scrolledTo) { _, newValue in
             model.topParagraph = newValue
         }
+        // 大标题整个滚到栏底下之后，栏里的小标题才出来——一半在屏上时两个同时出现，
+        // 就是同一句话说两遍。`contentInsets.top` 要加上：内容是从栏下面开始排的。
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            titleHeight > 0 && geometry.contentOffset.y + geometry.contentInsets.top > titleHeight
+        } action: { _, away in
+            titleScrolledAway = away
+        }
         // 面板最高只能占半屏（决定 26），所以要量一下这一屏有多高——
         // `UIScreen.main` 在 iOS 26 上已经不该再用了。
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
             viewportHeight = $0
         }
+        // **跳回上次位置（决定 15）要等排版量完才对得准。**打开的那一刻每一段的
+        // 高度都还没量出来（正文每段是一个 `UITextView`，高度事后才报上来），
+        // 那时设的位置是按全是零的高度算的，结果停在顶部。2026-09-23 在 iOS 27
+        // 模拟器上对照过：原版代码存着第 11 句，打开是顶部——P9 的注释记过
+        // iOS 26 真机上「整体错位，几秒后归位」，到 27 上干脆不归位了。
+        // 所以内容每长高一次就再对准一次，**直到用户自己动手滑、或者改了字号**为止——
+        // 不猜一个「等多少毫秒」：量完要多久随篇幅和机器变，猜的数总有一天不够。
+        .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
+            guard let target = pendingAnchor else { return }
+            proxy.scrollTo(target, anchor: .top)
+        }
+        .onScrollPhaseChange { _, phase in
+            if phase == .interacting { pendingAnchor = nil }
+        }
+        .onChange(of: app.preferences.fontScale) { _, _ in pendingAnchor = nil }
         .overlay(alignment: .bottomTrailing) { backToTop }
+        }
     }
 
-    /// 头部信息块，**跟正文一起滚走**（决定 18）。标题不在这里——它交给
-    /// 导航栏的大标题，滚过之后系统自己把它缩进栏里（决定 16）。
+    /// 头部信息块，**跟正文一起滚走**（决定 18）。
+    ///
+    /// **标题在这里**（P12 起），想占几行占几行——原先交给导航栏的大标题，
+    /// 而那个是单行截断的。字号用 `.largeTitle` 加粗，就是系统大标题那一档。
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Text(card.title)
+                .font(.largeTitle.bold())
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    titleHeight = $0
+                }
+                .padding(.bottom, 4)
             if let summary = card.summary, !summary.isEmpty {
+                // **左对齐**（P12 决定 ⑨）。P6 的草图上它是右对齐的——草图上那句只有一行，
+                // 一行右对齐是条干净的线；两行右对齐左边就参差了，中文没有词间空隙
+                // 吸收那种参差。下面「话题 · 词数」那一行照旧左右分居。
                 Text(summary)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack {
                 Text(card.topline)
@@ -155,16 +227,17 @@ struct ReaderScreen: View {
     /// 更好发现的入口，两个并存没问题。它浮在正文上，所以它正是玻璃该出现的地方。
     private var backToTop: some View {
         Button {
+            pendingAnchor = nil
             withAnimation { scrolledTo = Self.headerID }
         } label: {
             Image(systemName: "arrow.up")
                 .font(.body.weight(.semibold))
-                .frame(width: 44, height: 44)
+                .frame(width: Self.backToTopSize, height: Self.backToTopSize)
         }
         .buttonStyle(.glass)
         .clipShape(.circle)
         .padding(.trailing, 18)
-        .padding(.bottom, 24)
+        .padding(.bottom, Self.backToTopInset)
         .accessibilityLabel("回到顶部")
     }
 
@@ -198,8 +271,24 @@ struct ReaderScreen: View {
         guard model.phase == .loading else { return }
         await model.load(card: card, app: app)
         if case .ready = model.phase {
-            scrolledTo = model.resumeParagraph ?? Self.headerID
+            anchor(to: model.resumeParagraph)
+            #if DEBUG
+            if let paragraph = DevLaunch.scrollParagraph { anchor(to: paragraph) }
+            if let seq = DevLaunch.tapSeq {
+                model.tap(seq: seq, app: app)
+                if let pick = DevLaunch.pickSense {
+                    model.select(.init(inner: DevLaunch.openInner, senseId: pick))
+                }
+                if DevLaunch.markRequested { model.setMark(DevLaunch.markKind, app: app) }
+            }
+            #endif
         }
+    }
+
+    /// 打开时定位：设一次，并登记成「待对准」，排版量完之前每长高一次就再对准一次。
+    private func anchor(to paragraph: Int?) {
+        scrolledTo = paragraph ?? Self.headerID
+        pendingAnchor = paragraph
     }
 
     /// 离线时自己再试，不要求用户去点。转圈说的就是「还在重试」，
@@ -211,7 +300,7 @@ struct ReaderScreen: View {
             await model.load(card: card, app: app)
         }
         if case .ready = model.phase {
-            scrolledTo = model.resumeParagraph ?? Self.headerID
+            anchor(to: model.resumeParagraph)
         }
     }
 }

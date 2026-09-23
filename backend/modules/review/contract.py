@@ -38,6 +38,12 @@ class SenseCard(BaseModel):
     headword: str
     ordinal: int
     pos: str | None = None
+    pos_zh: str | None = Field(
+        default=None,
+        description="词性的中文。**客户端显示这个，不显示 `pos`**——P10 起 `pos` 是柯林斯的"
+        "语法标记（`N-COUNT`、`ADJ-GRADED`），对四六级考生是噪音。P12 加：点词面板那边的 "
+        "`Sense` 早就有它，复习卡这边一直没有",
+    )
     concept_en: str | None = None
     gloss_zh: list[str] | str | None = None
     exam_frequency: int | None = Field(default=None, description="真题考频")
@@ -98,6 +104,7 @@ class WordSense(BaseModel):
     id: int
     ordinal: int
     pos: str | None = Field(default=None, description="词性。说明用，从不决定义项怎么分")
+    pos_zh: str | None = Field(default=None, description="词性的中文，客户端显示这个（P12 加，理由见 SenseCard）")
     concept_en: str | None = None
     gloss_zh: list[str] | str | None = None
     exam_frequency: int = 0
@@ -109,7 +116,15 @@ class WordSense(BaseModel):
 
 
 class WordCard(BaseModel):
-    """The whole word, as the reveal screen shows it.
+    """The whole word — **or the whole phrase** — as the reveal screen shows it.
+
+    **Phrases ride in here too** (P12 决定 ⑬, 2026-09-23). The reveal screen
+    lists every sense of what was tested, and a phrase has senses of its own
+    (`beside yourself with` has several). The user chose one card type over a
+    parallel ``PhraseCard``; the cost is the name, so it is said here: for a
+    phrase, ``headword`` is the phrase text, ``phonetic`` and ``translation``
+    are always null, and ``senses`` are the phrase's senses. Before P12 a
+    phrase got ``None`` and its reveal screen showed only the one sense tested.
 
     Duplicates what the article glossary carries, and that is the point:
     **the review payload has to stand on its own.** Article bodies are cleared
@@ -130,7 +145,8 @@ class ReviewItem(BaseModel):
     queue_id: int = Field(description="上报作答时带上它。**不是义项 id**，是今天这一轮的排队号")
     item_type: str = Field(description="word 单词 / phrase 词组")
     item_key: str
-    sense_id: int = Field(description="词组恒为 0——词组不是别的东西的一个义项")
+    sense_id: int = Field(description="被考的那条义项。**词组也有自己的义项**（P11 起），"
+                          "这里不再是 0——原先那句「词组恒为 0」P11 就不成立了，P12 才改掉")
     bucket: str = Field(description="today 今天刚标的 / due 到期该复习的")
     direction: int = Field(description="1 看词想义项，2 看义项想词。答对 1 解锁 2，答错 2 退回 1 并重新上锁")
     asks: int = Field(description="今天问过几次，两个方向合计。**它就是成绩**")

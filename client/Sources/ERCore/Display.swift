@@ -218,3 +218,71 @@ extension ArticleDisplay {
         }
     }
 }
+
+/// 词性怎么显示（P12，2026-09-23）。**库里的值是柯林斯原文，不改；显示时取短。**
+///
+/// 两种会把一行字撑开的值：
+///
+/// * 柯林斯对 `ADJ-GRADED` 给的中文不是一个名称，是一句**解释**——
+///   「能被表示程度的副词或介词词组修饰的形容词」，20 个字，挂在 2,502 条义项上
+///   （全部义项的 10%）。它说的就是「可分级的形容词」，对四六级考生「形容词」就够了。
+/// * 几个标记用「；」并在一起（「可数名词；头衔名词；称呼名词」）。第一个是主标记。
+///
+/// 放在 Core 而不是 App：`ercli` 也显示词性，同一条显示规则两边各写一遍，
+/// 就是坑 §5.1 那个「三方各写一遍，只有一方是对的」。
+public enum PartOfSpeech {
+    /// 柯林斯写成解释的那几个，映射到它们解释的那个词类。**按原文逐字对**，
+    /// 不做模糊匹配：模糊匹配在一个没见过的值上会给出一个像样的错答案。
+    static let explained: [String: String] = [
+        "能被表示程度的副词或介词词组修饰的形容词": "形容词",
+    ]
+
+    public static func short(_ label: String?) -> String? {
+        guard let label = label?.trimmingCharacters(in: .whitespaces), !label.isEmpty else {
+            return nil
+        }
+        if let named = explained[label] { return named }
+        let first = label.split(whereSeparator: { $0 == "；" || $0 == ";" }).first
+            .map { $0.trimmingCharacters(in: .whitespaces) } ?? label
+        guard !first.isEmpty else { return nil }
+        return explained[first] ?? first
+    }
+}
+
+/// 从这一处标记，标记落在哪（P12 决定 ⑯）。**标记必须落在一条真实的义项上。**
+///
+/// 起因是 2026-09-23 的真机截图：人名 Green 被标成了不认识，记下的是
+/// 「义项 0」——复习按义项出题，义项 0 从语料里找不到句子、模型也造不出
+/// （`sense_by_id(0)` 查不到），于是它永远待在词池里、永远不会被问到，
+/// 而屏幕上的每一样反馈都在说「标上了」。本机语料里能点的 token 有 55% 会这样。
+///
+/// 放在 Core：App 与 `ercli` 以前各写一遍 `sense_id ?? 0`，**两处写得一样错**。
+public enum MarkTarget: Equatable, Sendable {
+    /// 本句中有一条可信的义项：滑块直接标它（P6 决定 19）。
+    case contextSense(Int)
+    /// 这一处没有可信的义项，但词有义项列表：**在列表里点哪一条就标哪一条**。
+    case pickFromList
+    /// 专有名词（人名地名）：不给普通词的意思，也不给标。
+    case properNoun
+    /// 这个词没有义项集：没有东西可标。
+    case noSenses
+
+    /// - Parameters:
+    ///   - kind: token 的 `kind`（`content` / `function` / `proper` / `nonword`）。
+    ///   - senseId: token 的 `sense_id`。`nil` 没标注过、`0` 没有义项集、
+    ///     `-1` 标注判「都不贴合」，**只有正数才是义项**。
+    ///   - senseIds: 这个词现行的全部义项号。
+    ///   - inPhrase: 这个 token 在一个已确认的词组里——那样它自己的标注
+    ///     是在不知情的情况下做的，不可信。
+    public static func resolve(kind: String, senseId: Int?, senseIds: [Int],
+                               inPhrase: Bool) -> MarkTarget {
+        if kind == "proper" { return .properNoun }
+        if senseIds.isEmpty { return .noSenses }
+        // **正面列举可信的情况**（坑 §6.9）：正数、而且在这个词的列表里、而且不在词组里。
+        // 反过来写成「排除 0 和 -1」的话，哪天冒出一个新的特殊值就静默放行。
+        if !inPhrase, let senseId, senseId > 0, senseIds.contains(senseId) {
+            return .contextSense(senseId)
+        }
+        return .pickFromList
+    }
+}

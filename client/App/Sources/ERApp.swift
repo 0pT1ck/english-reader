@@ -26,17 +26,23 @@ struct EnglishReaderApp: App {
     /// 不会再经历「诞生于 loading」那一下。
     @State private var reviewModel = ReviewModel()
     @Environment(\.scenePhase) private var scenePhase
+    /// 当前那一格。平时只由手指改；Debug 构建里 `DevLaunch.startTab` 能指定开屏落在哪。
+    #if DEBUG
+    @State private var tab = DevLaunch.startTab ?? "read"
+    #else
+    @State private var tab = "read"
+    #endif
 
     var body: some Scene {
         WindowGroup {
-            TabView {
-                Tab("阅读", systemImage: "book") {
+            TabView(selection: $tab) {
+                Tab("阅读", systemImage: "book", value: "read") {
                     LibraryScreen()
                 }
-                Tab("复习", systemImage: "arrow.triangle.2.circlepath") {
+                Tab("复习", systemImage: "arrow.triangle.2.circlepath", value: "review") {
                     ReviewScreen()
                 }
-                Tab("设置", systemImage: "gearshape") {
+                Tab("设置", systemImage: "gearshape", value: "settings") {
                     SettingsScreen()
                 }
             }

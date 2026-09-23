@@ -38,6 +38,9 @@ struct SpellingScreen: View {
         .reviewBackground()
         .navigationTitle("拼写强化")
         .navigationBarTitleDisplayMode(.inline)
+        // 作答是沉浸式的，不要标签栏（P12 决定 ⑪）。阅读器、作答、拼写三处一起——
+        // 2026-09-23 之前一处都没写，全项目 grep 不到这个修饰符。
+        .toolbar(.hidden, for: .tabBar)
     }
 
     private func question(_ word: SpellingWord) -> some View {

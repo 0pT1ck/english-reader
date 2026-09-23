@@ -104,7 +104,11 @@ public enum ContractVersion {
     ///
     /// **2 是 P11**：词组带上了义项、`translation`/`definition` 删掉了、
     /// 义项多了搭配。1 的客户端读不出词组的意思，所以服务端该把它挡在外面。
-    public static let current = 2
+    ///
+    /// **3 是 P12**：复习卡的 `word` 对词组也有值了（`WordCard` 装词组，决定 ⑬），
+    /// `WordSense`／`SenseCard` 多了 `pos_zh`。2 的客户端会把词组卡当成单词卡画
+    /// ——一个标题是 `more than`、却按单词排版的揭晓屏。
+    public static let current = 3
     public static let header = "X-Contract-Version"
 }
 

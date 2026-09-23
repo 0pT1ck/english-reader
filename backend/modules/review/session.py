@@ -98,6 +98,7 @@ def word_of(headword: str) -> dict[str, Any] | None:
             "id": item["id"],
             "ordinal": item["ordinal"],
             "pos": item.get("pos"),
+            "pos_zh": item.get("pos_zh"),
             "concept_en": item.get("concept_en"),
             "gloss_zh": gloss,
             "exam_frequency": item.get("exam_frequency") or 0,
@@ -111,6 +112,37 @@ def word_of(headword: str) -> dict[str, Any] | None:
         # The dictionary's comma pile, as a fallback for words with no sense set.
         "translation": entry["translation"] if entry else None,
         "senses": out_senses,
+    }
+
+
+def phrase_of(phrase: str) -> dict[str, Any] | None:
+    """Everything the reveal screen shows about one phrase — ``WordCard``'s shape.
+
+    P12 决定 ⑬: one card type for both. ``phonetic`` and ``translation`` stay
+    null for a phrase; the dictionary comma pile is word-only, and 柯林斯 is the
+    only source of phrase Chinese (P11). Share is computed exactly as for words.
+    """
+    from backend.modules.phrases import repository as phrase_repo
+
+    rows = phrase_repo.senses_of_phrase(phrase)
+    if not rows:
+        return None
+    exam_total = sum(int(r.get("exam_frequency") or 0) for r in rows)
+    return {
+        "headword": phrase,
+        "phonetic": None,
+        "translation": None,
+        "senses": [{
+            "id": r["id"],
+            "ordinal": r["ordinal"],
+            "pos": r.get("pos"),
+            "pos_zh": r.get("pos_zh"),
+            "concept_en": r.get("concept_en"),
+            "gloss_zh": r["gloss_zh"],
+            "exam_frequency": int(r.get("exam_frequency") or 0),
+            "share": (round(int(r.get("exam_frequency") or 0) / exam_total * 100, 1)
+                      if exam_total else None),
+        } for r in rows],
     }
 
 

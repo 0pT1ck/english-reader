@@ -9,9 +9,10 @@ import ERContract
 struct LibraryScreen: View {
     @Environment(AppModel.self) private var app
     @State private var model = LibraryModel()
+    @State private var path: [ArticleCard] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             content
                 .libraryBackground()
                 .navigationTitle("阅读")
@@ -20,6 +21,14 @@ struct LibraryScreen: View {
                 }
         }
         .task { await model.load(app) }
+        #if DEBUG
+        .onChange(of: model.cards) { _, cards in
+            // 只推一次：之后列表刷新不该把人又拽回那一篇。
+            guard path.isEmpty, let id = DevLaunch.openArticle,
+                  let card = cards.first(where: { $0.id == id }) else { return }
+            path.append(card)
+        }
+        #endif
         .onChange(of: model.shelf) { _, _ in Task { await model.load(app) } }
         .onChange(of: model.paper) { _, _ in Task { await model.load(app) } }
     }
@@ -105,10 +114,14 @@ private struct ArticleCardRow: View {
                 .lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+            // **两行，每张一样高**（P12 决定 ⑧⑱）。原先一行，在 21 字处就截断——
+            // 而概括平均 28.4 字、提示词上限 30 字，模型守住了也显示不全，
+            // 瓶颈在这里不在模型。`reservesSpace` 跟标题那行一致：
+            // 概括只有一行的那张下面空一行，换整张列表高低一致。
             Text(card.summary ?? " ")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .lineLimit(2, reservesSpace: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack {

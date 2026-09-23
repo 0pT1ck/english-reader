@@ -108,11 +108,12 @@ enum ArticleLayout {
 /// `ScrollView`，这里只负责一段。
 struct ParagraphTextView: UIViewRepresentable {
     let paragraph: ReaderParagraph
-    /// 每个 token 当前的标记。**只画自己标过的**（决定 11、12）：
+    /// 要画记号的段。**只画自己标过的**（决定 11、12）：
     /// 目标词、超纲词、派生词一律不画——满屏记号之后文章就不是文章了。
-    let marks: [Int: MarkKind]
-    /// 正在被点开的那个词，整词底色。
-    let selected: Int?
+    /// 一段可以是一个词，也可以是一整个词组（P12）。
+    let marks: [MarkSpan]
+    /// 正在被点开的那一段，整段底色——点词组的任一半，亮的是整个词组。
+    let selected: ClosedRange<Int>?
     /// 字号倍数（P8 决定 17）。**入口在阅读屏的 `···` 里**——调字号要看着正文
     /// 调，在设置页拖一个滑块再退出去看效果，是把两秒的动作做成一分钟。
     ///
@@ -190,20 +191,34 @@ struct ParagraphTextView: UIViewRepresentable {
             let range = NSRange(location: token.location, length: token.length)
             guard NSMaxRange(range) <= result.length else { continue }
             result.addAttribute(.tokenSeq, value: token.seq, range: range)
+        }
 
-            if marks[token.seq] != nil {
-                // 两档（不认识 / 模糊）暂时画成同一种（决定 12）。
-                result.addAttributes([
-                    .underlineStyle: NSUnderlineStyle.single.rawValue
-                        | NSUnderlineStyle.patternDash.rawValue,
-                    .underlineColor: UIColor.secondaryLabel,
-                ], range: range)
-            }
-            if token.seq == selected {
-                result.addAttribute(.backgroundColor,
-                                    value: UIColor.secondarySystemFill, range: range)
-            }
+        for span in marks {
+            guard let range = range(of: span.seqs, length: result.length) else { continue }
+            // 两档（不认识 / 模糊）暂时画成同一种（决定 12）；词组也是这一种
+            // （P12 决定 ③，美术以后再定）。
+            result.addAttributes([
+                .underlineStyle: NSUnderlineStyle.single.rawValue
+                    | NSUnderlineStyle.patternDash.rawValue,
+                .underlineColor: UIColor.secondaryLabel,
+            ], range: range)
+        }
+        if let selected, let range = range(of: selected, length: result.length) {
+            result.addAttribute(.backgroundColor,
+                                value: UIColor.secondarySystemFill, range: range)
         }
         return result
+    }
+
+    /// 一段 token 在这一段正文里占的范围：**从第一个词的开头到最后一个词的结尾**，
+    /// 中间的空格一起算进去——跨 Phase 不变量，词组是一个整体。不在这一段的返回 nil。
+    private func range(of seqs: ClosedRange<Int>, length: Int) -> NSRange? {
+        let inside = paragraph.tokens.filter { seqs.contains($0.seq) }
+        guard let first = inside.min(by: { $0.location < $1.location }),
+              let last = inside.max(by: { $0.location + $0.length < $1.location + $1.length })
+        else { return nil }
+        let range = NSRange(location: first.location,
+                            length: last.location + last.length - first.location)
+        return NSMaxRange(range) <= length ? range : nil
     }
 }

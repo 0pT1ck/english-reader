@@ -2362,7 +2362,7 @@
           "sense_id": {
             "type": "integer",
             "title": "Sense Id",
-            "description": "词组恒为 0——词组不是别的东西的一个义项"
+            "description": "被考的那条义项。**词组也有自己的义项**（P11 起），这里不再是 0——原先那句「词组恒为 0」P11 就不成立了，P12 才改掉"
           },
           "bucket": {
             "type": "string",
@@ -2688,6 +2688,18 @@
               }
             ],
             "title": "Pos"
+          },
+          "pos_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos Zh",
+            "description": "词性的中文。**客户端显示这个，不显示 `pos`**——P10 起 `pos` 是柯林斯的语法标记（`N-COUNT`、`ADJ-GRADED`），对四六级考生是噪音。P12 加：点词面板那边的 `Sense` 早就有它，复习卡这边一直没有"
           },
           "concept_en": {
             "anyOf": [
@@ -3562,7 +3574,7 @@
           "headword"
         ],
         "title": "WordCard",
-        "description": "The whole word, as the reveal screen shows it.\n\nDuplicates what the article glossary carries, and that is the point:\n**the review payload has to stand on its own.** Article bodies are cleared\none at a time (P5 决定 10) and the word may have been met months ago, so a\nclient reaching into a cached article for this would lose half its card\nwhenever the cache was tidied — silently."
+        "description": "The whole word — **or the whole phrase** — as the reveal screen shows it.\n\n**Phrases ride in here too** (P12 决定 ⑬, 2026-09-23). The reveal screen\nlists every sense of what was tested, and a phrase has senses of its own\n(`beside yourself with` has several). The user chose one card type over a\nparallel ``PhraseCard``; the cost is the name, so it is said here: for a\nphrase, ``headword`` is the phrase text, ``phonetic`` and ``translation``\nare always null, and ``senses`` are the phrase's senses. Before P12 a\nphrase got ``None`` and its reveal screen showed only the one sense tested.\n\nDuplicates what the article glossary carries, and that is the point:\n**the review payload has to stand on its own.** Article bodies are cleared\none at a time (P5 决定 10) and the word may have been met months ago, so a\nclient reaching into a cached article for this would lose half its card\nwhenever the cache was tidied — silently."
       },
       "WordSense": {
         "properties": {
@@ -3585,6 +3597,18 @@
             ],
             "title": "Pos",
             "description": "词性。说明用，从不决定义项怎么分"
+          },
+          "pos_zh": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pos Zh",
+            "description": "词性的中文，客户端显示这个（P12 加，理由见 SenseCard）"
           },
           "concept_en": {
             "anyOf": [

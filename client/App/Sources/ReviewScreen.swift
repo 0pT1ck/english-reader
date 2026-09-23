@@ -28,6 +28,16 @@ struct ReviewScreen: View {
         // `.task` 在视图出现时跑，但它会在视图消失（切走一格、被重算）时
         // 取消——而取消之后没有任何东西会再叫它一次，所以 `.onAppear` 兜底。
         .task { if model.needsLoad { await model.load(app) } }
+        #if DEBUG
+        .task {
+            // 等预热把 `today` 装好（有上限，坑 §7.2），再按开关开一池、翻到揭晓屏。
+            guard let bucket = DevLaunch.reviewBucket else { return }
+            for _ in 0..<100 where model.needsLoad { try? await Task.sleep(for: .milliseconds(100)) }
+            guard model.bucket == nil else { return }
+            model.begin(bucket: bucket)
+            if DevLaunch.revealAnswer { model.answer(passed: true) }
+        }
+        #endif
         .onAppear { if model.needsLoad { Task { await model.load(app) } } }
     }
 

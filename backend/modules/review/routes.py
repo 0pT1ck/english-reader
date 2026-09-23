@@ -134,9 +134,11 @@ async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
             "item_type": item_type,
             "item_key": item_key,
             "sense_id": sense_id,
-            # 词组没有「这个词的全部义项」那一栏：它的义项在词组表里，
-            # 而卡片要的那条由 `sense_of` 的回落给出（P11 决定 ⑭）。
-            "word": session.word_of(item_key) if item_type == "word" else None,
+            # **词组也有一张卡**（P12 决定 ⑬）：揭晓屏要列出被考的东西的全部义项，
+            # 而词组有它自己的几条。P11 这里给的是 None，于是词组的揭晓屏只有被考的那一条。
+            # 同一个类型（WordCard），字段含义写在它的文档里。
+            "word": (session.word_of(item_key) if item_type == "word"
+                     else session.phrase_of(item_key)),
             "sense": session.sense_of(sense_id),
             # **不分池。** `_rows` 是那张表的原样读取，而 `split_pools` 是
             # 它上面那层判断——搬走的正是那一层。

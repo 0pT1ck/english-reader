@@ -37,7 +37,30 @@ final class Connection {
         token = Keychain.read(.deviceToken) ?? ""
         adminSecret = Keychain.read(.adminSecret) ?? ""
         adminBaseURLOverride = UserDefaults.standard.string(forKey: Self.adminURLKey) ?? ""
+        #if DEBUG
+        seedFromEnvironment()
+        #endif
     }
+
+    #if DEBUG
+    /// 模拟器开发用：从启动环境里读地址和令牌（2026-09-23，P12）。
+    ///
+    /// **为什么要有它**：配对只能在设置页里手动输令牌，而命令行点不了模拟器的屏幕——
+    /// 于是界面上的改动在本地没法走到「打开一篇文章」那一步，只能推 TestFlight 等真机，
+    /// 正是坑 §7.7 那个「看不见就连猜三轮」的形状。
+    /// `xcrun simctl launch` 会把 `SIMCTL_CHILD_ER_DEV_BASE_URL` 这类变量去掉前缀后
+    /// 传给 App，所以启动时带上就配好了。
+    ///
+    /// **只在 Debug 构建里存在**：TestFlight 走 Release，这段根本不会被编进去；
+    /// 而那两个变量也只有从命令行启动时才有，真机上永远读不到。
+    /// 走的是 `update()` 同一条路，令牌照样进钥匙串，不另开一条存法。
+    private func seedFromEnvironment() {
+        let env = ProcessInfo.processInfo.environment
+        guard let base = env["ER_DEV_BASE_URL"], let devToken = env["ER_DEV_TOKEN"],
+              !base.isEmpty, !devToken.isEmpty else { return }
+        update(baseURL: base, token: devToken)
+    }
+    #endif
 
     var isConfigured: Bool { url != nil && !token.isEmpty }
 

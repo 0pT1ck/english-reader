@@ -173,7 +173,7 @@ struct ArticleRenderer {
                 // Collins's grammatical marker since the inventory changed —
                 // `N-COUNT`, `V-T` — which is precise and unreadable; the
                 // dictionary ships its own Chinese for it, so show that.
-                if let pos = sense.pos_zh, !pos.isEmpty { line += Ink.dim("[\(pos)] ") }
+                if let pos = PartOfSpeech.short(sense.pos_zh) { line += Ink.dim("[\(pos)] ") }
                 line += Self.gloss(sense.gloss_zh)
                 // **Chinese first, English after, and the English clipped.**
                 // Collins writes COBUILD full-sentence definitions averaging

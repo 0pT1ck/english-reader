@@ -297,6 +297,31 @@ def main() -> int:  # noqa: PLR0912, PLR0915 - 验收脚本就是一长串断言
               'check("3.1"' in verify9 and 'check("3.2"' in verify9,
               "P11 加了三张表、改了两条路由，而这条线一个字没动")
 
+        # ── P12 加的：词组的复习卡（P12 决定 ⑬，验收 A4）───────────────────
+        # 揭晓屏要列出被考的东西的**全部**义项。P11 这里给词组的是 None。
+        # **阳性**：挑一个多义词组，卡上的义项数必须等于它在库里的义项数——
+        # 只查「有值」的话，一个只装了被考那一条的卡也会过（坑 §4.3）。
+        # **阴性**：单词的卡照旧是单词的（有音标那一栏），没被词组那条路带歪。
+        from backend.modules.review import session as review_session
+        multi = content.execute(
+            "SELECT p.text, COUNT(*) n FROM phrase_list p JOIN phrase_senses s"
+            " ON s.phrase_id = p.id GROUP BY p.id HAVING n >= 3 ORDER BY n DESC LIMIT 1"
+        ).fetchone()
+        card = review_session.phrase_of(multi["text"]) if multi else None
+        n_card = len(card["senses"]) if card else 0
+        check("35", "词组的复习卡带着这个词组的**全部**义项（P12 ⑬）",
+              bool(multi) and n_card == int(multi["n"])
+              and card["phonetic"] is None and card["headword"] == multi["text"],
+              f"{multi['text'] if multi else '—'}：库里 {multi['n'] if multi else 0} 条，卡上 {n_card} 条")
+        word_card = review_session.word_of("account")
+        check("36", "单词的复习卡没被词组那条路带歪，且带上了 `pos_zh`（阴性对照）",
+              bool(word_card) and word_card["headword"] == "account"
+              and all("pos_zh" in s_ for s_ in word_card["senses"])
+              and any(s_["pos_zh"] for s_ in word_card["senses"]),
+              f"account：{len(word_card['senses']) if word_card else 0} 条义项")
+        check("37", "查不到的词组给 None，不给一张空卡",
+              review_session.phrase_of("no such phrase here") is None)
+
     print("\n" + "=" * 62)
     print(f"自动检查：{len(passed)} 项通过，{len(failed)} 项失败，{len(notes)} 项只记录")
     if failed:

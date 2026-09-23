@@ -3,14 +3,25 @@ import Observation
 import ERCore
 import ERContract
 
-/// 一次标记指向的东西：哪个词的哪个义项。
+/// 一次标记指向的东西：哪个词（或词组）的哪个义项。
 ///
 /// **标记是按义项记的**（决定 19），词池里存的是「`estimate` 的第 2 个义项」，
 /// 不是「`estimate`」。所以本地这份覆盖也得按义项来，否则滑一个义项会把
-/// 同一个词别的义项一起改掉。
+/// 同一个词别的义项一起改掉。**条目类型也是键的一部分**（P12）：
+/// 词组 `account for` 和单词 `account` 是两个条目。
 struct MarkKey: Hashable {
-    let headword: String
+    let itemType: String
+    let key: String
     let senseId: Int
+}
+
+/// 正文里要画记号的一段：从哪个 token 到哪个 token。
+///
+/// **一个词是长度为一的一段，一个词组是连着中间空格的一整段**——跨 Phase 不变量：
+/// 「一处词组渲染成一个元素，两个词连同中间的空格都在里面」。
+struct MarkSpan: Equatable {
+    let seqs: ClosedRange<Int>
+    let kind: MarkKind
 }
 
 @MainActor
@@ -35,13 +46,14 @@ final class ReaderModel {
 
     /// 按 seq 取原始 token——`ArticleDisplay` 不带义项号，而标记要用它。
     private var tokensBySeq: [Int: Components.Schemas.Token] = [:]
+    /// 这篇里的词组，按起点 token 取——面板要它的全部义项与标记。
+    private var phrasesByStart: [Int: Components.Schemas.Phrase] = [:]
 
-    /// 本地还没上报的标记改动。**服务端是唯一事实来源**，这份只是覆盖层：
-    /// 值为 nil 表示「这里明确取消了标记」，跟「没有本地改动」是两回事。
-    private var localMarks: [MarkKey: MarkKind?] = [:]
+    /// 读「现在标着什么」要用设备上的重放（P12，见 `currentMark`）。
+    private weak var app: AppModel?
 
-    /// 正在点开的那个 token。
-    private(set) var selectedSeq: Int?
+    /// 正在点开的那一段：一个词，或者一整个词组（点任一半都选中整体）。
+    private(set) var selectedSpan: ClosedRange<Int>?
     private(set) var lookup: LookupItem?
 
     /// 顶部那一段。跳回上次位置、报进度都读它。
@@ -60,6 +72,7 @@ final class ReaderModel {
     // MARK: 载入
 
     func load(card: ArticleCard, app: AppModel) async {
+        self.app = app
         articleId = card.id
         guard let engine = app.engine else {
             phase = .failed("连接还没建好，先到设置里填地址和令牌")
@@ -112,6 +125,8 @@ final class ReaderModel {
 
         let tokens = response.tokens ?? []
         tokensBySeq = Dictionary(uniqueKeysWithValues: tokens.map { ($0.seq, $0) })
+        phrasesByStart = Dictionary((response.phrases ?? []).map { ($0.start_seq, $0) },
+                                    uniquingKeysWith: { first, _ in first })
         paragraphs = ArticleLayout.paragraphs(
             body: text, tokens: tokens, sentences: response.sentences ?? [])
 
@@ -129,88 +144,201 @@ final class ReaderModel {
 
     // MARK: 标记
 
-    /// 每个 token 当前的标记，给正文画虚线用。
+    /// 正文上要画记号的那些段，给正文画虚线用。**只画自己标过的**（P6 决定 11、12）。
     ///
-    /// 服务端那份打底，本地覆盖在上面——你刚滑完滑块，正文当场就该有反应，
+    /// 标记从设备上的重放里读（见 `currentMark`）——你刚滑完滑块，正文当场就该有反应，
     /// 不该等上报成功。「标记后正文毫无反应」在 P2 是被当成 bug 记下来的。
-    var marks: [Int: MarkKind] {
-        guard let display else { return [:] }
-        var result: [Int: MarkKind] = [:]
-        for (seq, token) in tokensBySeq {
-            guard let headword = token.headword else { continue }
-            let key = MarkKey(headword: headword, senseId: token.sense_id ?? 0)
-            if let override = localMarks[key] {
-                if let kind = override { result[seq] = kind }
-                continue
+    ///
+    /// **三种 token 三种画法**（P12）：
+    /// * 在词组里的：不画它自己的，画整个词组（Core 的规则，见 `TokenDisplay.inPhrase`）；
+    /// * 本句中有可信义项的：那条义项标过才画——「这一处的这个意思」；
+    /// * 这一处没判出义项的（功能词、标注判「都不贴合」的）：这个词**任何一条**义项标过就画。
+    ///   它是在列表里挑着标的，而这一处到底是哪条说不准；一处都不亮的话，
+    ///   标完正文毫无反应，就是 P2 那个老 bug。
+    /// 专有名词和没有义项的词不画——它们标不了（决定 ⑯）。
+    var markSpans: [MarkSpan] {
+        guard let display else { return [] }
+        var spans: [MarkSpan] = []
+
+        for phrase in display.phrases {
+            let key = MarkKey(itemType: "phrase", key: phrase.phrase, senseId: phrase.senseId)
+            if let kind = currentMark(key) {
+                spans.append(MarkSpan(seqs: phrase.startSeq...phrase.endSeq, kind: kind))
             }
-            guard seq < display.tokens.count, let kind = display.tokens[seq].mark else {
-                continue
-            }
-            result[seq] = kind
         }
-        return result
+
+        for (seq, token) in tokensBySeq {
+            guard seq < display.tokens.count, !display.tokens[seq].inPhrase,
+                  let headword = token.headword, let entry = glossary[headword] else { continue }
+            let target = MarkTarget.resolve(kind: token.kind, senseId: token.sense_id,
+                                            senseIds: entry.senses.map(\.id), inPhrase: false)
+            let kind: MarkKind?
+            switch target {
+            case .contextSense(let senseId):
+                kind = currentMark(MarkKey(itemType: "word", key: headword, senseId: senseId))
+            case .pickFromList:
+                kind = wordMarks(headword).values.first
+            case .properNoun, .noSenses:
+                kind = nil
+            }
+            if let kind { spans.append(MarkSpan(seqs: seq...seq, kind: kind)) }
+        }
+        return spans
     }
 
+    /// 现在标着什么。**先问设备上的重放，它没见过这个条目才看文章里带的那份。**
+    ///
+    /// 2026-09-23 模拟器上撞出来的：文章是整篇缓存的（`SyncEngine.article` 有缓存就不再拉），
+    /// 它带着的「你标过什么」是**下载那一刻**的服务端快照；原先刚标的那一下只存在这一屏的
+    /// 内存覆盖层里，**退出文章就没了**——标一个词、退出、再进来，虚线不见了。
+    /// 而学习记录的第一副本本来就在设备上（P9 架构铁律），`record()` 写完事件当场重放，
+    /// 所以问它就是对的，覆盖层也就不需要了（它还会在事件没写进去时照样显示「标上了」）。
+    ///
+    /// 重放**有这个条目**（标过、哪怕后来撤了）就以它为准；没有才退回文章快照——
+    /// 那是刚装好、还没同步过的情形。
     private func currentMark(_ key: MarkKey) -> MarkKind? {
-        if let override = localMarks[key] { return override }
-        guard let entry = glossary[key.headword] else { return nil }
-        return entry.marks.additionalProperties[String(key.senseId)]
-            .flatMap(MarkKind.init(rawValue:))
+        if let item = app?.projection.items[
+            Projection.Key(itemType: key.itemType, key: key.key, senseId: key.senseId)] {
+            if item.marks.contains(.unknown) { return .unknown }
+            return item.marks.contains(.fuzzy) ? .fuzzy : nil
+        }
+        let raw: [String: String]?
+        if key.itemType == "phrase" {
+            raw = phrasesByStart.values.first { $0.phrase == key.key }?.marks?.additionalProperties
+        } else {
+            raw = glossary[key.key]?.marks.additionalProperties
+        }
+        return raw?[String(key.senseId)].flatMap(MarkKind.init(rawValue:))
+    }
+
+    /// 一个词在各条**真**义项上的标记（服务端那份 ＋ 本地覆盖）。
+    /// 义项号 ≤ 0 的老标记不算——它们指不到任何一行，也进不了复习（决定 ⑯）。
+    private func wordMarks(_ headword: String) -> [Int: MarkKind] {
+        guard let entry = glossary[headword] else { return [:] }
+        var out: [Int: MarkKind] = [:]
+        for sense in entry.senses {
+            if let kind = currentMark(MarkKey(itemType: "word", key: headword, senseId: sense.id)) {
+                out[sense.id] = kind
+            }
+        }
+        return out
     }
 
     // MARK: 点词
 
-    /// 点一个词。
-    ///
-    /// **这个 Phase 不认词组**（方案 §6），所以这里不走 `display.target(at:)`——
-    /// 那条路会把点击解析成整条词组。代价照单认下：`account for` 里的
-    /// `account` 会按普通单词处理，释义可能不贴合。Core 那半边原样留着，
-    /// 打开就是把这一处换回 `target(at:)`。
+    /// 点一个 token。**走 Core 的 `target(at:)`**（P12 起）：点词组的任一半，
+    /// 选中的都是整个词组——跨 Phase 不变量。P6 起这里绕开了它（「界面初版不认词组」，
+    /// P6 §7），那笔账这个 Phase 还掉。
     func tap(seq: Int, app: AppModel) {
-        guard let token = tokensBySeq[seq], let headword = token.headword,
-              let entry = glossary[headword] else { return }
+        guard let display, let target = display.target(at: seq),
+              let token = tokensBySeq[seq] else { return }
+        let role = seq < display.tokens.count ? display.tokens[seq].role : nil
 
-        selectedSeq = seq
-        let senseId = token.sense_id ?? 0
-        let role = (seq < (display?.tokens.count ?? 0)) ? display?.tokens[seq].role : nil
+        switch target {
+        case .phrase(let phrase):
+            guard let payload = phrasesByStart[phrase.startSeq],
+                  let subject = phraseSubject(payload, contextSenseId: phrase.senseId) else { return }
+            selectedSpan = phrase.startSeq...phrase.endSeq
+            lookup = LookupItem(
+                subject: subject,
+                // 「这个词本身」：词组里被点的那个词，**永远是挑着标**——
+                // 它自己的标注是在不知道自己在词组里的情况下做的（决定 ②）。
+                inner: wordSubject(token, inPhrase: true),
+                isBeyondSyllabus: false,
+                selection: subject.contextSenseId.map { .init(inner: false, senseId: $0) }
+            )
+        case .word:
+            guard let subject = wordSubject(token, inPhrase: false) else { return }
+            selectedSpan = seq...seq
+            lookup = LookupItem(
+                subject: subject,
+                inner: nil,
+                // 超纲词不在正文做记号，改在面板里单词右边一行小字（决定 28）。
+                isBeyondSyllabus: role == .beyondSyllabus,
+                selection: subject.contextSenseId.map { .init(inner: false, senseId: $0) }
+            )
+        }
+        if let headword = token.headword {
+            app.record(.wordTapped(headword, articleId: articleId))
+        }
+    }
 
-        lookup = LookupItem(
-            headword: headword,
+    private func wordSubject(_ token: Components.Schemas.Token, inPhrase: Bool) -> LookupSubject? {
+        guard let headword = token.headword, let entry = glossary[headword] else { return nil }
+        let target = MarkTarget.resolve(kind: token.kind, senseId: token.sense_id,
+                                        senseIds: entry.senses.map(\.id), inPhrase: inPhrase)
+        return LookupSubject(
+            kind: .word,
+            key: headword,
+            title: target == .properNoun ? token.surface : headword,
             phonetic: entry.phonetic,
-            fallbackGloss: entry.translation,
-            senses: LookupItem.ordered(entry.senses),
-            contextSenseId: senseId,
-            // 超纲词不在正文做记号，改在面板里单词右边一行小字（决定 28）。
-            isBeyondSyllabus: role == .beyondSyllabus,
-            mark: currentMark(MarkKey(headword: headword, senseId: senseId))
+            // **专有名词不给普通词的意思**（决定 ⑯）：David Green 的 Green 不是「绿色的」。
+            senses: target == .properNoun ? [] : SenseRow.ordered(entry.senses.map(SenseRow.init)),
+            fallbackGloss: target == .properNoun ? nil : entry.translation,
+            target: target,
+            marks: wordMarks(headword)
         )
-        app.record(.wordTapped(headword, articleId: articleId))
+    }
+
+    private func phraseSubject(_ phrase: Components.Schemas.Phrase,
+                               contextSenseId: Int) -> LookupSubject? {
+        let senses = SenseRow.ordered((phrase.senses ?? []).map(SenseRow.init))
+        guard !senses.isEmpty else { return nil }
+        let ids = senses.map(\.id)
+        // 词组的「这一处是哪条」是标注器看着句子判的（P11 §7，语境判定折进标注），可信；
+        // 不在列表里的号照样按「挑着标」处理，同一条规则。
+        let target: MarkTarget = ids.contains(contextSenseId) ? .contextSense(contextSenseId)
+                                                               : .pickFromList
+        var marks: [Int: MarkKind] = [:]
+        for id in ids {
+            if let kind = currentMark(MarkKey(itemType: "phrase", key: phrase.phrase, senseId: id)) {
+                marks[id] = kind
+            }
+        }
+        return LookupSubject(kind: .phrase, key: phrase.phrase, title: phrase.phrase,
+                             phonetic: nil, senses: senses,
+                             fallbackGloss: nil, target: target, marks: marks)
+    }
+
+    /// 在列表里点了一行：滑块改标这一条（决定 ⑯）。
+    func select(_ selection: LookupItem.Selection) {
+        guard var item = lookup else { return }
+        let owner = selection.inner ? item.inner : item.subject
+        guard owner?.isMarkable == true else { return }
+        item.selection = selection
+        lookup = item
     }
 
     func closeLookup() {
         lookup = nil
-        selectedSeq = nil
+        selectedSpan = nil
     }
 
-    /// 滑块动了。三档：认识（＝没有标记）/ 模糊 / 不认识。
+    /// 滑块动了。三档：认识（＝没有标记）/ 模糊 / 不认识。标的是**被选中的那一条**。
     ///
     /// 「认识」不是一种记录，是**撤销标记**——撤销之后条目退回 `new`，
     /// 但遇见记录保留（它确实被遇见过）。这是跨 Phase 不变量。
     func setMark(_ kind: MarkKind?, app: AppModel) {
-        guard var item = lookup else { return }
-        let key = MarkKey(headword: item.headword, senseId: item.contextSenseId)
+        guard var item = lookup, let selection = item.selection,
+              let owner = item.selectedSubject, owner.isMarkable,
+              owner.senses.contains(where: { $0.id == selection.senseId }) else { return }
+        // 上面那一行守着决定 ⑯：**标记必须落在一条真实的义项上**——
+        // 专有名词、没有义项的、没选中任何一行的，走不到这里。
+        let key = MarkKey(itemType: owner.itemType, key: owner.key, senseId: selection.senseId)
         guard currentMark(key) != kind else { return }
 
-        localMarks[key] = .some(kind)
-        item.mark = kind
-        lookup = item
-
         if let kind {
-            app.record(.marked(item.headword, senseId: item.contextSenseId, kind: kind,
-                               articleId: articleId))
+            app.record(.marked(owner.key, senseId: selection.senseId, kind: kind,
+                               itemType: owner.itemType, articleId: articleId))
         } else {
-            app.record(.unmarked(item.headword, senseId: item.contextSenseId))
+            app.record(.unmarked(owner.key, senseId: selection.senseId, itemType: owner.itemType))
         }
+        // **面板上显示的是记下之后重放出来的结果，不是想要的结果**——
+        // 事件没写进去的话，这里照实显示没标上。
+        let now = currentMark(key)
+        if selection.inner { item.inner?.marks[selection.senseId] = now }
+        else { item.subject.marks[selection.senseId] = now }
+        lookup = item
     }
 
     // MARK: 进度与读完

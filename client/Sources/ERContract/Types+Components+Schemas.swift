@@ -1999,7 +1999,7 @@ extension Components {
             public var item_type: Swift.String
             /// - Remark: Generated from `#/components/schemas/ReviewItem/item_key`.
             public var item_key: Swift.String
-            /// 词组恒为 0——词组不是别的东西的一个义项
+            /// 被考的那条义项。**词组也有自己的义项**（P11 起），这里不再是 0——原先那句「词组恒为 0」P11 就不成立了，P12 才改掉
             ///
             /// - Remark: Generated from `#/components/schemas/ReviewItem/sense_id`.
             public var sense_id: Swift.Int
@@ -2043,7 +2043,7 @@ extension Components {
             ///   - queue_id: 上报作答时带上它。**不是义项 id**，是今天这一轮的排队号
             ///   - item_type: word 单词 / phrase 词组
             ///   - item_key:
-            ///   - sense_id: 词组恒为 0——词组不是别的东西的一个义项
+            ///   - sense_id: 被考的那条义项。**词组也有自己的义项**（P11 起），这里不再是 0——原先那句「词组恒为 0」P11 就不成立了，P12 才改掉
             ///   - bucket: today 今天刚标的 / due 到期该复习的
             ///   - direction: 1 看词想义项，2 看义项想词。答对 1 解锁 2，答错 2 退回 1 并重新上锁
             ///   - asks: 今天问过几次，两个方向合计。**它就是成绩**
@@ -2410,6 +2410,10 @@ extension Components {
             public var ordinal: Swift.Int
             /// - Remark: Generated from `#/components/schemas/SenseCard/pos`.
             public var pos: Swift.String?
+            /// 词性的中文。**客户端显示这个，不显示 `pos`**——P10 起 `pos` 是柯林斯的语法标记（`N-COUNT`、`ADJ-GRADED`），对四六级考生是噪音。P12 加：点词面板那边的 `Sense` 早就有它，复习卡这边一直没有
+            ///
+            /// - Remark: Generated from `#/components/schemas/SenseCard/pos_zh`.
+            public var pos_zh: Swift.String?
             /// - Remark: Generated from `#/components/schemas/SenseCard/concept_en`.
             public var concept_en: Swift.String?
             /// - Remark: Generated from `#/components/schemas/SenseCard/gloss_zh`.
@@ -2472,6 +2476,7 @@ extension Components {
             ///   - headword:
             ///   - ordinal:
             ///   - pos:
+            ///   - pos_zh: 词性的中文。**客户端显示这个，不显示 `pos`**——P10 起 `pos` 是柯林斯的语法标记（`N-COUNT`、`ADJ-GRADED`），对四六级考生是噪音。P12 加：点词面板那边的 `Sense` 早就有它，复习卡这边一直没有
             ///   - concept_en:
             ///   - gloss_zh:
             ///   - exam_frequency: 真题考频
@@ -2480,6 +2485,7 @@ extension Components {
                 headword: Swift.String,
                 ordinal: Swift.Int,
                 pos: Swift.String? = nil,
+                pos_zh: Swift.String? = nil,
                 concept_en: Swift.String? = nil,
                 gloss_zh: Components.Schemas.SenseCard.gloss_zhPayload? = nil,
                 exam_frequency: Swift.Int? = nil
@@ -2488,6 +2494,7 @@ extension Components {
                 self.headword = headword
                 self.ordinal = ordinal
                 self.pos = pos
+                self.pos_zh = pos_zh
                 self.concept_en = concept_en
                 self.gloss_zh = gloss_zh
                 self.exam_frequency = exam_frequency
@@ -2497,6 +2504,7 @@ extension Components {
                 case headword
                 case ordinal
                 case pos
+                case pos_zh
                 case concept_en
                 case gloss_zh
                 case exam_frequency
@@ -3519,7 +3527,15 @@ extension Components {
                 case ctx
             }
         }
-        /// The whole word, as the reveal screen shows it.
+        /// The whole word — **or the whole phrase** — as the reveal screen shows it.
+        ///
+        /// **Phrases ride in here too** (P12 决定 ⑬, 2026-09-23). The reveal screen
+        /// lists every sense of what was tested, and a phrase has senses of its own
+        /// (`beside yourself with` has several). The user chose one card type over a
+        /// parallel ``PhraseCard``; the cost is the name, so it is said here: for a
+        /// phrase, ``headword`` is the phrase text, ``phonetic`` and ``translation``
+        /// are always null, and ``senses`` are the phrase's senses. Before P12 a
+        /// phrase got ``None`` and its reveal screen showed only the one sense tested.
         ///
         /// Duplicates what the article glossary carries, and that is the point:
         /// **the review payload has to stand on its own.** Article bodies are cleared
@@ -3576,6 +3592,10 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/WordSense/pos`.
             public var pos: Swift.String?
+            /// 词性的中文，客户端显示这个（P12 加，理由见 SenseCard）
+            ///
+            /// - Remark: Generated from `#/components/schemas/WordSense/pos_zh`.
+            public var pos_zh: Swift.String?
             /// - Remark: Generated from `#/components/schemas/WordSense/concept_en`.
             public var concept_en: Swift.String?
             /// - Remark: Generated from `#/components/schemas/WordSense/gloss_zh`.
@@ -3639,6 +3659,7 @@ extension Components {
             ///   - id:
             ///   - ordinal:
             ///   - pos: 词性。说明用，从不决定义项怎么分
+            ///   - pos_zh: 词性的中文，客户端显示这个（P12 加，理由见 SenseCard）
             ///   - concept_en:
             ///   - gloss_zh:
             ///   - exam_frequency:
@@ -3647,6 +3668,7 @@ extension Components {
                 id: Swift.Int,
                 ordinal: Swift.Int,
                 pos: Swift.String? = nil,
+                pos_zh: Swift.String? = nil,
                 concept_en: Swift.String? = nil,
                 gloss_zh: Components.Schemas.WordSense.gloss_zhPayload? = nil,
                 exam_frequency: Swift.Int? = nil,
@@ -3655,6 +3677,7 @@ extension Components {
                 self.id = id
                 self.ordinal = ordinal
                 self.pos = pos
+                self.pos_zh = pos_zh
                 self.concept_en = concept_en
                 self.gloss_zh = gloss_zh
                 self.exam_frequency = exam_frequency
@@ -3664,6 +3687,7 @@ extension Components {
                 case id
                 case ordinal
                 case pos
+                case pos_zh
                 case concept_en
                 case gloss_zh
                 case exam_frequency

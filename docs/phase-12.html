@@ -1145,6 +1145,166 @@ contributes to  ／  contribute to  ／  contribute to
     </div>
   </section>
 
+  <section>
+    <div class="sec-head"><span class="sec-mark">§14</span>
+      <h2>实施记录</h2>
+      <span class="sec-note">2026-09-23 起，边做边记</span></div>
+
+    <p class="lede">照 §11 的顺序做。<b>每条都在 iOS 27 模拟器上截图看过</b>，
+    靠的是下面第 ⓪ 条那套开关——没有它，这个 Phase 的界面改动只能推 TestFlight 等真机。</p>
+
+    <div class="steps">
+      <div class="step"><span class="step-n">⓪</span><span class="step-what">
+        <b>模拟器上能直接走到要看的那一屏了</b>
+        <span>配对只能在设置页手动输令牌，而命令行点不了屏幕。
+        加了几个<b>只在 Debug 构建里存在</b>的启动开关（<code>DevLaunch.swift</code>、
+        <code>Connection.seedFromEnvironment</code>）：带着地址与令牌启动、打开第几篇、
+        点第几个 token、滚到第几段。<b>按序号点不按坐标点</b>——坐标跟着排版变。
+        本机起一份后端（本机那份数据拷贝），模拟器连它，
+        <b>不碰阿里云上的真实记录</b>（打开文章退出时会发 <code>article.progress</code>）。
+        令牌是在本机 <code>ops.db</code> 登记的一台「simulator (P12 local)」设备</span></span></div>
+      <div class="step"><span class="step-n">①</span><span class="step-what">
+        <b>B1 不行，已转 C（决定 ⑩）</b>
+        <span>SDK 里没有控制大标题行数的开关（查了 Xcode 27 头文件：iOS 26 新加了
+        <code>largeTitle</code>／<code>largeSubtitle</code>／<code>largeSubtitleView</code>，
+        唯独没有这个）。于是只能按文字找到那个 label、放开行数。<b>对照结果</b>：
+        不加 B1 是「A New Life for an Old…」（截断、有省略号）；加了 B1（试了两版，
+        第二版让每一层都重新量高度）是「A New Life for an Old」——
+        <b>折行了，第二行被系统裁掉，省略号也没了</b>，看起来像标题本来就这么长。
+        正是 §7 三写的「做到一半」。
+        <br><b>C 做好了</b>：标题画在正文顶上、想占几行占几行（最长那篇三行），
+        滚过去之后栏里的小标题淡进来并固定住。
+        <br><b>这一条上我自己犯了一次 §4.3</b>：头两次截图后以为 B1「生效了但被裁」，
+        诊断日志一行没出，才意识到没跑不加 B1 的基线——没有基线分不清
+        「没有省略号」是代码造成的还是这台模拟器本来就这样。补跑之后确认是前者</span></span></div>
+      <div class="step"><span class="step-n">②</span><span class="step-what">
+        <b>「跳回上次位置」（P6 决定 15）在 iOS 27 上根本不生效——已修</b>
+        <span>方案里没有这一条，是试 C 时顺带撞出来的。<b>对照过原版代码</b>：
+        本机库里种一条「读到第 11 句」，原版打开还是顶部。原因是位置在文章刚载入的
+        那一刻设，而那时每一段（一个 <code>UITextView</code>）的高度还没报上来。
+        P9 的注释记过 iOS 26 真机上「整体错位，几秒后归位」，到 27 上干脆不归位。
+        <b>修法</b>：记下要去的那一段，<b>内容每长高一次就再对准一次，直到用户自己滑、
+        或者改了字号</b>——不猜一个「等多少毫秒」。
+        阳性（有位置→停在第 11 句）与阴性（没位置→顶部）都看过。
+        <b>用户的手机 2026-09-23 已经是 iOS 27</b>（当天订正——我原先以为是 26），
+        所以这个毛病大概率在真机上也一直在，只是没被注意到</span></span></div>
+      <div class="step"><span class="step-n">③</span><span class="step-what">
+        <b>标签栏三处都藏了（决定 ⑪），藏完撞出一个新问题</b>
+        <span>滚动区一直延伸到屏幕底之后，文章末尾的「读完了」正好停在「回到顶部」
+        浮钮底下被压住。底部留白从 40 改成<b>按浮钮尺寸算</b>
+        （边长 44 ＋ 离底 24 ＋ 16）</span></span></div>
+      <div class="step"><span class="step-n">④</span><span class="step-what">
+        <b>方案 §8 那句「契约里 <code>pos_zh</code> 早就有了」只对一半</b>
+        <span>点词面板用的 <code>Sense</code> 有；<b>揭晓屏用的 <code>WordSense</code>、
+        <code>SenseCard</code> 没有</b>。所以揭晓屏那一处要服务端加字段、改契约——
+        <b>并进第 7 步</b>，那一步本来就要把契约版本加一，不多开一次发版</span></span></div>
+      <div class="step"><span class="step-n">⑤</span><span class="step-what">
+        <b>换成中文之后，10% 的义项挂着一句 20 字的解释</b>
+        <span>「能被表示程度的副词或介词词组修饰的形容词」——柯林斯对
+        <code>ADJ-GRADED</code> 给的中文不是名称是解释，挂在 2,502 条义项上；
+        另有一批用「；」并列（「可数名词；头衔名词；称呼名词」）。
+        <b>库里的值不动</b>（柯林斯原文），<b>显示时取短</b>：并列的取第一个，
+        那句解释显示成「形容词」。规则在 Core 的 <code>PartOfSpeech.short</code>，
+        App 与 <code>ercli</code> 共用，<code>swift test</code> 4 项（含阴性对照：
+        普通标签原样不动）</span></span></div>
+      <div class="step"><span class="step-n">⑥</span><span class="step-what">
+        <b>列表卡片两行、一样高（决定 ⑧⑱）；阅读器概括左对齐（决定 ⑨）</b>
+        <span>截图看过：概括完整显示，「话题 · 词数」那行照旧左右分居</span></span></div>
+      <div class="step"><span class="step-n">⑦</span><span class="step-what">
+        <b>「标记必须落在真义项上」立在 Core，App 与 <code>ercli</code> 都照它走（决定 ⑯）</b>
+        <span><code>MarkTarget.resolve</code>，<code>swift test</code> 7 项
+        （含「凡是给出义项号的，号一定 &gt; 0 且在列表里」这条遍历式的不变量——
+        只测几个例子的话，一个什么都不让标的实现也会过）。
+        <code>ercli mark</code> 五个分支对本机后端各跑了一遍：人名拒标、功能词列出义项要
+        <code>--sense</code>、给了别的词的义项号报错、给对了能标、普通词照旧标本句中</span></span></div>
+      <div class="step"><span class="step-n">⑧</span><span class="step-what">
+        <b>正文认词组、点词面板重画（决定 ①②③④⑫⑭⑯）</b>
+        <span>正文改成按「段」画：一个词是长度为一的段，<b>一个词组是连着中间空格的一整段</b>，
+        底色与虚线都跨两个词。点词改走 Core 的 <code>target(at:)</code>。
+        面板一套模型管词与词组，<b>滑块标的是「被选中的那一行」</b>——
+        默认选中本句中那条（P6 决定 19 不变），没判出义项时不选、要人点一行（⑯），
+        每一行都写着自己标过没有（原先 §9 那条「你标过的另一个意思」就这么有了）。
+        截图看过的：词组 <code>more than</code>（本句中、三条按考频、标记后正文整段虚线、
+        事件是 <code>item_type=phrase</code> 加正确的义项号）、展开后「than 这个词本身」
+        （没有本句中高亮）、<code>with</code>（全列、无考频列、滑块灰着等人挑、挑了之后
+        记下的是真义项号）、人名 Green（写「专有名词」、无滑块、标题照原文大写）、
+        <code>back</code> 的默认与展开（展开后用法贴在各自义项下面）。
+        <br><b>一处认下的</b>：<code>more than</code> 的本句中带三行柯林斯英文定义，
+        默认那一段超过半屏被封顶，「这个词本身」那一行落在折线下面一点，往上一滑就是</span></span></div>
+      <div class="step"><span class="step-n">⑨</span><span class="step-what">
+        <b>标了、退出、再进来，虚线就没了——修了</b>
+        <span>方案里没有这一条，是验⑧时撞出来的。<code>SyncEngine.article</code>
+        <b>有缓存就直接返回、从不重拉</b>，文章里带的「你标过什么」是下载那一刻的服务端快照；
+        刚标的那一下只存在这一屏的内存覆盖层里，退出文章就丢。三次启动的结果正好是这个形状
+        （标完那次亮、下一次不亮、再下一次又亮——取决于缓存被哪条路刷新过）。
+        <b>学习记录的第一副本本来就在设备上</b>（P9），<code>record()</code> 写完事件当场重放——
+        所以改成<b>先问设备上的重放</b>，它没见过这个条目才退回文章快照（刚装好、还没同步过）。
+        覆盖层删了：它还会在事件没写进去时照样显示「标上了」。
+        <b>阳性</b>（标 <code>back</code>、重开，亮着）与<b>阴性</b>（撤掉、重开，灭了；
+        没撤的 <code>with</code> 照旧亮）都看过</span></span></div>
+      <div class="step"><span class="step-n">⑩</span><span class="step-what">
+        <b>词组会被拿去拼写——P11 定了不拼，Core 没跟上</b>
+        <span><code>ReviewDay.spellingWords()</code> 不分条目类型。先写了一条会红的测试
+        （同一天里一个词组一个单词，期望只拼单词），红了，再改成
+        <b>正面列举「只有 <code>word</code> 进拼写」</b>（坑 §6.9），绿了。
+        测试里单词那一半是阳性对照：一个「什么都不拼」的实现过不了</span></span></div>
+      <div class="step"><span class="step-n">⑪</span><span class="step-what">
+        <b>揭晓屏：词组有了自己的卡，两种卡都带上 <code>pos_zh</code>（决定 ⑥⑦⑬），契约 2 → 3</b>
+        <span>服务端：<code>session.phrase_of()</code> 按 <code>WordCard</code> 的形状给词组
+        （<code>headword</code> 是词组文本，<code>phonetic</code>／<code>translation</code> 恒空，
+        <code>senses</code> 是词组的义项），<code>/v1/client/sentences</code> 给词组用它，不再是 None；
+        <code>WordSense</code>、<code>SenseCard</code> 加 <code>pos_zh</code>；
+        <code>WordCard</code> 的文档改成说明词组也走这里（<b>名字留着，契约里有一句话说破它</b>）；
+        顺手把 <code>ReviewItem.sense_id</code> 那句「词组恒为 0」改掉——P11 起就不成立了。
+        <code>ContractVersion.current</code> 改成 3。契约与 Swift 类型重新生成（没手改生成物）。
+        <br>截图看过：复习主屏「今日学习 0/2」（一个词组一个单词混着数，决定 ⑤）；
+        词组的揭晓屏列出 <code>more than</code> 全部三条义项、中文词性、考频；
+        单词的揭晓屏词性是「介词」、没考频的不画「—」、全无考频时标题写「释义」。
+        <code>verify_phase11</code> 加了 35–37（阳性：多义词组卡上的义项数等于库里的；
+        阴性：单词卡照旧是单词卡；查不到的给 None 不给空卡）</span></span></div>
+      <div class="step"><span class="step-n">⑫</span><span class="step-what">
+        <b>本机后端改了代码，跑着的那个进程不会自己变</b>
+        <span>改完 <code>/sentences</code> 去查，词组卡还是 None——本机 <code>run.py</code>
+        是改之前起的。CLAUDE.md「部署」那条（改了服务端、阿里云跑的还是旧镜像）的本机版。
+        重启之后对了。<b>发版到阿里云时同一件事还要再做一遍</b>：
+        git pull ＋ 重建镜像 ＋ 重启容器，然后 <code>docker exec … grep -c phrase_of</code> 核实</span></span></div>
+      <div class="step"><span class="step-n">⑬</span><span class="step-what">
+        <b>一条要告诉用户的：真机上那条 <code>green(0)</code> 从面板上撤不掉了</b>
+        <span>⑯ 之后人名不给滑块，而 <code>green</code> 当颜色时义项 0 也不是列表里的任何一行。
+        它不碍事（永远不会被问到），但原先说的「滑回认识就撤了」对新版不成立。
+        要撤：<b>装新版之前</b>在旧版里滑回认识；或者装了之后告诉我，
+        用 <code>ercli unmark</code> 走同一条事件路撤——那是动真实记录，要用户点头</span></span></div>
+      <div class="step"><span class="step-n">⑭</span><span class="step-what">
+        <b>机器那一半跑完了（2026-09-23）</b>
+        <span><code>ci_client.py</code> 8/9，唯一红的 L0.3 是「生成物与已提交的不一致」——
+        契约改了还没提交的必然状态，同 P11 §19；<code>swift test</code> 全过、iOS 交叉编译过。
+        <code>ci_app.py</code> 9/9（不带任何开关的正常启动也过）。
+        <code>ci_testflight.py</code> 不带 <code>--upload</code>：Release 归档、签名、本地导出都成——
+        <b>Debug 那几个开关在 Release 里编得干净</b>。
+        回归：P0 32 · P1b 28 · P1c 11 · P2 48 · P3 30 · P4 41 · P5 21 · P9 38 · P10 19 · P11 30。
+        <br><b>路上两件要记的</b>：
+        第一次跑回归十个全是 rc=127、一瞬间结束——macOS 没有 <code>timeout</code> 这个命令，
+        <b>一个都没跑</b>，而那份「摘要」长得像跑完了（坑 §6.6 的形状）。换成 perl 的 alarm 重跑。
+        第二次 P2 7.1 与 P10 A13 红了：<b>是我在模拟器上验标记时写进本机数据拷贝的测试行</b>
+        （全部来自那台 221 号模拟器设备、全是当天的）。P10 A13 断言「学习记录已清空」，
+        P2 7.1 分不出「读者标的」和「入库误记的」。按设备号和日期删掉那几行，两套重跑全绿。
+        <b>本机那份数据是开发拷贝，从不推回阿里云</b>，删的每一行都是这次会话自己造的</span></span></div>
+    </div>
+
+    <h3>还没做的（要用户）</h3>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>服务端上阿里云</b>——词组卡、<code>pos_zh</code> 要新镜像。
+        阿里云是 <code>git pull</code> 取代码，所以要先推；而铁律说 Phase 进行中不提交、
+        验收通过才提交。P11 是用户定了「先推先部署」。<b>这次也要用户定</b></span></div>
+      <div class="not"><i>2</i><span><b>发 TestFlight</b>（<code>ci_testflight.py --upload</code>）——
+        号主和测试员都看得到的外部动作</span></div>
+      <div class="not"><i>3</i><span><b>装上确认能用之后，把 <code>min_contract_version</code> 从 2 拧到 3</b>，
+        在公网上验四种情形（A5）</span></div>
+      <div class="not"><i>4</i><span><b>真机验收 M1–M9</b>。手机与模拟器都是 iOS 27，
+        但「C 的标题动画像不像原来那个」这种手感上的事，只有拇指说了算</span></div>
+    </div>
+  </section>
+
   <footer>
     <span>English Reader</span>
     <span>Phase 12 · 完善客户端 · 词组上界面 ＋ 五条用出来的</span>

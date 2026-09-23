@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import ERContract
 @testable import ERCore
 
 /// Replay the server's own transitions through the client's mirror.
@@ -173,5 +174,29 @@ struct ReviewStateTests {
         #expect(phrase.done, "词组答对就走完了")
         #expect(phrase.direction == .wordToSense, "方向不动——没有第二向")
         #expect(phrase.asks == 1, "问过几次照旧累加，那个数就是成绩")
+    }
+}
+
+/// 词组不进拼写（P11 决定 ⑤b：`take sth into account` 中间有变量，拼什么）。
+///
+/// 这条 P11 定了、却没落到 Core 上：`spellingWords()` 不分条目类型，
+/// 2026-09-23（P12）读代码读出来的。
+struct SpellingSelectionTests {
+    static func entry(_ type: String, _ key: String, sense: Int) -> ReviewDay.Entry {
+        ReviewDay.Entry(
+            key: Projection.Key(itemType: type, key: key, senseId: sense),
+            bucket: .due, capped: false, state: ReviewItemState(),
+            item: Components.Schemas.ReviewItem(
+                queue_id: 0, item_type: type, item_key: key, sense_id: sense,
+                bucket: "due", direction: 1, asks: 0, misses: 0, weight: 1, done: false,
+                questions: [], hints: []))
+    }
+
+    @Test func phrasesAreNeverSpelled() {
+        var day = ReviewDay()
+        day.entries = [Self.entry("phrase", "account for", sense: 42809),
+                       Self.entry("word", "account", sense: 14896)]
+        // 阳性一半：单词照旧在——一个「什么都不拼」的实现过不了这一条。
+        #expect(day.spellingWords().map(\.key) == ["account"])
     }
 }
