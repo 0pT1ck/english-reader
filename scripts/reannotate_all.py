@@ -4,6 +4,7 @@ Usage::
 
     uv run python scripts/reannotate_all.py            # 全量
     uv run python scripts/reannotate_all.py --limit 3  # 先跑 3 篇看看
+    uv run python scripts/reannotate_all.py --stale-zero  # 只重标「当时查不到、现在查得到」的
 
 **Why a script and not the job framework.** The batch-job machinery exists so
 that a *scheduled* run survives restarts and stops at a spend cap. This is a
@@ -51,6 +52,8 @@ def main() -> int:
     parser.add_argument("--limit", type=int, help="只处理前 N 篇")
     parser.add_argument("--reset", action="store_true",
                         help="先清空已有标注（换义项集之后必须加）")
+    parser.add_argument("--stale-zero", action="store_true",
+                        help="只把「标成无义项集、而现在查得到义项」的放回去重标")
     args = parser.parse_args()
 
     # The framework's own tables — without these a script logs into nothing.
@@ -67,6 +70,28 @@ def main() -> int:
         ).rowcount
         conn.commit()
         print(f"清空了 {cleared:,} 条旧标注")
+
+    if args.stale_zero:
+        # 2026-09-24：`senses_of` 学会了借英美拼写变体（catalog → catalogue），
+        # 于是当初标成 0（无义项集）的一批词现在有义项了。只放回这些——
+        # `-1`（问过了、都不贴合）是模型的答案，不是查法的错，不动它。
+        # 按「现在查得到」来挑而不是按词表挑，所以哪天义项集补了词，
+        # 同一条命令照样管用。
+        from backend.modules.senses import repository as senses_repo
+
+        heads = [row[0] for row in conn.execute(
+            "SELECT DISTINCT headword FROM reading_tokens"
+            " WHERE kind = 'content' AND sense_id = 0 AND headword IS NOT NULL")]
+        stale = [h for h in heads if senses_repo.senses_of(h)]
+        reopened = 0
+        for headword in stale:
+            reopened += conn.execute(
+                "UPDATE reading_tokens SET sense_id = NULL, sense_ordinal = NULL"
+                " WHERE kind = 'content' AND sense_id = 0 AND headword = ?",
+                (headword,),
+            ).rowcount
+        conn.commit()
+        print(f"放回重标 {reopened:,} 处，{len(stale)} 个词：{', '.join(stale)}")
 
     # **词组也算「待标注」**（P11 决定 ④）。少了后半句，一篇词全标完、
     # 词组一处没答的文章会被当成做完了——而那正是看不见的那一半：

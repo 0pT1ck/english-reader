@@ -224,7 +224,15 @@
     <br>⑰ <b>§9 建议不做的四样，都不做</b>（2026-09-23 定）：读完之后的收尾屏、
     同词第二次出现的提示、<code>max_batch</code> 由服务端下发、词典例句进复习；
     <br>⑱ <b>列表卡片的概括两行、每张一样高</b>（<code>reservesSpace: true</code>，
-    跟标题那行一致；2026-09-23 定）。
+    跟标题那行一致；2026-09-23 定）；
+    <br><b>2026-09-23 下午，发版之后用户加的三条</b>（§14 ⑮）：
+    <br>⑲ <b>删掉阅读页右下角「回到顶部」浮钮</b>——推翻 P6 决定 15 的后半句；
+    前半句「自动跳回上次位置」不变，系统「点状态栏回到顶部」照样能用；
+    <br>⑳ <b>右上角改成「选项」</b>，<b>字号收进二级菜单</b>（P8 决定 17 的字号入口挪了一层）；
+    <br>㉑ <b>选项里加「在这篇里找单词」，点结果跳到那个位置</b>。
+    匹配规则是我定的、用户可改：大小写不分；原文写法以它开头<b>或</b>词形还原后等于它
+    （搜 <code>go</code> 找得到 <code>went</code>）；带空格按词组搜。每一处一行，显示整句、加粗那个词；
+    跳过去之后那一处带底色，留到下一次点别处。
   </div>
 
   <section>
@@ -1291,17 +1299,96 @@ contributes to  ／  contribute to  ／  contribute to
         <b>本机那份数据是开发拷贝，从不推回阿里云</b>，删的每一行都是这次会话自己造的</span></span></div>
     </div>
 
+    <div class="steps" style="margin-top:1.6rem">
+      <div class="step"><span class="step-n">⑮</span><span class="step-what">
+        <b>发版之后加的三条（决定 ⑲⑳㉑）</b>
+        <span>浮钮删了，底部留白回到 40（原先那个按浮钮尺寸算的留白随它一起走）。
+        「选项」是 <code>···</code>，里面「在这篇里找单词」与二级菜单「字号」。
+        搜索是一张 sheet（<code>ArticleSearch.swift</code>），复用复习屏的
+        <code>HighlightedText</code>（把它从文件私有放宽了——一个组件，不写第二份）。
+        <br><b>撞到两件事</b>：
+        <b>一、搜索框在模拟器上根本弹不出来</b>——它挂在里层滚动视图上，而外层已经挂着点词面板的
+        sheet。先以为是开关触发得太早（跟「跳回上次位置」同一个时机坑），加了延迟还是不出；
+        挪到和点词面板同一个视图上就出了。<b>这一条要是没在模拟器上看，真机上点菜单会什么都不发生</b>。
+        <b>二、「一段在一屏里放得下」是我写进注释却没量的</b>——量了：生成文最长一段 716 字符、
+        一屏放得下；<b>真题有 17 段超过一屏</b>（最长 1,521 字符），字号拧大更多。
+        所以跳转不按段首对准，<b>按「那个词在这段里走到几成」对准</b>：
+        <code>scrollTo(id, anchor: y)</code> 把段里 y 处放到屏幕 y 处，那个词一定在屏上。
+        最坏情形截图看过：真题 194 最长那段的最后一个词 <code>gardens</code>，在屏上、带底色。
+        <br><b>这三条在 TestFlight 202609231205 里没有</b>——那一版是它们之前发的；
+        <b>同日补发 202609231319</b>，带着这三条（只动了 App，服务端与契约不变，没有另提交）</span></span></div>
+      <div class="step"><span class="step-n">⑯</span><span class="step-what">
+        <b>真机撞到：<code>catalog</code> 标不了（2026-09-24）——英美拼写，坑 §5 的第五次</b>
+        <span>《Restoring a Symbol of the Past》里的 <code>catalog</code> 点开是灰的。
+        token 的 <code>sense_id</code> 是 0（无义项集），而柯林斯的四条义项全挂在
+        <code>catalogue</code> 下——<b>柯林斯每个词只收一种拼写，而且不固定是哪一边</b>
+        （<code>catalogue</code>／<code>behaviour</code>／<code>labour</code> 是英式，
+        <code>organization</code>／<code>realize</code> 是美式），语料两种都有。
+        <code>senses_of()</code> 只按原拼写精确查，没走 <code>spelling.variants()</code>——
+        那个模块开头第一张表里就写着 <code>catalog</code>。
+        <b>它从 P10 起就在那儿</b>，只是 P12 决定 ⑯「标记必须落在真义项上」之前，
+        标上一个义项 0 看着也「成功」，所以没露。
+        <br><b>生产库实测波及面</b>：无义项集的实词 10,055 处里，
+        <b>274 处（26 个词）是这个原因</b>——<code>behavior</code> 86、<code>labor</code> 48、
+        <code>analyze</code>／<code>favor</code> 各 16、<code>programme</code> 14……
+        <br><b>修法</b>：<code>senses_of()</code> 自己没有义项时退到已确认的拼写变体，
+        <b>改在这一处，标注、阅读 glossary、复习卡、管理页七个调用方一起受益</b>（坑 §5.1 的教训）。
+        自己有义项的词不借。然后只把这 26 个词的 0 放回 NULL 重标
+        （<code>reannotate_all.py --stale-zero</code>），<code>-1</code> 不动——那是模型的答案，不是查法的错。
+        <br><b>守卫</b>：<code>verify_phase10</code> 第 9 节。C1 四个借得到；
+        <b>C2 阴性对照</b> <code>sise</code>／<code>membre</code> 借不到（规则会生成它们、词典里也有，
+        靠「中文释义要有交集」那道闸拦）；<b>C3 标成 0 的词现在确实查不到</b>——
+        修了查法没重标，这一项就红。本地库上它红在正好 26 个词，与生产库量的一致。
+        <br><b>设备上要清一次正文缓存</b>：正文缓存之后不再回服务端核对，
+        不在今日包里的旧文章拿不到新标注，要在「设置 → 缓存」里清掉那一篇。
+        <b>这是缓存设计的一个缺口</b>（服务端内容能变、设备不知道），没修，记在下面「撞到但没修」。</span></span></div>
+    </div>
+
+    <h3>发版（2026-09-23，用户定「推、发」）</h3>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what">
+        <b>提交在 <code>ios</code>、推 <code>ios</code>（<code>5045910</code>），没碰 <code>main</code></b>
+        <span>铁律：界面的提交走 <code>ios</code>，验收通过再合回。用户定了先推先部署（同 P11），
+        但分支规则不因此改——所以<b>阿里云那份 checkout 临时切到了 <code>ios</code></b>
+        （<code>git checkout -B ios origin/ios</code>，切之前工作区是干净的）。
+        <b>验收通过、合回 <code>main</code> 之后，要把阿里云切回 <code>main</code></b></span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what">
+        <b>阿里云重建镜像、重启容器，核实过三样</b>
+        <span>容器 healthy；<code>docker exec … grep -c "def phrase_of"</code> 是 1；
+        在生产库上 <code>phrase_of("more than")</code> 出三条义项带中文词性。
+        公网上契约 3 与 2 都过版本关（回 401，卡在令牌不是 426）——
+        <b>下限还是 2，旧版 App 照常能用</b></span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what">
+        <b>TestFlight 构建 202609231205（版本 0.1）传上去了</b>
+        <span>发之前本地先跑过不上传的那一趟（Release 归档、签名、导出都成）</span></span></div>
+    </div>
+
     <h3>还没做的（要用户）</h3>
     <div class="nots">
-      <div class="not"><i>1</i><span><b>服务端上阿里云</b>——词组卡、<code>pos_zh</code> 要新镜像。
-        阿里云是 <code>git pull</code> 取代码，所以要先推；而铁律说 Phase 进行中不提交、
-        验收通过才提交。P11 是用户定了「先推先部署」。<b>这次也要用户定</b></span></div>
-      <div class="not"><i>2</i><span><b>发 TestFlight</b>（<code>ci_testflight.py --upload</code>）——
-        号主和测试员都看得到的外部动作</span></div>
       <div class="not"><i>3</i><span><b>装上确认能用之后，把 <code>min_contract_version</code> 从 2 拧到 3</b>，
         在公网上验四种情形（A5）</span></div>
       <div class="not"><i>4</i><span><b>真机验收 M1–M9</b>。手机与模拟器都是 iOS 27，
         但「C 的标题动画像不像原来那个」这种手感上的事，只有拇指说了算</span></div>
+    </div>
+
+    <h3>撞到但没修（2026-09-24，查 ⑯ 时顺带看见的，都不在这个 Phase）</h3>
+    <div class="nots">
+      <div class="not"><i>a</i><span><b>义项集整个缺席的常用词</b>：
+        <code>colour</code>／<code>color</code>、<code>centre</code>／<code>center</code>、
+        <code>neighbour</code>、<code>theatre</code>、<code>metre</code> <b>两种拼写都没有义项</b>，
+        拼写回退救不了。生产库里无义项集、又带四六级或中高考标签的有 <b>196 个词、1,590 处</b>
+        （<code>percent</code> 111、<code>dollar</code> 31、<code>spring</code> 26、<code>cent</code> 25、
+        <code>mile</code> 18……）。柯林斯显然收了这些词，所以大概率是 P10 导入漏了一类条目——
+        <b>没查是哪一类</b>，这是 P10 导入那条链上的事，要单独开。
+        其余约 8,000 处是派生词（<code>quickly</code>）、词形还原的怪词
+        （<code>datum</code>、<code>specie</code>）和词典本来就不收的，另说</span></div>
+      <div class="not"><i>b</i><span><b>正文缓存不会过期</b>：<code>Sync.article(_:)</code> 有缓存就不再问服务端。
+        服务端重标注、补义项之后，不在今日包里的旧文章在设备上永远是旧的，
+        而屏幕上看不出任何区别。要么给正文也加 <code>ETag</code>，要么今日包里带一份
+        「哪些文章的标注变了」——<b>属于缓存设计，不在这个 Phase</b></span></div>
+      <div class="not"><i>c</i><span><b><code>verify_phase10</code> A13「学习记录已清空」已经到期</b>：
+        P10 清空之后又用了几天，它注定红，而红的时候什么也没坏（坑 §8「验收脚本会到期」）。
+        该改成守始终成立的那一半——比如「P10 之前的义项 id 不再出现在学习记录里」</span></div>
     </div>
   </section>
 

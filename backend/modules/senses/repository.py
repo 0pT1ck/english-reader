@@ -350,13 +350,31 @@ def map_sense_key(from_key: str, to_key: str | None, *, reason: str = "",
 
 
 def senses_of(headword: str) -> list[dict[str, Any]]:
-    try:
-        rows = get_connection("content").execute(
-            "SELECT * FROM senses WHERE headword = ? ORDER BY ordinal",
-            (headword.lower(),),
-        ).fetchall()
-    except sqlite3.Error:
-        return []
+    """Every sense of one word, in Collins's order.
+
+    **Falls back to a confirmed British/American spelling variant** when the word
+    itself has none (2026-09-24, found on the phone: ``catalog`` in "Restoring a
+    Symbol of the Past" could not be marked). Collins files each word under one
+    spelling and not consistently the same side — ``catalogue``, ``behaviour``,
+    ``labour``, but ``organization``, ``realize`` — while the corpus uses both.
+    Without this, 274 content tokens over 26 words were annotated as "no sense
+    set", which P12 turns into "cannot be marked". Same trap as 坑 §5.2, which
+    was about syllabus tags; this is its fifth appearance.
+
+    It lives here rather than in the callers so that the annotator, the reading
+    glossary and the review card cannot disagree about what ``catalog`` means —
+    the lesson of 坑 §5.1. Only when the word has nothing of its own: a word
+    Collins does list keeps its own senses, even if its variant has others.
+    """
+    word = headword.lower()
+    rows = _sense_rows(word)
+    if not rows:
+        from backend.modules.vocabulary import spelling
+
+        for variant in spelling.variants(word):
+            rows = _sense_rows(variant)
+            if rows:
+                break
     out = []
     for row in rows:
         sense = dict(row)
@@ -366,6 +384,16 @@ def senses_of(headword: str) -> list[dict[str, Any]]:
             sense["gloss_zh"] = [sense["gloss_zh"]]
         out.append(sense)
     return out
+
+
+def _sense_rows(headword: str) -> list[sqlite3.Row]:
+    try:
+        return get_connection("content").execute(
+            "SELECT * FROM senses WHERE headword = ? ORDER BY ordinal",
+            (headword,),
+        ).fetchall()
+    except sqlite3.Error:
+        return []
 
 
 def pending_words(limit: int = 20000) -> list[str]:

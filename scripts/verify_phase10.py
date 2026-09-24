@@ -363,6 +363,38 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
                  + "。**这个 Phase 修不好它**——柯林斯把「考虑到」挂在 PHRASE 上，"
                    "而词组一条都不收（§4）。期望是填 0 而不是又选一个错的")
 
+        # ------------------------------------------------------------- #
+        section("9. 英美拼写（2026-09-24 真机撞到的：catalog 标不了）")
+        # ------------------------------------------------------------- #
+        # 柯林斯每个词只挂在一种拼写下，而且不固定是哪一边（catalogue / behaviour
+        # 是英式，organization / realize 是美式），语料两种都有。坑 §5.2 的第五次。
+        from backend.modules.senses import repository as senses_repo
+
+        borrowed = {w: senses_repo.senses_of(w) for w in
+                    ("catalog", "behavior", "labor", "organisation")}
+        missing = [w for w, s in borrowed.items() if not s]
+        check("C1", "拼写变体借得到另一种拼写的义项", not missing,
+              f"查不到：{missing}" if missing else
+              "、".join(f"{w}→{s[0]['headword']}" for w, s in borrowed.items()))
+
+        # 阴性对照：规则本身会把 size 变成 sise、member 变成 membre，而这两个
+        # 在词典里都有（人名、地名）。靠的是 spelling 模块那道「中文释义要有交集」
+        # 的闸——它一松，C1 照样绿，只有这一项会红。
+        leaked = [w for w in ("sise", "membre") if senses_repo.senses_of(w)]
+        check("C2", "巧合拼写借不到义项（sise / membre）", not leaked,
+              f"借到了：{leaked}" if leaked else "都是空的")
+
+        # **始终成立的那一半**：标成「无义项集」(0) 的 token，现在的查法下
+        # 必须真的查不到义项。修了查法而没重标注，这一项就是红的——
+        # 设备上那个词照旧标不了，而服务端一切看着正常。
+        zero_heads = [r["headword"] for r in content.execute(
+            "SELECT DISTINCT headword FROM reading_tokens"
+            " WHERE kind='content' AND sense_id = 0 AND headword IS NOT NULL")]
+        stale_zero = [h for h in zero_heads if senses_repo.senses_of(h)]
+        check("C3", "标成「无义项集」的词现在确实查不到义项", not stale_zero,
+              f"{len(stale_zero)} 个词要重标注：{stale_zero[:10]}" if stale_zero
+              else f"{len(zero_heads)} 个无义项集的词都对得上")
+
     print("\n" + "=" * 62)
     print(f"自动检查：{len(passed)} 项通过，{len(failed)} 项失败，{len(notes)} 项只记录")
     if failed:
