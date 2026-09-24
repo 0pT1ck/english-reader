@@ -20,6 +20,14 @@ struct LibraryScreen: View {
                     ReaderScreen(card: card)
                 }
         }
+        #if DEBUG
+        .task {
+            if let raw = DevLaunch.examPaper, let paper = LibraryModel.Paper(rawValue: raw) {
+                model.paper = paper
+                model.shelf = .exam
+            }
+        }
+        #endif
         .task { await model.load(app) }
         #if DEBUG
         .onChange(of: model.cards) { _, cards in

@@ -25,6 +25,9 @@ enum DevLaunch {
     /// 列表加载完就推进这一篇。
     static var openArticle: Int? { env["ER_DEV_OPEN_ARTICLE"].flatMap(Int.init) }
 
+    /// 开屏落在哪个卷别的真题书架（`cet4` / `cet6` / `kaoyan`）。要打开的是真题时用。
+    static var examPaper: String? { env["ER_DEV_EXAM"] }
+
     /// 文章打开后点这个 token。
     static var tapSeq: Int? { env["ER_DEV_TAP_SEQ"].flatMap(Int.init) }
 
@@ -51,6 +54,12 @@ enum DevLaunch {
     static var reviewBucket: Projection.Bucket? {
         env["ER_DEV_REVIEW"].flatMap(Projection.Bucket.init(rawValue:))
     }
+
+    /// 文章打开后直接打开文内搜索，框里填着这个词。
+    static var searchQuery: String? { env["ER_DEV_SEARCH"] }
+
+    /// 文章打开后当作「从搜索结果点了这一处」跳过去（token 序号）。
+    static var jumpToSeq: Int? { env["ER_DEV_JUMP"].flatMap(Int.init) }
 
     /// 开始之后直接翻到揭晓屏（`answer` 只切屏，**不记事件**——记事件在 `advance`）。
     static var revealAnswer: Bool { env["ER_DEV_REVEAL"] == "1" }

@@ -234,7 +234,7 @@ struct ReviewSessionScreen: View {
 ///
 /// 按**字符下标**切，不是按字符串搜：同一个词在句子里可能出现两次，搜会命中错的
 /// 那一个——服务端给区间正是为了这件事。
-private struct HighlightedText: View {
+struct HighlightedText: View {
     let text: String
     let highlight: Range<Int>?
 

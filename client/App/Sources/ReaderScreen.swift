@@ -19,12 +19,14 @@ struct ReaderScreen: View {
     @State private var titleHeight: CGFloat = 0
     @State private var titleScrolledAway = false
     /// 打开时要对准的那一段（上次读到的位置），**在用户自己开始滑之前**反复对准。
-    @State private var pendingAnchor: Int?
+    @State private var pendingAnchor: Anchor?
+    /// 一次「现在就滚过去」的请求——文内搜索跳转用。排版早就量完了，
+    /// 等不到「内容长高」那个时机，所以要一个直接的触发。
+    @State private var jumpRequest: Anchor?
+    /// 文内搜索开着没有（P12 决定 ㉑）。
+    @State private var searching = false
 
     private static let headerID = -1
-    /// 「回到顶部」那个浮钮的边长与离底距离。正文的底部留白由它俩算出来。
-    private static let backToTopSize: CGFloat = 44
-    private static let backToTopInset: CGFloat = 24
 
     var body: some View {
         content
@@ -61,6 +63,14 @@ struct ReaderScreen: View {
                 // 服务端还以为你没读过，于是回到第一段。
                 // 退出一篇文章是个自然的同步点，而且就一条事件。
                 Task { await app.drain() }
+            }
+            // 文内搜索（决定 ㉑）。**跟点词面板挂在同一个视图上**——挂在里层的滚动视图上时，
+            // 2026-09-23 模拟器上它根本弹不出来（外层已经挂着一个 sheet）。
+            .sheet(isPresented: $searching) {
+                ArticleSearchSheet(model: model, initialQuery: devSearchQuery) { hit in
+                    searching = false
+                    jump(to: hit)
+                }
             }
             .sheet(isPresented: lookupBinding) {
                 if let item = model.lookup {
@@ -117,11 +127,10 @@ struct ReaderScreen: View {
             }
             .scrollTargetLayout()
             .padding(.horizontal, 20)
-            // **底部留白要让「读完了」滚得出浮钮的范围**（P12 决定 ⑪）。原先是 40，
-            // 那时标签栏占着底部、滚动区在它上面结束；标签栏藏掉之后滚动区一直到屏幕底，
-            // 2026-09-23 模拟器上「读完了」正好停在「回到顶部」底下被压住。
-            // 从浮钮尺寸算，不再填一个新的魔法数。
-            .padding(.bottom, Self.backToTopSize + Self.backToTopInset + 16)
+            // 底部留白。**「回到顶部」那个浮钮 P12 删了**（决定 ⑲），这里原先按它的尺寸
+            // 算（标签栏藏掉之后「读完了」曾被它压住）；它不在了，就回到一个普通的留白。
+            // 系统自带的「点状态栏回到顶部」照样能用。
+            .padding(.bottom, 40)
         }
         .scrollPosition(id: $scrolledTo)
         // 面板开着时正文不能滚（决定 24）。
@@ -156,13 +165,16 @@ struct ReaderScreen: View {
         // 不猜一个「等多少毫秒」：量完要多久随篇幅和机器变，猜的数总有一天不够。
         .onScrollGeometryChange(for: CGFloat.self) { $0.contentSize.height } action: { _, _ in
             guard let target = pendingAnchor else { return }
-            proxy.scrollTo(target, anchor: .top)
+            proxy.scrollTo(target.paragraph, anchor: target.point)
+        }
+        .onChange(of: jumpRequest) { _, request in
+            guard let request else { return }
+            withAnimation { proxy.scrollTo(request.paragraph, anchor: request.point) }
         }
         .onScrollPhaseChange { _, phase in
             if phase == .interacting { pendingAnchor = nil }
         }
         .onChange(of: app.preferences.fontScale) { _, _ in pendingAnchor = nil }
-        .overlay(alignment: .bottomTrailing) { backToTop }
         }
     }
 
@@ -223,43 +235,65 @@ struct ReaderScreen: View {
         }
     }
 
-    /// 回到顶部（决定 15）。系统本来就有「点状态栏回到顶部」，这个是额外的、
-    /// 更好发现的入口，两个并存没问题。它浮在正文上，所以它正是玻璃该出现的地方。
-    private var backToTop: some View {
-        Button {
-            pendingAnchor = nil
-            withAnimation { scrolledTo = Self.headerID }
-        } label: {
-            Image(systemName: "arrow.up")
-                .font(.body.weight(.semibold))
-                .frame(width: Self.backToTopSize, height: Self.backToTopSize)
-        }
-        .buttonStyle(.glass)
-        .clipShape(.circle)
-        .padding(.trailing, 18)
-        .padding(.bottom, Self.backToTopInset)
-        .accessibilityLabel("回到顶部")
-    }
-
-    /// `···` 菜单。P6 决定 17 把它留成了一个说「选项还没做」的空壳，
-    /// **P8 填上字号**——这一项之所以在这里而不在设置页，是因为调字号要
-    /// 看着正文调：在设置页拖滑块、退出去看效果、不对再进来，
-    /// 是把两秒的动作做成一分钟。
+    /// 右上角的「选项」（P12 决定 ⑳）。原先那里直接是字号按钮（P8 决定 17）；
+    /// 用户 2026-09-23 定成一个选项菜单，**字号收进二级菜单**，旁边加「搜索单词」。
+    /// 字号仍然在阅读屏而不在设置页——调字号要看着正文调（P8 的理由不变）。
     private var optionsMenu: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
-                Picker("正文字号", selection: Binding(
-                    get: { app.preferences.fontScale },
-                    set: { app.preferences.fontScale = $0 }
-                )) {
-                    ForEach(FontStep.all) { step in
-                        Text(step.label).tag(step.value)
+                Button("在这篇里找单词", systemImage: "magnifyingglass") {
+                    model.closeLookup()
+                    searching = true
+                }
+                Menu {
+                    Picker("正文字号", selection: Binding(
+                        get: { app.preferences.fontScale },
+                        set: { app.preferences.fontScale = $0 }
+                    )) {
+                        ForEach(FontStep.all) { step in
+                            Text(step.label).tag(step.value)
+                        }
                     }
+                } label: {
+                    Label("字号", systemImage: "textformat.size")
                 }
             } label: {
-                Image(systemName: "textformat.size")
+                Image(systemName: "ellipsis")
             }
+            .accessibilityLabel("选项")
         }
+    }
+
+    /// 从搜索结果跳过去：滚到那一处，给它加底色（决定 ㉑）。
+    ///
+    /// **按「它在这一段里的相对位置」对准，不按段首**。`scrollTo(id, anchor: y)` 把这一段
+    /// 高度 y 处的那一点放到屏幕高度 y 处——y 取「那个词在这段里走到了几成」，
+    /// 那个词就一定落在屏上，不管这段多长、字号多大。按段首对准的话，
+    /// 2026-09-23 量过：生成文最长一段 716 字符、一屏放得下；**真题有 17 段超过一屏**
+    /// （最长 1,521 字符），字号拧大之后更多——那个词会落在屏幕下面。
+    /// 按字符比例估位置不是精确的行坐标（一行的字数不齐），但误差在一两行之内，
+    /// 而量精确坐标要伸手进 `UITextView` 的排版，为这点精度不值得。
+    private func jump(to hit: ReaderModel.SearchHit) {
+        model.highlight(hit.seqs)
+        guard let paragraph = model.paragraphs.first(where: { $0.id == hit.paragraph }),
+              let token = paragraph.tokens.first(where: { $0.seq == hit.seqs.lowerBound }) else {
+            return
+        }
+        let length = max(1, (paragraph.text as NSString).length)
+        let fraction = min(1, max(0, (Double(token.location) + Double(token.length) / 2)
+                                      / Double(length)))
+        let target = Anchor(paragraph: hit.paragraph, point: UnitPoint(x: 0.5, y: fraction))
+        scrolledTo = hit.paragraph
+        pendingAnchor = target
+        jumpRequest = target
+    }
+
+    private var devSearchQuery: String {
+        #if DEBUG
+        return DevLaunch.searchQuery ?? ""
+        #else
+        return ""
+        #endif
     }
 
     private var lookupBinding: Binding<Bool> {
@@ -274,6 +308,16 @@ struct ReaderScreen: View {
             anchor(to: model.resumeParagraph)
             #if DEBUG
             if let paragraph = DevLaunch.scrollParagraph { anchor(to: paragraph) }
+            if DevLaunch.searchQuery != nil {
+                // 阅读器这一刻才刚出现，挂在它上面的 sheet 还没装好，当场设会被丢掉。
+                // 真实路径（点菜单）不经过这一刻，所以只有这个开关要等一下。
+                try? await Task.sleep(for: .milliseconds(600))
+                searching = true
+            }
+            if let seq = DevLaunch.jumpToSeq,
+               let hit = model.search(model.surface(at: seq) ?? "").first(where: { $0.id == seq }) {
+                jump(to: hit)
+            }
             if let seq = DevLaunch.tapSeq {
                 model.tap(seq: seq, app: app)
                 if let pick = DevLaunch.pickSense {
@@ -288,7 +332,14 @@ struct ReaderScreen: View {
     /// 打开时定位：设一次，并登记成「待对准」，排版量完之前每长高一次就再对准一次。
     private func anchor(to paragraph: Int?) {
         scrolledTo = paragraph ?? Self.headerID
-        pendingAnchor = paragraph
+        pendingAnchor = paragraph.map { Anchor(paragraph: $0, point: .top) }
+    }
+
+    /// 对准到哪一段的哪个位置。`nonce` 让「连着两次跳到同一处」也算一次新请求。
+    struct Anchor: Equatable {
+        let paragraph: Int
+        let point: UnitPoint
+        var nonce = UUID()
     }
 
     /// 离线时自己再试，不要求用户去点。转圈说的就是「还在重试」，

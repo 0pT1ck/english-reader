@@ -48,6 +48,8 @@ final class ReaderModel {
     private var tokensBySeq: [Int: Components.Schemas.Token] = [:]
     /// 这篇里的词组，按起点 token 取——面板要它的全部义项与标记。
     private var phrasesByStart: [Int: Components.Schemas.Phrase] = [:]
+    /// 句子，按序号取——搜索结果要显示「它在哪一句」。
+    private var sentencesBySeq: [Int: Components.Schemas.Sentence] = [:]
 
     /// 读「现在标着什么」要用设备上的重放（P12，见 `currentMark`）。
     private weak var app: AppModel?
@@ -126,6 +128,8 @@ final class ReaderModel {
         let tokens = response.tokens ?? []
         tokensBySeq = Dictionary(uniqueKeysWithValues: tokens.map { ($0.seq, $0) })
         phrasesByStart = Dictionary((response.phrases ?? []).map { ($0.start_seq, $0) },
+                                    uniquingKeysWith: { first, _ in first })
+        sentencesBySeq = Dictionary((response.sentences ?? []).map { ($0.seq, $0) },
                                     uniquingKeysWith: { first, _ in first })
         paragraphs = ArticleLayout.paragraphs(
             body: text, tokens: tokens, sentences: response.sentences ?? [])
@@ -339,6 +343,76 @@ final class ReaderModel {
         if selection.inner { item.inner?.marks[selection.senseId] = now }
         else { item.subject.marks[selection.senseId] = now }
         lookup = item
+    }
+
+    // MARK: 文内搜索（P12 决定 ㉑）
+
+    /// 一处搜到的地方。
+    struct SearchHit: Identifiable, Equatable {
+        /// 起点 token 的序号，同时当 id——一处一行。
+        let id: Int
+        let seqs: ClosedRange<Int>
+        /// 在第几段（跳过去用）。
+        let paragraph: Int
+        /// 它所在的整句，以及它在这句里的位置（加粗用，按字符算）。
+        let sentence: String
+        let highlight: Range<Int>?
+    }
+
+    /// 在这篇里找一个词。
+    ///
+    /// **两条都算搜到**：原文里的写法以它开头（边打边出结果），或者词形还原之后
+    /// 正好是它——所以搜 `go` 找得到 `went`、搜 `child` 找得到 `children`。
+    /// **带空格就当词组搜**，对的是这篇里已确认的词组。大小写不分。
+    func search(_ raw: String) -> [SearchHit] {
+        let query = raw.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !query.isEmpty else { return [] }
+
+        var spans: [ClosedRange<Int>] = []
+        if query.contains(" ") {
+            for phrase in display?.phrases ?? [] where phrase.phrase.lowercased().hasPrefix(query) {
+                spans.append(phrase.startSeq...phrase.endSeq)
+            }
+        } else {
+            for (seq, token) in tokensBySeq where token.kind != "nonword" {
+                if token.surface.lowercased().hasPrefix(query)
+                    || token.headword?.lowercased() == query {
+                    spans.append(seq...seq)
+                }
+            }
+        }
+        return spans.sorted { $0.lowerBound < $1.lowerBound }.compactMap(hit(for:))
+    }
+
+    private func hit(for seqs: ClosedRange<Int>) -> SearchHit? {
+        guard let first = tokensBySeq[seqs.lowerBound], let last = tokensBySeq[seqs.upperBound],
+              let paragraph = paragraphs.first(where: { p in
+                  p.tokens.contains { $0.seq == seqs.lowerBound }
+              }) else { return nil }
+        let sentence = sentencesBySeq[first.sentence_seq]
+        let text = sentence?.text ?? ""
+        var highlight: Range<Int>?
+        if let sentence {
+            // 服务端的下标是 Unicode 码位（同 `ArticleLayout`），这里也按码位算，
+            // 再交给视图按 `Character` 用——英文里两者一致。
+            let lower = first.char_start - sentence.char_start
+            let upper = last.char_end - sentence.char_start
+            if lower >= 0, upper <= text.unicodeScalars.count, lower < upper {
+                highlight = lower..<upper
+            }
+        }
+        return SearchHit(id: seqs.lowerBound, seqs: seqs, paragraph: paragraph.id,
+                         sentence: text, highlight: highlight)
+    }
+
+    /// 某个 token 在原文里的写法。
+    func surface(at seq: Int) -> String? { tokensBySeq[seq]?.surface }
+
+    /// 跳过去之后给那一处加底色。**留到下一次点别处为止**——
+    /// 跟点词的底色是同一种，不另发明一种记号（决定 ⑮：新东西照现有样式画）。
+    func highlight(_ seqs: ClosedRange<Int>) {
+        lookup = nil
+        selectedSpan = seqs
     }
 
     // MARK: 进度与读完
