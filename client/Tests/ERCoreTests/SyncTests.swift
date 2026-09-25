@@ -134,6 +134,91 @@ struct SyncTests {
         #expect(harness.articles.bodySizes()[id] != nil, "重新拉回来之后又缓存上了")
     }
 
+    // MARK: Revalidating a cached article (2026-09-24)
+
+    /// The day's package, one article cached from it, and that article's bytes.
+    static func cachedArticle(_ transport: ScriptedTransport) async throws
+        -> (Harness, Components.Schemas.ArticleResponse) {
+        let harness = try Harness(transport)
+        _ = try await harness.engine.fetchDay()
+        let article = try JSONDecoder().decode(
+            Components.Schemas.TodayResponse.self, from: try fixture("today")).articles[0]
+        return (harness, article)
+    }
+
+    /// `catalog` was fixed on the server and stayed unmarkable on the phone,
+    /// because a cached body was never asked about again.
+    @Test func aChangedArticleReplacesTheCachedOne() async throws {
+        let original = try JSONDecoder().decode(
+            Components.Schemas.TodayResponse.self, from: try Self.fixture("today")).articles[0]
+        var changed = original
+        changed.article.title = "服务端改过了"
+        let transport = ScriptedTransport([
+            ("/v1/client/today", Self.ok(try Self.fixture("today"))),
+            ("/v1/client/articles/", .success(HTTPResponse(
+                status: 200, body: try JSONEncoder().encode(changed), headers: ["etag": "\"v2\""]))),
+        ])
+        let (harness, article) = try await Self.cachedArticle(transport)
+        defer { harness.cleanUp() }
+        let id = article.article.id
+
+        let fresh = await harness.engine.revalidateArticle(id)
+        #expect(fresh?.article.title == "服务端改过了")
+        #expect(try await harness.engine.article(id).article.title == "服务端改过了",
+                "缓存里换成了新的，下次打开直接是它")
+        #expect(harness.articles.etag(id) == "\"v2\"")
+    }
+
+    @Test func anUnchangedArticleSendsItsEtagAndGetsNothing() async throws {
+        let transport = ScriptedTransport([
+            ("/v1/client/today", Self.ok(try Self.fixture("today"))),
+            ("/v1/client/articles/", .success(HTTPResponse(status: 304, body: Data()))),
+        ])
+        let (harness, article) = try await Self.cachedArticle(transport)
+        defer { harness.cleanUp() }
+        let id = article.article.id
+        let before = try harness.articles.body(id)
+        try harness.articles.storeBody(id, before, etag: "\"v1\"")
+
+        #expect(await harness.engine.revalidateArticle(id) == nil)
+        let asked = await transport.requests().last
+        #expect(asked?.headers["If-None-Match"] == "\"v1\"", "带着版本号去问")
+        #expect(try harness.articles.body(id) == before, "304 不许碰缓存")
+    }
+
+    /// Same bytes, first time asked: the body came in the day's package without
+    /// an etag. Nothing to redraw, but the etag is worth keeping.
+    @Test func sameBytesAreNotNewsButTheEtagIsKept() async throws {
+        let original = try JSONDecoder().decode(
+            Components.Schemas.TodayResponse.self, from: try Self.fixture("today")).articles[0]
+        let transport = ScriptedTransport([
+            ("/v1/client/today", Self.ok(try Self.fixture("today"))),
+            ("/v1/client/articles/", .success(HTTPResponse(
+                status: 200, body: try JSONEncoder().encode(original), headers: ["etag": "\"v1\""]))),
+        ])
+        let (harness, article) = try await Self.cachedArticle(transport)
+        defer { harness.cleanUp() }
+        let id = article.article.id
+        #expect(harness.articles.etag(id) == nil, "今日包带来的正文没有版本号")
+
+        #expect(await harness.engine.revalidateArticle(id) == nil, "字节一样就不必重画")
+        #expect(harness.articles.etag(id) == "\"v1\"", "版本号记下了，下次问就是 304")
+    }
+
+    @Test func noNetworkMeansNoNewsNotAnError() async throws {
+        let online = ScriptedTransport([("/v1/client/today", Self.ok(try Self.fixture("today")))])
+        let (harness, article) = try await Self.cachedArticle(online)
+        defer { harness.cleanUp() }
+        let id = article.article.id
+        let before = try harness.articles.body(id)
+
+        let offline = ScriptedTransport([("/v1/client/articles/", .failure(.offline("没有网络")))])
+        let engine = SyncEngine(transport: offline, outbox: harness.outbox,
+                                articles: harness.articles, day: harness.day)
+        #expect(await engine.revalidateArticle(id) == nil)
+        #expect(try harness.articles.body(id) == before, "手里那份不许因为网不好丢掉")
+    }
+
     // MARK: Draining
 
     @Test func drainingDeletesOnlyWhatLanded() async throws {

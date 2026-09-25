@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import html as html_module
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -291,6 +292,41 @@ class CollinsSense:
 def is_hollow(html: str) -> bool:
     """Entry exists but carries no content. See :data:`HOLLOW_ENTRY_CHARS`."""
     return len(html) < HOLLOW_ENTRY_CHARS
+
+
+def _squash(key: str) -> str:
+    return key.replace(" ", "").replace("-", "")
+
+
+def squash_index(entries: Mapping[str, str]) -> dict[str, list[str]]:
+    """Keys grouped by their spelling with spaces and hyphens removed."""
+    index: dict[str, list[str]] = {}
+    for key in entries:
+        index.setdefault(_squash(key), []).append(key)
+    return index
+
+
+def entry_key(word: str, entries: Mapping[str, str],
+              index: Mapping[str, list[str]]) -> str | None:
+    """Which dictionary key holds ``word``'s entry.
+
+    **Usually the word itself.** When it is not there, Collins may write it
+    with a space or a hyphen where the corpus does not — ``percent`` is under
+    ``per cent`` (111 tokens in the corpus), ``northeast`` under ``north-east``.
+    Measured over the syllabus: 8 words, all genuine. Only an **unambiguous**
+    match counts; two keys squashing to the same string is a question, not an
+    answer. Senses are still stored under ``word`` — that is what the tokens
+    carry — so the import and its reconciliation (verify_phase10 A1) must both
+    come through here, or they would disagree about what the dictionary says.
+    """
+    if word in entries:
+        return word
+    # Affix entries (``-ware``, ``-ish``) squash onto real words — ``ware``
+    # 器皿 would otherwise get the suffix's sense. A leading or trailing hyphen
+    # is never a spelling variant.
+    candidates = [k for k in index.get(_squash(word), ())
+                  if k != word and not k.startswith("-") and not k.endswith("-")]
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def classify(headword: str, pos: str, concept_en: str, gloss_zh: str,

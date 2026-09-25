@@ -31,13 +31,22 @@ TARGET_TAGS = ("zk", "gk", "cet4", "cet6", "ky")
 def target_words() -> list[tuple[str, str | None]]:
     """Every word in scope, with its dictionary translation.
 
-    ``frq > 0`` drops entries the frequency list has never seen, which are
-    overwhelmingly abbreviations and proper nouns that happen to carry a tag.
+    **Seen by either frequency list, not just the American one** (2026-09-24).
+    ``frq`` is ECDICT's COCA rank, and COCA has never seen a British spelling or
+    a good number of plain words: ``colour``, ``centre``, ``programme``,
+    ``dollar``, ``mile``, ``cent``, ``percent``, ``criterion`` all carry
+    ``frq = 0``. This used to be ``frq > 0`` alone, under a comment saying what
+    it dropped was "overwhelmingly abbreviations and proper nouns" — **nobody
+    had counted**. It dropped 195 tagged words; the real ones among them never
+    got a sense set, so P10 never imported Collins for them, and ``dollar``
+    could not be marked on the phone. ``bnc`` (the British National Corpus
+    rank) keeps those and still drops what the filter was for: ``are``,
+    ``does``, ``b.c.``, ``cd-rom`` have zero in both.
     """
     tag_clause = " OR ".join(f"tags LIKE '%{tag}%'" for tag in TARGET_TAGS)
     rows = get_connection("dictionary").execute(
         f"SELECT headword, translation FROM words"  # noqa: S608 - tags are a literal tuple
-        f" WHERE ({tag_clause}) AND frq > 0 ORDER BY headword"
+        f" WHERE ({tag_clause}) AND (frq > 0 OR bnc > 0) ORDER BY headword"
     ).fetchall()
     return [(row["headword"], row["translation"]) for row in rows]
 

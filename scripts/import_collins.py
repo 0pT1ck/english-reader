@@ -5,6 +5,7 @@ Usage::
     uv run python scripts/import_collins.py            # 全量导入
     uv run python scripts/import_collins.py --dry-run  # 只报数，不写库
     uv run python scripts/import_collins.py --word account   # 一个词，看长什么样
+    uv run python scripts/import_collins.py --only-missing   # 只补还没有义项的词
 
 **What it does and does not decide.** Parsing and the word/phrase split live in
 :mod:`backend.modules.senses.collins`; storage and identity live in
@@ -34,7 +35,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.core.db import get_connection, run_migrations  # noqa: E402
 from backend.core.registry import run_core_migrations  # noqa: E402
-from backend.modules.senses import collins, repository, schema  # noqa: E402
+from backend.modules.senses import collins, repository, schema, targets  # noqa: E402
 
 #: Which edition this run is importing. Stored on every row as provenance, and
 #: what a re-import matches on — **changing this string makes every sense look
@@ -63,12 +64,23 @@ def load_dictionary(path: Path) -> dict[str, str]:
 
 
 def target_words() -> list[str]:
-    """The words we keep senses for, from whatever inventory is current."""
+    """The words we keep senses for: the syllabus, plus whatever already has some.
+
+    **2026-09-24: this used to be only "whatever already has some"** — the
+    old model-written inventory. That inventory was built behind the coarse
+    screen P10 deleted, and behind ``targets``'s ``frq > 0``, so it silently
+    carried both exclusions into Collins: ``dollar``, ``mile``, ``colour``,
+    ``percent`` never got senses. The syllabus is the definition of scope
+    (``targets.py``); the union keeps anything a previous run imported, so a
+    re-import never retires a word just because the scope rule moved.
+    """
     rows = get_connection("content").execute(
         "SELECT DISTINCT headword FROM senses_pre_collins"
         " UNION SELECT DISTINCT headword FROM senses"
     ).fetchall()
-    return sorted(row[0] for row in rows if row[0])
+    words = {row[0] for row in rows if row[0]}
+    words.update(targets.target_headwords())
+    return sorted(words)
 
 
 def main() -> int:
@@ -78,6 +90,8 @@ def main() -> int:
                         help="只解析和报数，一行都不写")
     parser.add_argument("--word", help="只处理一个词，用来看解析结果")
     parser.add_argument("--limit", type=int, help="只处理前 N 个词（调试用）")
+    parser.add_argument("--only-missing", action="store_true",
+                        help="只处理还没有义项的词；已有的一条不碰")
     args = parser.parse_args()
 
     if not args.mdx.exists():
@@ -92,6 +106,14 @@ def main() -> int:
     print(f"  {len(entries):,} 个条目")
 
     words = [args.word.lower()] if args.word else target_words()
+    if args.only_missing:
+        # **补漏不重导。** 已有的六千多个词在 P10 验过、P11 之后还被
+        # 词组那一路引用着；重跑一遍它们，解析器哪怕只变过一处，
+        # 就是一批义项被静默改写或退休。这次要的只是把漏的补上。
+        have = {row[0] for row in get_connection("content").execute(
+            "SELECT DISTINCT headword FROM senses")}
+        words = [w for w in words if w not in have]
+    index = collins.squash_index(entries)
     if args.limit:
         words = words[:args.limit]
     print(f"目标词 {len(words):,} 个")
@@ -101,7 +123,10 @@ def main() -> int:
     no_word_sense: list[str] = []
 
     for word in words:
-        html = entries.get(word)
+        key = collins.entry_key(word, entries, index)
+        html = entries.get(key) if key else None
+        if key and key != word:
+            tally["按空格／连字符对上的"] += 1
         if html is None:
             tally["词典里没有这个词"] += 1
             no_word_sense.append(word)
@@ -112,7 +137,7 @@ def main() -> int:
             continue
 
         try:
-            blocks = collins.parse_entry(word, html)
+            blocks = collins.parse_entry(key, html)
         except collins.UnknownMarker as exc:
             # Criterion 4: stop and say so. Guessing here is how senses go
             # missing without anyone noticing.

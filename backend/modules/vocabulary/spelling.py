@@ -59,6 +59,11 @@ INFIX_PAIRS: tuple[tuple[str, str], ...] = (
     ("ll", "l"),      # woollen / woolen, travelling / traveling
     ("ae", "e"),      # anaemia / anemia
     ("oe", "e"),      # oestrogen / estrogen
+    # neighbourhood / neighborhood, favourite / favorite, behavioural. The
+    # suffix rule only catches -our at the very end; measured on the corpus
+    # this adds 19 pairs, every one the same word (2026-09-24). "or" is in
+    # half the language, which is what the gloss guard below is for.
+    ("our", "or"),
 )
 
 # Pairs no rule produces. Short list on purpose: anything a rule can generate

@@ -326,6 +326,7 @@ struct ReaderScreen: View {
                 if DevLaunch.markRequested { model.setMark(DevLaunch.markKind, app: app) }
             }
             #endif
+            await model.refreshIfStale()
         }
     }
 

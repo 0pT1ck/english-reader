@@ -81,6 +81,7 @@ final class ReaderModel {
             return
         }
         do {
+            openedFromCache = await engine.hasCachedBody(card.id)
             let response = try await engine.article(card.id)
             apply(response)
             if !reportedOpen {
@@ -108,6 +109,35 @@ final class ReaderModel {
         } catch {
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    /// 这一次打开用的是不是缓存那份。是的话 `refreshIfStale` 才值得问。
+    private var openedFromCache = false
+
+    /// **先给缓存那份，再在旁边问一句变了没有**（2026-09-24）。
+    ///
+    /// 正文缓存之后原本永远不再问，而服务端那份会变——重标注、补义项；
+    /// `catalog` 在服务端修好之后手机上照旧标不了。
+    ///
+    /// **放在 `load` 外面、由阅读页在定位之后调**：塞进 `load` 的话，
+    /// 「跳回上次位置」要等这一趟网络回来才发生（它排在 `load` 之后），
+    /// 读者先看见顶部、过一会儿被拉走。屏幕不等这一问（架构铁律 4）。
+    ///
+    /// 换上是安全的：段落 id 由正文推出，正文没变，读到哪儿也就没变；
+    /// 变的只是 token 的义项和 glossary。**上次读到哪不跟着换**——
+    /// 那个数只在打开时用一次，而这时读者可能已经往下读了。
+    func refreshIfStale() async {
+        guard openedFromCache, phase == .ready, let app, let engine = app.engine else { return }
+        openedFromCache = false
+        let id = articleId
+        guard let fresh = await engine.revalidateArticle(id), articleId == id,
+              phase == .ready else { return }
+        let keep = savedSentenceSeq
+        apply(fresh)
+        savedSentenceSeq = keep
+        app.log?.write(.info, "reader.article.refreshed",
+                       "缓存那份过期了，已换成服务端的新版本",
+                       fields: ["article_id": String(id)])
     }
 
     private func apply(_ response: Components.Schemas.ArticleResponse) {

@@ -81,13 +81,13 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
         # ------------------------------------------------------------- #
         from backend.modules.senses import collins
 
+        entries: dict[str, str] = {}
         if not MDX.exists():
             check("A1", "柯林斯词典文件在", False, f"找不到 {MDX}")
             check("A2", "词组全部没收进来", False, "同上")
         else:
             from mdict_utils.reader import MDX as MDXReader
 
-            entries: dict[str, str] = {}
             for key, value in MDXReader(str(MDX)).items():
                 entries.setdefault(
                     key.decode("utf-8", "replace").strip().lower(),
@@ -101,12 +101,16 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
 
             expect_word = expect_phrase = 0
             mismatched: list[str] = []
+            # 查键要跟导入走同一个函数（percent 在 per cent 下）——
+            # 各写一遍就是坑 §5.1 那个形状：两边对「词典说了什么」意见不一。
+            index = collins.squash_index(entries)
             for word in stored_by_word:
-                html = entries.get(word)
+                key = collins.entry_key(word, entries, index)
+                html = entries.get(key) if key else None
                 if html is None:
                     mismatched.append(f"{word}(词典里没有)")
                     continue
-                blocks = collins.parse_entry(word, html)
+                blocks = collins.parse_entry(key, html)
                 wants = sum(1 for b in blocks if b.kind is collins.Kind.WORD)
                 expect_word += wants
                 expect_phrase += sum(1 for b in blocks
@@ -154,13 +158,37 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
         target_count = len(targets.target_headwords())
         have = content.execute(
             "SELECT COUNT(DISTINCT headword) n FROM senses").fetchone()["n"]
-        missing_count = target_count - have
-        # 用户 2026-09-20 定「暂时不管」，所以这一项守的不是「一个不缺」，
-        # 而是**缺的数量没有失控**——真正「缺的正好是哪些」要人看名单。
-        check("A4", "没有义项的词数在已知范围内",
-              missing_count <= 320,
-              f"{have} / {target_count} 个词有义项，缺 {missing_count} 个"
-              f"（已知：词典没条目 + 空壳 + 只有词组义，约 308）")
+        # **2026-09-24 改口径。** 原本守「缺的 ≤ 320 个」——一个按当时
+        # 名单拍的数。而那份名单本身就漏了 195 个词（targets 的 `frq > 0`），
+        # 所以这个数守住的是 bug：`dollar`、`colour` 不在名单里，
+        # 也就不算「缺」。现在守的是**缺的每一个都缺得有理由**：
+        # 词典里没有、空壳、只有词组义、只是交叉引用——
+        # **「词典给得出单词义、而我们没收」一个都不许有**。
+        # 用户 2026-09-20 定的「暂时不管」管的是前面那几类，不是这一类。
+        target_list = targets.target_headwords()
+        stored = {r["headword"] for r in content.execute(
+            "SELECT DISTINCT headword FROM senses")}
+        lacking = [w for w in target_list if w not in stored]
+        if not entries:
+            note("A4", "缺义项的词都缺得有理由", f"缺 {len(lacking)} 个；没有词典文件，判不了")
+        else:
+            index = collins.squash_index(entries)
+            neglected: list[str] = []
+            for word in lacking:
+                key = collins.entry_key(word, entries, index)
+                html = entries.get(key) if key else None
+                if not html or collins.is_hollow(html):
+                    continue
+                if any(b.kind is collins.Kind.WORD
+                       for b in collins.parse_entry(key, html)):
+                    neglected.append(word)
+            check("A4", "缺义项的词都缺得有理由（词典有单词义的一个不漏）",
+                  not neglected,
+                  f"{len(target_list) - len(lacking)} / {len(target_list)} 个在纲词有义项，"
+                  f"缺 {len(lacking)} 个"
+                  + (f"；**其中 {len(neglected)} 个词典里明明有**：{neglected[:10]}"
+                     if neglected else
+                     "，全是词典没条目／空壳／只有词组义／交叉引用"))
 
         broken = content.execute(
             "SELECT COUNT(*) n FROM senses WHERE"
@@ -247,18 +275,31 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
         check("A12", "该删的三张表都删了", not gone, f"还剩：{gone}" if gone else "干净")
 
         # ------------------------------------------------------------- #
-        section("5. 学习记录已清空（§7）")
+        section("5. 学习记录没有指着旧义项（§7）")
         # ------------------------------------------------------------- #
-        residue = {}
-        for table in ("study_marks", "study_states", "review_queue",
-                      "review_history", "client_events", "learner_pool"):
+        # **2026-09-24 改口径**（坑 §8「验收脚本会到期」）。原本守「学习记录
+        # 已清空」——那是 P10 那一刻的状态，清空之后用户照常在用，它注定红，
+        # 而红的时候什么也没坏。清空要防的是**记录指着一个不存在的义项**
+        # （换血之后旧 id 全作废），那一半始终成立：记录里出现的每个义项 id，
+        # 在单词义项、词组义项（P11 ⑭ 共用一个号段）或退休表里必须查得到。
+        known = {int(r["id"]) for r in content.execute(
+            "SELECT id FROM senses UNION SELECT id FROM phrase_senses"
+            " UNION SELECT id FROM senses_retired")}
+        dangling: dict[str, int] = {}
+        seen = 0
+        for table in ("study_marks", "study_states", "learner_pool"):
             try:
-                residue[table] = events.execute(
-                    f"SELECT COUNT(*) n FROM {table}").fetchone()["n"]  # noqa: S608
-            except Exception:  # noqa: BLE001 - 表不在就是 0
-                residue[table] = 0
-        check("A13", "学习记录已清空", sum(residue.values()) == 0,
-              f"{residue}" if sum(residue.values()) else "十张表全空")
+                ids = [int(r["sense_id"]) for r in events.execute(
+                    f"SELECT sense_id FROM {table} WHERE sense_id > 0")]  # noqa: S608
+            except Exception:  # noqa: BLE001 - 表不在就是没有记录
+                ids = []
+            seen += len(ids)
+            bad = sum(1 for i in ids if i not in known)
+            if bad:
+                dangling[table] = bad
+        check("A13", "学习记录指着的义项都查得到", not dangling,
+              f"悬空：{dangling}（共 {seen} 条）" if dangling
+              else f"{seen} 条记录，全部指着现行或已退休的义项")
 
         backups = list((ROOT / "data" / "backups").glob("events-before-p10-*.db"))
         check("A14", "清空之前留了备份", bool(backups),

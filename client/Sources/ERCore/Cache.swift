@@ -74,6 +74,10 @@ public enum CacheError: Error, Equatable {
 public final class ArticleCache: @unchecked Sendable {
     private let root: URL
     private let bodies: URL
+    /// One file per body holding the server's `ETag` for it. **A directory of
+    /// its own**, not `<id>.etag` beside the body: `bodySizes()` reads any file
+    /// whose stem is a number as a body, and would count these too.
+    private let etags: URL
     private let metaFile: URL
     private let fileManager: FileManager
     private let lock = NSLock()
@@ -81,9 +85,11 @@ public final class ArticleCache: @unchecked Sendable {
     public init(directory: URL, fileManager: FileManager = .default) throws {
         self.root = directory
         self.bodies = directory.appendingPathComponent("bodies", isDirectory: true)
+        self.etags = directory.appendingPathComponent("etags", isDirectory: true)
         self.metaFile = directory.appendingPathComponent("articles.json")
         self.fileManager = fileManager
         try fileManager.createDirectory(at: bodies, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: etags, withIntermediateDirectories: true)
     }
 
     // MARK: Metadata
@@ -144,10 +150,35 @@ public final class ArticleCache: @unchecked Sendable {
     /// hand the server's own shape back to the decoder, and re-encoding through
     /// a model would quietly drop any field this version of the client does not
     /// know about — which is the thing 架构铁律 5 exists to prevent.
-    public func storeBody(_ id: Int, _ data: Data) throws {
+    ///
+    /// `etag` is the version the server gave it, sent back on the next open to
+    /// ask "has this changed" (2026-09-24). **Written or removed together with
+    /// the body**: an etag left pointing at older content would make the server
+    /// answer 304 for bytes the device does not have. A body that came inside
+    /// the day's package has none, so the first revalidation fetches it whole.
+    public func storeBody(_ id: Int, _ data: Data, etag: String? = nil) throws {
         lock.lock()
         defer { lock.unlock() }
         try data.write(to: bodyURL(id), options: .atomic)
+        if let etag, let encoded = etag.data(using: .utf8) {
+            try? encoded.write(to: etagURL(id), options: .atomic)
+        } else {
+            try? fileManager.removeItem(at: etagURL(id))
+        }
+    }
+
+    /// The server's version of the cached body, if it gave one.
+    public func etag(_ id: Int) -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = try? Data(contentsOf: etagURL(id)),
+              let text = String(data: data, encoding: .utf8), !text.isEmpty
+        else { return nil }
+        return text
+    }
+
+    private func etagURL(_ id: Int) -> URL {
+        etags.appendingPathComponent("\(id)")
     }
 
     public func body(_ id: Int) throws -> Data {
@@ -195,6 +226,7 @@ public final class ArticleCache: @unchecked Sendable {
         var removed = 0
         for id in ids where fileManager.fileExists(atPath: bodyURL(id).path) {
             try fileManager.removeItem(at: bodyURL(id))
+            try? fileManager.removeItem(at: etagURL(id))
             removed += 1
         }
         return removed

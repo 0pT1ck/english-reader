@@ -283,9 +283,50 @@ public actor SyncEngine {
         // than an error — asking for one is normal. Don't cache that: it is a
         // progress report, not an article.
         if decoded.preparing == nil {
-            try articles.storeBody(id, response.body)
+            try articles.storeBody(id, response.body, etag: response.header("ETag"))
         }
         return decoded
+    }
+
+    /// Whether an article's body is on disk — i.e. whether `article(_:)` will
+    /// answer without the network, and a revalidation is worth asking for.
+    public func hasCachedBody(_ id: Int) -> Bool {
+        (try? articles.body(id)) != nil
+    }
+
+    /// Ask the server whether the cached copy of an article is still current.
+    /// Returns the new version when it is not, `nil` when it is — or when there
+    /// is no cached copy, no network, or any other failure.
+    ///
+    /// **Why this exists** (2026-09-24): `article(_:)` returns the cache without
+    /// asking, and the server's copy *does* change — re-annotation, a sense added
+    /// to the inventory. `catalog` was fixed on the server and stayed unmarkable
+    /// on the phone, because the phone never asked again. The reader shows the
+    /// cached copy immediately and calls this beside it; nothing waits on it
+    /// (架构铁律 4), and a 304 costs no body.
+    ///
+    /// Every failure is "no news". This is an opportunistic refresh, and a
+    /// reader that had its article in hand must not lose it to a bad network.
+    public func revalidateArticle(_ id: Int) async -> Components.Schemas.ArticleResponse? {
+        guard (try? articles.body(id)) != nil else { return nil }
+        var headers: [String: String] = [:]
+        if let etag = articles.etag(id) { headers["If-None-Match"] = etag }
+        guard let response = try? await transport.send(
+                HTTPRequest(method: .get, path: "/v1/client/articles/\(id)", headers: headers)),
+              !response.isNotModified, response.isOK,
+              let decoded = try? JSONDecoder().decode(
+                Components.Schemas.ArticleResponse.self, from: response.body),
+              decoded.preparing == nil
+        else { return nil }
+        // Compared decoded, not as bytes: a body that came in the day's package
+        // was re-encoded here, and `JSONEncoder` does not keep key order, so the
+        // same article would look changed every first time. Unchanged content is
+        // still news for the etag (that body has none), but not for the screen.
+        let cached = (try? articles.body(id)).flatMap {
+            try? JSONDecoder().decode(Components.Schemas.ArticleResponse.self, from: $0)
+        }
+        try? articles.storeBody(id, response.body, etag: response.header("ETag"))
+        return cached == decoded ? nil : decoded
     }
 
     /// 这把令牌是谁的。**测试连接用它。**

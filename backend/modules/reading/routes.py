@@ -14,6 +14,8 @@ here on: fields may be added, never removed or given a new meaning.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -133,14 +135,27 @@ async def library(
 
 @client_router.get("/articles/{article_id}", summary="一篇文章的全部内容",
                    response_model=ArticleResponse)
-async def article(device_id: DeviceId, article_id: int) -> dict[str, Any]:
+async def article(device_id: DeviceId, article_id: int, request: Request,
+                  response: Response) -> Any:
     """Text, sentences, every token's analysis, every gloss, and your marks.
 
     One response, then no further requests while reading. An article still being
     prepared comes back with a ``preparing`` block instead of an error — lazy
     ingest means asking for one is normal, not a mistake.
+
+    **条件请求（2026-09-24 加）。** 设备把正文缓存下来之后就不再问了，
+    而正文**会变**：重标注、补义项、拼写回退都会改 token 的义项和 glossary。
+    那天 `catalog` 在服务端修好了，手机上照旧标不了——缓存里还是旧的。
+    所以客户端打开缓存那份的同时带着它的 ``ETag`` 来问一句，没变就 304、零字节。
+    哈希的是整个响应体，跟今日包一个口径：宁可多发一次，也不能把变了的说成没变。
     """
-    return service.article(auth.learner_for_device(device_id), article_id)
+    payload = service.article(auth.learner_for_device(device_id), article_id)
+    raw = json.dumps(payload, sort_keys=True, default=str, ensure_ascii=False)
+    etag = '"' + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32] + '"'
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers={"ETag": etag})
+    response.headers["ETag"] = etag
+    return payload
 
 
 @client_router.post("/events", summary="批量上报交互事件",
