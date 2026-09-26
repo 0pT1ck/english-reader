@@ -1377,14 +1377,18 @@
             版本握手已上线，下限 2。
             <b>这一行 2026-09-23 才订正</b>——P11 结束时漏改，一直写着「方案讨论中」</td>
           </tr>
-          <tr class="now">
+          <tr>
             <td class="phase"><b>P12 完善客户端</b></td>
             <td><b>把词组端上界面</b>，还 P6 §7 那笔从 P6 欠到 P11 的账；
             点词面板整个重画（默认一屏只给有考频的，往上滑展开到超过半屏、带用法）；
             <b>标记必须落在真义项上</b>（真机撞出来的：能点的词一半以上标了是白标）；
             加上真机用出来的五条。改动几乎全在 App，服务端只动一处。
             见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12 文档</a></td>
-            <td><b>2026-09-23 方案定稿，尚未动手。</b>十八条决定</td>
+            <td><b>2026-09-26 结束，人工验收没跑</b>（铁律的第四次记名例外，
+            用户定「日常体验中慢慢发现问题」）。十八条决定 ＋ 发版后加的三条；契约 2 → 3，下限已拧到 3。
+            <b>验收期间真机撞出一串，当场修了</b>（Phase 12 文档 §14 ⑯⑰）：英美拼写查不到义项、
+            在纲名单漏了 195 个词（<code>dollar</code>、<code>colour</code>、<code>percent</code>）、
+            正文缓存永不过期。<b>最后那条的客户端一半还没发 TestFlight</b>，见 §M</td>
           </tr>
         </tbody>
       </table>
@@ -1441,6 +1445,22 @@
     </div>
 
     <div class="open">
+      <div><i>?</i><span><b>正文缓存重新校验，客户端那一半还没发版。</b>
+      2026-09-26 记下（P12 结束时）。服务端的 <code>ETag</code>／304 已上线，
+      App 那边「先给缓存、定位完再问一句」写好了、单元测试与模拟器都过了，
+      <b>但用户定先不发 TestFlight</b>，所以手机上那份仍然是「正文缓存之后永不再问」。
+      <b>在那之前</b>：服务端改过标注的旧文章（重标注、补义项）要在「设置 → 缓存」里清掉才看得到新的。
+      <b>发版之后要在真机上补看一眼</b>——这一条从没在真机上走过。
+      见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12 文档</a> §14 ⑰。</span></div>
+      <div><i>?</i><span><b>派生词没有义项：约 280 个在纲词</b>（<code>rapidly</code>、<code>clearly</code>、
+      <code>happiness</code>、<code>interaction</code>、<code>researcher</code>……）。
+      2026-09-25 量出来的。这版 COBUILD 把它们写成词根条目里的 run-on，
+      <b>只有例句，没有词性、中文和定义</b>，所以拿不出义项；借词根的会把意思弄错。
+      P10 当时是用户定的「暂时不管」，这条只是把它从 P10 文档里提到这儿来，免得忘。
+      <b>路子是 P10 §4 写过的「2017 有道版只用来补缺」</b>——那一步从没做过，
+      而 2017 版的中文是单词对译、没有括注（P10 比过），要不要拿它补是一个要单独定的取舍。
+      点到这些词的症状跟 P12 ⑯ 一样是「标不了」。
+      见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12 文档</a> §14 末尾 d／e。</span></div>
       <div><i>?</i><span><b>CI 的签名要换成「证书 ＋ 私钥存 secret、手动签名」。</b>
       2026-09-19 记下。现在是云签名（<code>CODE_SIGN_STYLE: Automatic</code> 加
       <code>-allowProvisioningUpdates</code>），而 CI 的机器每次都是新的、钥匙串是空的，

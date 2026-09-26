@@ -301,7 +301,10 @@ def main() -> int:  # noqa: PLR0915 - 验收脚本就是一长串断言
               f"悬空：{dangling}（共 {seen} 条）" if dangling
               else f"{seen} 条记录，全部指着现行或已退休的义项")
 
-        backups = list((ROOT / "data" / "backups").glob("events-before-p10-*.db"))
+        # 两处都找：Mac 上那份在 `data/backups/`，阿里云那份当年直接放在 `data/`
+        # （2026-09-24 在生产库上跑才发现这一项只认得一处）。
+        backups = [*(ROOT / "data" / "backups").glob("events-before-p10-*.db"),
+                   *(ROOT / "data").glob("events-before-p10-*.db")]
         check("A14", "清空之前留了备份", bool(backups),
               backups[0].name if backups else
               "没有备份——events.db 是唯一标着「补不回来」的那一类")

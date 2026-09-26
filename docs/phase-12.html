@@ -140,7 +140,7 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">Phase 12 · 方案定稿，尚未动手 · 2026-09-22 ／ 09-23</div>
+    <div class="eyebrow">Phase 12 · 2026-09-26 结束，人工验收没跑（第四次记名例外，见末节） · 2026-09-22 ／ 09-26</div>
     <h1>完善客户端</h1>
     <p class="standfirst">词组做完了，而手机上一个像素都没变。
     <b>P6 §7 那笔破了跨 Phase 不变量的账，从 P6 一直欠到 P11</b>，这个 Phase 把它还掉，
@@ -1339,9 +1339,60 @@ contributes to  ／  contribute to  ／  contribute to
         <b>C2 阴性对照</b> <code>sise</code>／<code>membre</code> 借不到（规则会生成它们、词典里也有，
         靠「中文释义要有交集」那道闸拦）；<b>C3 标成 0 的词现在确实查不到</b>——
         修了查法没重标，这一项就红。本地库上它红在正好 26 个词，与生产库量的一致。
+        <br><b>上线与结果（同日）</b>：提交 <code>4f0db18</code> 推 <code>ios</code>，阿里云拉取、重建、healthy，
+        <code>grep</code> 确认新代码在容器里。容器里跑 <code>--stale-zero</code>：放回 274 处／26 个词，
+        168 篇、162 次调用、0 失败、9 分钟。<b>274 处里 246 处标上义项、28 处模型判「都不贴合」（-1）、
+        0 处仍为 0</b>；文章 514 的 <code>catalog</code> 标成第 2 条「将…列入目录；为…编目录」。
+        生产库上 B1／B5／C1／C2／C3 全过；A1／A2（mdx 只在 Mac）、A13（到期，见下面 c）、
+        A14（P10 那份备份在 Mac）红，与这次无关。
         <br><b>设备上要清一次正文缓存</b>：正文缓存之后不再回服务端核对，
         不在今日包里的旧文章拿不到新标注，要在「设置 → 缓存」里清掉那一篇。
-        <b>这是缓存设计的一个缺口</b>（服务端内容能变、设备不知道），没修，记在下面「撞到但没修」。</span></span></div>
+        <b>这是缓存设计的一个缺口</b>（服务端内容能变、设备不知道）——第二天用户定「一起修了」，见 ⑰。</span></span></div>
+      <div class="step"><span class="step-n">⑰</span><span class="step-what">
+        <b>接着 ⑯ 修的三件（2026-09-25，用户定「一起修了」）</b>
+        <span><b>一、在纲词缺义项：病根是名单，不是解析器。</b>
+        <code>colour</code>、<code>dollar</code>、<code>percent</code>、<code>mile</code>、<code>cent</code>
+        这些柯林斯里有完整词条，却一条义项都没进库。追下去有两层：
+        ① P10 的导入名单取自<b>旧义项集</b>（<code>senses_pre_collins ∪ senses</code>），
+        而不是项目里定义「在纲」的那个函数（<code>targets.target_headwords()</code>）——
+        旧义项集是粗筛后面建的，P10 删了粗筛，却通过这张名单把它的判断原样继承了；
+        ② 更根上：<code>targets</code> 本身有一条 <code>frq &gt; 0</code>，注释说它筛掉的
+        「绝大多数是缩写和专名」——<b>没人数过</b>。<code>frq</code> 是 ECDICT 的 COCA（美国语料）词频，
+        英式拼写和一批普通词在那儿是 0：<b>被它筛掉的在纲词 195 个</b>，跟 ⑯ 量到的 196 对得上。
+        改成 <code>frq &gt; 0 OR bnc &gt; 0</code>（英国国家语料库），真词和专名进来，
+        <code>are</code>／<code>does</code>／<code>b.c.</code> 这类两边都是 0 的照样挡住。
+        <br>导入加 <code>--only-missing</code>：<b>只补缺的，已有的六千多个词一条不碰</b>
+        （P11 之后词组那一路引用着它们，解析器变过一处就是一批义项被静默改写）。
+        <code>percent</code> 在柯林斯里是 <code>per cent</code>：加了
+        <code>collins.entry_key</code>，只差空格或连字符、且<b>唯一</b>对上才算（8 个，全是真的）；
+        <b>词缀键（<code>-ware</code>）排除</b>——第一版让 <code>ware</code>「器皿」对上了后缀 <code>-ware</code>。
+        导入与 A1 对账走同一个函数。拼写模块补了词中的 <code>our/or</code>
+        （<code>neighbourhood</code>、<code>favourite</code>，原先只认词尾），实测多认 19 对、全是同一个词。
+        <br><b>二、正文缓存会过期了。</b>服务端 <code>GET /articles/{id}</code> 加 <code>ETag</code>，
+        带 <code>If-None-Match</code> 来且没变就 304（跟今日包同一个口径，整包哈希）。
+        客户端：缓存按篇记 ETag（<b>单独一个目录</b>——<code>bodySizes()</code> 会把 <code>&lt;id&gt;.etag</code> 当成正文），
+        阅读页<b>先给缓存那份、定位完再问一句</b>，有新的就换上；<b>上次读到哪不跟着换</b>。
+        <b>撞到两件</b>：第一版把这一问塞进了 <code>load</code>，而「跳回上次位置」排在 <code>load</code> 之后——
+        读者会先看见顶部、等一趟网络才被拉走，拆了出来；
+        第二，按<b>字节</b>比「变没变」不成立：今日包带来的正文是客户端重新编码过的，
+        <code>JSONEncoder</code> 不保序，同一篇每次看着都「变了」——单元测试当场红，改成按解码后的内容比。
+        <code>swift test</code> 加 4 项（变了／304／同内容补上 ETag／断网不丢手里那份），共 133 项全过，
+        <code>ci_app</code> 9 项全过。<b>要新发一版 TestFlight 才到手机上</b>，契约不变、不用加版本号。
+        <br><b>三、验收断言改口径</b>（坑 §8「验收脚本会到期」）：
+        <b>A13</b> 从「学习记录已清空」改成「学习记录指着的义项都查得到」；
+        <b>A4</b> 从「缺的 ≤ 320 个」改成「缺的每一个都缺得有理由——词典给得出单词义而没收的一个都不许有」。
+        <b>旧 A4 守住的恰恰是这个 bug</b>：名单漏了 195 个词，它们也就不算「缺」。
+        新 A4 做了阳性对照（假装 <code>dollar</code>／<code>percent</code> 没义项，会被揪出来）
+        和阴性对照（<code>spring</code> 空壳、<code>rapidly</code> 没条目、<code>color</code> 交叉引用，不报）。
+        <br><b>生产库</b>：动之前 <code>VACUUM INTO content.db.pre-collins-fill-20260925</code>；
+        mdx 传上去（sha256 两边一致）；导入 <b>86 个词、182 条义项、305 条例句，更新 0、退休 0</b>。
+        重标注放回 434 处、46 个词（新导入的 ＋ 拼写回退新接上的）。
+        <b>118 次调用、0 失败、6 分钟：417 处标上义项、17 处「都不贴合」、0 处仍为 0</b>
+        （<code>percent</code>→「百分之…」、<code>dollar</code>→「元」、<code>neighborhood</code>→「居住区」）。
+        然后重算超纲标记与难度（再跑一遍报 0 处变化，已收敛）、重算考频（非零义项 9,471 → 9,528）。
+        全语料「无义项集」的实词从 ⑯ 之前的 10,055 处降到 9,372 处。
+        <b>生产库上 <code>verify_phase10</code> 21 过 1 红</b>：A1／A2／A4 这次在阿里云上也跑得了（mdx 传上去了），全过；
+        红的是 A14——那台的备份在 <code>data/</code> 而脚本只找 <code>data/backups/</code>，路径的事，已改成两处都找</span></span></div>
     </div>
 
     <h3>发版（2026-09-23，用户定「推、发」）</h3>
@@ -1363,39 +1414,63 @@ contributes to  ／  contribute to  ／  contribute to
         <span>发之前本地先跑过不上传的那一趟（Release 归档、签名、导出都成）</span></span></div>
     </div>
 
-    <h3>还没做的（要用户）</h3>
+    <h3>还没做的（要用户）——结束时怎么处理的</h3>
     <div class="nots">
-      <div class="not"><i>3</i><span><b>装上确认能用之后，把 <code>min_contract_version</code> 从 2 拧到 3</b>，
-        在公网上验四种情形（A5）</span></div>
-      <div class="not"><i>4</i><span><b>真机验收 M1–M9</b>。手机与模拟器都是 iOS 27，
-        但「C 的标题动画像不像原来那个」这种手感上的事，只有拇指说了算</span></div>
+      <div class="not"><i>3</i><span><b><code>min_contract_version</code> 2 → 3</b>：结束时拧了，见末节</span></div>
+      <div class="not"><i>4</i><span><b>真机验收 M1–M9</b>：<b>没跑</b>，用户定的，见末节</span></div>
     </div>
 
-    <h3>撞到但没修（2026-09-24，查 ⑯ 时顺带看见的，都不在这个 Phase）</h3>
+    <h3>查 ⑯ 时顺带看见的三件（2026-09-24 记下，次日用户定「一起修了」，见 ⑰）</h3>
     <div class="nots">
-      <div class="not"><i>a</i><span><b>义项集整个缺席的常用词</b>：
-        <code>colour</code>／<code>color</code>、<code>centre</code>／<code>center</code>、
-        <code>neighbour</code>、<code>theatre</code>、<code>metre</code> <b>两种拼写都没有义项</b>，
-        拼写回退救不了。生产库里无义项集、又带四六级或中高考标签的有 <b>196 个词、1,590 处</b>
-        （<code>percent</code> 111、<code>dollar</code> 31、<code>spring</code> 26、<code>cent</code> 25、
-        <code>mile</code> 18……）。柯林斯显然收了这些词，所以大概率是 P10 导入漏了一类条目——
-        <b>没查是哪一类</b>，这是 P10 导入那条链上的事，要单独开。
-        其余约 8,000 处是派生词（<code>quickly</code>）、词形还原的怪词
-        （<code>datum</code>、<code>specie</code>）和词典本来就不收的，另说</span></div>
-      <div class="not"><i>b</i><span><b>正文缓存不会过期</b>：<code>Sync.article(_:)</code> 有缓存就不再问服务端。
-        服务端重标注、补义项之后，不在今日包里的旧文章在设备上永远是旧的，
-        而屏幕上看不出任何区别。要么给正文也加 <code>ETag</code>，要么今日包里带一份
-        「哪些文章的标注变了」——<b>属于缓存设计，不在这个 Phase</b></span></div>
-      <div class="not"><i>c</i><span><b><code>verify_phase10</code> A13「学习记录已清空」已经到期</b>：
-        P10 清空之后又用了几天，它注定红，而红的时候什么也没坏（坑 §8「验收脚本会到期」）。
-        该改成守始终成立的那一半——比如「P10 之前的义项 id 不再出现在学习记录里」</span></div>
+      <div class="not"><i>a</i><span><b>义项集整个缺席的常用词</b>——<b>已修</b>，病根不是导入漏了一类条目，
+        是<b>名单</b>：见 ⑰ 一</span></div>
+      <div class="not"><i>b</i><span><b>正文缓存不会过期</b>——<b>已修</b>，见 ⑰ 二</span></div>
+      <div class="not"><i>c</i><span><b><code>verify_phase10</code> A13 到期</b>——<b>已改</b>，见 ⑰ 三</span></div>
     </div>
+
+    <h3>仍然没有义项的，以及为什么不修</h3>
+    <div class="nots">
+      <div class="not"><i>d</i><span><b>派生词：约 280 个在纲词</b>（<code>rapidly</code>、<code>clearly</code>、
+        <code>happiness</code>、<code>interaction</code>、<code>researcher</code>……）。
+        这版 COBUILD 把它们写成词根条目里的 run-on：<b>只有几条例句，没有词性、没有中文、没有定义</b>，
+        所以从这本词典里拿不出义项；借词根的义项会把意思弄错（<code>happy</code> 的「高兴的」不是
+        <code>happiness</code>）。<b>P10 §4 当时就是用户定的「暂时不管」</b>，这次没有擅自改。
+        路子是 P10 写过的「2017 有道版只用来补缺」——那一步从没做过，要做就单独定</span></div>
+      <div class="not"><i>e</i><span><b>空壳词条 15 个</b>（<code>spring</code>、<code>within</code>、
+        <code>hell</code>、<code>preside</code>……）：这本 mdx 里只有标题和星级，词典本身缺内容。
+        <b>只有词组义的 57 个</b>（<code>behalf</code>、<code>sake</code>、<code>accordance</code>）：
+        按 P10 §4 本来就不收，它们归 P11 的词组</span></div>
+    </div>
+
+    <h3>怎么结束的（2026-09-26）</h3>
+    <p>用户定：<b>「这个 Phase 不需要验收。以后日常体验中慢慢发现问题即可。宣布 Phase12 结束，进行收尾。」</b>
+    于是 §12 的人工 M1–M9 <b>一项没跑</b>——铁律「每个 Phase 由用户实际跑一遍验收清单」的
+    <b>第四次记名例外</b>（前三次 P5、P6／P7／P8、P11）。<b>跟 P11 一样是「不跑」，不是「欠账」</b>：
+    没有一个未来的时点会把它补上，撞到问题按缺陷处理。</p>
+    <p><b>自动那半边</b>：<code>swift test</code> 133、<code>ci_client</code> 9、<code>ci_app</code> 9 全过；
+    生产库上 <code>verify_phase10</code> 21 过、A14 红（备份路径，脚本已改）。
+    <b>真机其实用了三天</b>——⑯ 那个 <code>catalog</code> 就是用出来的，而它牵出了 ⑰ 的三件。
+    <b>这恰好说明「日常体验里撞」是真的在发生的验收</b>，只是它只覆盖用户碰巧走到的地方。</p>
+    <p><b>代价是这几件没有第二双眼睛看过</b>：</p>
+    <div class="nots">
+      <div class="not"><i>1</i><span><b>正文缓存重新校验（⑰ 二）在真机上一次都没走过</b>——
+        用户定这次先不发 TestFlight，手机上装的 <code>202609231319</code> 里没有它。
+        <b>在下一次发版之前，服务端改了标注的旧文章要手动清缓存才看得到</b>（设置 → 缓存）。记进主文档 §M</span></div>
+      <div class="not"><i>2</i><span><b>M1–M9 里手感那几条</b>（标题动画、点词面板的展开手势、词组虚线的观感）——
+        只有拇指说了算，而这次没人专门去看</span></div>
+      <div class="not"><i>3</i><span><b>派生词仍然没有义项</b>（约 280 个在纲词，见上面 d）——不是这个 Phase 的缺陷，
+        但点到它们会是「标不了」，跟 ⑯ 看起来一样。记进主文档 §M</span></div>
+    </div>
+    <p style="margin-top:1.2rem"><b>收尾做的事</b>：提交并把 <code>ios</code> 合回 <code>main</code>；
+    阿里云那份 checkout 从临时的 <code>ios</code> 切回 <code>main</code>、重建镜像；
+    <code>min_contract_version</code> 2 → 3——用户这三天用的就是 P12 的构建（带契约 3），
+    所以拧上去不会把他锁在外面；真出事 <code>ssh</code> 一条命令退回 2。</p>
   </section>
 
   <footer>
     <span>English Reader</span>
     <span>Phase 12 · 完善客户端 · 词组上界面 ＋ 五条用出来的</span>
-    <span>2026-09-22 开谈 · 2026-09-23 定稿 · 尚未动手</span>
+    <span>2026-09-22 开谈 · 09-23 定稿并实施 · 09-26 结束（人工验收没跑）</span>
   </footer>
 
 </div>
