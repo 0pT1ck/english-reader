@@ -1,8 +1,6 @@
 <meta charset="utf-8">
 <title>部署</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 
 <style>
   :root {
@@ -134,20 +132,56 @@
 <div class="wrap">
 
   <header class="masthead">
-    <div class="eyebrow">2026-09-14 / 09-15 · 阿里云 · <b>开发阶段的部署，不是正式迁移</b></div>
+    <div class="eyebrow">English Reader · 阿里云 · 2026-10-09 文档整理</div>
     <h1>部署</h1>
-    <p class="standfirst">把服务端打成 Docker，跑到阿里云那台机器上，
-    让写界面这几天手机有东西可连。<b>三个容器、两条入口、一次被备案拦掉的直连。</b></p>
-    <p class="thesis"><b>这件事原本排在整个项目做完之后。</b>提前的理由是具体的：
-    这几天要远程开发，而手机连不上家里的局域网——界面没有东西可连就验不了。
-    2026-09-14 由用户决定提前。<b>提前的只是「把服务端打成 Docker」这一件事</b>，
-    不是提前部署，也没有动「不跨 Phase 开发」那条铁律。</p>
-    <p class="thesis"><b>阿里云是部署目标，这是终点。</b>但现在跑在上面的是开发期实例：
-    主副本仍在 r5s，正式迁移仍然等整个项目开发完毕。
-    这两句话必须一起读——把它读成「已经部署了」会得出错误的操作结论，
-    最要紧的一条是<b>数据只许 r5s → 阿里云单向流动</b>（§8）。</p>
+    <p class="standfirst"><b>服务端与数据正本只有阿里云一份，工程在 Mac。</b>
+    先读现行操作，再按需要查看部署经过与实测依据。</p>
+    <p class="thesis">2026-09-20 已定阿里云为唯一服务端，r5s 退休；
+    不再等待项目结束后迁移，也不再将阿里云的真实学习记录视为可作废的开发副本。
+    <b>任何时候只有一份数据在被写</b>。</p>
+    <p class="thesis">本页保留首次构建、备案判别和历史实测。§1–§10 中的机器状态与数字按各自日期理解，
+    <b>操作以 <a href="#current-operations">现行操作</a> 为准</b>；过期的数据方向和欠账已单独标明。</p>
     <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a></p>
   </header>
+
+
+  <section id="current-operations">
+    <div class="sec-head"><h2>现行操作</h2></div>
+    <p class="lede">以 2026-09-20 场地决定、09-26 P12 收尾及这次本地核对为依据。
+    2026-10-09 本次仅整理文档，没有登录生产机重测；版本、开关与机器容量在操作前查实际值。</p>
+    <h3>连接、发版与确认</h3>
+    <p><code>ssh aliyun</code>，用户 root，IP <code>47.116.104.62</code>；工程目录
+    <code>/opt/appdata/English reader/</code>（空格和大小写照抄），数据在其 <code>data/</code>，挂为容器的 <code>/app/data</code>。
+    主入口 <code>https://reader.cntick.top</code>，备用 <code>https://reader.cfoptick.com</code>。</p>
+    <ol><li>在获准的提交节点推送代码；远端以 <code>https_proxy=http://127.0.0.1:7890 git pull</code> 拉取。</li>
+    <li>按 <code>/root/build-er.sh</code> 重建镜像，再在项目 compose 的位置重建并重启容器。
+    那份脚本已有三条国内取包路径，不改仓库默认源、不给 Docker 守护进程配代理（§5）。</li>
+    <li>确认容器内确有改动，例如 <code>docker exec english-reader grep -c &lt;新函数名&gt; /app/backend/...</code>，
+    答案 0 就是没上去；再查健康与实际端点。仅本地回归绿不能证明手机连的服务更新了。</li></ol>
+    <p>客户端发版走 TestFlight，服务器发版走镜像，两边分别验证。契约客户端当前号为 3；
+    服务端下限最后记录为 3（P12，09-26），本次未远程查询。破坏性契约变更先发客户端，再提高下限；
+    只拦客户端接口、缺版本头也拦；误锁可经 SSH 降低下限。</p>
+    <h3>数据正本与本地加工</h3>
+    <p><b>正本只有阿里云一份；r5s、Windows 的库是过期拷贝，不启动、不取数。</b>
+    小查改直接在阿里云做。大动作先关夜间备稿、暂停手机使用，用 <code>VACUUM INTO</code> 取得一致快照到 Mac；
+    完成并核验后推回、重建镜像、开回备稿。不要 <code>cp</code> 正在使用的 WAL 库。
+    任何时候只有一份在写；任务可中断、可续跑，不把部分完成报成全部完成。</p>
+    <p>服务端数据库现为五库：<code>content.db</code>、<code>events.db</code> 要备份；
+    <code>ops.db</code>、<code>dictionary.db</code>、<code>logs.db</code> 不需要备份。
+    <code>learning.db</code> 只留空壳不删。设备上的学习日志是原本，服务端只是上报副本。</p>
+    <h3>容器与入口</h3>
+    <p>本项目 compose 只有 app，不发布端口；Caddy 为公共设施，位于 <code>/opt/appdata/caddy/</code>，
+    不进本仓库，两个 stack 靠外部网络 <code>proxy</code> 相连。备用隧道位于 <code>/opt/appdata/cloudflared/</code>。
+    域名、证书、公网端口归反代，不塞进 app 的 .env。</p>
+    <p>容器时区 <code>Asia/Shanghai</code>；挂载 uid/gid 必须对齐（可用 <code>ER_UID</code>/<code>ER_GID</code>，
+    默认用户 10001）；必须配 <code>ER_ADMIN_SECRET</code>。管理台公开且能下载备份，密码生成、凭证不写日志或 git。
+    公网 iOS 必须 HTTPS。Caddy 的 DNS 插件与 DNS-01 继续保留；§6 的封禁实验是备案前的实测，不能当当前直连状态。</p>
+    <p>夜间备稿最后记录为阿里云 04:00 开启。做数据大动作才临时停；恢复后检查任务表，
+    不只看日志或 next_due_at 的名字。跑验收前读 <a href="./pitfalls.html#pitfall-4.6">排坑 §4.6</a>，
+    防验收起的循环触发真实任务再在退出时中断它。</p>
+    <p>下面 §1–§10 为部署过程与历史实测（09-14～19），原始文章数、库体积、证书到期与网络延迟不当实时指标。
+    尚无结清依据的 Tunnel token 更换事项仍保留在 §10，不能凭本次整理说它已完成。</p>
+  </section>
 
   <div class="callout" style="margin-top:2.5rem">
     <b>两件事在动手之前是不知道的，它们改变了做法。</b>
@@ -457,9 +491,12 @@
   <section>
     <div class="sec-head">
       <span class="sec-mark">§8</span>
-      <h2>数据怎么上去的，以及不许怎么下来</h2>
+      <h2>首次数据搬运与后续订正</h2>
       <span class="sec-note">这一节关系到一条不变量</span>
     </div>
+    <p class="callout"><b>本节前半是 2026-09-15/16 的搬运记录。</b>当时的单向流动、学习记录作废与未来迁移口径已于 2026-09-20 作废。
+    现在正本在阿里云；取回 Mac 加工须先停写，完成再推回。见 <a href="#current-operations">现行操作</a>。
+    下面旧库体积、Web 令牌与副本设置保留为历史证据，不作为现行操作指令。</p>
     <p class="lede">原本定的是「先不搞数据」。但要验的是界面——
     <b>空库连上去是空列表，列表、点词、复习几屏一个都验不了</b>。所以改成搬。</p>
 
@@ -582,8 +619,10 @@
       <div class="not"><i>!</i><span><b>Tunnel token 贴进过对话，该刷一串</b>
       <span>它能让人跑一个自己的连接器接管那个主机名的流量，包括设备令牌。
       拿不到账号权限，但换一串更干净。</span></span></div>
-      <div class="not"><i>!</i><span><b>正式迁移还没做</b>
-      <span>仍然等整个项目开发完毕。那时数据流动方向反过来，是一次性搬迁。</span></span></div>
+      <div class="not"><i>✓</i><span><b>2026-09-20 正式场地已经定案，迁移等待已结束</b>
+      <span>原先「正式迁移还没做，仍等整个项目开发完毕」的待办已作废。
+      阿里云实测是 r5s 的严格超集，因此没有搬迁或合并，直接成为唯一服务端与数据正本。
+      集合差与数据量见 <a href="./development.html#development">开发参考</a>。</span></span></div>
     </div>
 
     <h3>在那台机器上动过的配置</h3>
@@ -608,6 +647,132 @@
     </div>
   </section>
 
+<section id="instructions-record"><div class="sec-head"><h2>从项目指令移入的部署依据</h2></div><p class="note">2026-10-09 从旧 CLAUDE.md 的部署节原文转入。日期、硬件容量、证书、内存与延迟均为当时记录；包括「P10 会清空记录」这类当时将来时，不视为新的操作授权。现行操作在本页开头，工程与模型参考在 development.html。</p><ul>
+<li>开发怎么跑：见「开发场地」。Mac 上直接 <code>uv run python run.py</code>
+（Windows 上那两个 <code>.bat</code> 还在，理由见 <code>run.py</code> 的模块注释）。</li>
+<li><strong>部署目标定为阿里云（x86_64，2G 内存），2026-09-14 定。</strong> 这是终点，不是临时安排。</li>
+<li><strong>2026-09-20 起它就是唯一的服务端，不再是「开发期实例」。</strong>
+用户当天定的「以后服务端就在阿里云，工程就在 Mac」。
+原先那句「正式迁移推迟到项目做完」已经兑现掉了——迁移就是这一次，没有下一次。
+<strong>数据主副本从此在阿里云</strong>（实测它是 r5s 的严格超集，见「开发场地」）。</li>
+<li><strong>改了服务端代码，手机那边不会自己变——阿里云跑的是镜像里的代码</strong>（2026-09-16 栽的）。
+那天在本地改了三处服务端、跑了回归、全绿，然后让用户在手机上验——
+<strong>而手机连的是阿里云，那台跑的还是前一天构建的镜像，一行新代码都没有</strong>。
+于是「我已经会了」照旧不收队列行、拼写照旧重复提示、客户端发的
+<code>If-None-Match</code> 没人认。<strong>客户端更新了不等于服务端更新了</strong>，这两边的
+发版路径完全不同：App 走 TestFlight，服务端要 <strong>git pull + 重新构建镜像 + 重启容器</strong>。
+在阿里云上构建照 <code>/root/build-er.sh</code>（三条国内源已经写在里面）。
+<strong>判断标准别靠记忆</strong>：<code>docker exec english-reader grep -c &lt;你刚加的函数名&gt; /app/backend/...</code>，
+答案是 0 就是没上去。
+<strong>同一天又兑现了一次</strong>：改完写文章的提示词，不重建镜像的话阿里云那一轮会按旧提示词写，
+12 次尝试全被合格线拦下、出 0 篇。重建只花几十秒（代码层在 Dockerfile 最后，依赖层命中缓存）。
+<strong>那台拉 GitHub 要挂代理</strong>：直连 <code>GnuTLS recv error (-110)</code>，
+<code>https_proxy=http://127.0.0.1:7890 git pull</code> 就过。这跟「别给 Docker 守护进程配代理」不冲突——
+那条说的是构建时拉包。</li>
+<li><strong>夜间备稿跑在阿里云</strong>（2026-09-16 起，因为 gemini 的 key 在那台）。
+从前 r5s 那份开关是故意关着的，怕两台各自 04:00 生成把 <code>content.db</code> 搞分叉；
+<strong>2026-09-20 起只剩一台，那个顾虑消失了</strong>。</li>
+<li><strong>数据只有一份，在阿里云。</strong> 那条「只许 r5s → 阿里云 单向流动、永不回流」已经作废，
+连同「开发期实例上产生的标记、读完、复习记录全部作废」那句——
+<strong>阿里云上那 27 条标记、230 条复习历史是真机上产生的真实记录</strong>。
+（P10 会把学习记录整个清空，所以这批也留不住，但那是 P10 的决定，不是因为它们不算数。）</li>
+<li><strong>要在本地动数据，就得先让阿里云停手</strong>：关掉夜间备稿、手机别用，
+把库拉下来（<strong>用 <code>VACUUM INTO</code> 不要 <code>cp</code></strong>，有 WAL，直接拷可能不一致），
+跑完推回去、重建镜像、开回备稿。
+<strong>老规矩没变：任何时候只有一份在被写。</strong></li>
+<li>内存不是问题：后端常驻实测 152 MB（spaCy 占 134 MB），容器里 <strong>117 MB</strong>，那台 2G 绰绰有余。</li>
+<li><strong>形态：两个独立的 compose stack，靠一个共享网络 <code>proxy</code> 连起来</strong>（2026-09-15 按用户惯例拆开）。
+<code>docker network create proxy</code> 每台机器建一次，两边都声明 <code>external: true</code>，谁先起都无所谓。
+<ul>
+<li><strong>本项目只剩 app 一个服务</strong>，在仓库 <code>docker/</code> 下：<code>Dockerfile</code> + <code>docker-compose.yml</code> +
+<code>env.example</code>。<strong>它一个端口都不发布</strong>（<code>expose</code> 不是 <code>ports</code>），只能由反代按容器名访问。</li>
+<li><strong>反代是宿主机的公共设施，不属于本项目</strong>，在 <code>/opt/appdata/caddy/</code>（自己的 compose、
+<code>Dockerfile.caddy</code>、<code>Caddyfile</code>、证书目录）。<strong>它不进版本控制</strong>——将来别的服务也挂它，
+塞进这个仓库就等于让本项目拥有整台机器的入口。代价是重装服务器要重写那三十来行。</li>
+<li>域名、证书、公网端口全归反代管，<strong>本项目的 <code>.env</code> 里不该再出现它们</strong>。</li>
+</ul>
+</li>
+<li><strong>数据库文件挂载到宿主机</strong>，容器重建不丢数据。</li>
+<li><strong>三件动手前必须知道的事</strong>（每一件都是实测撞出来的，不是预想的风险）：
+<ul>
+<li><strong>容器默认 UTC，而本项目读的是本地时钟</strong>（<code>core/tasks.py:204</code>，<code>04:00</code> 是本地 4 点，
+复习「当天」也按本地零点切）。不设 <code>TZ</code> 就是夜间备稿在中午跑、日界提前八小时，<strong>全程零报错</strong>。
+镜像里已经写死 <code>TZ=Asia/Shanghai</code>。</li>
+<li><strong>bind mount 的属主按 uid 数字比对，不按名字</strong>。容器用户 uid 对不上宿主机目录，
+启动即 <code>PermissionError</code>。用 <code>ER_UID</code>/<code>ER_GID</code> 或把目录 chown 成 10001。</li>
+<li><strong>不设 <code>ER_ADMIN_SECRET</code> 容器会崩</strong>，而且报错跟密码毫无关系（它想往 root 拥有的
+<code>/app/.env</code> 追加生成的密码）。compose 里用 <code>${VAR:?}</code> 提前拦成一句人话。</li>
+</ul>
+</li>
+<li><strong>那台上的数据来历</strong>：2026-09-15 从 r5s 拷了一份快照过去（<code>VACUUM INTO</code>，三库 <code>integrity_check</code> 全 ok），
+此后它自己一路往前跑——<strong>到 09-20 已经比 r5s 多 20 篇生成文、多一批真机记录</strong>，
+于是顺理成章成了正本。<code>secrets.json</code> 后来补上了（只有 <code>gemini</code> 一个 key）。
+夜间备稿当初拷进去时是关着的，现在开着。</li>
+<li><strong>阿里云那台的现状</strong>（2026-09-15）：<code>47.116.104.62</code>，Ubuntu 24.04 / x86_64 /
+<strong>实际可用内存 1.6G，无 swap</strong> / 磁盘 40G。<code>ssh aliyun</code> 可直连——
+<strong>Mac 上的密钥是 <code>~/.ssh/id_rsa_aliyun</code></strong>（2026-09-19 配的，<code>~/.ssh/config</code> 里有 <code>Host aliyun</code>）。
+域名 <strong><code>reader.cntick.top</code></strong>。app 容器实测 healthy、时区 CST、四个库迁移完成。</li>
+<li><strong>备案拦截比我原先判断的更狠：高端口也挡，而且是按 SNI 掐 TLS</strong>（2026-09-15 实测推翻前判）。
+原以为「未备案只挡 80/443，高端口可用」，实际是：<code>reader.cntick.top</code> 在 8443 上
+<strong>先能用了四十分钟，随后被扫到并封掉</strong>。
+<strong>分清它的办法</strong>（这是决定性的，别用别的）：对同一个 IP、同一个端口做两次 TLS 握手——
+<strong>不带 SNI</strong>，Caddy 会回一个 <code>internal_error</code> 告警（<strong>有字节回来</strong>）；
+<strong>带那个域名的 SNI</strong>，一个字节都没有。同时明文 HTTP 打同一端口拿得到 Caddy 的 400。
+端口是通的、Caddy 是好的、MTU 正常（1472 DF 通）——<strong>只有带那个 SNI 的 TLS 被中途丢弃</strong>。
+注意 <code>SNI=example.com</code> 这个对照<strong>不成立</strong>：Caddy 只配了一个站点，对陌生 SNI 本来就中断握手。</li>
+<li><strong>两条路都留着，2026-09-19 起 B 转正</strong>（2026-09-15 定 A+B 并行，ICP 过审后按原计划切换）：
+<ul>
+<li><strong>A. Cloudflare Tunnel，现在是备用</strong>：<code>https://reader.cfoptick.com</code>，
+<code>/opt/appdata/cloudflared/</code>。<strong>服务器一个入站端口都不开</strong>，没有 SNI 可供识别，拦不到。
+实测端到端 200，今日包 1 MB / 3 篇文章 / 21 条复习，<strong>延迟 0.85–1.4 秒</strong>——
+隧道连的是 Cloudflare 洛杉矶节点，流量绕太平洋一趟。容器没停，出问题随时切回来。</li>
+<li><strong>B. Caddy 直连，2026-09-19 转正</strong>：<code>https://reader.cntick.top</code>，<code>/opt/appdata/caddy/</code>。
+<code>.env</code> 的 <code>HTTPS_PORT</code> 8443→443、<code>HTTP_PORT</code> 127.0.0.1:8080→80，
+<code>docker compose up -d</code> 重建后验证：带 SNI 的握手拿到完整证书链（Let's Encrypt，
+<code>CN=reader.cntick.top</code>），<code>curl .../health</code> 跟完 307 拿到 200。
+证书到期仍是 2026-12-14。<strong>App 里的服务器地址要手动从 cfoptick.com 换成 cntick.top</strong>，
+这一步不随服务端改动自动生效。细节见 <code>deploy.html</code> §7。</li>
+</ul>
+</li>
+<li>证书<strong>只能走 DNS-01</strong>（未备案时 80/443 都不可达，HTTP-01 与 TLS-ALPN-01 都要那两个端口），
+而 DNS-01 要 Caddy 带 DNS 插件，官方镜像不带——<code>/opt/appdata/caddy/Dockerfile.caddy</code> 为此存在。</li>
+<li><strong>在阿里云那台上构建，三条取包的路都要换成国内的</strong>（2026-09-15 实测，命令存在服务器
+<code>/root/build-er.sh</code>，重建照着跑）：PyPI 用 <code>PYPI_INDEX=https://mirrors.aliyun.com/pypi/simple/</code>、
+Go 模块用 <code>GOPROXY=https://goproxy.cn,direct</code>、spaCy 模型用 <code>SPACY_MODEL_URL</code> 指到
+<code>ghfast.top</code> 前缀。三个都是 Dockerfile 里的参数，<strong>默认仍是官方源</strong>，别改仓库里的默认值。
+<ul>
+<li><strong>别给那台的 Docker 守护进程配代理</strong>：BuildKit 会把守护进程的代理注入每个构建步骤，
+而那台的 mihomo 只有 <strong>73 KB/s</strong>（实测 50 分钟拉了 220 MB），装依赖要几小时。
+去掉代理、改用镜像源之后，同样这一层 <strong>496 秒</strong>装完。</li>
+<li><strong><code>docker.io</code> 要配镜像源</strong>。原有的 <code>docker.xuanyuan.me</code> 会 403 限流<strong>且不回落到官方源</strong>，
+整个构建当场失败。现配 <code>dockerproxy.net</code> 等三个，<code>python:3.12-slim</code> 17 秒拉完。</li>
+<li><strong>宿主机连得上不等于容器里连得上</strong>：<code>github.com</code> 在宿主机上 484 KB/s，
+<strong>在容器里是 000（不通）</strong>。判断某条路行不行，要在 <code>docker run</code> 里判，不要在宿主机上判。</li>
+</ul>
+</li>
+<li><strong>HTTPS 是功能需求不是加固</strong>：<code>client/App/project.yml</code> 的 ATS 只对局域网开了例外，
+<strong>iOS 会直接拒绝连公网的明文 HTTP</strong>。没有证书手机就连不上。</li>
+<li><strong>管理台一并暴露在公网，只靠 <code>ER_ADMIN_SECRET</code> 护着</strong>（2026-09-14 用户定）。
+它后面是「下载整个学习库」那个按钮，所以密码要生成不要自己想。</li>
+</ul>
+</section>
+<section id="initial-context"><div class="sec-head"><h2>首次部署的原始背景</h2></div><p class="note">原首页说明保留于此，描述 2026-09-14/15 的决定。开发实例、主副本在 r5s、未来迁移及单向搬运口径已被 09-20 的决定推翻，不能据此操作。原文如下。</p>  <header class="masthead">
+    <div class="eyebrow">2026-09-14 / 09-15 · 阿里云 · <b>开发阶段的部署，不是正式迁移</b></div>
+    <h1>部署</h1>
+    <p class="standfirst">把服务端打成 Docker，跑到阿里云那台机器上，
+    让写界面这几天手机有东西可连。<b>三个容器、两条入口、一次被备案拦掉的直连。</b></p>
+    <p class="thesis"><b>这件事原本排在整个项目做完之后。</b>提前的理由是具体的：
+    这几天要远程开发，而手机连不上家里的局域网——界面没有东西可连就验不了。
+    2026-09-14 由用户决定提前。<b>提前的只是「把服务端打成 Docker」这一件事</b>，
+    不是提前部署，也没有动「不跨 Phase 开发」那条铁律。</p>
+    <p class="thesis"><b>阿里云是部署目标，这是终点。</b>但现在跑在上面的是开发期实例：
+    主副本仍在 r5s，正式迁移仍然等整个项目开发完毕。
+    这两句话必须一起读——把它读成「已经部署了」会得出错误的操作结论，
+    最要紧的一条是<b>数据只许 r5s → 阿里云单向流动</b>（§8）。</p>
+    <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a></p>
+  </header>
+
+</section>
   <footer>
     <span>English Reader · 部署</span>
     <span>2026-09-14 / 09-15 / 09-16 / 09-19</span>

@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 12 完善客户端</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 
 <style>
@@ -1465,6 +1462,24 @@ contributes to  ／  contribute to  ／  contribute to
     阿里云那份 checkout 从临时的 <code>ios</code> 切回 <code>main</code>、重建镜像；
     <code>min_contract_version</code> 2 → 3——用户这三天用的就是 P12 的构建（带契约 3），
     所以拧上去不会把他锁在外面；真出事 <code>ssh</code> 一条命令退回 2。</p>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、铁律（P12验收例外）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「铁律」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。下方 TestFlight 发版状态与契约数值是 Phase 结束时的记录，不代表后来状态。</p>
+    <h3>原文档节的阅读警示</h3>
+    <p><code>docs/phase-12.html</code> — P12 方案与实施结果（完善客户端，<strong>2026-09-26 结束，人工验收没跑</strong>）。主线是<strong>把词组端上界面</strong>（还 P6 §7 那笔账）。<strong>开头方框是十八条决定 ＋ 发版后加的三条</strong>，实施记录 <strong>§14 ①–⑰</strong>，末节是怎么结束的。<strong>⑯⑰ 是验收期间真机撞出来的一串</strong>（英美拼写、在纲名单漏了 195 个词、正文缓存永不过期），查词典之前值得读。两条要先知道的：</p>
+    <ul>
+      <li><strong>§4 末尾「标了也白标」</strong>——能点的词一半以上标了永远进不了复习（人名、功能词、没判出义项的），规则要放进 Core、<code>ercli</code> 有同一个 <code>?? 0</code>；</li>
+      <li><strong>§3 那三条死路</strong>——「词组里的词是不是本义」库里没有判据，别再去试溯源 join／用法表／tier。</li>
+    </ul>
+    <h3>原结果表：P12 完善客户端</h3>
+    <p><strong>状态：</strong><strong>2026-09-26 结束。第四次记名例外：人工验收没跑</strong>（用户定「日常体验中慢慢发现问题」）。TestFlight <code>202609231205</code> / <code>202609231319</code></p>
+    <p><strong>细节：</strong>词组端上界面 ＋ 点词面板重画 ＋ <strong>标记必须落在真义项上</strong> ＋ 真机用出来的五条。契约 2 → 3。十八条决定见 <code>phase-12.html</code> 开头方框，实施记录 §14。<strong>路上修了三个旧缺陷</strong>：重开文章虚线消失（读的是缓存快照，改成读设备重放）、跳回上次位置从未生效、词组进了拼写。<strong>验收期间真机又撞出一串（§14 ⑯⑰，2026-09-24/25）</strong>：英美拼写查不到义项、在纲名单漏了 195 个词、正文缓存永不过期——服务端已上线，<strong>客户端那半（正文 ETag 重新校验）还没发 TestFlight</strong>（用户定先不发，记在主文档 §M）——在那之前服务端改过标注的旧文章要手动清缓存。<strong>结束时收了两件临时状态</strong>：<code>ios</code> 合回 <code>main</code>、阿里云切回 <code>main</code>；<code>min_contract_version</code> 拧到 3</p>
+    <h3>记名验收例外原文：P12</h3>
+    <p><strong>P12，2026-09-26 定</strong>：用户原话「这个 Phase 不需要验收。以后日常体验中慢慢发现问题即可」。自动那半边全过（<code>swift test</code> 133、<code>ci_client</code> 9、<code>ci_app</code> 9），<strong>人工 M1–M9 一项没跑</strong>。</p>
+    <p><strong>真机其实用了三天，而且逮到了真问题</strong>（<code>catalog</code> 标不了 → §14 ⑯⑰ 一串）——所以「日常体验里撞」确实在起作用，<strong>但只覆盖碰巧走到的地方</strong>。</p>
+    <p><strong>没人看过的</strong>：正文缓存重新校验（没发版，真机一次没走过）、手感那几条（标题动画、面板展开）。</p>
   </section>
 
   <footer>

@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 5 客户端内核</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -1202,6 +1199,21 @@
       <div class="not"><i>✓</i><span><b>主文档 §M「没有任何客户端在用 <code>/today</code>」结清了。</b>命令行客户端每次都走它，在线离线都走过。字段够用——<b>唯一不够的是 <code>AnswerResponse</code> 不回显方向</b>，所以在线对拍只能从 <code>done</code> 和 <code>misses</code> 反推。不算缺陷，记一笔。</span></div>
       <div class="not"><i>✓</i><span><b>P4 的人工 M1「断网走完一天」，机器能验的那一半验完了。</b>剩下的是「在真手机上对着真停掉的服务点一遍」，那要等下一个 Phase。</span></div>
     </div>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、铁律（P5验收例外）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「铁律」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。</p>
+    <h3>原文档节的阅读指针</h3>
+    <p><code>docs/phase-5.html</code> — P5 方案（§2 二十四条决定、§3 Windows 本地回路实测、§7 发件箱与服务端那个洞、§16 动手前先验的两个未知数、§17 验收与它的边界、<strong>§18 Core 装什么——动手时照着这一节，不用翻前面</strong>）</p>
+    <h3>原结果表：P5 客户端内核</h3>
+    <p><strong>状态：</strong>2026-09-12 验收通过</p>
+    <p><strong>细节：</strong><strong>P5 只做 Core 与命令行验收工具，界面留给下一个 Phase</strong>（2026-09-12 拆分）。已定二十四条见 <code>phase-5.html</code> §2：仓库转公开、只面向 iPhone 17/iOS 26、Core/界面分层、Windows 本地为主回路、本地分三类数据、发件箱一条一个文件、契约类型用生成的、状态机双保险、命令行客户端带标注、<strong>取消加餐</strong>。<strong>验收全部由 AI 执行（铁律的唯一例外，见 §17）</strong>：<code>verify_phase5.py</code> 21 项全过，内含 <code>swift test</code> 47 项；回归 P0 32 / P1b 28 / P1c 15 / P2 47 / P3 42 / P4 34 也全过（P4 少 4 项是当天复习被做完了，不是回归，见主文档 §M）。客户端在 <code>client/</code>，命令行工具 <code>ercli</code></p>
+    <p><strong>历史口径说明：</strong>上句「唯一例外」描述 P5 当时的记录；之后又有 P6–P8、P11、P12 的记名例外，不应据此推导当前只有一次例外。</p>
+    <h3>记名验收例外原文：P5</h3>
+    <p>每个 Phase 结束由用户实际跑一遍验收清单，通过后才进下一个。现在有四次记名的例外，都不是把这条改掉：</p>
+    <p><strong>P5，2026-09-12 定</strong>：它没有界面，人没法「用」一个 Swift 库，人工验收也只是跑命令看输出。P5 的验收全部由 AI 执行，没有人工项——代价是没有第二双眼睛，见 <code>phase-5.html</code> §17。</p>
+    <p>其余三次的完整记录分别移入 <a href="phase-8.html#instructions-record">P8</a>、<a href="phase-11.html#instructions-record">P11</a>、<a href="phase-12.html#instructions-record">P12</a>。</p>
   </section>
 
   <footer>

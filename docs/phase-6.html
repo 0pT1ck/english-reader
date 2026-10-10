@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 6 界面</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -656,6 +653,18 @@
       P5 结束时它是唯一的缺口，P6 写了发它的代码，但没跑过——<b>所以缺口还在</b>，
       只是从「没有代码」变成了「有代码没跑过」</div>
     </div>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」与「进度」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。</p>
+    <h3>先分清两个时点</h3>
+    <p><strong>下方原文中的「没跑验收」「验过的只有编译和启动」是 P6 早期结束时的状态。</strong>2026-09-16 在 P8 后，P6 / P7 / P8 三个 Phase 一起走完三十项真机验收，全过，欠账结清。原结果表把这两个时点写在同一行，这里完整保留原文作为历史证据；不要把早期状态误当后来或当前状态。完整的延期决定、代价与还清记录见 <a href="phase-8.html#instructions-record">P8 移入区</a>。</p>
+    <h3>原文档节的阅读指针</h3>
+    <p><code>docs/phase-6.html</code> — P6 方案与结束（§3–§6 四屏共 34 条决定、§7 词组这条动了不变量、<strong>§13 怎么结束的与欠下了什么——没跑验收，别把文档里的「做到的」读成「跑通了」</strong>）</p>
+    <h3>原结果表：P6 界面·阅读</h3>
+    <p><strong>状态：</strong>2026-09-16 验收通过（欠了三个 Phase 的账，一次还清）</p>
+    <p><strong>细节：</strong>原生 iOS + 液态玻璃，<strong>只做「列表 → 阅读 → 点词」一条链</strong>。34 条决定见 <code>phase-6.html</code>。两条最要紧的都是减法：<strong>正文不画系统预标的记号</strong>（只画你自己标过的）、<strong>界面初版不认词组</strong>（后者动了跨 Phase 不变量，代价三笔写在 §7）。<strong>验过的只有「能为 iPhone 17 模拟器编译」和「装得上起得来不闪退」</strong>——列表、点词、标记、读完一次都没被真实流程走过。App 在 <code>client/App/</code>，工程文件由 XcodeGen 从 <code>project.yml</code> 生成、不进版本控制</p>
   </section>
 
   <footer>

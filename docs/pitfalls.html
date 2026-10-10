@@ -1,0 +1,479 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>开发排坑</title>
+<style>
+:root { --ground:#FAFAFC; --surface:#FFFFFF; --ink:#1B1D26; --muted:#4E5364; --rule:#E3E4ED; --accent:#37429B; --soft:#F2F2F7; --note:#FBF2DE; color-scheme:light; }
+@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ground:#101119; --surface:#171922; --ink:#E7E8F0; --muted:#ADB2C4; --rule:#2A2D3B; --accent:#98A1EE; --soft:#1D202B; --note:#2C2718; color-scheme:dark; } }
+:root[data-theme="dark"] { --ground:#101119; --surface:#171922; --ink:#E7E8F0; --muted:#ADB2C4; --rule:#2A2D3B; --accent:#98A1EE; --soft:#1D202B; --note:#2C2718; color-scheme:dark; }
+* { box-sizing:border-box; }
+body { margin:0; padding-inline:16px; padding-block:32px 64px; background:var(--ground); color:var(--ink); font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; font-size:16px; line-height:1.8; overflow-wrap:anywhere; }
+main { max-width:48rem; margin-inline:auto; }
+h1,h2,h3 { font-family:"Songti SC",Georgia,serif; line-height:1.4; text-wrap:balance; }
+h1 { font-size:2rem; margin:0 0 16px; } h2 { font-size:1.5rem; margin:48px 0 20px; border-bottom:1px solid var(--rule); padding-bottom:12px; } h3 { font-size:1.12rem; margin:28px 0 12px; }
+p,ul,ol { margin:0 0 16px; } li { margin-block:6px; } a { color:var(--accent); text-underline-offset:3px; } a:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+code,pre { font-family:ui-monospace,"SFMono-Regular",Consolas,monospace; font-size:.88em; } code { background:var(--soft); padding:2px 4px; border-radius:3px; } pre { padding:16px; background:var(--surface); border:1px solid var(--rule); overflow-x:auto; white-space:pre-wrap; }
+nav { display:flex; flex-wrap:wrap; gap:8px 20px; border-block:1px solid var(--rule); padding-block:16px; margin-block:24px; }
+.note { background:var(--note); padding:16px; margin-block:20px; } .meta { color:var(--muted); font-size:.86rem; } .table-scroll { overflow-x:auto; max-width:100%; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; } th,td { padding:12px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top; } th { background:var(--soft); }
+hr { border:0; border-top:1px solid var(--rule); margin-block:32px; } footer { border-top:1px solid var(--rule); margin-top:48px; padding-top:16px; color:var(--muted); font-size:.85rem; }
+</style>
+<main><header><p class="meta">English Reader · 2026-10-09 整理</p><h1>开发排坑</h1><p>完整保留从 CLAUDE.md 移出的事故复盘、实测数据、结论边界与守卫。原有 §1–§8 及各条编号不变，先由根文件触发表确定要读哪一节。</p><p>统一写成「症状 → 原因 → 正确做法 → 现在谁守着」。<strong>每一条都是真的栽过，不是假想的风险。</strong>
+触发表在根文件「文档维护与按需阅读」，按「正要动手做什么」确定对应节；读到某一节就把那一节读完。</p>
+<p><strong>记录规矩</strong>：新坑往对应小节末尾加；坑被验收脚本守住之后，条目留着但在「守卫」里写上验收项号——
+<strong>守卫才是保护，这里的散文只是解释</strong>。已经不成立的条目直接删，不留归档（归档是 <code>docs/</code> 那边的规矩）。</p>
+<p class="note">旧条目里的日期与样本数字只描述当时实验，不是当前库存或验收结果。现行规则以根文件为准；后续新增真实问题继续写进本页对应节，不能把每次复盘全文再抄回根文件。</p></header>
+<nav aria-label="文档目录"><a href="#pitfalls-0">零、四条元教训</a><a href="#pitfalls-1">一、改提示词前</a><a href="#pitfalls-2">二、调模型 / 换模型前</a><a href="#pitfalls-3">三、写管理页 JS 前</a><a href="#pitfalls-4">四、加验收项或新指标前</a><a href="#pitfalls-5">五、查词典 / 判大纲前</a><a href="#pitfalls-6">六、写数据库代码 / 解析别处写的数据前</a><a href="#pitfalls-7">七、读代码时、等后台任务时</a><a href="#pitfalls-8">八、跨 Phase 的静默错误清单（只有一行，但都真的发生过）</a></nav><section id="pitfalls-0"><h2>零、四条元教训</h2><p>底下 27 条里反复出现的其实就这四个形状。<strong>新坑八成还是它们。</strong></p>
+<ol>
+<li><strong>已知答案的样本一直在手边，却没去对。</strong> 同一个 <code>tags</code> 字段栽了四次（§5）。
+<code>labor</code> / <code>labour</code> 对一下就当场露馅，而它安静地过了整整一个阶段。</li>
+<li><strong>让模型「找错」是生成任务，它会编造；让它判断具体对象是封闭任务，它很准。</strong>（§1）
+开放式提问有产出压力，模型总能挤出点什么。</li>
+<li><strong>一个测试在已知好的样本上报零，不等于它有效</strong>——还得看它在已知坏的样本上报不报。（§4）
+阴性对照 + 阳性对照，缺一个都得不出结论。</li>
+<li><strong>注释、方案、字段名说了什么，不等于代码做了什么。</strong>（§7、§6）
+一段解释性的注释会让人以为对应的代码在那儿，读代码时就跳过它了。</li>
+</ol>
+<hr />
+</section><section id="pitfalls-1"><h2>一、改提示词前</h2><p class="note">§1.4 保留的是 2026-09-09 的实验原始记录。词组清单已在 P11 重建，不能把旧 P2 §18 的覆盖数字当现状；现行判据见 <a href="./phase-11.html">P11 §2、§9</a>。</p><h3 id="pitfall-1.1">1.1 模型对提示词里的数量约束基本无感</h3>
+<p><strong>症状</strong>：「不要超过五六处」无效（反而更高）、「至少用一两处」无效、义项集那次「合并成 3-5 项」也无效（给了 7 项）。
+<strong>原因</strong>：数量是模型算不出来的东西，它只能大概比划。
+<strong>正确做法</strong>：<strong>说清楚「什么时候该用」</strong>。被动语态就是靠给条件 + 写完自查，从 30.8 降到 15.5 的。
+<strong>2026-09-16 第四个实例，也是最值钱的一个</strong>：用词上限写成「限制在最常见的约 4000 个英语单词以内」，
+<code>gemini-3.8-flash-high</code> 十个种子<strong>零合格</strong>、超纲中位 5.82%。
+换成<strong>它认得的类别</strong>——「四级大纲以内，六级／考研／雅思托福 GRE 才学的词一个都不要用」——
+同样十个种子 <strong>7/10、0.56%</strong>，与 gpt-5.5 持平，命中率还升了。
+<strong>它不是不守规矩，是感觉不到 <code>mechanism</code>、<code>municipal</code>、<code>rigorous</code> 难</strong>，直到你说这些词属于哪一级。
+配套还有两段各自有效、合起来更有效的：<strong>给一张越界词对照表</strong>（16 个词各配一个替代说法）、
+<strong>要它写完逐词自查</strong>。三段单独是 2.12 / 3.28 / 3.67，合起来 0.88。<strong>互补，不是同一句话说三遍。</strong>
+<strong>顺带一条反向的教训</strong>：压住抽象词之后，剩下的越界词全变成 <code>storehouse</code>、<code>smokestack</code> 这类具体名词，
+而「必须写具体的事」是另一条硬要求——所以那一段必须<strong>给出口而不是下禁令</strong>，
+否则模型会靠把文章写空来守规矩。
+<strong>守卫</strong>：无。改提示词时只能靠这条。数据在 <code>phase-4.html</code> §4 末节。</p>
+<h3 id="pitfall-1.2">1.2 一个错误的度量比没有度量更危险</h3>
+<p><strong>症状</strong>：「形式主语几乎为零」，为此改了三轮提示词。
+<strong>原因</strong>：校验器在数 <code>there be</code>——spaCy 只把 <code>there is/are</code> 标成 <code>expl</code>，<code>It is clear that…</code> 里的 <code>It</code> 是普通 <code>nsubj</code>。
+改对之后真实值 8.91、基线 5.6，<strong>一直是偏多而不是为零</strong>。
+<strong>正确做法</strong>：<strong>改代码前先验证指标本身在数什么。</strong>
+<strong>守卫</strong>：无。见 §4.2 的通用做法。</p>
+<h3 id="pitfall-1.3">1.3 绝不让模型「找错」，只让它逐句做封闭判断</h3>
+<p><strong>症状</strong>：问 <code>deepseek-v4-flash</code>「找出这篇文章里不地道的搭配」，它给<strong>考试委员会审定的真题</strong>判出均值 5.1 个「问题」
+（<code>exerting influence on</code> 要改成 <code>having influence on</code>、<code>gap remains yawning</code> 要改成 <code>wide</code>）。
+<strong>原因</strong>：开放式找错是生成任务，模型有产出压力。
+<strong>正确做法</strong>：换成逐句的封闭判断——「这句话里的搭配，母语者会这么说吗？」
+种下已知错误（真题句里 <code>make a decision</code> → <code>do a decision</code>）的对照测试里 <strong>8/8 全中、零误报</strong>。
+<strong>守卫</strong>：无。这条是 B3「过量生成择优」的方法基础，写在主文档 §B3。</p>
+<h3 id="pitfall-1.4">1.4 同一条的第二个实例，比第一个更干净（2026-09-09）</h3>
+<p><strong>症状</strong>：让 <code>deepseek-v4-flash</code> 通读一篇六级真题、「指出文章中所有的词组」，同一篇跑三次：
+提出 37/28/34 个，<strong>并集 50、交集 19，稳定率 38%</strong>；只有 <strong>21/50（42%）</strong> 在 318,207 条词典里查得到；
+<strong>23 个在原文里根本找不到那个字符串</strong>（<code>a you-and-me-against-the-world principle</code>、<code>strategic calculations</code>、<code>the cries of</code>）；
+而且<strong>连现有流水线已知的 13 个都漏了 3 个</strong>。
+<strong>对照</strong>：同一篇上，放宽后的结构筛提出 28 个、<strong>全部在词典里、零编造</strong>，其中 16 个是现有筛子漏的。
+<strong>正确做法</strong>：<strong>把候选锚在词典上</strong>——词典里没有的组合它一个都提不出来，没有编造的余地。
+<strong>守卫</strong>：无。数据在 <code>docs/phase-2.html</code> §18。</p>
+<hr />
+</section><section id="pitfalls-2"><h2>二、调模型 / 换模型前</h2><h3 id="pitfall-2.1">2.1 长文生成必须开流式</h3>
+<p><strong>症状</strong>：写一篇 450 词的文章每次 524，而模型其实还在写。
+<strong>原因</strong>：<strong>网关掐的是沉默，不是长度</strong>。gpt-5.5 要先思考约 109 秒才吐第一个可见 token，中转站在 120 秒掐断空闲连接。
+<strong>正确做法</strong>：<code>llm_stream</code> 默认开（2026-09-09 加）。开了之后同一个请求 60 秒完成（453 词、超纲 0.85%、目标词 24/25）。
+<strong>关掉它长文生成直接不可用。</strong>
+<strong>顺带</strong>：中转站上非流式只有 <code>minimax-m2.5</code> 能写完整篇，但它目标词只命中 10/25、均句长 12.4；
+其余模型把 2500 个输出 token 全烧在思维链上，正文 0 字。<strong>能写完和守约束是两回事。</strong></p>
+<h3 id="pitfall-2.2">2.2 思考型模型会「成功地」返回空正文——流式也救不了（2026-09-10）</h3>
+<p><strong>症状</strong>：<code>deepseek-v4.1-flash</code> 写文章四篇全空。流是通的、<code>finish_reason</code> 也有，就是没正文。
+<strong>原因</strong>：<code>reasoning_tokens: 4000 / completion_tokens: 4000</code>，<strong>delta 里只有 <code>reasoning_content</code>，<code>content</code> 一次都没出现</strong>。
+<strong>正确做法</strong>：三条解法——预算提到 16000（12.9s）、<strong><code>enable_thinking: false</code>（9.9s，最快）</strong>、<code>thinking: {&quot;type&quot;:&quot;disabled&quot;}</code>（13.1s）。
+<strong>排查手法记住</strong>：模型「返回成功但没内容」时，<strong>先把流里 delta 的字段名和 usage 打出来</strong>——<code>reasoning_tokens</code> 会直接告诉你预算去哪了。</p>
+<h3 id="pitfall-2.3">2.3 别拿 star 数当权威依据</h3>
+<p><strong>症状</strong>：<code>fsrs4anki</code> 有 4.1k star、<code>py-fsrs</code> 只有 481，差点据此选错。
+<strong>原因</strong>：前者是<strong>给 Anki 用的 JS 调度脚本 + notebook</strong>（而且 FSRS 已内置进 Anki 23.10+，那个仓库对新版用户已无必要），
+后者才是<strong>能嵌进 Python 后端的库</strong>。star 差的是用户群大小，不是权威性。
+<strong>正确做法</strong>：<strong>真正的权威证据是「FSRS 被 Anki 官方吸收成默认调度器」</strong>，外加公开的 SRS benchmark 和十几种语言的独立实现。
+<strong>顺带</strong>：许可要逐个核对。<code>py-fsrs</code> 是 MIT；<strong>Anki 本身是 AGPL，绝对不能抄它的代码</strong>；
+同一个组织（open-spaced-repetition）下的仓库许可不一，有 AGPL 也有 CC0、BSD。</p>
+<h3 id="pitfall-2.4">2.4 别把「写文章」和「造例句」的横评结论搞混</h3>
+<p><strong>症状</strong>：两次横评结论相反，容易记岔。
+<strong>原因</strong>：任务大小不同——写 350 词整篇文章 vs 写一句话带一个指定的词。
+<strong>结论</strong>：写文章 <code>gpt-5.5</code> 完胜（同一套提示词，超纲率 0.32% 对 <code>deepseek-v4-flash</code> 的 3.64%）；
+<strong>造例句不适用这条</strong>（2026-09-09 横评 23 个模型）：合格率 92–100%，<code>deepseek-v4-flash-0731</code> 96% 反而高于 <code>gpt-5.5</code> 94%。
+<strong>顺带</strong>：<code>deepseek-v4-flash</code> 那次横评 20 个模型的结论是<strong>数据整理要的是不思考的模型</strong>——
+思考型模型把输出预算烧在思维链上，强模型反而在中转站的 180 秒网关超时里跑不完。</p>
+<hr />
+</section><section id="pitfalls-3"><h2>三、写管理页 JS 前</h2><h3 id="pitfall-3.1">3.1 <code>hidden</code> 在管理页里不一定隐藏得了</h3>
+<p><strong>症状</strong>：设了 <code>el.hidden = true</code>，按钮<strong>失效了但没消失</strong>——「看得见却点不动」，代码全对而屏幕在骗人。
+<strong>原因</strong>：<code>base.html</code> 给 <code>button</code> 设了 <code>display: inline-block</code>，优先级高过浏览器自带的 <code>[hidden] { display: none }</code>。
+<strong>正确做法</strong>：已在 <code>base.html</code> 加 <code>[hidden] { display: none !important; }</code>。
+<strong>这类最难查，因为没有任何东西出错。</strong>
+<strong>守卫</strong>：<code>verify_phase0.py</code> 4.10。</p>
+<h3 id="pitfall-3.2">3.2 管理页继承 <code>base.html</code> 的全局作用域，别用它已有的名字</h3>
+<p><strong>症状</strong>：<strong>页面加载正常、之后每次点击都 404</strong>，症状看着还是「按钮点不动」。
+<strong>原因</strong>：复习页定义了同名的 <code>api()</code> 走 <code>/v1/client</code>，被 base 那个走 <code>/v1/admin</code> 的覆盖。
+已被占用的名字：<code>api</code> / <code>toast</code> / <code>humanBytes</code>。P2 的阅读页把 helper 叫 <code>client()</code> 所以没事。
+<strong>正确做法</strong>：<strong>页面脚本一律包进 IIFE。</strong>
+<strong>守卫</strong>：<code>verify_phase0.py</code> 4.9 会扫描并报出撞车。</p>
+<h3 id="pitfall-3.3">3.3 Web 页的调试办法：抽出 <code>&lt;script&gt;</code>，在 node 里重放点击序列</h3>
+<p><strong>症状</strong>：P3 人工验收时「按钮点不动」，猜了两轮都没找到。
+<strong>正确做法</strong>：把 <code>&lt;script&gt;</code> 抽出来，配假 DOM 和假服务端，在 node 里重放点击序列。<strong>重放一次就看清了</strong>——
+包括「答案面板没打开时点『对了』照样会提交」这种眼睛看不出来的。
+<strong>顺带</strong>：<strong>开发期的页面要 <code>Cache-Control: no-store</code></strong>——缓存的旧 JS 看起来和「没修好」一模一样。</p>
+<hr />
+</section><section id="pitfalls-4"><h2>四、加验收项或新指标前</h2><h3 id="pitfall-4.1">4.1 验收脚本不许依赖「今天碰巧有数据」</h3>
+<p><strong>症状</strong>：<code>verify_phase3</code> 起初走当天真实的到期队列，于是复习做完之后再跑就一片红。
+<strong>原因</strong>：<strong>只在某些日子能过的验收脚本等于没有。</strong>
+<strong>正确做法</strong>：自己种探针、用完删掉，<strong>前后各清一次</strong>——中断的上一轮也不会污染下一轮。
+<strong>2026-09-21 又一次，栽在「清理清单按形状列，而形状漏了一半」</strong>：<code>fixture_events.py</code> 的
+<code>FIXTURE_SHAPES</code> 收着 <code>v2-ph-mark-%</code> / <code>v2-ph-unmark-%</code>，注释还写着「verify_phase2 词组那一节」，
+<strong>而同一节里 <code>v2-ph-seed-%</code> / <code>v2-ph-unseed-%</code> 这一对从来没进过清单</strong>——
+于是那一节每跑一次就往 <code>events.db</code> 里留一条 <code>come</code> 的 <code>study_states</code>，
+安静地待了一年，直到 P10 的 A13「学习记录已清空」把它照出来。
+<strong>清理是按形状匹配的，所以漏一个形状就是永久漏</strong>，而漏掉的那部分不会报错。
+加清理形状时去种探针的那处逐个数一遍，别照着已有的清单补。</p>
+<h3 id="pitfall-4.2">4.2 任何新指标上线前，先拿一个已知答案的样本验证它数得对</h3>
+<p><strong>症状</strong>：难度画像里的「超纲率」量出来四级真题比考研还难。
+<strong>正确做法</strong>：真题的三个等级就是现成的已知答案，任何难度类指标都该先在它上面跑一遍，看单调性对不对。
+（这次是在写进代码之前跑数才发现的；§1.2 那次是改了三轮提示词之后。）</p>
+<h3 id="pitfall-4.3b">4.3b 拿模型的输出做对比实验，<strong>先量噪音底数</strong>（2026-09-21）</h3>
+<p><strong>症状</strong>：同一篇文章、同样两个批次配置，跑两遍，结论<strong>方向相反</strong>
+（第一次「只有小批次作答 8 个」，第二次「只有大批次作答 8 个」）。
+而我已经拿这种单次对比调了大半天批次，还把「批次越大越准」写进了 CLAUDE.md。
+<strong>原因</strong>：标注调用 <code>temperature=0.1</code>，<strong>不是 0</strong>。模型输出本身带随机性，
+而我从来没量过那个随机性有多大。
+<strong>实测</strong>：同一篇、<strong>同一个配置</strong>跑两遍——一致率 <strong>99.3%</strong>，单边作答 5 对 1；
+而跨配置（35 vs 100）是一致 97.5%、单边 1 对 8。
+<strong>两者同一个量级，所以配置差异淹没在噪音里。</strong>
+<strong>正确做法</strong>：<strong>任何拿模型输出做的 A/B，都要先跑 A/A</strong>。
+那一趟给出噪音底数，没有它，A/B 的差值读不出意义。
+工具在 <code>scripts/compare_annotation.py</code>，它的模块注释写着这条。
+<strong>这是 §4.3 的同一个形状，第三次</strong>：前两次是「分不出对和瞎选」，
+这次是「分不出配置差异和随机波动」——<strong>一个分不出两种情况的测量等于没有测量</strong>。
+<strong>顺带</strong>：温度不为零时，「跑一次看看」永远不是证据，哪怕数字很好看。</p>
+<h3 id="pitfall-4.3c">4.3c 盲判的答案键写反过一次，而反常的数字早就在提示了（2026-09-22）</h3>
+<p><strong>症状</strong>：P10 的 B3 新旧标注盲判，第一版结论是「旧的更好，48 对 19」。
+<strong>原因</strong>：取样时 A/B 顺序随机，<code>flip</code> 为真时 A 装的是旧释义，
+而答案键写成了 <code>new=&quot;A&quot;</code>——<strong>整份结论反了</strong>。阳性对照那一半的键恰好是对的，
+所以「判法分得出对错」那个结论不受影响，错的只有新旧归属。
+<strong>怎么抓到的</strong>：不是复查代码，是<strong>交叉核对</strong>——<code>reserve</code> 的「（野生生物）保护区」、
+<code>approach</code> 的「探讨；处理；对待」在新义项集里逐字存在，而我却把它们当成「旧标注」在报，
+五个词五次逐字撞上。
+<strong>本来早该露头</strong>：同一份脚本算出的长度基线说「新标注是更短的那个」（17%），
+而柯林斯的中文明明更长——我当时写了句「方向和我猜的相反」就放过去了。
+<strong>正确做法</strong>：<strong>盲判类实验，答案键要用一个独立事实验一遍</strong>
+（比如「被判为旧的那条，在新词典里存在吗」），别只靠读代码确认。
+<strong>以及：反常的数字要当场追，不要记一句就走。</strong> 那句「方向和我猜的相反」
+如果当场追下去，能省掉后面一整轮分析和一次错误的结论。</p>
+<h3 id="pitfall-4.3d">4.3d 对照逮得到抽样逮不到的东西（2026-09-22，P11）</h3>
+<p><strong>症状</strong>：词组清单的 B 档（「柯林斯某一块的加粗串正好等于这个词组」）<strong>抽样 14 条全对</strong>，
+于是当成干净的直接收了。后来种 30 条阳性对照去验判定模型，<strong>它把其中 6 条判成「不是」</strong>——
+查下去<strong>模型六条全对，错的是我的对照</strong>：<code>as far as</code> ＋ <code>is concerned</code> 是一个词组被分段加粗
+（<code>as far as</code> 只是半个）、<code>beside yourself with</code>／<code>beside the point</code> 是两个词组挤在一块
+而那块的中文只描述前者。两种都会让读者点开看到<strong>不是这个词组的中文</strong>。
+<strong>原因</strong>：抽样只能告诉你「抽到的这些对」，而<strong>它抽不到你没想到的那一类</strong>。
+对照不一样——它拿已知答案去问，答案不符就暴露出「我以为的已知答案其实不成立」。
+<strong>正确做法</strong>：<strong>凡是「这一档我抽样看过，是干净的」这种判断，都要再种一次对照</strong>。
+代价极小（这次 60 次调用），而它换来的是一个抽样永远给不出的结论。
+<strong>顺带</strong>：对照不过关时，先别急着调阈值——<strong>先看是哪几条，很可能是对照本身错了</strong>。</p>
+<h3 id="pitfall-4.3">4.3 阴性对照 + 阳性对照，缺一个都得不出结论</h3>
+<p><strong>症状</strong>：搭配检查改好提示词之后真题和生成文都判成 ~0，看着像「文章没问题」。
+<strong>原因</strong>：<strong>分不清是「没问题」还是「裁判瞎了」。</strong>
+<strong>正确做法</strong>：补上<strong>阳性对照</strong>——拿真题句子把 <code>make a decision</code> 改成 <code>do a decision</code> 种个已知错误。
+补上之后才知道模型是好的、问法是坏的。</p>
+<h3 id="pitfall-4.4">4.4 验收脚本会往真实告警通道里灌假警报（2026-09-11）</h3>
+<p><strong>症状</strong>：用户刚打开 Bark，当天就收到两条失败推送——<code>任务失败：验收探针·失败</code>、<code>任务 probe.p4 的周期设置看不懂</code>。
+<strong>原因</strong>：<code>verify_phase4</code> 有两项<strong>故意制造错误</strong>来验行为（任务抛异常、周期写坏），
+<code>verify_phase0</code> 也每次报一条 <code>verify.failure</code> 验追溯链路。这些都是 ERROR，
+而告警处理器挂在 logging 上，于是原样推给用户。
+<strong>为什么比噪音更糟</strong>：<code>notifications.py</code> 的设计第一句就是「<strong>一个狼来了的告警通道会被忽略</strong>」。
+验收每跑一次推两条假警报，就是在亲手训练用户忽略它——而它是夜间任务失败的唯一出口。
+<strong>正确做法</strong>：<code>notifications.muted()</code>，验收脚本整段包进去。两处刻意设计：
+① <strong>是进程内变量，不是配置项</strong>——用「跑前关掉、跑完打开」实现的话，脚本崩在中途就会
+<strong>把告警永久关掉</strong>，而比误报更糟的失败模式是手机永远安静；
+② <strong>只静音推送，不静音日志</strong>，ERROR 照旧全量落盘，查得到。
+<strong>守卫</strong>：无。验的时候要用阴性+阳性对照（§4.3）——只看「没推」分不清是静音生效还是推送链路本来就坏了。</p>
+<h3 id="pitfall-4.4b">4.4b 验收脚本会绊在自己刚制造出来的东西上（2026-09-12）</h3>
+<p><strong>症状</strong>：<code>verify_phase2</code> 7.9「候选已逐处判断过」报「待判 5」。跑完之后再查，是 <strong>0</strong>。
+<strong>原因</strong>：这个脚本自己会入库一篇文章，入库时结构预筛提出新的词组候选，<strong>而判词组是异步任务</strong>——
+脚本在自己刚制造出来的候选还没判完时就去数了。
+<strong>正确做法</strong>：<strong>等，带上限</strong>。改成轮询到 0 或者两分钟超时，超时了把「等了两分钟还没判完」写进说明——
+那时它指向的是模型那条路断了，而不是代码坏了。
+<strong>这一条和 §4.6 是一家</strong>：一个是脚本触发了真任务然后把它掐死，一个是脚本没等自己触发的任务。
+<strong>共同点是「脚本自己动了手，又假装只是在观察」。</strong></p>
+<h3 id="pitfall-4.4c">4.4c 「待人工」的项数变多，可能只是今天没数据（2026-09-12）</h3>
+<p><strong>症状</strong>：<code>verify_phase4</code> 从「38 通过、2 待人工」变成「34 通过、4 待人工」，看着像回归。
+<strong>原因</strong>：C3.1 离线补报与 C4.1 幂等要「当天有未完成的复习条目」才跑得动，
+而我刚用命令行客户端把当天的复习做完了。<strong>脚本自己说了「当天没有未完成的复习条目，跑不了这一项」</strong>。
+<strong>正确做法</strong>：这两项该自己种探针、用完删掉（§4.1）。在那之前，<strong>看到项数变化先读那一行的说明</strong>，
+它通常已经告诉你原因了——别急着当成回归去查代码。</p>
+<h3 id="pitfall-4.5">4.5 算法要用仿真验，单元检查查不出标定错</h3>
+<p><strong>症状</strong>：FSRS 接线有两个错（把「一次过」当 Easy、没关掉自带 learning steps），在 1.1–1.6 全过的时候一直存在。
+<strong>原因</strong>：<strong>它们不让任何东西报错，只让间隔排得不对</strong>——8→66→180 天，而正确的是 2→11→46→163→180。
+<strong>正确做法</strong>：<strong>让仿真里的学习者按 FSRS 自己的曲线遗忘</strong>，消掉模型分歧，剩下的只有接线——
+实测到期可提取性 0.901 对目标 0.900，偏离 0.0005。
+<strong>再换一个不同形状的遗忘模型，一次过率掉到 0.28</strong>——那不是 bug，正是 optimizer 存在的理由。</p>
+<h3 id="pitfall-4.6">4.6 验收脚本会触发真实的定时任务，然后把它掐死在半路（2026-09-12）</h3>
+<p><strong>症状</strong>：跑完一轮验收，<code>verify_phase4</code> 的 B5.1、B5.2 红了——「1 篇停在半路」「12 处待判词组」。
+看着像刚改的代码碰坏了什么。
+<strong>原因</strong>：验收脚本会 <code>create_app()</code>，于是<strong>定时任务循环跟着起来</strong>，夜间备稿正好到点触发，
+真的生成了 3 篇、真的排了标注任务。<strong>然后脚本跑完退出，线程池关掉</strong>——
+任务当场 <code>RuntimeError: cannot schedule new futures after interpreter shutdown</code>，
+判词组那个则永远挂在 <code>running</code>。<strong>花了钱，留下一篇打不开的文章，而验收把它报成自己的失败。</strong>
+<strong>怎么认出来</strong>：先看 <code>llm_jobs</code> 的 <code>error</code> 列——这一条的指纹就是 <code>after interpreter shutdown</code>。
+<strong>是环境不是代码</strong>，形状同 §1.2：别拿着它去改根本没错的东西。
+<strong>收拾办法</strong>（也是正常的运维动作）：重启服务让 <code>recover_interrupted()</code> 把僵住的 <code>running</code> 收成
+<code>paused</code>——<strong>但它有个 5 分钟的陈旧窗口</strong>，刚死的任务收不到，等一会儿再重启；
+然后控制台重启任务，查 <code>llm_jobs</code> 等它跑完（有超时上限）。
+<strong>没有守卫</strong>。真正的解法是让验收脚本别把真任务跑起来，但那是要改验收框架的事。
+在那之前：<strong>跑验收之前先看一眼离 04:00 还有多久</strong>，以及跑完检查一遍 <code>llm_jobs</code> 有没有留下 <code>running</code>。</p>
+<hr />
+</section><section id="pitfalls-5"><h2>五、查词典 / 判大纲前</h2><p>**这个字段栽了四次。**四次的共同点是：<strong>已知答案的样本一直在手边，却没去对。</strong></p>
+<h3 id="pitfall-5.1">5.1 第四次，也是最贵的一次（2026-09-09）</h3>
+<p><strong>症状</strong>：阅读页把 <code>quickly</code> 标成超纲词，还说「不用学会」。
+<strong>原因</strong>：「这个词在不在大纲里」有<strong>三个调用方</strong>——生成校验器算超纲率、入库打 <code>beyond</code> 标记、难度画像算超纲词比例。
+<strong>三方各写了一遍，只有生成校验器是对的</strong>。它做了四件事，另外两方只做了第一件：</p>
+<ol>
+<li>词条自己的标签（并英美变体）</li>
+<li><strong>表面形的标签</strong>（<code>datum</code> 无标签，页面上是 <code>data</code>）</li>
+<li><strong>词典自带的变形表</strong>（<code>teeth</code> / <code>phenomena</code> / <code>curricula</code> 还原失败，但 ECDICT 的 <code>exchange</code> 认得）</li>
+<li><strong>A 级派生的词根，且要顺链走到底</strong>（<code>nationality → national → nation</code>，一步不够）</li>
+</ol>
+<p><strong>实测</strong>：453 篇里 8,401 处超纲标记，<strong>3,005 处（35.8%）的词根就在纲内</strong>——<code>quickly</code> 30 处、<code>fully</code> 28 处、<code>cultural</code> 27 处。修完降到 4,158 处。
+<strong>正确做法</strong>：<code>vocabulary/syllabus.py</code> 一个函数，<strong>三方都调它</strong>，且<strong>返回布尔不返回标签集合</strong>——
+返回集合就意味着每个调用方自己写比较，而它们正是各自停在了不同的地方。
+B 级派生单独回答（<code>light_root</code>），它不算超纲但算三分之一个目标词，两个答案要能分开数。
+<strong>重算</strong>走 <code>reading/recompute.py</code>（<code>POST /v1/admin/reading/recompute</code>），<strong>只重写词典派生出来的值，
+绝不碰 token 的身份、位置、义项标注</strong>——那些是遇见记录，标记指着它们；前后各数一次行数，对不上就回滚。
+<strong>这次比前三次多学到一条：坏规则不只是让数字难看，它会让你选错。</strong>
+P3 的模型横评先用坏规则算，排出 gpt-5.5 92% &gt; deepseek-v4-flash 88%；换成对的规则重算变成
+<strong>96% 对 94%，名次反了</strong>——差一点就把活派给了贵四倍、慢四倍的模型。
+<strong>守卫</strong>：<code>verify_phase2.py</code> 3.6（<code>quickly</code> / <code>teeth</code> / <code>nationality</code> 不许判超纲）与 <strong>3.7（读源码断言三方调的是同一个函数）</strong>。
+<strong>2026-09-18（P9）后果升级了一档</strong>：大纲判定的结果现在随文章下发到设备，
+而设备照着它画记号、决定哪些词能标。<strong>判错一次不再只是这边数字难看，
+是那个错误跟着今日包去了手机上</strong>，而那台手机离线时连改都改不了——
+只能等下一次下发。所以「三方调同一个函数」这条比以前更硬，不是更松。</p>
+<h3 id="pitfall-5.2">5.2 第三次：<code>tags</code> 在英式／美式拼写之间随机分配（2026-09-08）</h3>
+<p><strong>症状</strong>：<code>labor</code> 被判成超纲——实测 21 个词条、125 处，<code>labor</code> 一个词 41 处。
+<strong>原因</strong>：ECDICT 的 <code>tags</code> <strong>不是各存一份</strong>：<code>labour</code> 带 <code>zk gk cet4 cet6</code>，而 <code>labor</code> 只带 <code>ky</code>；
+<code>judgement</code> 是四级词，<code>judgment</code> 一个标签都没有。
+<strong>正确做法</strong>：<code>vocabulary/spelling.py</code> 和 <code>tags_of()</code> <strong>就是为这件事写的</strong>，模块开头第一段写的正是这个问题——调它。
+（当时判超纲的两处 <code>ingest._is_beyond</code>、<code>difficulty.syllabus_tags</code> 没有调，安静地过了整整一个阶段。）
+<strong>守卫</strong>：<code>verify_phase2.py</code> 3.5。</p>
+<h3 id="pitfall-5.3">5.3 第二次：<code>tags</code> 是分级清单，不是累积的（2026-09-07）</h3>
+<p><strong>症状</strong>：超纲率 58%，四级真题量出来比考研还难。
+<strong>原因</strong>：<code>the</code> 只带 <code>zk gk</code>（中考、高考），<strong>并不带 <code>cet4</code></strong>；<code>make</code>、<code>people</code> 同理。
+<strong>正确做法</strong>：「四级水平之内」= 带 <code>zk</code> / <code>gk</code> / <code>cet4</code> <strong>任意一个</strong>。改对之后超纲率 58% → 10%，三个等级也变成正确的单调上升。</p>
+<h3 id="pitfall-5.2b">5.2b 英美拼写的第二个现场：义项集（2026-09-24，P12 真机）</h3>
+<p><strong>症状</strong>：<code>catalog</code> 点开标不了。
+<strong>原因</strong>：柯林斯每个词只挂在<strong>一种</strong>拼写下、而且不固定是哪边（<code>catalogue</code>/<code>behaviour</code> 英式、
+<code>organization</code>/<code>realize</code> 美式）；<code>senses_of()</code> 只按原拼写查。生产库 274 处 / 26 个词标成了「无义项集」。
+§5.2 修的是<strong>大纲标签</strong>那个现场，<code>spelling.py</code> 早就在，<strong>义项集这个现场没人去调它</strong>。
+<strong>正确做法</strong>：<code>senses_of()</code> 自己没有义项时退到 <code>spelling.variants()</code>——改在那一个函数里。
+改完<strong>要重标注</strong>（<code>reannotate_all.py --stale-zero</code>），不然查法对了、库里的 0 还是 0。
+<strong>守卫</strong>：<code>verify_phase10.py</code> C1–C3（C2 是阴性对照 <code>sise</code>/<code>membre</code>，C3 守「标成 0 的现在确实查不到」）。</p>
+<h3 id="pitfall-5.2c">5.2c 「在纲」这个名单本身漏了 195 个词（2026-09-25）</h3>
+<p><strong>症状</strong>：<code>dollar</code>、<code>colour</code>、<code>percent</code>、<code>mile</code> 没有义项——柯林斯里明明有完整词条。
+<strong>原因两层</strong>：① P10 导入名单取自旧义项集，而不是 <code>targets.target_headwords()</code>，
+于是把 P1b 粗筛的判断原样继承了；② <code>targets</code> 里 <code>frq &gt; 0</code>，注释说筛掉的「绝大多数是缩写和专名」，
+<strong>没人数过</strong>——<code>frq</code> 是 COCA（美国）词频，英式拼写和一批普通词在那儿是 0。
+<strong>更要紧的一条</strong>：守卫 A4 写的是「缺的 ≤ 320」，<strong>而名单漏掉的词根本不算缺</strong>——
+一个按错名单算的上限，守住的正是这个 bug。
+<strong>正确做法</strong>：<code>frq &gt; 0 OR bnc &gt; 0</code>；导入名单＝在纲词 ∪ 已有；<strong>缺的每一个要缺得有理由</strong>。
+<strong>守卫</strong>：<code>verify_phase10.py</code> A4（带阳性对照 <code>dollar</code>/<code>percent</code>）。</p>
+<h3 id="pitfall-5.4">5.4 词形还原式和原样式各查一次</h3>
+<p><strong>症状</strong>：漏义项报告里排第一的词是 <code>accord</code>，追下去是 <strong>84 处 <code>according to</code> 一处都没识别出来</strong>。
+<strong>原因</strong>：spaCy 把 <code>according</code> 还原成 <code>accord</code>，而 <code>accord to</code> 在词典里没有条目。
+<strong>正确做法</strong>：查词典时<strong>两种形式各查一次</strong>。
+<strong>顺带</strong>：<strong>报告本身就是诊断工具</strong>——它排第一的那个词指的不是缺一条义项，而是识别少了一整类。</p>
+<hr />
+</section><section id="pitfalls-6"><h2>六、写数据库代码 / 解析别处写的数据前</h2><p class="note">§6.6 的 <code>-Xswiftc</code> 交叉编译示例属于当年的 CI 环境。Xcode 27 本地须使用顶层 <code>--triple</code> 加 <code>--sdk</code>，见 <a href="./development.html#development">开发参考</a>。§6.8 的 Documents 路径是当时场地，不是当前 checkout。</p><h3 id="pitfall-6.1">6.1 凡是解析别处写的数据，先看一眼它长什么样</h3>
+<p><strong>症状</strong>：文章照样能读，<strong>读完什么都不记</strong>。不报错。
+<strong>原因</strong>：<code>generation_drafts.target_words</code> 存的是 JSON 数组，按逗号空格切会切出 <code>[&quot;assignment&quot;</code> 这种永远匹配不上的东西。
+<strong>正确做法</strong>：<strong>别照着字段名想当然</strong>，先打印一条真实数据出来看。</p>
+<h3 id="pitfall-6.2">6.2 <code>sqlite3.IntegrityError</code> 被捕获后必须回滚</h3>
+<p><strong>症状</strong>：几步之后一个<strong>毫不相干</strong>的请求报「database is locked」。
+<strong>原因</strong>：失败的 INSERT 会把隐式事务挂着不放写锁。
+<strong>正确做法</strong>：<strong>吞掉数据库异常的地方都要问一句事务归谁收。</strong></p>
+<hr />
+<h3 id="pitfall-6.3">6.3 ISO 时间戳和 SQLite 的 <code>datetime()</code> 不能直接比（2026-09-11）</h3>
+<p><strong>症状</strong>：<code>recover_interrupted()</code> 只恢复得了<strong>昨天以前</strong>中断的批次任务。当天崩溃的永远停在 <code>running</code>，
+于是那篇文章的标注永远续不上，<strong>文章永远停在 <code>annotating</code>、点开是空的，全程零日志</strong>。
+<strong>原因</strong>：存的是 <code>'2026-09-11T13:14:15+00:00'</code>（ISO，<code>T</code> 分隔），比的是 <code>datetime('now','-5 minutes')</code>
+即 <code>'2026-09-11 13:09:15'</code>（空格分隔）。<strong><code>'T'</code> 的码位 0x54 大于空格 0x20</strong>，日期段相同时后面一位就把结果定死——
+同一天的比较永远为假，跨天才碰巧正确。
+<strong>正确做法</strong>：<strong>截止时间在 Python 里按同一种格式算出来再比</strong>，别让两种格式在 SQL 里碰面。
+<strong>顺带</strong>：这条最毒的地方是「跨天能用」——所以它能在测试里蒙混过去，只在当天重启时发作。</p>
+<h3 id="pitfall-6.4">6.4 「下次运行时间为空」＝这个任务永远不再跑（2026-09-11）</h3>
+<p><strong>症状</strong>：夜间备稿任务二十七分钟一次没跑，<code>runs</code> 一直是 0，<strong>没有任何日志说它为什么不跑</strong>。
+<strong>原因</strong>：<code>task_runs.next_due_at</code> 是 NULL，而判定是 <code>due &lt;= now</code>——<code>None</code> 永远不满足。
+播种逻辑又只在<strong>行不存在</strong>时才写，行在、值为空就原样返回。
+<strong>这个状态真实可达</strong>：任务收尾时如果周期解析失败（在控制台把周期写错过一次），
+<code>next_due_at</code> 就被写成 NULL，<strong>从此永远不跑，把周期改回正确的也救不回来</strong>。
+<strong>正确做法</strong>：值为空要<strong>重排并记 WARNING</strong>，而不是当作「已排好」。
+重排到<strong>下一次</strong>而不是「立刻」——修复动作不该顺手多跑一次生成。
+<strong>顺带</strong>：这类「空值＝永远不满足条件」的判定，都要问一句<strong>空是怎么来的、谁负责补上</strong>。
+<strong>守卫</strong>：<code>verify_phase4.py</code> A3.3。</p>
+<h3 id="pitfall-6.6">6.6 CI 的一步「成功」了也可能什么都没做（2026-09-12）</h3>
+<p><strong>症状</strong>：L1「Core 能为 iOS 编译」这个 job 绿了，37 秒，<strong>一行都没编译</strong>。
+<strong>原因</strong>：写成 <code>xcodebuild … | xcbeautify || xcodebuild …</code>，而<strong>管道的退出码是最后一个命令的</strong>——
+xcodebuild 报错退出，xcbeautify 把输出消化完返回 0，于是这一步成功，<code>||</code> 的兜底也没触发。
+底下真正的错是 <code>Supported platforms … is empty</code>：<code>xcodebuild -scheme</code> 要从 SwiftPM 包里推导
+scheme 支持哪些平台，推导出来是空的。
+<strong>正确做法</strong>：① <strong><code>set -euo pipefail</code></strong>；② 别用 <code>||</code> 兜底，它会把失败变成沉默；
+③ <strong>编完断言产物真的存在</strong>——没有这一步，哪天又变成空跑，job 还是会绿。
+<strong>绿着的空跑比没有这个 job 更糟，因为它还给人信心。</strong>
+<strong>顺带</strong>：改用显式的 target triple 加 SDK（<code>swift build -Xswiftc -target …</code>），不让工具去推导。</p>
+<h3 id="pitfall-6.8">6.8 macOS 的定时任务读不了 <code>~/Documents</code>，而它不会说（2026-09-21）</h3>
+<p><strong>症状</strong>：装了一个 LaunchAgent 跑标注脚本，<code>launchctl list</code> 里有、退出码 0，
+<strong>看上去完全正常</strong>。真触发时什么都没发生，日志一个字没有。
+<strong>原因</strong>：<code>StandardErrorPath</code> 里写着
+<code>/bin/zsh: can't open input file: …/scripts/resume_annotation.sh</code>——
+**macOS 的隐私保护（TCC）**不让 launchd 起的后台任务读 <code>~/Documents</code>，
+而这个项目和它的数据库都在那底下。<strong>同一个脚本手动跑完全正常</strong>（终端有权限），
+所以「我试过了，能跑」这句话在这里是假的。
+<strong>正确做法</strong>：两条路——
+① 给 <code>/bin/zsh</code> 完全磁盘访问权限（系统设置 → 隐私与安全性 → 完全磁盘访问权限 →
+＋ → <code>Cmd+Shift+G</code> 输入 <code>/bin/zsh</code>），<strong>代价是任何 zsh 脚本都能读全盘</strong>；
+② <strong>把项目挪出 <code>~/Documents</code></strong>（比如 <code>~/code/</code>），不需要任何授权，更干净，
+但路径写死在 CLAUDE.md 和几个脚本里，要一次改齐。
+<strong>这条同时是 §6.6 的又一个实例</strong>：<code>launchctl list</code> 报的是「任务登记成功」，
+不是「任务能干活」。<strong>只有真触发一次、看到日志里出现预期的那句话，才算验过。</strong>
+<strong>顺带</strong>：<code>launchd</code> 给的环境极其干净，PATH 里几乎什么都没有——
+调 <code>uv</code>、<code>python3</code> 一律写绝对路径，或者在 plist 里补 <code>EnvironmentVariables</code>。</p>
+<h3 id="pitfall-6.7">6.7 一个分不出两种情况的断言，等于没有断言（2026-09-12）</h3>
+<p><strong>症状</strong>：为了防 6.6，我加了「确认产物是 arm64」的断言——它照样会在「iOS 目标被忽略、
+实际编成了 macOS」时通过，因为<strong>两个平台的产物都是 arm64</strong>。
+<strong>而且构建目录名写着 <code>arm64-apple-macosx</code></strong>（SwiftPM 按宿主命名），看上去更像是编错了。
+<strong>正确做法</strong>：读 Mach-O 的 load command——<code>otool -l x.o | grep -A5 LC_BUILD_VERSION</code>，
+<code>platform 2</code> 才是 iOS。<strong>读不出来要报红，不能默默放过</strong>：一个说不清自己验了什么的检查，
+比没有更糟。
+<strong>这条和 §4.3 是同一个形状</strong>：不是「有没有报错」，是「它区分得开吗」。</p>
+<h3 id="pitfall-6.9">6.9 一个永远不等于任何东西的名字，不会报错（2026-09-22，P11）</h3>
+<p><strong>症状</strong>：词组扫描抓出了 <code>at - home</code>、<code>talked about .</code> 这种<strong>跨逗号跨破折号</strong>的匹配，
+而代码里明明写着「遇到标点就断开」。
+<strong>原因</strong>：那一行是 <code>BREAKING_KINDS = frozenset({&quot;punct&quot;})</code>，
+<strong>而这个项目里标点的 kind 叫 <code>nonword</code></strong>（<code>ingest._classify</code> 定的，只有
+<code>content</code> / <code>function</code> / <code>proper</code> / <code>nonword</code> 四种）。于是那个判断永远不成立，
+静默失效——<strong>没有报错，没有日志，只有数据里多出一批看着像对的东西</strong>。
+<strong>正确做法</strong>：<strong>正面列举允许的值，别列举要排除的值</strong>（改成
+<code>PHRASE_KINDS = {&quot;content&quot;,&quot;function&quot;,&quot;proper&quot;}</code>）。前者写错了当场什么都匹配不上、
+一眼看得见；后者写错了是「全部放行」，跟正常运行长得一模一样。
+<strong>这条和 §6.7 是一家</strong>：不是「有没有报错」，是「它区分得开吗」。</p>
+<h3 id="pitfall-6.5">6.5 任务「成功」了也可能什么都没做（2026-09-11）</h3>
+<p><strong>症状</strong>：标注任务显示 6/6 全部完成、耗时 0.03 秒、零错误，而 275 个实词一个都没标注。
+<strong>原因</strong>：任务规划时把 token id 存进了 payload，之后文章被重新分析过一次，<strong>token 被删了重建、id 全变</strong>。
+每一批都按旧 id 去查，查出来是空的，于是「没有需要处理的内容」——<strong>报成功</strong>。
+<strong>正确做法</strong>：<strong>按业务对象自愈，不要按任务自愈</strong>。要问的不是「任务跑完没有」而是
+「<strong>文章现在能不能打开</strong>」——把所有「备好但没就绪」的文章按当下真实缺的 token 重新排上。
+<strong>守卫</strong>：<code>verify_phase4.py</code> B5.1（不许有备好却打不开的文章）。
+<strong>2026-09-18（P9）这个坑的后果变了，而且变得看不见了</strong>：token 被删了重建、id 全变，
+以前只伤服务端自己（文章打不开，一眼看得出来）。<strong>记录搬到设备之后，标记指着的正是这些 id</strong>——
+id 一变就是<strong>别人手机上的标记静默失效</strong>，而这边一切正常。
+所以「内容 id 不可变」从实现细节升成了架构铁律 5：<strong>重新分析必须是加一个新版本，不是原地重建。</strong></p>
+</section><section id="pitfalls-7"><h2>七、读代码时、等后台任务时</h2><p class="note">§7.2 所说的后台四条规则见根文件「模型与批量任务」，也保存在 <a href="./development.html#background">开发参考</a>。不要再按「上面」去找原根文件的位置。</p><h3 id="pitfall-7.1">7.1 一段解释性的注释会让人以为对应的代码在那儿</h3>
+<p><strong>症状</strong>：404 带着 trace_id 发给用户、什么也不写；用户把 trace 贴过来，<strong>查出来是空的</strong>。
+而「贴 trace 就能定位」正是把 trace_id 放进响应的全部理由。
+<strong>原因</strong>：<code>core/errors.py</code> 的 404 处理器上写着「保持 INFO 级：拼错地址不算事故」，<strong>下面没有任何一行 log 调用</strong>。
+<strong>正确做法</strong>：读代码时<strong>不要把注释当成实现的描述</strong>——它描述的是意图，实现可能从来没跟上。
+<strong>守卫</strong>：<code>verify_phase0.py</code> 9.4。</p>
+<h3 id="pitfall-7.3">7.3 查残留进程要查「自己丢到后台的那些」，不只是服务（2026-09-12）</h3>
+<p><strong>症状</strong>：P5 全部做完、收尾查过好几遍「没有残留进程」之后，<strong>用户看到后台还有一个 shell 在跑</strong>。
+是一条 <code>find / -name &quot;Package.swift&quot; -path &quot;*swift-openapi-generator*&quot;</code>——
+Git Bash 里的 <code>/</code> 会扫遍 C: 和 D:（D: 上 516 GB），<strong>跑了三个半小时、烧掉 13000 秒 CPU</strong>。
+<strong>原因有两层</strong>：① 那条命令本身就不该写，我几秒后就用别的办法查到了答案，扫描却没停；
+② 收尾时我每次只查 <code>python|swift|uvicorn</code> 和端口占用，<strong>从没查过自己超时丢到后台的一次性命令</strong>。
+<strong>正确做法</strong>：<strong>别在 Windows 上写 <code>find /</code></strong>，要找第三方包就去它该在的目录找。
+收尾那一查要按 CPU 排，不要按进程名过滤——名字是猜的，CPU 不是：
+<code>Get-Process | Where-Object { $_.CPU -gt 60 }</code>。
+<strong>这条最扎眼的地方</strong>：CLAUDE.md 早就写着「收尾时顺手查一次，<strong>不要留给用户去发现</strong>」，
+而这次正好是用户发现的。</p>
+<p><strong>2026-09-20 又一次，同一条，而且又是用户发现的</strong>（挂了 4 小时 51 分）。
+这次多出一层，值得单记：<strong><code>||</code> 后面的兜底分支是没人审的代码</strong>。
+当时那条命令是
+<code>ssh aliyun 'ls /opt/appdata/english-reader/data/ || find / -name &quot;content.db&quot; …'</code>——
+路径猜错了（真实路径是 <code>/opt/appdata/English reader/data</code>，带空格和大写），
+于是 <code>ls</code> 失败、<strong>兜底的 <code>find /</code> 在阿里云上扫了全盘</strong>。
+写的时候我眼睛只看了前半句，「万一找不到就全盘搜一下」这半句是顺手加的，
+而它才是真正会跑起来的那一半。
+<strong>两条都要守</strong>：① 兜底分支要和主分支同等对待，问一句「它什么时候触发、触发了干什么」；
+② <code>find /</code> 在哪台机器上都不要写，<strong>远程执行时更甚</strong>——本地看到的只是一个不返回的 ssh，
+跑飞的是别人的机器。
+<strong>怎么认出来</strong>：本地那条 ssh <strong>一直不退出</strong>，而 <code>ps</code> 里它的 CPU 时间几乎是 0
+（活干在远端，本地只是在等）。所以按 CPU 查这次查不出来，要按 <strong>ELAPSED</strong> 查。</p>
+<h3 id="pitfall-7.7">7.7 <strong>「我修好了一个真的缺陷」不等于「我修好了他报的那个问题」</strong>（2026-09-19）</h3>
+<p><strong>症状</strong>：用户报「切选项卡很卡，还在转圈」。我从日志里挖出四个缺陷，
+每一个都确凿（服务端 trace 里的 422、成对出现的日志行、存档里的越界值），
+<strong>每一个都修了、都配了回归测试</strong>——推了三版（11／13／14），
+而用户那边<strong>症状一次都没变</strong>。
+<strong>原因</strong>：我一直在回答「日志里有什么不对」，而他问的是「屏幕为什么在转」。
+那是两个问题。<strong>事后的日志能证明某个请求失败了，证明不了某一帧为什么没画出来</strong>——
+主线程花了多少毫秒、切屏时重建了哪些视图、<code>.task</code> 被取消了几次，日志里一个字都没有。
+<strong>正确做法</strong>：<strong>症状类的报告，先想清楚「我要看的那个东西，现在的手段看得见吗」</strong>。
+看不见就先解决看得见的问题（这次的答案是换场地到 Mac），
+<strong>而不是拿看得见的那部分连猜三轮</strong>——每一轮都消耗一次用户的真机验收，
+而那是这个项目最贵的资源（P6 §13 就是为它欠了三个 Phase 的账）。
+<strong>顺带一条</strong>：修掉的东西要如实说成「修了一个真的缺陷」，不能说成「应该好了」。
+我三次都说成了后者。
+<strong>守卫</strong>：无，这类守不住。<code>phase-9.html</code> §17 把这次的账算清了。</p>
+<h3 id="pitfall-7.5">7.5 <strong><code>@MainActor</code> 不防重入</strong>，而「每一行日志都是双份」是认出它的办法（2026-09-18）</h3>
+<p><strong>症状</strong>：手机「一直转圈而且非常卡」。日志里 <code>adopted=399</code> 出现两次、
+<code>progress.pool.reported</code> 出现两次、<code>pending</code> 从 0 跳到 798（正好 399×2）。
+<strong>原因</strong>：<code>AppModel</code> 是 <code>@MainActor</code>，我据此以为 <code>drain()</code> 不会并发——
+<strong>而 MainActor 只保证「都在主线程上跑」，不保证不重入</strong>：<code>await</code> 一让出去，
+第二个调用就从头跑起来。启动时 <code>.task</code> 和 <code>scenePhase == .active</code> 几乎同时到。
+两趟 <code>pull()</code> 各自在开头取一份「已知幂等键」快照，于是同一批事件进日志两遍，
+而两边的游标写入互相覆盖。
+<strong>正确做法</strong>：要互斥就自己写互斥（一个 in-flight <code>Task</code>，并发进来的<strong>等它</strong>
+而不是丢掉——<code>await drain()</code> 的含义是「一趟同步完成了」）。
+<strong>怎么认出来</strong>：<strong>日志里每一行都是双份</strong>。这比任何推理都快，
+而且它在 09-16 的日志里就已经是双份了——那时不致命，所以没人看它。
+<strong>守卫</strong>：无。回归测试在 <code>SyncTests</code>（分片那条）与 <code>EventLogTests</code>（幂等那条）。</p>
+<h3 id="pitfall-7.6">7.6 同一个方法、同一个形状、隔两天栽两次（2026-09-18）</h3>
+<p><strong>症状</strong>：2026-09-16 真机上「越用越慢」，答得越多越卡。
+<strong>原因</strong>：<code>refreshPendingCount()</code> 里塞了 <code>outbox.pending()</code>，而那个方法会
+<strong>读取并解码发件箱里的每一个文件</strong>；<code>record()</code> 每记一条事件就调一次它。
+<strong>2026-09-18 我在同一个方法里塞了 <code>events.load()</code></strong>（为了显示「日志一共多少条」），
+形状一模一样，原因完全不同。
+<strong>正确做法</strong>：贵的计数按需算（<code>refreshEventCount()</code> / <code>refreshDamagedCount()</code>），
+<strong>而禁令写在那个方法的注释里</strong>，不只记在这份坑里——
+第二次栽的时候我正在读这份文件的别处，而注释就在我手指下面。
+<strong>守卫</strong>：无。</p>
+<h3 id="pitfall-7.4">7.4 <code>pkill -f &lt;模式&gt;</code> 会杀掉你自己那条命令（2026-09-15，一小时里栽了三次）</h3>
+<p><strong>症状</strong>：通过 ssh 在远端跑 <code>pkill -f &quot;docker compose --env-file&quot;</code>，命令<strong>没有任何输出就结束了</strong>，
+后面的步骤一步都没执行。看起来像 ssh 断了，其实是<strong>它把自己杀了</strong>。
+<strong>原因</strong>：<code>pkill -f</code> 匹配的是进程的完整命令行，而<strong>我那条 ssh 命令的命令行里就含着那个模式串</strong>——
+<code>ssh host 'pkill -f &quot;X&quot;'</code> 的远端 shell 命令行里有 <code>X</code>，于是它匹配到自己。
+写成脚本也救不了：只要 ssh 命令行里出现过那个字面量（比如用 heredoc 把脚本内容传过去），
+远端那条 <code>bash -c</code> 的命令行里就有它。<strong>第三次是在 <code>pgrep -f &quot;bake&quot;</code> 上栽的</strong>，
+当时我以为换成 pgrep 就没事了。
+<strong>正确做法</strong>：<strong>先用一次调用取 PID，再用下一次调用按 PID 杀</strong>。
+非要在一条命令里做，就让模式串在命令行里长得不一样：<code>pgrep -f bak&quot;e&quot;</code>——
+pgrep 收到的是 <code>bake</code>，而我的命令行里是 <code>bak&quot;e&quot;</code>，匹配不上。
+<strong>怎么认出来</strong>：远端命令<strong>静默地少执行了后半截</strong>，而且没有任何错误。
+和 §6.6 是一家——<strong>失败被变成了沉默</strong>。
+<strong>守卫</strong>：无。</p>
+<h3 id="pitfall-7.2">7.2 等待条件不要依赖一个后来又被自己改变的东西</h3>
+<p><strong>症状</strong>：循环永远不退出，shell 一直空转，控制台一直显示「还有任务在跑」，让人以为有事没做完。
+<strong>原因</strong>：犯过两次同一类错误——第一次是等一个永远凑不满的输出行数（自己用 <code>tail</code> 截掉了前几行），
+第二次是等一个日志文件里的完成标记（自己在收尾时 <code>rm</code> 掉了那个文件）。
+<strong>正确做法</strong>：见上面「后台任务与等待」那四条规则（查数据库不轮询日志、循环必须有超时、清理放最后、收尾查残留进程）。</p>
+<p><strong>2026-09-15 第三次，形状又变了一点</strong>：等的是<strong>一个已经死掉的进程的输出</strong>。
+两个 <code>until grep -q ...; do sleep; done</code> 分别在等两个探针脚本写出结果，
+而那两个脚本一个被 <code>timeout</code> 杀了、一个 import 失败当场退出——
+<strong>它们的输出永远不会出现，于是循环永远不退</strong>。
+最后是机器内存不足把它们杀掉才结束的（当时在 r5s 上，3.6G 还跑着九个容器）。
+<strong>「循环必须有超时上限」这条就是为这个写的，而我没照做</strong>——
+等待条件不只要防「自己后来改掉它」，还要防「产生它的那个进程已经不在了」。
+<strong>顺带</strong>：别并行跑验收脚本，每个都要加载 spaCy（134 MB）加一整个后端——
+在小内存机器上这会直接被 OOM 杀掉（r5s 上栽过），Mac 上不至于，但一样是白烧。</p>
+<hr />
+</section><section id="pitfalls-8"><h2>八、跨 Phase 的静默错误清单（只有一行，但都真的发生过）</h2><ul>
+<li><strong>入库绝不写 <code>study_states</code></strong>：破了它，没读过的文章里的词会被静默记为已学、从此不再出现——没有报错、没有日志。守卫 <code>verify_phase2.py</code> 7.1。</li>
+<li><strong>撤销标记后要退回 <code>new</code></strong>，但<strong>遇见记录保留</strong>（它确实被遇见过）。守卫 7.13。</li>
+<li><strong>换义项集会作废全部语境标注</strong>：义项 id 一变，指着它们的九万多条标注就静默失效。
+<strong>P10（2026-09-20）在三个条件下有依据地做了这件事</strong>，并且把身份从「内容的哈希」
+改成了「发的号 ＋ 溯源」，所以下一次换词典不再是全体失效——条件与做法见
+<code>phase-10.html</code> §5 与 §7。<strong>别把这条读成「再也不能换」，也别读成「随便换」。</strong></li>
+<li><strong>词组只高亮半个词</strong>：第一版点任一半都开面板，但高亮只亮半个词、标记后正文毫无反应。<strong>高亮半个词，等于用更安静的方式说了同一句错话。</strong></li>
+<li><strong>方案写了但代码没写</strong>：「读完文章自动补句子池」先前写进了方案没写进代码，拨到第二天才发现「抽到的题没有句子」。守卫 <code>verify_phase3.py</code> 5.5。</li>
+<li><strong>验收脚本会到期</strong>：<code>verify_phase2.py</code> 7.5 原本断言「调度字段不存在」，P3 做了之后这条到期。改成守始终成立的那一半（入库与阅读都不许碰调度字段）。<strong>删掉会丢守卫，留着会天天报假警。</strong></li>
+<li><strong>验收脚本把版本号写死，改版之后它只看得见旧数据</strong>：<code>verify_phase1c.py</code> 7.1 查的是 <code>prompt_version = 'p1b-1'</code>。提示词一升版（2026-09-16 升到 <code>p1b-2</code>），这条<strong>照旧通过，量的却是上一版的成绩</strong>，而且没有任何东西会提醒你。改成先问当前版本、没有产出时回落到最近有数据的那一版，<strong>并把用的是哪一版印出来</strong>——回落是合理的，隐瞒不是。<strong>凡是按版本号、日期、模型名取样的断言都是这个形状。</strong></li>
+</ul>
+</section>
+<footer>现行通用规则见 <a href="../CLAUDE.md">CLAUDE.md</a>；功能设计见 <a href="./english-reader.html">主文档</a>。本页按需读取，不自动导入会话。</footer></main>

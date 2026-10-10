@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 10 义项大清洗</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -1520,6 +1517,33 @@
     <p>工具留在仓库里，因为<b>词一多要重验</b>（主文档 §M）：
     <code>scripts/b3_sample.py</code> 取样、<code>scripts/b3_judge.py</code> 盲判并算长度基线、
     <code>scripts/b3_score.py</code> 记分。</p>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、跨Phase不变量（完整原节）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「跨 Phase 不变量」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。原文的「踩过的坑」「开发场地」节现分别见 <a href="pitfalls.html">踩过的坑</a>与<a href="development.html">开发场地</a>。</p>
+    <h3>原文档节的阅读警示</h3>
+    <p><code>docs/phase-10.html</code> — <strong>P10 方案与实施结果（义项大清洗，2026-09-22 验收通过）</strong>。义项集整体换成柯林斯 COBUILD，全语料重标注，旧的全部归档。<strong>词组不在这个 Phase</strong>，它是 P11。<strong>§17 是验收怎么跑的与结果</strong>——M2 直接跟词典 mdx 原文对拍、B3 盲判、以及 M1 挖出的三个 <code>ercli</code> 缺陷。<strong>B3 的结论必须连它那三条边界一起读</strong>，单独引用「新 48 对旧 19」是错的。</p>
+    <p>另外两节动手前仍然要读：<strong>§4 单词与词组的四条判据</strong>（「单词全收、词组全不收」是用户的硬要求，判据穷举过 110 种标记，我在这上面漏收过两次）、<strong>§5 义项拿什么当身份</strong>（拆掉「定义的指纹」那套，它是 §7 破铁律 5 的前提条件，<strong>也是「下一次换词典不再是全体失效」的全部依据</strong>）。</p>
+    <h3>原结果表：P10 义项大清洗</h3>
+    <p><strong>状态：</strong><strong>2026-09-22 验收通过</strong></p>
+    <p><strong>细节：</strong>义项集整体换成柯林斯 COBUILD。导入 24,537 条 / 6,918 词、例句 51,648 条、学习记录清空（先备份）、粗筛与 Wiktionary 连表带代码删掉、契约加 <code>pos_zh</code>/<code>register_label</code>、<strong>全语料重标注 107,466 个实词 token</strong>、<strong>真题考频重算 9,366 个义项</strong>（换之前 7,107）。自动 19 项 + 回归 P0 32 / P1b 28 / P1c 11 / P2 48 / P3 29 / P4 41 / P5 21 / P9 38 全过，<code>ci_client.py</code> 9 项全过；人工 A0 / M1 / M2 / B3 全做完，<strong>怎么跑的与结果见 <code>phase-10.html</code> §17</strong>。<strong>B3 的结论要连边界一起记</strong>：分歧样本里新 48 / 都行 33 / 旧 19，但<strong>这个实验一次变了两样</strong>（义项集 ＋ 标注模型），且<strong>三方独立判断做不到</strong>——只有一条路调得通模型。<strong>M1 挖出三个 ercli 缺陷</strong>，其中 <code>read</code> 从 P9 起就没跑完过一次、<code>sync</code> 一直在调 POSIX 的 <code>sync(2)</code>。<strong>动了架构铁律 5</strong>（义项 id 全变），破例的三个条件与前提写在 §7——<strong>第三条「§5 的身份重新设计」是破例的前提，不是顺带重构</strong>。<strong>同日定了场地变更：服务端＝阿里云、工程＝Mac，r5s 退休</strong>，见「开发场地」</p>
+    <h3>跨 Phase 不变量：完整原节作为规则依据</h3>
+    <p><strong>移入说明：</strong>保留下方完整原节，是为了保住规则的来源、P10 破例的三个条件、调用账、熟词僻义依据与守卫。原文的命令式表述和「现在」并非第二份现行规则；当前开发读根 <code>CLAUDE.md</code>。原文中的「末尾」「架构铁律」指原根文件对应章节，架构铁律完整原节现存于 <a href="phase-9.html#instructions-record">P9 移入区</a>。</p>
+    <p>改动时别破。破了这些的后果都是<strong>静默的</strong>——没有报错、没有日志，末尾「踩过的坑」§8 有一份症状清单。</p>
+    <p><strong>2026-09-18（P9）：前三条的执行点从服务端换到了设备，语义一个字没改。</strong>现在它们由 <code>ERCore/Projection.swift</code> 的重放实现，守卫也搬了家——服务端那半边由 <code>verify_phase3.py</code> 1.1–1.10 守着「不许再实现一遍」。</p>
+    <ul>
+      <li><p><strong>记账只在读完那一刻发生。</strong> 入库不动词池，打开文章不动词池。现在由投影保证：只有 <code>article.finished</code> 那条事件会加遇见次数。守卫 <code>verify_phase2.py</code> 7.1（服务端那半）与 <code>verify_phase9.py</code> 4.x。</p></li>
+      <li><p><strong>进复习队列只有一条路：你自己标记。</strong> 2026-09-11 收紧——原本还有第二条（读后抽查答错），<strong>读后抽查整套已决定不做并归档</strong>（主文档 §D 留桩、§J 新增一条边界）。不认识却不标记＝不想学，系统不替你查证。推论：<strong>超纲词也能标、也能进队列</strong>——「不在大纲里」是关于大纲的事实，「不许学」是替用户做主。不计生词率照旧（那个数描述的是文章对大纲，不是文章对你）。<strong>读完一篇文章只增加遇见次数，不改变词池位置</strong>，不管是真题还是为教那些词而写的生成文。试过两版自动记账，都推翻了。守卫 7.4。</p></li>
+      <li><p><strong>撤销标记后条目退回 <code>new</code>，但遇见记录保留</strong>（它确实被遇见过）。守卫 7.13。<strong>P9 起这条自己成立了</strong>:撤销就是日志里的一条 <code>word.unmarked</code>，下一次重放它自然不在队列里。原先要靠一条订阅去「收掉今天那道题」，而那条订阅在 2026-09-16 之前只做了一半（坑 §7.1）。</p></li>
+      <li><p><strong>同一天同一张卡，问过几次是累加的。</strong> 那个数就是成绩（<code>asks</code>），不是「最近一次怎么样」。答错退回第一向、权重减半，但计数不清零——否则反复答错会显示成一次干净的通过。守卫 <code>review-vectors.json</code> 十个场景（由 <code>scripts/review_reference.py</code> 导出，两种语言对拍）。</p></li>
+      <li><p><strong>内容 id 一旦发出去就不许变。</strong> 见架构铁律 5。这条同时是不变量，因为破它的后果是<strong>别人手机上的记录静默失效</strong>，而这边什么也看不到。</p></li>
+      <li><p><strong>词组是一个整体，就按一个整体渲染</strong>——这条对所有客户端都成立，将来的原生端也算。静止状态正文里不加记号（下划线三种、底色两种已占满），但<strong>悬停、点选、标记都整体发生</strong>，一处词组渲染成一个元素，两个词连同中间的空格都在里面。静止要不要标出来是各客户端自己的呈现决定，「选中与标记按整体」不是。</p></li>
+      <li><p><strong>契约里给未来留位置，值先为空</strong>：水平估计、义项的记忆状态、专有名词说明这类将来某个 Phase 才填的东西，字段在契约里就要有位置，并由响应顶层的 <code>capabilities</code> 声明区分「没数据」和「没实现」。但<strong>只留形状显而易见的位置</strong>（布尔、一句话、一个数、可整体为 null 的对象）；复习卡片、今日包这类结构复杂的不猜，将来以<strong>新增端点</strong>接入。详见 <code>phase-2.html</code> §6。身份也是这么留的：由设备令牌推导，响应顶层回显 <code>learner</code>，路径里不出现人的编号。</p></li>
+      <li><p><strong>义项集换过一次了（P10，2026-09-20），而且是连标注一起换的。</strong>这条原本写的是「换义项集时不要重新标注」，理由是一次全量替换会静默作废九万多条语境标注（460 万输入 token）和全部真题考频。<strong>那条规矩这次被有依据地推翻了</strong>，三个条件同时成立才敢（<code>phase-10.html</code> §7）：① 只有一台设备、一个使用者、测试期；② 要失效的学习记录只有 24 条而且用户明确不要；③ <strong>换完之后同样的事不会再发生一次</strong>。<br><strong>第三条是前提，不是顺带</strong>：义项的身份不再从内容推导（不再是英文定义的哈希），而是导入时发的号，重复导入靠「词典 + 词 + 块号」这个溯源三元组对上号。所以<strong>下一次换词典是一次明确的映射工作，不是又一次全体失效</strong>。没有这一条，这次破例只是把同一个坑往后挪一年。<br><strong>现在的规矩是这样</strong>：义项 id 仍然是契约的一部分，仍然不许无谓地变；但「换一本词典」现在是一件做得动的事，做法见 <code>phase-10.html</code> §5。实测账：重标注全语料约 2,600 次调用，而义项级映射要 7,227 次——<strong>重标注反而更便宜</strong>，当年「必须做映射」那条算的是中转站按 token 收费的账。</p></li>
+      <li><p><strong><code>is_exam_key</code> 熟词僻义标记保持为 0。</strong> <strong>2026-09-20 起只剩一个理由了</strong>：这个说法本身站不住——<code>address</code> 的「着手解决」在真题里出现 38 次、「地址」只有 2 次，那不是僻义，是它在书面语里的主流用法（主文档 §F4）。<br><strong>原来的第二个理由已经不成立</strong>：那条说「序号是模型猜的，不可信」，而 P10 之后序号来自柯林斯，是词典编辑按频率排的。<strong>行为不变，但别拿那条过时的理由去翻案。</strong></p></li>
+      <li><p><strong>不要问模型「哪些义项值得学」</strong>——它会答最常见的，而四六级考的是熟词僻义。只能问「这个义项属不属于通用书面英语」。</p></li>
+    </ul>
   </section>
 
   <footer>

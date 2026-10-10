@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 4 每日供给与今日包</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -578,6 +575,27 @@
       <b>但结论有边界</b>：三个判断者都是语言模型，共有盲区看不出来；只覆盖 7 个词。
       而 P4 的每日供给会让句子池持续变大——<b>词一多要重验</b>，记在主文档 §M。</span></div>
     </div>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」与「进度」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。原文的「踩过的坑」节现见 <a href="pitfalls.html">踩过的坑</a>。</p>
+    <h3>原文档节的阅读指针</h3>
+    <p><code>docs/phase-4.html</code> — P4 方案与实施结果（§2 十九条决定、§4 模型配对实测、§8 实施结果与五个静默失败）</p>
+    <h3>原结果表：P4 每日供给与今日包</h3>
+    <p><strong>状态：</strong>2026-09-11 验收通过</p>
+    <p><strong>细节：</strong>自动 38 项全过、人工 M2 过；M1「断网走完一天」推迟到做手机端时验，理由见主文档 §M。<code>phase-4.html</code>，<code>verify_phase4.py</code></p>
+    <h3>综合回归记录：三条到期断言</h3>
+    <p><strong>三条到期的验收断言，2026-09-15 全部改完</strong>（当时都不是回归，别去翻旧账）。三条都按「踩过的坑」§8 那条办了：<strong>改成守始终成立的那一半，没删守卫，也不再天天报假警。</strong></p>
+    <ul>
+      <li><code>verify_phase3.py</code> <strong>3.2</strong>——原本守 P3 决定 18「标模糊的当天不来」，而 P7 §3 推翻了它。现在守「模糊的当天也进，但这一次封顶」，外加 <strong>3.4 封顶真的把评级压下来</strong>（那一半是静默的）。</li>
+      <li><code>verify_phase4.py</code> <strong>A4.1</strong>——原本硬编码 <code>len(kinds) == 9</code>，而 P7 加翻译 worker 之后是 10 个。现在断言规则本身（每个 worker 都碰得到自己的开关），不数个数。</li>
+      <li><code>verify_phase1b.py</code> <strong>6.1</strong>——原本拿<strong>旧报告里存的</strong>超纲率跟重算的比，而两者来自不同时期的草稿集，old 会一路向 new 靠拢，<strong>注定有一天会红</strong>（撞上那天差 0.04 个百分点）。现在守当场做得出的那一半：派生词认得出来，且不同时出现在超纲名单里。</li>
+    </ul>
+    <h3>第四条：思考开关断言放宽</h3>
+    <p><strong>第四条，2026-09-16 放宽</strong>：<code>verify_phase4.py</code> 的 <strong>A5.2</strong>——原本断言「只有写文章那处可以非默认，其余八处的思考开关保持 default」（理由是只有那处有实测依据）。而同一天定了<strong>十个 worker 统一走 <code>deepseek-flash</code> 并一律关思考</strong>，十处全非默认，这条就天天报红，而红的时候什么也没坏——那是人做的决定，不是代码跑偏。现在守的是<strong>「写文章那处必须是关的」</strong>，其余几处是不是默认照实写进说明里：<strong>非默认不算错，但它们没有实测依据，哪天觉得某一路质量掉了先查这里。</strong></p>
+    <h3>同日修复：串行调度阻塞探针</h3>
+    <p><strong>还有一条不是断言的问题，同一天修的</strong>：<code>verify_phase4.py</code> 的 <strong>A2.4</strong>（调度循环自己把到点的任务跑起来）会在「循环其实好好的」时候报红——循环是<strong>串行</strong>的，夜间备稿只要到期就排在探针前面，一篇文章几十秒加重试，70 秒的窗口轮不到探针。改成<strong>等待期间先把别的任务让开，<code>finally</code> 原样还回去</strong>。</p>
   </section>
 
   <footer>

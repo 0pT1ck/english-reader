@@ -1390,6 +1390,16 @@
             在纲名单漏了 195 个词（<code>dollar</code>、<code>colour</code>、<code>percent</code>）、
             正文缓存永不过期。<b>最后那条的客户端一半还没发 TestFlight</b>，见 §M</td>
           </tr>
+          <tr>
+            <td class="phase"><b>P13 派生义项与查词体验</b></td>
+            <td>把词典已有派生小节建立成独立义项；标记后立即上报并后台备句；
+            面板外点击关闭、只留最新查词；真实构词提示；
+            <b>普通上拖无级调高，快速上甩直接最大化</b>。
+            见 <a href="./phase-13.html" style="color:var(--accent)">Phase 13 文档</a></td>
+            <td><b>2026-10-10 定稿，已授权实现，尚未验收</b>。
+            义项补缺只选派生小节路线：2017 补中文与词性，模型只补英文定义；
+            备句须中英文齐全。文档迁移与 P13 一并提交推送，应用实现留在工作区至验收节点。</td>
+          </tr>
         </tbody>
       </table>
     </div>
@@ -1452,15 +1462,15 @@
       <b>在那之前</b>：服务端改过标注的旧文章（重标注、补义项）要在「设置 → 缓存」里清掉才看得到新的。
       <b>发版之后要在真机上补看一眼</b>——这一条从没在真机上走过。
       见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12 文档</a> §14 ⑰。</span></div>
-      <div><i>?</i><span><b>派生词没有义项：约 280 个在纲词</b>（<code>rapidly</code>、<code>clearly</code>、
-      <code>happiness</code>、<code>interaction</code>、<code>researcher</code>……）。
-      2026-09-25 量出来的。这版 COBUILD 把它们写成词根条目里的 run-on，
-      <b>只有例句，没有词性、中文和定义</b>，所以拿不出义项；借词根的会把意思弄错。
-      P10 当时是用户定的「暂时不管」，这条只是把它从 P10 文档里提到这儿来，免得忘。
-      <b>路子是 P10 §4 写过的「2017 有道版只用来补缺」</b>——那一步从没做过，
-      而 2017 版的中文是单词对译、没有括注（P10 比过），要不要拿它补是一个要单独定的取舍。
-      点到这些词的症状跟 P12 ⑯ 一样是「标不了」。
-      见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12 文档</a> §14 末尾 d／e。</span></div>
+      <div><i>?</i><span><b>派生词义项补缺已纳入 P13 定稿，尚未完成。</b>
+      <code>severely</code> 在《Saving a Green Island》中标不了，2026-10-10 已只读核查生产库与词典原文：
+      2012 版把它附在 <code>severe</code> 的不同母义项下，只有派生词标题与例句，没有独立定义。
+      <b>用户只选「利用派生小节与母义项的明确对应关系，建立派生词独立义项」</b>；
+      不另加其他完整词典补缺，也不以只给构词提示代替可学习义项。
+      2017 对应派生小节补中文与词性，模型只补独立英文定义；已有义项 id 与设备记录不得失效。
+      见 <a href="./phase-13.html#senses" style="color:var(--accent)">Phase 13 §2／§7</a>。
+      原来约 280 个在纲派生词的规模是 2026-09-25 的历史统计，本次未重算；
+      P12 当时暂不补的依据仍见 <a href="./phase-12.html" style="color:var(--accent)">Phase 12</a> §14 末尾 d／e。</span></div>
       <div><i>?</i><span><b>CI 的签名要换成「证书 ＋ 私钥存 secret、手动签名」。</b>
       2026-09-19 记下。现在是云签名（<code>CODE_SIGN_STYLE: Automatic</code> 加
       <code>-allowProvisioningUpdates</code>），而 CI 的机器每次都是新的、钥匙串是空的，

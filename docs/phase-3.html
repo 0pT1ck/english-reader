@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 3 复习</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -1097,6 +1094,20 @@ residence    bucket=due   句子池 <b>0 条</b>
     <h3>自动生成文章：确认没有，而且不该有</h3>
     <p>拨到第二天，新增文章 0 篇、新增任务 0 个。那是 B9「每天备几篇」与 B5「提前备好」，
     在这个 Phase 的<b>明确不做</b>清单里。测出来是 0，是对的。</p>
+  </section>
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度（P3结果及人工D/E边界）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」与「进度」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。</p>
+    <h3>原文档节的阅读指针</h3>
+    <p><code>docs/phase-3.html</code> — P3 方案与实施结果（§2 二十八条决定、§11 模型横评、§12 实施结果）</p>
+    <h3>原结果表：P3 复习</h3>
+    <p><strong>状态：</strong>2026-09-11 验收通过</p>
+    <p><strong>细节：</strong>当年自动 42 项、人工 E 全过；D 已撤销。<code>phase-3.html</code>，<code>verify_phase3.py</code>。<strong>2026-09-18（P9 §12）剩 30 项</strong>——调度与队列搬到设备之后，原先的 1–4 节换成了「服务端不许再实现一遍」的迁移断言，规则本身由 CI 的 <code>swift test</code> 与 <code>verify_phase9</code> 守着</p>
+    <h3>P3 人工 D / E 的完整结论边界</h3>
+    <p><strong>P3 的两项人工验收，2026-09-11 结清</strong>（见 <code>phase-3.html</code> §12 与主文档 §M）：D「真跑三到五天」<strong>撤销</strong>（验的全是体感，要在每天真的在用的场地上才量得准，那是手机端那个 Phase 的事）；E「句子质量抽验」<strong>通过</strong>——105 条生成句盲判、混 15 条阳性对照、三方独立判断，查出并删除 2 条歧义句。</p>
+    <p><strong>结论的边界要一起记住</strong>：三个判断者都是语言模型，共有盲区看不出来；只覆盖 7 个词（句子池只为标记过的词生成，现在词池里 16 条）。<strong>词一多要重验</strong>，记在主文档 §M。</p>
+    <p><code>verify_phase3.py</code> 3.2 / 3.4 的到期断言调整完整移入 <a href="phase-4.html#instructions-record">P4 的综合回归记录</a>。</p>
   </section>
 
   <footer>

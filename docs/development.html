@@ -1,0 +1,469 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>开发参考</title>
+<style>
+:root { --ground:#FAFAFC; --surface:#FFFFFF; --ink:#1B1D26; --muted:#4E5364; --rule:#E3E4ED; --accent:#37429B; --soft:#F2F2F7; --note:#FBF2DE; color-scheme:light; }
+@media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) { --ground:#101119; --surface:#171922; --ink:#E7E8F0; --muted:#ADB2C4; --rule:#2A2D3B; --accent:#98A1EE; --soft:#1D202B; --note:#2C2718; color-scheme:dark; } }
+:root[data-theme="dark"] { --ground:#101119; --surface:#171922; --ink:#E7E8F0; --muted:#ADB2C4; --rule:#2A2D3B; --accent:#98A1EE; --soft:#1D202B; --note:#2C2718; color-scheme:dark; }
+* { box-sizing:border-box; }
+body { margin:0; padding-inline:16px; padding-block:32px 64px; background:var(--ground); color:var(--ink); font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif; font-size:16px; line-height:1.8; overflow-wrap:anywhere; }
+main { max-width:48rem; margin-inline:auto; }
+h1,h2,h3 { font-family:"Songti SC",Georgia,serif; line-height:1.4; text-wrap:balance; }
+h1 { font-size:2rem; margin:0 0 16px; } h2 { font-size:1.5rem; margin:48px 0 20px; border-bottom:1px solid var(--rule); padding-bottom:12px; } h3 { font-size:1.12rem; margin:28px 0 12px; }
+p,ul,ol { margin:0 0 16px; } li { margin-block:6px; } a { color:var(--accent); text-underline-offset:3px; } a:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; }
+code,pre { font-family:ui-monospace,"SFMono-Regular",Consolas,monospace; font-size:.88em; } code { background:var(--soft); padding:2px 4px; border-radius:3px; } pre { padding:16px; background:var(--surface); border:1px solid var(--rule); overflow-x:auto; white-space:pre-wrap; }
+nav { display:flex; flex-wrap:wrap; gap:8px 20px; border-block:1px solid var(--rule); padding-block:16px; margin-block:24px; }
+.note { background:var(--note); padding:16px; margin-block:20px; } .meta { color:var(--muted); font-size:.86rem; } .table-scroll { overflow-x:auto; max-width:100%; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; } th,td { padding:12px; border-bottom:1px solid var(--rule); text-align:left; vertical-align:top; } th { background:var(--soft); }
+hr { border:0; border-top:1px solid var(--rule); margin-block:32px; } footer { border-top:1px solid var(--rule); margin-top:48px; padding-top:16px; color:var(--muted); font-size:.85rem; }
+</style>
+<main><header><p class="meta">English Reader · 2026-10-09 整理</p><h1>开发参考</h1><p>保存开发环境、备用工具链、模型实验和文档阅读依据，按任务查阅。通用约束与最新状态摘要留在根文件，各 Phase 的实施与验收记录仍归各自文档。</p><p>服务器部署操作见 <a href="./deploy.html#current-operations">部署现行操作</a>；真实排坑见 <a href="./pitfalls.html">开发排坑</a>。历史配置以明确日期保留，不能当成实时查询结果。</p></header>
+<nav aria-label="文档目录"><a href="#development">开发场地与本地验证</a><a href="#network">代理与网络</a><a href="#windows">Windows 备用工具链</a><a href="#models">模型配置与实验依据</a><a href="#repository">仓库与数据库历史</a><a href="#background">后台任务与等待</a><a href="#logging">日志与代码规范</a><a href="#files">文件位置与旧路径</a><a href="#reading-guide">设计文档阅读提示</a></nav><section id="development"><h2>开发场地与本地验证</h2><p class="note">当前 checkout 是 <code>/Volumes/satassd/code/english-reader</code>，所在盘已核实为 APFS。下面的迁移、工具版本与机器状态是其标注日期的记录；以本次实际工作目录和工具链为准。服务端运行与数据正本仍只在阿里云。</p><p><strong>2026-09-20 用户定：服务端就在阿里云，工程就在 Mac，r5s 退休。</strong>
+在这之前是「Python 后端在 r5s、Swift 在 Mac、阿里云跑开发期实例」三处分工，
+现在收成两处。<strong>r5s 上那份 <code>data/</code> 从此是一份过期拷贝，不要再从它上面取数。</strong></p>
+<p><strong>动手前实测过两边分叉没有</strong>（2026-09-20）：r5s 一直挂着「数据主副本」的名分，
+而生产方向是反的——夜间备稿从 09-16 起跑在阿里云，新文章只在那里产生。
+文章 id 逐个做集合差：<strong>阿里云有而 r5s 没有的 20 篇，r5s 有而阿里云没有的 0 篇</strong>。
+<strong>阿里云是 r5s 的严格超集，所以没有搬迁，也没有合并。</strong>
+（阿里云 498 篇 / 235,408 token / 27 条标记，r5s 那份是 478 / 225,231 / 24。）</p>
+<p><strong>Swift / iOS 那一侧 2026-09-19 就迁到 Mac 了</strong>，理由是 P9 结束时那笔账
+（<code>phase-9.html</code> §17）：真机上「切选项卡卡 ＋ 转圈」推了三版没修好，
+三版的形状一模一样——<strong>远程读日志 → 推断 → 出一版 → 症状还在</strong>。
+事后的日志能证明「某个请求失败了」，证明不了「屏幕为什么在转」。
+有了 Mac 才量得到主线程耗时、才看得见切屏时 SwiftUI 重建了什么、<code>.task</code>
+被取消了几次，而 <code>swift build</code> 也从「推一次等 CI 一分钟」变成本地几秒。
+<strong>P6 §13 当年写「远程操控 runner 那条路试过、走死了」，这条路现在通了。</strong></p>
+<p><strong>Swift/iOS 那一侧不再靠 CI 才能验证</strong>（2026-09-19 定）：<code>scripts/ci_client.py</code>、
+<code>scripts/ci_app.py</code>、<code>scripts/ci_testflight.py</code> 三份脚本照着 <code>client.yml</code>、
+<code>app.yml</code>、<code>testflight.yml</code> 各自的步骤原样搬了一遍，本地跑，比推一次等 CI 快得多。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>活</th>
+<th>在哪</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>代码、文档、全部开发</strong></td>
+<td><strong>这台 Mac</strong></td>
+</tr>
+<tr>
+<td><strong>服务端运行、数据主副本、夜间备稿</strong></td>
+<td><strong>阿里云</strong>（跑的是 Docker 镜像，不是源码——见下面那条）</td>
+</tr>
+<tr>
+<td>Swift / SwiftUI 的编写、<code>swift test</code>、Core 给 iOS 编译、契约生成比对、App 编译装模拟器、TestFlight 归档签名上传</td>
+<td><strong>这台 Mac</strong>（<code>uv run python scripts/ci_client.py</code> / <code>ci_app.py</code> / <code>ci_testflight.py [--upload]</code>）</td>
+</tr>
+<tr>
+<td>上面这些的独立第二次验证</td>
+<td><strong>CI</strong>（<code>client.yml</code> / <code>app.yml</code> / <code>testflight.yml</code>）</td>
+</tr>
+<tr>
+<td>r5s</td>
+<td><strong>退休</strong>（2026-09-20）。数据是过期拷贝，别取；机器还在，但本项目不用它</td>
+</tr>
+<tr>
+<td>Windows 那套</td>
+<td>保留，<strong>备用的备用</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>改了服务端代码，阿里云不会自己变</strong>——它跑的是镜像。发版路径是
+<strong>git push → 那台 <code>git pull</code> → 重新构建镜像 → 重启容器</strong>，照 <code>/root/build-er.sh</code>
+（三条国内源写在里面，重建几十秒，代码层在 Dockerfile 最后、依赖层命中缓存）。
+<strong>判断有没有上去别靠记忆</strong>：
+<code>docker exec english-reader grep -c &lt;你刚加的函数名&gt; /app/backend/...</code>，答案是 0 就是没上去。
+这条坑 2026-09-16 栽过一次，详见「部署」那节。</p>
+<p><strong>数据在阿里云，而开发在 Mac，所以要动数据的活有两种走法</strong>：
+① <strong>小改、看一眼</strong>——<code>ssh aliyun</code> 直接在那台上查；
+② <strong>大动作</strong>（比如 P10 的义项清洗，要反复调解析器）——
+<strong>关掉夜间备稿、手机先别用，把库拉到 Mac 跑，跑完推回去、重建镜像、开回备稿</strong>。
+两种走法都要守住那条老规矩：<strong>任何时候只有一份在被写。</strong></p>
+<p><strong>CI 还在，一个字没改。</strong> <code>client.yml</code> 里 Core 在 <code>swift:6.3</code> 的 Linux 容器里
+跑 <code>swift test</code> 那半份，本地 Mac 验不了（Core 在 Linux 上编不编得过是本地
+macOS 环境回答不了的问题）——所以 CI 不是被替换，是从「唯一能验的地方」
+降级成「独立的第二次验证」，这一半的覆盖仍然只有它能给。</p>
+<p><strong>云签名以前在 CI 上每推一次就烧一张证书，根子不在签名方式，在「CI 的钥匙串
+每次都是空的」</strong>——本地钥匙串是持久的，Xcode 认得已经建过的证书就直接用，
+不会再问 Apple 要一张新的（2026-09-19 实测：本地连跑两次归档，第二次原样
+复用了第一次建的那张）。签名凭证放在 <code>data/signing/</code>（整个 <code>data/</code> 都在
+<code>.gitignore</code> 里）——和 CI 用的那份 GitHub secret 是<strong>同一把</strong>App Store Connect
+团队密钥的两份拷贝，不是另建的。<code>ci_testflight.py</code> 默认只导出到本地，
+要真的传上 TestFlight 得显式加 <code>--upload</code>（那是号主和测试员都看得到的外部动作，
+脚本的默认值就是唯一的关卡，没有 Actions 页面那道「点 Run 之前看一眼参数」）。</p>
+<p><strong>Core 交叉编译踩过一个坑，记这儿免得下次又撞上</strong>：<code>client.yml</code> 写的
+<code>-Xswiftc -target ... -Xswiftc -sdk ...</code> 那套在这台 Mac 的 Xcode 27 上
+<strong>不生效</strong>——会静默编出 macOS 的产物，不报错，只是 Mach-O 里的平台标记不对，
+<code>otool -l</code> 读出来是 <code>platform 1</code> 不是 <code>2</code>。CI 锁的是 Xcode 26，这大概率是
+两个版本间 SwiftPM 处理跨平台编译目标的差异。本地要用 <code>--triple</code> <strong>加</strong>
+<code>--sdk</code> 这两个顶层参数（缺一个都不对），<code>ci_client.py</code> 已经改成这个写法；
+<strong>CI 那份先不动</strong>，Xcode 26 上原来那套还是好的，等哪天升级 CI 的 Xcode
+版本再一起核实。</p>
+<p><strong>契约类型现在本地也生成得出来</strong>（<code>python3 scripts/generate_swift_types.py</code>，
+生成器要 <code>swift run</code>，这台 Mac 有 Swift 工具链）。2026-09-19 用这条本地路径
+逮到一次真的漂移：<code>client/openapi.json</code> 在 <code>4aac095</code> 那次改了批量端点的入参
+形状，但生成的 Swift 类型没跟上——r5s 编不出来、也没人推一次去触发 CI 的
+<code>regenerate</code> job，漂了好几个提交都没被发现。<strong>别手改 <code>client/Sources/ERContract</code></strong>，
+那是生成物；改完契约，本地跑一遍 <code>scripts/ci_client.py</code>（或单独跑生成器）
+再提交，不用再等 CI。</p>
+<p><strong><code>verify_phase5.py</code> 的 Swift 部分</strong>（内含 <code>swift test</code> 47 项）以前在 r5s 上跑不了，
+<strong>这台 Mac 能跑</strong>——但那个脚本本身还没改成认本机的 Swift，跑之前先看一眼它认不认得。</p>
+<p><strong>连法</strong>：<code>ssh aliyun</code>（<code>~/.ssh/config</code> 已配，Mac 上的密钥是 <code>~/.ssh/id_rsa_aliyun</code>），
+<code>47.116.104.62</code>，用户 <code>root</code>。域名 <code>reader.cntick.top</code>。
+数据在 <strong><code>/opt/appdata/English reader/data/</code></strong>（注意目录名里有空格），
+挂进容器的 <code>/app/data</code>。</p>
+<p><strong>曾经的两个场地，留一句交代</strong>（细节已随它们退休，不再占地方）：
+Windows（<code>D:\code\English Reader</code>）2026-09-14 让位给 r5s；
+r5s（NanoPi R5S，<code>/data/code/English</code>）2026-09-20 退休，让位给「阿里云 ＋ Mac」。
+两台机器上的 <code>data/</code> <strong>都是过期拷贝，不要再启动服务、不要再从上面取数</strong>。
+搬走的理由每次都一样：<strong>任何时候只有一份在被写</strong>——而现在被写的那份在阿里云。</p>
+</section><section id="network"><h2>代理与网络</h2><p class="note">下面地址来自既有配置记录，使用前核实当前环境。Mac/Linux 的大小写环境变量互不冲突，Windows 的限制不能照搬。</p><p><strong>Mac（主场地）：<code>http://127.0.0.1:10808</code></strong>，环境变量已经导好
+（<code>HTTP_PROXY</code> / <code>HTTPS_PROXY</code> / <code>ALL_PROXY</code> / <code>NO_PROXY</code> / <code>no_proxy</code>）。
+2026-09-20 实测：GitHub、PyPI、<code>api.anthropic.com</code> 都通，freemdict 那类下载站直连也通。</p>
+<ul>
+<li><strong><code>NO_PROXY</code> 和 <code>no_proxy</code> 在这台机器上两个都设着，而这是安全的。</strong>
+「踩过的坑」§7 那条「绝不两个都设」<strong>只对 Windows 成立</strong>——那边环境变量不区分大小写，
+Foundation 建字典时会撞重复键、进程当场没（<code>Fatal error: Duplicate values for key</code>）。
+<strong>macOS 和 Linux 区分大小写，是两个不同的键，不会撞</strong>——这台机器上就是两个都设着，别来「修」它。
+这条在主场地搬到 Mac 之后要紧了：<code>ercli</code> 和 <code>swift test</code> 都在这台机器上跑。</li>
+<li><strong>阿里云</strong>：那台有 mihomo，<code>http://127.0.0.1:7890</code>。<strong>拉 GitHub 必须挂它</strong>——
+直连报 <code>GnuTLS recv error (-110)</code>，<code>https_proxy=http://127.0.0.1:7890 git pull</code> 就过。
+这跟「别给 Docker 守护进程配代理」不冲突：那条说的是构建时拉包（见「部署」）。</li>
+<li>应用代码里的出站请求（LLM API、Bark 推送）走配置里的代理地址，不写死。</li>
+<li><strong>Claude Code 不支持 SOCKS</strong>，10808 和 7890 都是 http 混合口，正好。</li>
+</ul>
+</section><section id="windows"><h2>Windows 备用工具链</h2><p class="note">仅在使用 Windows 备用环境时读取。以下为 2026-09-12 安装与实测记录，不把那台过期数据当正本。</p><p><strong>主路径现在是这台 Mac</strong>（Xcode 27 自带 Swift 6.4），见「开发场地」。
+下面这套留在 Windows 上应急——原来是「Windows 备用、CI 主路径」，
+现在 Mac 顶了 CI 的位置，Windows 排到了第三。
+（当年还有一条「r5s 上不装 Swift」，那台 2026-09-20 退休了，这条跟着作废。）</p>
+<p>2026-09-12 装在 <strong><code>D:\Software\Swift</code></strong>，Swift <strong>6.3.3</strong>，target <code>x86_64-unknown-windows-msvc</code>。
+靠 VS Community 2026（MSVC 14.51.36231）与 Windows SDK 10.0.26100.0 编译链接——
+<strong>官方文档写的前提是 VS 2022，这套更新的组合实测能用</strong>。</p>
+<p><strong>新开的终端已经带好了环境</strong>（安装器写进了用户 PATH 和 <code>SDKROOT</code>）。只有在环境变量写入之前
+就启动的 shell 才要手动补，那时两样都要，缺一样都失败得很难看：</p>
+<ul>
+<li>PATH 要<strong>两个目录</strong>：<code>Toolchains\6.3.3+Asserts\usr\bin</code> 和 <code>Runtimes\6.3.3\usr\bin</code>。
+只加第一个的话 <code>swift --version</code> <strong>什么都不输出，退出码也正常</strong>。</li>
+<li><code>SDKROOT=D:\Software\Swift\Platforms\6.3.3\Windows.platform\Developer\SDKs\Windows.sdk</code>，
+不设就报 <code>unable to load standard library</code>。</li>
+</ul>
+<p><strong>Core 的每个依赖都要单独核实能不能在 Windows 上编</strong>，别默认「Swift 生态的应该都行」。
+已验过：<code>swift-openapi-runtime</code> 1.12.1 + <code>swift-http-types</code> 1.8.0、生成器本身（产出能编译能解码）。</p>
+<p><strong>跑任何 Swift 程序前，代理环境变量有两条要守</strong>（2026-09-12 各栽一次，详见 <code>phase-5.html</code> §16）：</p>
+<ul>
+<li><strong>只设大写的 <code>NO_PROXY</code>，绝不 <code>NO_PROXY</code> 和 <code>no_proxy</code> 都设。</strong>
+<strong>这条只对 Windows 成立</strong>：Linux 环境变量区分大小写，两个是不同的键，不会撞
+Windows 环境变量不区分大小写，Foundation 读环境时建字典会撞重复键——
+<strong><code>Fatal error: Duplicate values for key</code>，进程直接没了</strong>，不是能捕获的错误，
+而且崩在任何网络代码之前，报错里看不出跟代理有关。</li>
+<li><strong><code>NO_PROXY</code> 必须设上</strong>（本机环境里原本没有，只有 <code>HTTP_PROXY</code>）。不设的话发给
+<code>127.0.0.1</code> 的请求会被 v2rayN 接管，<strong>连一个没人监听的端口也返回 503 而不是报错</strong>——
+对离线优先的客户端这是要命的，它会把「网断了」读成「服务器出错了」。</li>
+</ul>
+<p><strong>Swift 6 的严格并发默认开着</strong>（<code>swift-tools-version: 6.0</code>）：跨并发域改全局变量直接编译不过。
+对 Core 是好事，但要一开始就按它的规矩写，不能等写完再补。</p>
+</section><section id="models"><h2>模型配置与实验依据</h2><p class="note">本节配置与实验来自 2026-09-20～22 的实查和决定，操作前查生产配置；这次文档整理没有连接生产环境重测。旧提供商的余额、型号与故障码是历史记录，不是当前可用路径。标注没有贴合义项使用 -1、没有义项集使用 0，见 P11 订正；不能把下面 P10 的「填 0」原说法照搬。末段「批次 12–35 无差别、先动批次」也是较早口径，现行选择为 400，并以 A/A 噪音实验为依据。</p><ul>
+<li><strong>只有一条路能调通模型：<code>gemini-3.8-flash-high</code></strong>（提供商 <code>gemini</code>，自建网关
+<code>gcli2api.cfoptick.com</code>，免费）。<strong>2026-09-20 起只有阿里云一台</strong>，
+<code>secrets.json</code> 里只有 <code>gemini</code> 一个 key，<code>llm_providers</code> 表里<strong>只有 <code>gemini</code> 一行</strong>
+（中转站那几个提供商的行在这台上已经不在了）。
+<ul>
+<li><strong>阿里云现行配置</strong>（2026-09-20 实查）：<code>gen_provider = gemini</code>、
+<code>llm_provider_generate_article = gemini</code>，<strong>其余九个 worker 没有单独配</strong>，
+走「默认提供商」也就是 <code>gemini</code>；<code>llm_concurrency = 3</code>、
+<code>llm_requests_per_minute = 18</code>；夜间备稿 <code>task_generation_daily_enabled = true</code>、
+<code>04:00</code>。</li>
+<li><strong>原先记着的「两处指着不存在的东西」2026-09-21 实查已经不存在了</strong>：
+那台的 <code>llm_thinking_generate_article</code> 是 <code>off</code>、<code>review_translate_provider</code> 是 <code>gemini</code>，
+两处都对。<strong>留这一句是因为这份文件上一版说反了</strong>——照着它去「修」会改坏正确的配置。</li>
+<li><strong>夜间备稿现在可以安心开着</strong>：从前两台各自 04:00 生成会让 <code>content.db</code> 静默分叉，
+所以 r5s 那份一直故意关着；<strong>现在只剩一台，那个理由消失了</strong>。
+但<strong>做数据大动作时仍然要先关</strong>（比如 P10 的全语料重标注，
+不关它就是一边清洗一边进新文章，把靶子搞成移动的）。</li>
+<li><strong>它必须配 <code>p1b-2</code> 提示词才能用</strong>：同一个模型，旧提示词 0/10 合格、超纲中位 5.82%，
+新提示词 7/10、0.56%，与 gpt-5.5 当年的 8/10 / 0.39% 基本持平。
+<strong>差别全在提示词上</strong>，不在模型上。五版实测与三条要打的折见 <code>phase-4.html</code> §4 末节。</li>
+<li><strong>关思考对它无效</strong>：那个网关忽略 <code>enable_thinking</code>，拨哪边结果都一样。
+「切模型必须关思考 ＋ 给足预算」那条是对中转站的 deepseek 说的，<strong>别照搬到这里</strong>。</li>
+<li><strong>标注这一路 2026-09-20 测了（P10），结果要记住</strong>：
+它比当年标全语料的那个模型<strong>爱说「没有贴合的义项」得多</strong>——
+同一篇文章、同一套义项集，<code>gemini-3.8-flash-high</code> 给 4.6%，
+而库里旧标注留下的基准是 <strong>0.6%</strong>（那是中转站的 deepseek 标的）。
+<strong>这不是义项集的锅</strong>：拿旧义项集配这个模型重标一遍，还是 4.6%。
+调批次（35→12）和调候选顺序都试过，都在噪音范围内，<strong>两个假设都被自己的实验推翻</strong>。
+决定是接受它——填 0 是安全的失败（读者退回去看词典），
+而硬选一个错义项才是这个项目最怕的事。详见 <code>phase-10.html</code> §13③。</li>
+<li><strong>造例句这一路仍然没测过</strong>，只是跟着默认提供商走到了它身上。质量存疑先查这里。</li>
+<li><strong>标注的批次大小，实测对质量没有可辨别的影响</strong>（2026-09-21 定案，前一天的结论已推翻）。
+<strong>关键是先量噪音底数</strong>：<code>temperature=0.1</code> 不是 0，同一篇文章、<strong>同一个配置</strong>跑两遍，
+一致率 99.3%、单边作答 5 对 1。而批次 35 对 100 是一致 97.5%、单边 1 对 8，
+再跑一遍变成 8 对 2——<strong>方向都能反过来</strong>。
+<br><strong>所以配置间的差异淹没在模型自身的随机性里。</strong>
+2026-09-20 我记过一串「12 → 5.6%、35 → 4.2%、400 → 0.7%」的曲线并写成「越大越准」，
+那是<strong>单次测量、没有对照</strong>，读的是噪音。坑 §4.3 的第三个实例，这次是自己造的。
+<br><strong>既然质量无差别，就按成本选</strong>：批次 400（整篇一次，最长的文章 328 个实词）
+要 405 次调用，批次 35 要 2,157 次。用 400。
+<br><strong>要再动这个数，先跑 <code>scripts/compare_annotation.py &lt;文章&gt; &lt;批次A&gt; &lt;批次B&gt;</code>，
+并且一定要先用同配置跑一遍拿噪音底数</strong>——那个脚本存在的全部理由就是这个。</li>
+<li><strong>标注不吃推理，吃注意力，所以不能降档</strong>（同日实测，批次 100）：
+<code>flash-high</code> 4.6%、<code>flash-medium</code> 5.2%、<code>flash-low</code> 6.5%，而且 medium 最慢。
+它的任务形状是「从列表里挑一个编号」，但要在几百条候选里保持注意力——
+<strong>那正是低档模型先丢的东西</strong>。</li>
+<li><strong>额度是有限的，但不用为它做预算</strong>（2026-09-22 用户订正）：那个网关按额度算，
+<strong>刷新规律跟着 Google Antigravity 走，不是每天固定一个钟点</strong>——
+这份文件先后写过的「每天 16:50」和「23:17」<strong>都是错的</strong>，别再照它去推算什么时候能接着跑。
+用户的口径是：<strong>不管花费，一次跑不完就等额度回来接着跑，先试试一次能不能跑完。</strong>
+所以大批量任务的要求不是「先问还剩多少」，而是<strong>必须可中断、可续跑</strong>：
+跑到一半没额度了要停在那儿、把做完的存住，等额度回来接着做，
+<strong>既不许重头再来，也不许把半成品报成完成</strong>（坑 §6.4／§6.5 那两个形状）。
+P10 的全语料重标注按批次 35 要约 2,600 次调用——
+<strong>批次越大越省次数</strong>（批次 100 只要 910 次），而实测批次 12–35 之间质量没差别，
+哪天额度紧张，那里是第一个可以动的地方。</li>
+</ul>
+</li>
+<li><strong>2026-09-15 那天定的「十个 worker 全部指向 <code>deepseek-flash</code>（<code>dsflash2</code>）、思考一律关」
+已经不存在了</strong>：key 早删了，中转站余额一直没充，那条路仍然是 402。
+<strong>旧记录订正（2026-10-09 整理）</strong>：原句「<code>review_translate_provider</code> 是这次合并后唯一漏网的，还指着 <code>dsflash2</code>」与上文 2026-09-21 实查冲突；以那次实查的 <code>gemini</code> 为准。原句保留在这里说明被订正的内容，不能据它改配置。
+下面这两段分工留着不删，是为了哪天充值之后改得回去——<strong>但那时要先重新填 key</strong>。
+<ul>
+<li><strong>关思考这一条只有写文章有实测</strong>（2026-09-11，十个相同种子：5/10 → 8/10，61.6s → 9.1s）。
+另外九个是<strong>按横评结论推的</strong>——「数据整理要的是不思考的模型，思考型模型把输出预算
+烧在思维链上」。<strong>推的不是测的</strong>，哪天觉得某一路质量掉了，先怀疑这里。</li>
+<li><strong>造例句这一路要留意</strong>：横评里 <code>deepseek-v4-flash-0731</code> 96% 高于 <code>gpt-5.5</code> 94%，
+而现在换成了另一个模型（<code>deepseek-flash</code> 与 <code>deepseek-v4-flash-0731</code> <strong>是两个不同的模型</strong>，
+fingerprint 不同），没测过。</li>
+</ul>
+</li>
+<li><strong>改之前的分工，改回来时照这个填</strong>：数据整理用 <code>deepseek-v4-flash</code>（快、便宜、准），
+<strong>写文章用 <code>gpt-5.5</code></strong>——同一套提示词超纲率 0.32% 对 3.64%。
+<strong>但「给一个义项造例句」不适用这条</strong>，见「踩过的坑」§2.4。</li>
+<li><strong>长文生成必须开流式</strong>（<code>llm_stream</code>，默认开）。关掉它长文生成直接不可用，原因见「踩过的坑」§2.1。</li>
+<li><strong>中转站限速 20 rpm</strong>，这条比模型延迟更决定批次总耗时。
+<code>seed-2.1-*</code> 与 <code>qwen3.8-max</code> 全部 504，<code>minimax-m2.7</code> 全部 429。</li>
+<li><strong>2026-09-15：两条路当天都断了，实测。</strong>
+<ul>
+<li><strong>基元律动（<code>tokenrhythm.studio</code>）余额不足</strong>，HTTP 402 <code>INSUFFICIENT_BALANCE</code>。
+<code>dsflash</code>（<code>deepseek-v4-flash-0731</code>）与 <code>dsflash2</code>（<code>deepseek-flash</code>）各测一次，<strong>都是 402</strong>——
+因为 <strong><code>secrets.json</code> 里那四个条目是同一把 key</strong>（<code>1</code>/<code>dsflash</code>/<code>mimo</code>/<code>judge</code>/<code>dsflash2</code>，
+sha256 一致），<strong>换 provider、换模型都换不出余额来</strong>，它们是同一个账户。
+（<code>mimo</code> 与 <code>judge</code> 对应的 provider 早已不在 <code>llm_providers</code> 表里，是孤儿条目。）
+<strong>这六个条目 2026-09-18 全部删掉了</strong>，所以现在连「试一次看还是不是 402」都做不到——
+要试得先重新填 key。</li>
+<li><strong>ShuaiAPI（<code>api.shuaiapi.com</code>，<code>gpt-5.5</code>）HTTP 400</strong>：
+<code>The channel is temporarily unavailable. Please contact the administrator.</code>
+<strong>不是余额，是它那边的上游通道</strong>。</li>
+<li>所以那一天<strong>没有任何一条调得通模型的路</strong>。
+<strong>一切要花钱的动作都跑不通</strong>：生成、翻译、判词组、标注。
+由此带出的连锁<strong>都不是回归，别去查代码</strong>：<code>verify_phase2</code> 7.9（词组判不完）、
+<code>verify_phase4</code> B5.1／B5.2（文章卡在 <code>annotating</code>、词组待判）。
+<strong>2026-09-16 补记</strong>：ShuaiAPI 那条当天<strong>自己好了</strong>（通道恢复），但账上只剩 ¥0.035，
+写了两篇就 403 <code>insufficient_user_quota</code>，<strong>等于没有</strong>。中转站仍是 402。
+所以现在能调通的只有 gemini 那条免费的路。
+<strong>由此那一串「不是回归」的连锁 2026-09-18 就断了</strong>：<code>verify_phase2</code> 7.9、
+<code>verify_phase4</code> B5.1／B5.2 现在真的能过——调通模型之后，
+卡在 <code>annotating</code> 的那篇当场治好了（走 <code>daily._resume_unfinished</code>，治文章不治任务）。</li>
+</ul>
+</li>
+<li>生成用哪个提供商由配置项 <code>gen_provider</code> 指定，<strong>不走「默认提供商」</strong>。
+<code>shuai</code> 提供商额度有限，<strong>2026-09-16 已耗尽</strong>（余额 ¥0.035，两次调用就 403）。</li>
+<li><strong>模型名是 <code>deepseek-flash</code></strong>（不带版本不带日期，DeepSeek 官方改的，中转站跟着改）。
+写 <code>deepseek-v4.1-flash</code> 会得到 <code>MODEL_NOT_AVAILABLE</code>——<strong>不是没放开，是改名了</strong>（2026-09-11 订正）。
+写文章实测<strong>关思考 8/10、与 gpt-5.5 打平且快 8.5 倍，开思考只有 5/10</strong>——要用必须关。
+<strong>「<code>client.complete()</code> 不接受这个参数」这句 2026-09-15 订正：它接受</strong>——
+P4 把思考开关做成了每个 worker 一个配置项（<code>llm_thinking_&lt;kind&gt;</code>，取 <code>on</code>/<code>off</code>，
+别的值＝不发这个参数、随模型默认），<code>client.complete(..., thinking=)</code> 也直接收。
+当时写下那句之后功能就做了，而这里一直没跟上（坑 §7.1 的同一个形状）。
+<strong>2026-09-13 实测补一条</strong>：<code>deepseek-flash</code> 与默认提供商配置里那个 <code>deepseek-v4-flash-0731</code>
+<strong>都回 200，而且是两个不同的模型、不是别名</strong>（fingerprint 不同）。失效的只有 <code>deepseek-v4.1-flash</code>。</li>
+</ul>
+</section><section id="repository"><h2>仓库与数据库历史</h2><p class="note">用户名、公开仓库与备份底线仍适用。这里的库体积是历史实测，不是当前统计；现行数据库用途表见根文件。</p><p>https://github.com/0pT1ck/english-reader （<strong>公开</strong>，默认分支 <code>main</code>）</p>
+<p><strong>2026-09-19 账号改名</strong>：<code>SCmenghua</code> → <strong><code>0pT1ck</code></strong>（零、p、大写 T、数字 1、c、k——
+这几个字符容易看错，照着抄）。两台机器的 remote 当天改完并实测通了。
+<strong>没受影响的</strong>：令牌与 SSH key（绑的是账号数字 id <code>100364688</code>，不绑用户名）、
+Actions 的 secrets、提交历史与贡献图（GitHub 按<strong>邮箱</strong>认作者，
+本仓库全部是 <code>2059263572@qq.com</code>）、star/fork/issue。
+CI 的三条 workflow 一个字没改——它们用的是 <code>github.repository</code> 这类上下文变量。
+<strong>唯一要记着的风险</strong>：旧用户名立刻可被他人注册，而 GitHub 的重定向
+<strong>只在旧名没被占用时有效</strong>。</p>
+<p><strong>2026-09-12 从私有转为公开</strong>，为的是 GitHub Actions 的 macOS runner 在公开仓库上不计费（P5/手机端要用）。
+转之前扫过全部历史确认没有泄漏，扫的结果记在 <code>phase-5.html</code> §4。
+<strong>公开之后这两条要记着</strong>：<code>docs/</code> 里的设计文档现在人人可读；仓库没有 LICENSE 文件，
+默认仍是「保留所有权利」。真题在 <code>data/</code> 里没进仓库，所以主文档那条「合规卡在真题」不受影响。</p>
+<p>代码进版本控制，数据不进：<code>data/</code> 下的数据库、词典源文件、<code>.env</code>（含管理密码）、
+<code>data/secrets.json</code>（API 密钥）全部在 <code>.gitignore</code> 里。备份走管理控制台的下载按钮，不走 git。
+<strong>仓库公开之后这条从「隐私」变成了「安全」</strong>——往 <code>data/</code> 外面写任何带密钥的东西之前先想一下。</p>
+<p>数据库按「丢了会怎样」分类，<strong>2026-09-18（P9 §10）从四个库改成五个</strong>——
+<code>learning.db</code> 拆没了，因为它一个文件里装着三种不同的答案，备份规则只能对整个文件说谎。</p>
+<div class="table-scroll"><table>
+<thead>
+<tr>
+<th>库</th>
+<th>装什么</th>
+<th>丢了会怎样</th>
+<th>备份</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>content.db</code></td>
+<td>文章、句子、token、词组、复习例句、草稿、义项集、词族</td>
+<td>花钱重做一遍</td>
+<td><strong>要</strong></td>
+</tr>
+<tr>
+<td><code>events.db</code></td>
+<td>上报的事件、词池快照、决策日志、标记与进度存档</td>
+<td><strong>补不回来</strong></td>
+<td><strong>要</strong></td>
+</tr>
+<tr>
+<td><code>ops.db</code></td>
+<td>设备令牌、设置、任务表、LLM 任务日志</td>
+<td>重新配对加重填几个值</td>
+<td>不用</td>
+</tr>
+<tr>
+<td><code>dictionary.db</code></td>
+<td>ECDICT 导入</td>
+<td>重新导入</td>
+<td>不用</td>
+</tr>
+<tr>
+<td><code>logs.db</code></td>
+<td>技术日志，30 天轮转</td>
+<td>无所谓</td>
+<td>不用</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong><code>events.db</code> 只有 0.5 MB，而拆开之前那份 42 MB 的文件对备份说的是同一句话。</strong>
+<code>learning.db</code> 留着一个 12 KB 的空壳，不删——它旁边那三个就是它的去向。
+重切由 <code>backend/core/resplit.py</code> 在启动时做，幂等；守卫 <code>verify_phase9.py</code> 8.1–8.4。</p>
+</section><section id="background"><h2>后台任务与等待</h2><p>批量任务动辄跑几十分钟，必须放后台。等待它的方式犯过两次同一类错误，见「踩过的坑」§7.2。</p>
+<ul>
+<li><strong>查状态优先查数据库，不要轮询日志文件。</strong> 批次任务表里就有 <code>status</code> 和 <code>done/total</code>
+（<code>llm_jobs</code>），那是权威来源，也不会被清理脚本删掉。</li>
+<li><strong>等待循环必须有超时上限</strong>，超时就退出并说明情况。绝不写没有出口的 <code>until … do sleep</code>。</li>
+<li><strong>清理放在最后一步。</strong> 还有东西在监视某个文件时，不要删它。</li>
+<li><strong>任务结束后确认没有残留进程</strong>——收尾时顺手查一次，不要留给用户去发现。
+<strong>按 CPU 查，也要按运行时长查</strong>：远程执行的活干在别人机器上，本地那条 <code>ssh</code>
+的 CPU 时间几乎是 0，只有 ELAPSED 会露馅（2026-09-20 栽的，见「踩过的坑」§7.3）。
+Mac / Linux 上 <code>ps -Ao pid,etime,%cpu,command</code>，Windows 上
+<code>Get-Process | Where-Object { $_.CPU -gt 60 }</code>：
+名字是猜的，而跑飞的往往正是那条你以为无关的一次性命令。
+2026-09-12 栽过一次，见「踩过的坑」§7.3。<strong>另：Windows 上别写 <code>find /</code></strong>，它会扫遍所有盘。</li>
+</ul>
+</section><section id="logging"><h2>日志与代码规范</h2><p class="note">迁移时核对了 <code>backend/core/logging.py</code> 的 <code>get_connection("events")</code>：决策日志写入 events.db。旧文档 learning.db 的说法已订正。</p><p>日志的设计目标是：用户说&quot;不对劲&quot;时，AI 能查出来到底怎么了。</p>
+<ul>
+<li><strong>三类分开</strong>：技术日志入 <code>logs.db</code>（30 天轮转，可丢弃）；决策日志入 <code>events.db</code>（长期保存，记录每次判断的输入、候选、理由）；业务记录本身就在业务表里，不重复记。</li>
+<li><strong>事件名是固定标识符</strong>，不是自由文本（<code>article.generation.failed</code>，不是&quot;生成失败了&quot;）。这样才能精确过滤和统计。</li>
+<li><strong>trace_id 贯穿</strong>一次请求或任务，并出现在错误响应里——用户复制给 AI 就能定位完整链路。</li>
+<li><strong>DEBUG 平时只在内存滚动</strong>，发生 ERROR 时自动落盘该 trace 的详细记录。</li>
+<li><strong>语言</strong>：事件名和字段名英文，说明文字中文，原始报错原样保留。不做&quot;人话翻译层&quot;——用户有疑问直接问 AI。</li>
+<li><strong>通知</strong>：Bark，仅推生成失败 / 服务异常 / CRITICAL，带去重。</li>
+<li><strong>API 密钥一律不入日志。</strong></li>
+</ul>
+<ul>
+<li>注释用<strong>英文</strong>，与标识符同语言。项目特有概念在模块头部给中英对照（如 <code>target word 目标词</code> / <code>incidental word 附带词</code>），以便和中文设计文档对上。</li>
+<li>注释解释<strong>为什么</strong>这么做，而不是复述代码在做什么。用户不读代码，注释是写给未来接手的 AI 看的。
+但<strong>注释描述的是意图，不保证实现跟上了</strong>——读代码时别拿它当实现的描述，见「踩过的坑」§7.1。</li>
+</ul>
+</section><section id="files"><h2>文件位置与旧路径</h2><p class="note">下段 Documents 路径是迁移前记录，当前工程在 <code>/Volumes/satassd/code/english-reader</code>。工程产物以实际 checkout 为根，不去旧路径生成；SQLite 文件锁要求不变。</p><ul>
+<li><strong>所有生成的文件都放在项目目录下</strong>，不要写进 scratchpad 或系统临时目录。文档放 <code>docs/</code>。
+Mac 上是 <strong><code>/Users/optick/Documents/code/english-reader</code></strong>；
+阿里云上代码在 <code>/opt/appdata/English reader/</code>，数据在它下面的 <code>data/</code>
+（<strong>目录名里有空格</strong>，写命令记得引号），挂进容器的 <code>/app/data</code>。</li>
+<li><strong>数据库所在的盘要有 POSIX 文件锁语义</strong>——SQLite 靠它，挂 exFAT 或 NTFS 的盘会出很难查的问题。
+Mac 的 APFS、阿里云的 ext4 都没问题；这条是留给「哪天想把库放到移动硬盘或网络盘上」的人看的。</li>
+<li>数据库文件放 <code>data/</code>，<strong>不进版本控制</strong>（体积 + 隐私）。词典源数据同样不进仓库，用脚本下载。</li>
+<li>只有真正一次性的中间产物才用临时目录。</li>
+</ul>
+</section><section id="reading-guide"><h2>设计文档阅读提示</h2><p class="note">这些指针与阅读警示从旧根文件移入。关于「这份 CLAUDE.md」「上面」「末尾排坑」的指代属于旧文件组织；现行入口在根文件和本页目录。P6 早期欠账后来由 P8 结清，TestFlight 初次准备与旧路线叙述不是当前待办。完整排坑现位于 <a href="./pitfalls.html">开发排坑</a>。</p><p><strong>为方便用户读</strong>而做成 HTML（<code>docs/</code>，浏览器直接打开，<strong>不要发布为 Artifact</strong>，样式全在文件内不依赖网络）。
+<strong>第一行必须是 <code>&lt;meta charset=&quot;utf-8&quot;&gt;</code></strong>——2026-09-20 栽的：十七个文档全都没有，
+文件本身是正确的 UTF-8、<code>file -I</code> 查也是 utf-8、git 里看也正常，
+<strong>只有在浏览器里打开才是乱码</strong>，而写文档的人不在浏览器里打开它。
+之前没暴露只是因为浏览器碰巧猜对了编码，换台机器就现形。
+<strong>AI 一样要读</strong>——功能设计、每个 Phase 的决定与依据全在里面，这份 CLAUDE.md 只给指针：</p>
+<ul>
+<li><code>docs/english-reader.html</code> — 功能设计（做什么、为什么这么做、开发路线、架构前提）</li>
+<li><code>docs/phase-0.html</code> — P0 方案（八项技术定案、要建的东西、明确不做的边界、验收清单）</li>
+<li><code>docs/phase-1.html</code> — P1 方案（三段推进、已定决策、P1a 工作流、验收标准）</li>
+<li><code>docs/phase-1b.html</code> — P1b 方案（API 集成、词典修复、义项集、词族、生成改进）</li>
+<li><code>docs/phase-1c.html</code> — P1c 方案（用 Wiktionary 清单 + 真题考频重建义项集）</li>
+<li><code>docs/phase-2.html</code> — P2 方案与实施结果（§1–§12 阅读闭环、§13 P2y 词组、§18 词组召回缺口）</li>
+<li><code>docs/phase-3.html</code> — P3 方案与实施结果（§2 二十八条决定、§11 模型横评、§12 实施结果）</li>
+<li><code>docs/phase-4.html</code> — P4 方案与实施结果（§2 十九条决定、§4 模型配对实测、§8 实施结果与五个静默失败）</li>
+<li><code>docs/phase-6.html</code> — P6 方案与结束（§3–§6 四屏共 34 条决定、§7 词组这条动了不变量、
+<strong>§13 怎么结束的与欠下了什么——没跑验收，别把文档里的「做到的」读成「跑通了」</strong>）</li>
+<li><code>docs/phase-5.html</code> — P5 方案（§2 二十四条决定、§3 Windows 本地回路实测、§7 发件箱与服务端那个洞、
+§16 动手前先验的两个未知数、§17 验收与它的边界、<strong>§18 Core 装什么——动手时照着这一节，不用翻前面</strong>）</li>
+<li><code>docs/phase-8.html</code> — P8 方案与实施结果（§8 开发者选项<strong>动了铁律 4</strong>、§9 客户端日志、
+§13 三个 Phase 一起验的清单、§16 实施结果与路上撞到的四件事）</li>
+<li><code>docs/phase-9.html</code> — P9 方案与实施结果（重构）。<strong>§17 是怎么结束的——
+代码完成而真机症状没修好，验收没通过，不记例外。先读它再读别的。****§4 的新铁律已经定案并写进这份文件
+上面那两节了</strong>——读那两节就够，不用去 §4 找口径。方案那半边留着是为了说清「为什么」：
+§1 触发它的症状与病根、§2 那条线（服务端生文／客户端学习）、§5 五种事件、§6 多设备、
+§8 义项稳定键与那次数据大清洗的关系、§10 数据库重切、§12 验收网怎么保住。
+<strong>实施结果在 §16，①–㉕</strong>，动手前照那一节看「这件事上次是怎么做的」。
+<strong>§14 那六个先验的未知数里 U1 是错的</strong>（「用官方那个 Swift FSRS」——它在 Linux 上编不出来），
+条目标着 ✗ 并写了错在哪，别照它去找依赖。</li>
+<li><code>docs/phase-10.html</code> — <strong>P10 方案与实施结果（义项大清洗，2026-09-22 验收通过）</strong>。
+义项集整体换成柯林斯 COBUILD，全语料重标注，旧的全部归档。<strong>词组不在这个 Phase</strong>，它是 P11。
+<strong>§17 是验收怎么跑的与结果</strong>——M2 直接跟词典 mdx 原文对拍、B3 盲判、
+以及 M1 挖出的三个 <code>ercli</code> 缺陷。<strong>B3 的结论必须连它那三条边界一起读</strong>，
+单独引用「新 48 对旧 19」是错的。
+另外两节动手前仍然要读：<strong>§4 单词与词组的四条判据</strong>（「单词全收、词组全不收」是用户的硬要求，
+判据穷举过 110 种标记，我在这上面漏收过两次）、<strong>§5 义项拿什么当身份</strong>
+（拆掉「定义的指纹」那套，它是 §7 破铁律 5 的前提条件，
+<strong>也是「下一次换词典不再是全体失效」的全部依据</strong>）。</li>
+<li><code>docs/phase-11.html</code> — P11 方案与实施结果（词组与用法，2026-09-22 结束并上线，<strong>人工验收没跑</strong>）。
+清单＝<strong>考纲表 ∩ 柯林斯</strong>，词组的中文只用柯林斯。<strong>§9 是判据来源</strong>：柯林斯把词组与用法
+分成四类，<strong>③WORD 块加粗＝某个义项的用法、不是词组</strong>。§19 是实施结果与五件事。
+<strong>§2 记着旧文档塌掉的三个前提，P2 §18 那批数（2026-09-07/09）不要再引用。</strong></li>
+<li><code>docs/phase-12.html</code> — P12 方案与实施结果（完善客户端，<strong>2026-09-26 结束，人工验收没跑</strong>）。
+主线是<strong>把词组端上界面</strong>（还 P6 §7 那笔账）。<strong>开头方框是十八条决定 ＋ 发版后加的三条</strong>，
+实施记录 <strong>§14 ①–⑰</strong>，末节是怎么结束的。<strong>⑯⑰ 是验收期间真机撞出来的一串</strong>
+（英美拼写、在纲名单漏了 195 个词、正文缓存永不过期），查词典之前值得读。两条要先知道的：
+<strong>§4 末尾「标了也白标」</strong>——能点的词一半以上标了永远进不了复习（人名、功能词、
+没判出义项的），规则要放进 Core、<code>ercli</code> 有同一个 <code>?? 0</code>；
+<strong>§3 那三条死路</strong>——「词组里的词是不是本义」库里没有判据，别再去试溯源 join／用法表／tier。</li>
+<li><code>docs/deploy.html</code> — 部署（2026-09-14/15 做的：Docker 打包、三个容器怎么摆、
+<strong>在那台机器上构建要换三条取包的路</strong>、§6 <strong>备案按 SNI 掐 TLS——那个判断被实测推翻了</strong>、
+两条入口为什么都留着、数据怎么上去以及不许怎么下来）</li>
+<li><code>docs/testflight.html</code> — <strong>给帮忙的朋友看的</strong>，不是给我们看的：借他的开发者账号走 TestFlight 内测，
+他要做的四件一次性的事。<strong>里面的空格是留给真实信息的，仓库是公开的，别往里填邮箱和 Bundle ID</strong>——
+那些直接发给他。签名与上传属于下一个 Phase，这份提前写只是因为对方那边有等待时间。</li>
+<li><code>docs/archived.html</code> — 归档（从主文档移出的内容，原文照录，附移出理由）。
+<strong>不需要读它</strong>——里面全是已经不成立的东西，读了只会把废弃口径当成现行口径。
+它只是留档备查，用户想翻旧账时自己打开；只有用户明确指名要看某条归档内容时才去读。</li>
+</ul>
+<p class="note">下面是旧根文件对自身组织方式的解释。2026-10-09 已改为根文件常驻短规则，复盘与详细参考按触发表读取；曾经的合并不代表这次仍需把复盘全文自动加载。</p>
+<p><strong>这份 CLAUDE.md 每次会话整份进上下文</strong>，所以它只放「随时可能改变下一步动作」的东西：
+铁律、跨 Phase 不变量、现行配置，外加末尾那份<strong>踩过的坑</strong>——
+那份曾经拆成单独文件，2026-09-10 又并了回来，理由见该节开头。</p>
+<p><strong>文档组织规范</strong>：功能设计集中在主文档，每个 Phase 的实施方案各自一份 <code>docs/phase-N.html</code>。
+讨论产出的结论更新进对应文档，不要随意另开新文档。<strong>实施细节写进 phase 文档，不要抄进这里</strong>——
+这份文件每次会话整份进上下文，抄一遍就是每次都付一遍钱，而且两份必然漂移。</p>
+<p><strong>主文档只描述现在的系统。</strong> 已经不成立的决定、被推翻的数字、归档的旧路线，全部移进
+<code>docs/archived.html</code>，并在原位留一句指路——<strong>移出不等于作废</strong>，原文与实测数据照录、附移出理由。
+「不等于作废」是对历史而言：<strong>对当前开发它等同于不存在，不要去读</strong>，主文档那句指路就是全部所需。
+2026-09-10 第一次这么清的：每日配额与周期预测、「句法复杂度始终对齐 CET 真题」这句保证
+（<strong>这等于在密度与句法的取舍里选了密度</strong>）、设计前提 03「单用户系统」（它与 P2 契约留的身份口子说反话）、
+按分钟数定的时间限定，以及早已标着归档却还占着 §K 半张表的那条旧路线。
+<strong>那条旧路线的 Phase 编号一并作废</strong>——2026-09-11 把 P5 及以后的编号从这份文件、<code>docs/</code>
+（<code>archived.html</code> 除外）和代码注释里全部剔除了，没做的事一律写成事情本身、记进主文档 §M。
+再看到这类编号就是漏网的：按它去找只会找到不存在的东西。</p>
+</section>
+<section id="instructions-migration"><h2>这次整理的去向与订正</h2>
+<p>2026-10-09 整理前 CLAUDE.md 为 60,408 字符、1,349 行。根文件保留现行协作规则、架构与不变量、当前状态、操作底线及触发表；完整资料按下列位置读取，不用 @ 导入。</p>
+<ul><li>排坑 §0–§8 的完整复盘、实验数据、结论边界与守卫：<a href="./pitfalls.html">开发排坑</a>，保留原编号。</li>
+<li>开发场地、代理、Windows 工具链、模型、仓库与数据库历史、后台等待、文件位置与阅读提示：本页对应节。</li>
+<li>部署操作和原部署节：<a href="./deploy.html#current-operations">部署</a>。开头是现行操作，首次背景与旧原文带日期保留，旧单向搬运规则不再适用。</li>
+<li>各 Phase 的结果表行与阅读警示：对应文档末尾的 <code>instructions-record</code>。P1b/P1c 合并结果在 P1c；回归断言改动在 P4；P3 D/E 人工验收边界在 P3；P2x/P2y 术语在 P2。</li>
+<li>四次验收例外及代价：P5、P8（含 P6/P7）、P11、P12 的移入节；提交节点撤销与分支历史在 P8；完整架构原节在 P9，完整不变量及 P10 破例依据在 P10。</li></ul>
+<p>订正有明确依据：客户端契约号由代码核对为 3，服务器下限依据 P12 结束记录为 3（本次没有远程重测）；翻译提供商旧 dsflash2 说法服从原文 2026-09-21 实查的 gemini；决策日志按实现写入 events.db；当前 checkout 实查为 /Volumes/satassd/code/english-reader，文件系统 APFS。P9 原架构节末句「内容只增不减」与 P11 已定契约变更冲突，现行规则允许契约变更，内容 id 仍稳定。P6 早期「只验编译启动」不能覆盖 P8 后的真实验收结清。</p>
+<p>原触发表已在根文件重写，规则正文与事故依据仍可在排坑查到。原全局协作规则只做措辞合并，不另存第二份现行约束；错误旧口径要保留订正依据，不能因为看见历史原句就改回去。未新增功能、未触发生产任务、未改生产配置。</p>
+</section>
+<footer>现行通用规则见 <a href="../CLAUDE.md">CLAUDE.md</a>；功能设计见 <a href="./english-reader.html">主文档</a>。本页按需读取，不自动导入会话。</footer></main>

@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 11 词组与用法</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -1593,10 +1590,26 @@
     会把当天的卡片消耗掉，然后下一次看到的是「今天的复习 0 条」。手动走，别接管道。</div>
   </section>
 
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、铁律（P11验收例外）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「铁律」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。下方契约下限 2 是 2026-09-22 的历史值，当前值看根文件；P12 的后续变更另见其移入区。</p>
+    <h3>原文档节的阅读警示</h3>
+    <p><code>docs/phase-11.html</code> — P11 方案与实施结果（词组与用法，2026-09-22 结束并上线，<strong>人工验收没跑</strong>）。清单＝<strong>考纲表 ∩ 柯林斯</strong>，词组的中文只用柯林斯。<strong>§9 是判据来源</strong>：柯林斯把词组与用法分成四类，<strong>③WORD 块加粗＝某个义项的用法、不是词组</strong>。§19 是实施结果与五件事。<strong>§2 记着旧文档塌掉的三个前提，P2 §18 那批数（2026-09-07/09）不要再引用。</strong></p>
+    <h3>原结果表：P11 词组与用法</h3>
+    <p><strong>状态：</strong><strong>2026-09-22 结束并上线。第三次记名例外：人工验收没跑</strong>（用户定「日后体验中慢慢验收」，代价写在铁律那一条）</p>
+    <p><strong>细节：</strong><strong>自动那半边全绿</strong>：<code>verify_phase11</code> 27 项、回归 P0 32 / P1b 28 / P1c 11 / P2 48 / P3 29 / P4 41 / P5 21 / P9 38 / P10 19、<code>swift test</code> 117、<code>ci_app</code> 9。<strong>M1／M2／M3 一项没跑</strong>，工具留着（<code>scripts/m2_phrase_glosses.py</code>／<code>m3_context_check.py</code>）。<strong>做出来的</strong>：清单＝考纲表 ∩ 柯林斯 <strong>2,170 个词组 / 3,232 条义项</strong>，语料 4,219 处（<strong>1,363 处即 32% 判为「这一处不是词组」</strong>），用法 4,954 条挂在义项上，词组义项考频 681 条，单词考频重算为 9,471。<strong>⑭ 词组义项与单词义项共用一个号段</strong>（<code>sense_of</code> 是裸 id 查表，撞号不报错只是中文错了）；<strong>⑱ 铁律 7 的「只增不减」作废</strong>，配套 <strong>⑲ 契约版本握手</strong>（<code>X-Contract-Version</code>／426）已上线，<strong>当天发了一版 TestFlight（构建 <code>202609222030</code>）并把下限拧到 2</strong>，公网实测四种情形全对（不带头 426、版本 1 426、版本 2 放行、<code>/health</code> 与管理接口不拦）。<strong>那个「把自己锁在外面」的顾虑不成立</strong>——开关在服务器上，<code>ssh</code> 一条命令就退回 0。<strong>路上撞到五件事，全记在 §18</strong>，其中两件是新形状的坑：<strong>① 抽样 14 条全对的 B 档，阳性对照一次就照出 6 条错</strong>（分段加粗的碎片、一块讲两个词组）；<strong>② <code>BREAKING_KINDS = {"punct"}</code> 是个这个项目里不存在的类别名</strong>（标点叫 <code>nonword</code>），判断永远不成立、静默失效。<strong>填的值是 -1 不是 0</strong>（<code>-1</code> ＝ 问过了都不贴合，<code>0</code> ＝ 根本没有义项集），方案里写 0 的地方已订正。</p>
+    <h3>记名验收例外原文：P11</h3>
+    <p><strong>P11，2026-09-22 定</strong>：用户原话「验收太复杂了。直接宣布本 Phase 结束，我日后体验中慢慢验收」。<strong>自动那半边全绿</strong>（<code>verify_phase11</code> 27 项、九个 Phase 的回归、<code>swift test</code> 117、<code>ci_app</code> 9），<strong>人工三项一项没跑</strong>。</p>
+    <p><strong>代价是三件事没有第二双眼睛看过</strong>：① 整条词组复习链走通（我自己用 <code>ercli</code> 走过，但那是同一双眼睛）；② 词组的中文跟柯林斯原文逐字对拍（<strong>P10 的同一项逮到过真问题</strong>）；③ 语境判定准不准（对照组和脚本都现成，没人判）。</p>
+    <p><strong>日后体验里撞到问题按缺陷处理，不回头补验收</strong>——这是用户的决定，不是欠账。工具留着随时能跑：<code>scripts/m2_phrase_glosses.py</code>、<code>scripts/m3_context_check.py</code>。</p>
+    <h3>历史 footer 原句</h3>
+    <p><strong>历史标签（方案讨论时）：</strong>「2026-09-21 开谈 · 2026-09-22 起是当前 Phase · 方案仍未定稿」。2026-10-09 整理时将 footer 对齐 2026-09-22 结束并上线、人工验收没跑的结果，旧句仅在此保留。</p>
+  </section>
+
   <footer>
     <div>English Reader</div>
     <div>Phase 11 · 词组与用法 · 全走柯林斯 · 词组表＋义项子表 · 用法挂在义项上</div>
-    <div>2026-09-21 开谈 · 2026-09-22 起是当前 Phase · 方案仍未定稿</div>
+    <div>2026-09-21 开谈 · 2026-09-22 结束并上线（人工验收没跑）</div>
   </footer>
 
 </div>

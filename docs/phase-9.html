@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 9 重构</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -2148,6 +2145,35 @@ tokens the corpus pass cost, <b>silently and in the time it takes to click a but
     照实记在上一节，不倒回来改这一段的判断。</p>
   </section>
 
+
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、架构铁律（完整原节）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「架构铁律」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。原文的「踩过的坑」节现见 <a href="pitfalls.html">踩过的坑</a>。</p>
+    <h3>原文档节的阅读警示</h3>
+    <p><code>docs/phase-9.html</code> — P9 方案与实施结果（重构）。<strong>§17 是怎么结束的——代码完成而真机症状没修好，验收没通过，不记例外。先读它再读别的。</strong><strong>§4 的新铁律已经定案并写进这份文件上面那两节了</strong>——读那两节就够，不用去 §4 找口径。方案那半边留着是为了说清「为什么」：§1 触发它的症状与病根、§2 那条线（服务端生文／客户端学习）、§5 五种事件、§6 多设备、§8 义项稳定键与那次数据大清洗的关系、§10 数据库重切、§12 验收网怎么保住。</p>
+    <p><strong>实施结果在 §16，①–㉕</strong>，动手前照那一节看「这件事上次是怎么做的」。<strong>§14 那六个先验的未知数里 U1 是错的</strong>（「用官方那个 Swift FSRS」——它在 Linux 上编不出来），条目标着 ✗ 并写了错在哪，别照它去找依赖。</p>
+    <p><strong>移入说明：</strong>上段的「这份文件上面那两节」指原根 <code>CLAUDE.md</code> 的架构铁律与跨 Phase 不变量；现行规则仍读根文件。后来的同一天真机修复记录须连下方结果行与 §17「同一天后续」一起读。</p>
+    <h3>原结果表：P9 重构</h3>
+    <p><strong>状态：</strong><strong>代码完成，Phase 结束那一刻验收未通过；同一天搬到 Mac 后症状修好</strong></p>
+    <p><strong>细节：</strong>用户定了<strong>完全重构，包括改铁律</strong>，不考虑改动大小与破坏性。那条线：<strong>服务端只管生文，客户端拿到文、学习、把进度汇报回去</strong>。§4–§12 全部落地，实施记录见 <code>phase-9.html</code> §16 的 ①–㉖，<strong>怎么结束的见 §17</strong>。架构铁律与跨 Phase 不变量已照 §4/§15 重写（上面那两节就是新的）。<strong>自动验收 231 项零失败</strong>、CI 的 <code>swift test</code> 116 项、两条 workflow 都绿、阿里云已重建上线。<strong>Phase 结束那一刻真机那个症状没修好</strong>：「快速切换选项卡就会很卡，还是会触发转圈」，推了三版（11／13／14）都还在，修掉的四个缺陷每一个都有证据但没有一个被证明是成因，<strong>所以当时不算完成，也不记例外</strong>。<strong>同一天，Mac 装好之后没等下一个 Phase，当场接着查，修好了</strong>——六层原因（老作答永久被拒、日历不是真前向重放、日期格式器/日历现建、<code>adopt()</code> 无条件重放、取消处理拉回 <code>.ready</code> 画面、<code>ReviewModel</code> 每次进屏才诞生），每一层都用 <code>xcrun devicectl</code> 连真机实测过、不是推断，细节与证据见 <code>phase-9.html</code> §17 新加的那一节「同一天后续」。<strong>这不改判断本身</strong>：暂停是对的决定，只是暂停的理由（看不见症状）当天就不成立了</p>
+    <h3>架构铁律：完整原节与契约订正</h3>
+    <p><strong>先读订正：</strong>原第 7 条已记下 2026-09-22 作废契约「只增不减」的决定，但末句「内容那半边照旧只增不减」仍是未清掉的旧契约口径，<strong>不能作为现行契约规则</strong>。内容 id 稳定由第 5 条另行约束，不能与字段只增不减混同。原文的「现行值：2」只是 2026-09-22 的记录；后续 P12 已有契约 2 → 3 的变更。具体当前值与现行规则看根 <code>CLAUDE.md</code>，此处不把历史值当当前配置。</p>
+    <p><strong>2026-09-18（P9）整体重写过一次。</strong> 这个项目是「一个<strong>内容工厂</strong> + 一个<strong>学习者</strong>」：服务端生文、存档、送货；客户端学习，并把进度汇报回来好让工厂接着生。旧的那套写的是「headless 后端 + 可替换客户端」，而那句话把学习记录也算进了后端——症状见 <code>phase-9.html</code> §1（复习页转圈、刷新几次才回到 13/13），根因见 §2。<strong>每条都带验法：一条没有验法的规矩只是一句愿望</strong>（P8 §8 动铁律 4 那次学到的）。</p>
+    <ol>
+      <li><p><strong>服务端不许有任何学习逻辑。</strong> 排期、队列组成、选文、进度聚合，一处都不许有。守卫 <code>verify_phase9.py</code> 第 3 节（读源码断言）。<strong>替掉旧铁律 1「客户端零业务逻辑」</strong>——它的理由是「将来要在三种语言里各实现一遍」，而现在只有一份 Core（Swift），iOS App 与 <code>ercli</code> 共用它。服务端也根本不需要 FSRS：夜间备稿从学习记录里只要一个「正在学的词」的集合。</p></li>
+      <li><p><strong>客户端不许产出内容，服务端不许解释记录。</strong> 两个方向都要说：前半句防「顺手在手机上拼个句子」，后半句防「管理台顺手算一下他学得怎么样」。守卫 <code>verify_phase9.py</code> 3.x 与 <code>verify_phase3.py</code> 1.1–1.10。<strong>唯一的记名让步在 §7</strong>：服务端要知道「哪些词在学」才能保证每篇有生词——而它是靠<strong>客户端上报快照</strong>拿到的，不是靠自己推，所以不算破例。</p></li>
+      <li><p><strong>API 是离线形状。</strong> 服务端下发当天要用的内容（文章全文、释义、在学词的句子池），客户端全天离线可用；交互事件先入本地日志，联网后批量上报，每条带客户端生成的幂等键。在线和离线走同一条代码路径。</p></li>
+      <li><p><strong>屏幕上没有一个数字等网络。</strong> 每一个显示出来的数都要有本地来源。<strong>这是铁律 1 的可执行版本</strong>，也是整个 P9 的起因：13/13 变 0/13 是因为那两个数来自服务端。守卫 <code>verify_phase9.py</code> 第 5 节。</p></li>
+      <li><p><strong>内容 id 一旦发出去就不许变。</strong> 文章、句子、token、义项的 id 是契约的一部分。<strong>重新分析必须是加一个新版本，不是原地重建。</strong>以前这只是实现细节（坑 §6.5 只伤服务端自己）；记录搬到设备之后，标记指着的正是这些 id，<strong>id 一变就是别人手机上的记录静默失效</strong>。义项那一半 P9 §8 做掉了（稳定自然键 + 退休表，不再删了重插）。</p></li>
+      <li><p><strong>两套 API 完全分离。</strong> <code>/v1/client/…</code> 与 <code>/v1/admin/…</code> 路径和认证都分开；客户端令牌碰不到管理接口。<strong>2026-09-15 有一条记名的例外</strong>：手机端的<strong>开发者选项</strong>直接调管理接口，用的是另一把凭证（管理密码走 <code>X-Admin-Secret</code>，后端一行没改——<code>require_admin</code> 本来就接受它）。设备令牌照旧碰不到管理接口，破掉的是「管理只在控制台发生」那半句。<strong>例外不延伸</strong>：只在开发者选项那一页背后、只用那把凭证；阅读、复习、设置的正常路径上一个管理调用都不许出现。理由与边界见 <code>phase-8.html</code> §8。</p></li>
+      <li><p><strong>API 版本化，但「只增不减」那一半 2026-09-22 作废了</strong>（用户定，P11 ⑱）。原话：「那个铁律是 ai 瞎写的。<strong>我们现在要求客户端必须是最新版本。</strong>」那条规矩的前提是「侧载安装的客户端更新滞后」，而这个前提不成立——<strong>所以现在可以删字段、可以改字段含义</strong>，不必为此开 <code>/v2/</code> 或写记名放宽。契约文档每个 Phase 更新，这一半不变。</p>
+        <p><strong>但「必须最新」本身要有执行点</strong>，否则只是一句愿望：客户端每个请求带 <code>X-Contract-Version</code>（归 Core 不归 host），服务端配 <code>min_contract_version</code> 只拦 <code>/v1/client/…</code>，低于它回 426。<strong>没有这个头 ＝ 最老</strong>（否则最该拦的正好绕过去），管理接口与 <code>/health</code> 不拦，<strong>发版顺序是先发客户端再拧服务端</strong>。<strong>现行值：2</strong>（2026-09-22 起，阿里云实测四种情形全对）；客户端发的号在 <code>ERCore/Transport.swift</code> 的 <code>ContractVersion.current</code>，<strong>契约有破坏性变更时两边一起加一</strong>。顺序反了的代价是「手机暂时连不上」，<strong>不是没救</strong>——这个开关在服务器上，<code>ssh</code> 改回 0 就行。做法见 <code>phase-11.html</code> §11 六与 §18。</p>
+        <p><strong>别把这条读成「铁律 5 也松了」</strong>：内容 id 不许变靠的是另一个理由——<strong>设备上的学习记录指着那些 id</strong>，跟客户端是不是最新版毫无关系。<strong>2026-09-18 那条记名放宽留着不删</strong>，它记的是另一件事（P9 §11）：<code>GET /reviews</code>、<code>GET /reviews/calendar</code>、<code>POST /reviews/answer</code> 删掉了。它们是「服务端跟着用户的拇指改学习状态」的最后几处，而那正是这个 Phase 拆掉的东西；它们唯一的调用方（Web 复习页）在同一个 Phase 一起删了。<strong>内容那半边照旧只增不减</strong>，<code>TodayResponse.reviews</code> 这类字段留着不删就是为了守住它。</p></li>
+      <li><p><strong>可扩展性优先。</strong> 每一个 Phase 都是在加新功能，所以：功能按模块自包含（自带表、路由、管理页、任务、配置）；新模块一处登记自动挂载；新功能通过<strong>订阅事件</strong>接入而非修改原有流程；表结构变更走<strong>版本化迁移</strong>且升级前自动备份；参数一律配置化。项目里保留一份"如何加新功能"的说明和一个可照抄的样板模块。<strong>这套东西正是让 P9 这次搬家做得动的原因</strong>，一个字没改。</p></li>
+      <li><p><strong>前端零构建链。</strong> 管理控制台用服务端渲染，不引入 node_modules 和打包步骤。加页面就是写模板 + 登记。</p></li>
+      <li><p><strong>Web 管理控制台长期存在</strong>，要好用、稳定、信息全——它是诊断通道和备份入口。<strong>但它看的是副本，不是原本</strong>（2026-09-18 加）：学习记录的第一副本在设备上，控制台看到的是上报上来的那一份。所以它该显示「设备说什么／服务端存档说什么」两列，而不是合成一个数——两列对不上正是「这台设备有一阵没同步了」的唯一可见信号。<strong>Web 阅读页与 Web 复习页已于 2026-09-18 删除</strong>（P9 §11）：新架构下它们要能学习就得在 JS 里再实现一遍学习引擎，而那正是铁律 1 禁止的事。第二客户端是 <code>ercli</code>，它走同一份 Core。</p></li>
+    </ol>
+  </section>
 
   <footer>
     <div>English Reader</div>

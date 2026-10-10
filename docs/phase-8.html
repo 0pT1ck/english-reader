@@ -1,8 +1,5 @@
 <meta charset="utf-8">
 <title>Phase 8 设置与验收</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 
 <style>
   :root {
@@ -862,10 +859,39 @@
     </div>
   </section>
 
+  <section id="instructions-record" data-source="CLAUDE.md：文档、进度、铁律（P6–P8验收例外、提交与分支历史）">
+    <div class="sec-head"><span class="sec-mark">移入</span><h2>从项目指令移入的记录</h2></div>
+    <p>2026-10-09 仅一次移入自根 <code>CLAUDE.md</code> 的「文档」「进度」与「铁律」节。以下是历史与证据；Phase 编号、数字、状态与「现在」均按当时记录理解。当前规则以<a href="../CLAUDE.md">根 CLAUDE.md</a>为准。原文的「开发场地」节现见 <a href="development.html">开发场地</a>。</p>
+    <h3>原文档节的阅读指针</h3>
+    <p><code>docs/phase-8.html</code> — P8 方案与实施结果（§8 开发者选项<strong>动了铁律 4</strong>、§9 客户端日志、§13 三个 Phase 一起验的清单、§16 实施结果与路上撞到的四件事）</p>
+    <h3>原结果表：P8 设置与验收</h3>
+    <p><strong>状态：</strong><strong>2026-09-16 验收通过</strong>，P6/P7 的欠账一并结清</p>
+    <p><strong>细节：</strong>设置屏八个区 + 把 P6/P7 的欠账收齐 + 三个 Phase 一起验收。39 条决定见 <code>phase-8.html</code>，实施结果见 §16。<strong>动了架构铁律 4</strong>：开发者选项直接控制后台（原生控件 + <code>X-Admin-Secret</code>，后端一行没改）。新建<strong>客户端日志</strong>（四级、一天一个文件、存三天、可导出，凭证打码）。<strong>真机逼出十一个问题</strong>（九个代码、一个内容、一个我的流程疏忽），其中七个是模拟器与 CI 永远看不见的那一类——请求被取消、一秒的网络延迟、越用越慢、兜底同时落空。全部记在 <code>phase-8.html</code> §18</p>
+    <h3>记名验收例外原文：P6、P7 与 P8</h3>
+    <p><strong>P6、P7 与 P8，2026-09-13 定、09-15 扩到三个，2026-09-16 还清</strong>：验收推迟到设置也做完、一起推 TestFlight，当天三个 Phase 一次走完三十项，全过。<strong>代价也如实兑现了</strong>：九个代码问题同时到来，而它们本可以分三次遇到。</p>
+    <p>（当天先定的是「欠到设置那个 Phase」，同日改成 P7——朋友的开发者账号当天就到位了，欠账因此从三个 Phase 缩到两个。<strong>设置那个 Phase 排在这次验收之后</strong>，不再一起欠。）</p>
+    <p>理由是真机验一次要动用别人的开发者账号，分两次约人不如做齐了约一次；而模拟器上用鼠标点和真机上用拇指读判断不出同一批东西（远程操控 runner 那条路试过、走死了）。</p>
+    <p>（2026-09-15 用户定把设置也做进这一次，于是<strong>欠账从两个 Phase 变成三个</strong>。）</p>
+    <p><strong>代价是三个 Phase 的验收一起欠着</strong>，塌了要一起改，见 <code>phase-6.html</code> §13、<code>phase-8.html</code> §1 与主文档 §M。</p>
+    <p><strong>缓解只有一条，但必须守住</strong>：每个界面 Phase 仍然必须过 CI——<strong>编得过、装得上、起得来、不闪退</strong>，这四样机器验得了。</p>
+    <h3>原提交节点说明与第三节点的撤销</h3>
+    <p><strong>提交只在两个节点发生，别处一律不提交：</strong></p>
+    <ol>
+      <li><strong>Phase 的方案文档彻底定稿时——问一句要不要推</strong>（不自动推，等回答）。加这一条的原因是方案讨论常常跨天跨会话，文档定稿了却不落库，下次开会就得靠翻对话重建。</li>
+      <li><strong>验收通过后自动提交并推送</strong>，不必再询问。</li>
+    </ol>
+    <p>除这两处之外，<strong>Phase 进行中保持工作区未提交</strong>，便于用户随时看到改了什么。</p>
+    <p><strong>原来还有第三个节点</strong>（2026-09-14 加、2026-09-19 撤销）：「本地不装 Swift，改完 Core 必须提交并推 <code>ios</code> 才能靠 CI 验证」——那条的前提是本地验不了 Core，而 Mac 迁移之后前提没了（见「开发场地」），本地跑一遍 <code>scripts/ci_client.py</code> 就知道改得对不对，不用再靠提交触发验证。</p>
+    <h3>原分支历史</h3>
+    <p><strong>界面的提交走 <code>ios</code> 分支，验收通过后合回 <code>main</code></strong>（2026-09-13 定，2026-09-16 第一次兑现）。P6/P7/P8 的提交在 <code>ios</code> 上攒了三个 Phase，TestFlight 验收通过当天一次合回 <code>main</code>。<strong>下一个界面 Phase 照旧</strong>：先在 <code>ios</code> 上攒，验收通过再合。看到 <code>main</code> 落后不要去「修」它——那是有意的。</p>
+    <h3>历史 footer 原句</h3>
+    <p><strong>历史标签（方案讨论时）：</strong>「Phase 8 · 设置与验收 · 方案讨论稿」；原日期行「2026-09-15」。2026-10-09 整理时将 footer 对齐 2026-09-16 的验收结果，旧句仅在此保留。</p>
+  </section>
+
   <footer>
     <div>English Reader</div>
-    <div>Phase 8 · 设置与验收 · 方案讨论稿</div>
-    <div>2026-09-15</div>
+    <div>Phase 8 · 设置与验收 · 与 P6、P7 一起验收通过</div>
+    <div>2026-09-15 方案 · 2026-09-16 验收通过</div>
   </footer>
 
 </div>
