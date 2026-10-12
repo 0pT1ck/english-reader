@@ -67,7 +67,7 @@ def main() -> int:
     key_path = ROOT / creds["key_path"]
     if not key_path.exists():
         return fail(f"凭证里写的 {creds['key_path']} 这个文件不存在")
-    print(f"密钥齐了：{creds['key_id']}，团队 {creds['team_id']}")
+    print("签名凭证已读取")
 
     print("\n1. 生成工程")
     gen = run(["xcodegen", "generate"], cwd=APP_DIR)
@@ -84,6 +84,8 @@ def main() -> int:
     run(["/usr/libexec/PlistBuddy", "-c",
          f"Set :CFBundleVersion {build_number}", str(plist_path)])
     print(f"  构建号 {build_number}（版本 {short_version}）")
+    release_dir = ROOT / "data" / "signing" / "release" / build_number
+    release_dir.mkdir(parents=True, exist_ok=True)
 
     auth_args = [
         "-allowProvisioningUpdates",
@@ -93,7 +95,7 @@ def main() -> int:
     ]
 
     print("\n3. 归档")
-    archive_path = Path("/tmp/EnglishReader-testflight.xcarchive")
+    archive_path = release_dir / "EnglishReader-testflight.xcarchive"
     archive = run([
         "xcodebuild", "archive",
         "-project", "EnglishReader.xcodeproj",
@@ -127,11 +129,11 @@ def main() -> int:
     if args.upload:
         export_options["uploadSymbols"] = True
         export_options["manageAppVersionAndBuildNumber"] = False
-    options_path = Path("/tmp/ExportOptions-testflight.plist")
+    options_path = release_dir / "ExportOptions-testflight.plist"
     with open(options_path, "wb") as f:
         plistlib.dump(export_options, f)
 
-    export_path = Path("/tmp/export-testflight")
+    export_path = release_dir / "export-testflight"
     export = run([
         "xcodebuild", "-exportArchive",
         "-archivePath", str(archive_path),

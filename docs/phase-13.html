@@ -278,7 +278,7 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
 
   <section id="implementation">
     <div class="sec-head"><span class="sec-mark">§9</span><h2>实施与本地验证</h2><span class="sec-note">2026-10-10 ／ 11</span></div>
-    <p class="lede">方案与上次文档迁移已按用户授权提交并推送 <code>ios</code>：<code>f8955cb</code>。下面的应用实现、回归及实施记录仍在工作区，没有另提交、部署或上传 TestFlight。</p>
+    <p class="lede">方案与文档迁移已推送 <code>ios</code>：<code>f8955cb</code>；应用实现与以下本地验证随后以 <code>4f3a8fc</code> 推送。10-12 提前发布结果单列在 §11，不把发布等同人工验收。</p>
     <h3>五项实现落在什么地方</h3>
     <div class="table-scroll"><table>
       <thead><tr><th>范围</th><th>实现与边界</th></tr></thead><tbody>
@@ -318,7 +318,7 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
         <tr><td>真实模拟器操作</td><td>初次三个慢拖中间高度松手后保留；随后快甩最大化／收起／关闭的独立操作通过，最新目标／空白关闭／drought 不硬拆及改档／最大后滚动的两项操作通过。没有把最初在辅助功能值读取处超时的整套自动化称为通过。</td></tr>
       </tbody>
     </table></div>
-    <p style="margin-top:1.2rem"><b>运行条件：</b>设备为 iPhone 17 模拟器，当前安装的 runtime 是 iOS 27.0；工程部署目标仍为 iOS 26。快甩样本测得向上速度约 2600 pt/s，面板到该模拟器安全区最大 716 pt；不是通用尺寸或真机手感结论。临时手势诊断已经移除，以下图片来自实际运行。</p>
+    <p style="margin-top:1.2rem"><b>上述验证的运行条件：</b>当时设备为 iPhone 17 模拟器、runtime 为 iOS 27.0；工程部署目标仍为 iOS 26。快甩样本测得向上速度约 2600 pt/s，面板到该模拟器安全区最大 716 pt；不是通用尺寸或真机手感结论。临时手势诊断已经移除，以下图片来自实际运行。10-12 开发环境迁移与新运行时结果另见 §11。</p>
     <div class="shots">
       <figure class="shot"><img src="./phase-13/lookup-default.png" alt="severely 独立义项与真实构词提示的默认查词面板"><figcaption>默认高度：本句中独立义项与构词提示；未把母词 id 当作可学义项。</figcaption></figure>
       <figure class="shot"><img src="./phase-13/lookup-max.png" alt="实际快速上甩后的最大高度面板"><figcaption>实际快甩后最大化；底部标记固定，顶部仍可收起或关闭。</figcaption></figure>
@@ -330,7 +330,7 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
   </section>
 
   <section id="acceptance">
-    <div class="sec-head"><span class="sec-mark">§10</span><h2>还没有验收，也没有手机上线</h2><span class="sec-note">边界</span></div>
+    <div class="sec-head"><span class="sec-mark">§10</span><h2>已提前发布，尚未人工验收</h2><span class="sec-note">边界</span></div>
     <div class="callout"><b>P13 尚未结束。</b>本地代码与机器结果不是用户真机验收。用户随后授权提前提交推送、上传 TestFlight、更新阿里云后端并安装模拟器，见 §11；该发布授权不等于生产派生义项已经补齐，也不等于人工验收通过。</div>
     <p>正式补缺使用 <code>scripts/import_derived_senses.py</code> 的 scan／import／reannotate 明确步骤，写入要求 <code>--apply --data-dir</code>，模型任务可续跑。先核对真实匹配与备份；大动作依现行部署规则暂停写入与夜间备稿，保住已有内容身份。不把隔离样本库回写正本。</p>
     <p>验收安排仍在当前 P13：需要可安装的新客户端与匹配的内容工厂、明确隔离的测试身份／宿主，避免把夹具混进本人的学习日志。本轮已获得提前提交与 TestFlight 上传授权；界面提交仍走 ios，不提前合回 main，不把发布视为新的人工验收例外。</p>
@@ -343,14 +343,40 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
         <tr><td>M5 手感与可访问性</td><td>拇指慢拖可停任意高度、快甩到最大，最大后滚内容；滑块、按钮不抢手势，大字、安全区和 VoiceOver 操作合理。</td></tr>
       </tbody>
     </table></div>
-    <p style="margin-top:1.2rem">人工 M1–M5 未跑；iOS 26 真机手感、全量生产补缺、线上部署与 Linux 编译未由本次结果证明。方案没有获得新的验收例外。</p>
+    <p style="margin-top:1.2rem">人工 M1–M5 未跑；iOS 26 真机手感、全量生产补缺与 Linux 编译未由本次结果证明。线上代码部署与 Apple 内部测试可用已验证，见 §11；方案没有获得新的验收例外。</p>
   </section>
 
   <section id="release">
-    <div class="sec-head"><span class="sec-mark">§11</span><h2>发布与开发环境迁移</h2><span class="sec-note">2026-10-12 授权</span></div>
+    <div class="sec-head"><span class="sec-mark">§11</span><h2>发布与开发环境迁移</h2><span class="sec-note">2026-10-12</span></div>
     <p>用户明确要求推送 GitHub、上传 TestFlight、更新阿里云后端、安装到模拟器；模拟器设备与运行时实际存储选择放在 <code>/Volumes/satassd/xcode</code>，而不只是将下载文件放过去。本轮按该授权提前发布，不宣布 P13 验收完成。</p>
     <p>动手前实查：Xcode 选择路径仍为 <code>/Volumes/satassd/Applications/Xcode.app/Contents/Developer</code>，版本 27.0；当前模拟器运行时与设备均为空，指定目录为空。运行时系统存储迁移需要管理员授权与正确文件所有权，保留回退路径，不静默改成仅外置下载。</p>
     <p>后端更新范围为源码、镜像与正常版本化迁移；不将隔离样本库回写正本，不擅自执行全量派生义项模型导入或重标。代码部署和正式内容补缺是两件事。</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>发布项</th><th>实际结果与边界</th></tr></thead><tbody>
+        <tr><td>GitHub</td><td><code>4f3a8fc</code> 已推送到 <code>ios</code>；未合回 main，P13 未结束。</td></tr>
+        <tr><td>TestFlight</td><td><code>0.1 / 202610121345</code>，本地 <code>ci_testflight.py --upload</code> 成功；归档 Mach-O 为 iOS 平台 2、签名验证通过。Apple 处理状态 <code>VALID</code>，内部测试状态 <code>IN_BETA_TESTING</code>；既有内部组确实包含本构建，未增加测试员或邀请。没有证明手机安装／操作。</td></tr>
+        <tr><td>阿里云</td><td>上线源码 <code>4f3a8fc</code>，镜像 <code>sha256:93cc4ad4de75…</code>；容器 running／healthy，两个公网 HTTPS <code>/health</code> 均返回 ok，公开契约含备句状态字段。实际契约下限仍 3；原 uid/gid、时区、凭证、数据挂载与 proxy 网络保持。</td></tr>
+        <tr><td>生产迁移</td><td><code>review v5</code>、<code>senses v8</code>、<code>llm v3</code> 已执行；停写窗口用 <code>VACUUM INTO</code> 保存 content／events 一致快照，迁移自动备份也保留，均 quick_check=ok。旧文章、token、句子、单词义项、词组义项五表全部行摘要前后相同，内容身份未改。</td></tr>
+        <tr><td>内容边界</td><td>上线时 <code>derived_sense_sources=0</code>；没有运行生产派生词补缺或重标。手机原有 severely 缺义项不会仅因代码上线就自动变成已补好。夜间备稿 04:00 开关保持；上线前后无 running 模型任务。</td></tr>
+      </tbody>
+    </table></div>
+    <p>发布入口的归档、导出与签名选项现放在忽略的 <code>data/signing/release/&lt;build_number&gt;/</code>；不再打印真实 Key ID／Team ID。此次实际上传使用修正后的普通脚本入口，非临时包装。</p>
+    <p>首次服务端构建在 frozen 锁文件的实际 PyPI 下载 URL 处超时；SSH 超时没有自动结束远端构建，已按本任务 PID 收尾。之后只给这一次 build 传已有 mihomo 的 HTTP(S) 代理，未改锁版本、hash、仓库源或 Docker daemon。真实 wheel 下载 1,250,147 字节／2.69 秒，新镜像构建 208.88 秒成功；临时 override 删除，运行容器使用原 compose。</p>
+    <h3 id="restart-handoff">模拟器现行布局与恢复诊断（2026-10-12／13）</h3>
+    <p>10-12 重启前的整目录链接迁移步骤已失效。用户随后明确选择在既有外盘 APFS 容器增加专用卷，原生挂载；原 satassd 卷没有重新格式化。详细交接与保留副本清单见 <a href="./p13-handoff-2026-10-12.md">Markdown 交接</a>，不重跑其中保留的一次性迁移脚本。</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>对象</th><th>实查结果与边界</th></tr></thead><tbody>
+        <tr><td>运行时存储</td><td><code>ER-Simulator</code> 卷 UUID <code>A13025CB-BC56-4765-A5AB-4AF4AB030927</code>，真实挂载在 <code>/Library/Developer/CoreSimulator</code>，不是链接；<code>/etc/fstab</code> 按 UUID 配置。10-12 普通卸载重挂与镜像服务重启通过。10-13 再查 UUID、挂载点与 Ready 一致，BSD 名已变为 disk5s2，不能依赖旧 disk7s2。</td></tr>
+        <tr><td>设备集</td><td>用户 CoreSimulator 根为普通目录；仅 <code>~/Library/Developer/CoreSimulator/Devices</code> 链接到外盘 <code>xcode/CoreSimulator/User/Devices</code>。原 iPhone 17 设备 <code>C42BC883-A5BD-4003-8760-EAF8229525BA</code> 保留，没有 erase 或删除身份。</td></tr>
+        <tr><td>镜像与权限</td><td>完整官方 exportedBundle 已导入，运行时 <code>C2EA3F08-2CA9-4C20-98EF-72EE716F4339</code>。payload 为 <code>Cryptex/Images/C2EA3F08-2CA9-4C20-98EF-72EE716F4339/Restore/043-92413-002.dmg</code>，8,014,773,567 字节，内核 backing image 位于新卷。Signature State 为 Unknown，不能写 Verified。用户授权服务 XPC Bundle 与 simdiskimaged 完全磁盘访问后实际创建设备成功，见排坑 §6.10。</td></tr>
+        <tr><td>10-12 App</td><td>最终外盘布局下 <code>ci_app.py</code> 9／9，编译、platform=7、安装、启动与 PID 存活通过；前台实际阅读初始页的中文却全部成方框，系统桌面也有相同症状。截图保存在 <code>data/p13-handoff/final-volume-app-font-boxes.png</code>，不将机器通过写成文字显示正常。</td></tr>
+        <tr><td>10-13 启动</td><td>原设备重新 boot 后长时间等 BackBoard；正常 shutdown／boot 后仍停在启动过程。SpringBoard 采样停在 dyld 的加载／初始化，缓存构建器持续数十分钟没有缓存产物。随后截图取得，但实际为黑屏转圈（<code>data/p13-handoff/current-reboot.png</code>），不是恢复后的 App。</td></tr>
+        <tr><td>字体资源</td><td>普通 Fonts 目录未列出 PingFang，但实际 runtime 的 <code>System/Library/PrivateFrameworks/FontServices.framework/CorePrivate/PingFangUI.ttc</code> 存在，61,081,560 字节。不能凭目录清单断言镜像缺中文字体；字体注册、回退与方框原因尚未确认。</td></tr>
+      </tbody>
+    </table></div>
+    <h3>10-13 最终恢复与收尾</h3>
+    <p>获准的管理员采样开始时缓存构建器已自行退出，返回目标进程不存在，没有取得管理员等待栈。实际缓存主文件 2,805,170,176 字节、分块 1,342,717,952 字节及 atlas／map 已生成。桌面主要中文标签与 English Reader 阅读初始页的中文恢复；原设备再次正常 shutdown／boot 后首次 90 秒等待超时，随后启动完成，App 中文仍正常。实际截图 <code>data/p13-handoff/app-after-cache.png</code>、<code>app-after-reboot.png</code> 已直接查看；最终 <code>ci_app.py</code> 9／9，日志留在同目录。没有改 App、字体或 Apple 二进制，也没有 erase 设备；缓存完成与恢复的先后关系不等于字体根因已证明。</p>
+    <p>启动仍曾缓慢，不能称为快速启动或所有系统资源正常（桌面地图小组件内部仍有问号图块）。完整 Mac 重启／热插拔、生产学习身份和 P13 人工 M1–M5 未验。9 个失效一次性迁移脚本与 fstab 安装模板／卷快照移入 <code>data/p13-handoff/retired-tools-20261013/</code>，未执行；原件、完整官方包、有效镜像、设备数据与诊断证据保留。按 CPU 与运行时长检查，本轮诊断、采样、构建和 shim 查找进程均已结束，正常 SDK 服务与设备保留。此次没有重传 TestFlight、重复部署后端或运行生产内容补缺；流水线及文档收尾按既有发布授权提交推送 ios，不合 main。</p>
   </section>
 
   <footer><span>English Reader</span><span>Phase 13 · 派生义项与查词体验</span><span>2026-10-10 开谈与定稿 · 已授权实现，尚未验收</span></footer>

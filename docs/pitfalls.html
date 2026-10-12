@@ -371,6 +371,16 @@ scheme 支持哪些平台，推导出来是空的。
 以前只伤服务端自己（文章打不开，一眼看得出来）。<strong>记录搬到设备之后，标记指着的正是这些 id</strong>——
 id 一变就是<strong>别人手机上的标记静默失效</strong>，而这边一切正常。
 所以「内容 id 不可变」从实现细节升成了架构铁律 5：<strong>重新分析必须是加一个新版本，不是原地重建。</strong></p>
+<h3 id="pitfall-6.10">6.10 终端的完全磁盘权限不等于模拟器服务的权限（2026-10-12）</h3>
+<p><strong>症状</strong>：外盘是 APFS、Owners Enabled，目录所有者与 sudo 迁移都正确，创建设备却报 Code 22 “stuck in creation state”；服务实际写设备目录时报 <code>Operation not permitted</code>。给服务可执行文件添加完全磁盘访问后，界面开关已开，失败仍在。</p>
+<p><strong>原因</strong>：TCC 以后台进程自身身份检查外盘访问，终端授权不传给 <code>CoreSimulatorService</code>。本机日志请求 <code>com.apple.CoreSimulator.CoreSimulatorService</code> 的 Bundle 身份（client_type=0），直接添加可执行文件得到路径身份（client_type=1），两者不匹配。界面开关不是实际访问成功的证据。</p>
+<p><strong>正确做法</strong>：先从系统日志核对被拒绝进程与身份。经用户授权，在系统设置添加 <code>CoreSimulatorService.xpc</code> Bundle，而不是只添加它的 Contents/MacOS 文件；挂载服务另按实际身份授权。只读核对授权身份，重启正确登记域的服务，再真实创建设备。不能改 TCC 数据库、关 SIP 或 chmod 777 来掩盖问题。</p>
+<p><strong>守卫</strong>：本轮先有真实失败，Bundle 授权后实际创建 iPhone 17 成功；<code>ci_app.py</code> 在 iOS 26.0 上 9／9，截图确认真实阅读初始页。该机器结果不替代 P13 人工 M1–M5，运行时实际镜像路径须另查，不能只看“Ready”或外盘有下载文件。</p>
+<h3 id="pitfall-6.11">6.11 外置运行时不能只看一次 Ready（2026-10-12）</h3>
+<p><strong>症状</strong>：整目录链接到外盘后，导入显示 Ready，重启挂载服务却丢掉记录；日志明确说镜像位于受管存储区之外。只链接 <code>Images</code> 又报 <code>Not a directory</code>，触发安全存储断言并反复崩溃。另一次导出命令超时，留下 4.8 GB 的部分镜像，不能当作完整包。</p>
+<p><strong>原因</strong>：这版 CoreSimulator 的目录与持久路径检查不等于普通文件系统的链接解析；进程内 Ready 不是重启后的持久可用。下载、安装、导出也不是同一完成点，导出可在“Done”后仍继续复制。</p>
+<p><strong>正确做法</strong>：不改 Apple 二进制或内部索引、不强行关闭安全检查。经用户选择，在外盘 APFS 容器中新增专用卷，挂到原生 <code>/Library/Developer/CoreSimulator</code>；用卷 UUID 配置默认挂载，不重新格式化既有卷。完整导出必须退出 0，再从官方 exportedBundle 导入；不把中断的包重复导入。</p>
+<p><strong>守卫</strong>：核对物理卷与镜像路径；卸载后不带路径覆盖参数重新挂载，确认 UUID 配置生效；挂载服务重启后再看运行时和 App 真实启动。只看外盘有文件、导入返回 UUID、一次 Ready 或原环境 9／9 都不够。10-12 最终布局 App 9／9 后中文仍全为方框，10-13 运行时 Ready／设备 Booted 后实际截图却黑屏转圈：必须读截图、验证文字和设备重启，不能只断言 PID 存活。系统缓存最终生成后 App 中文恢复，原设备再重启后截图保持正常，最终 ci_app 9／9；重启曾超过 90 秒，不把后来可用写成首次等待已通过。PingFangUI 实际位于 FontServices 的 CorePrivate 目录，不能凭普通 Fonts 目录未列出就断言缺字体；缓存完成与恢复的先后关系不等于字体根因已证实，见 P13 §11。</p>
 </section><section id="pitfalls-7"><h2>七、读代码时、等后台任务时</h2><p class="note">§7.2 所说的后台四条规则见根文件「模型与批量任务」，也保存在 <a href="./development.html#background">开发参考</a>。不要再按「上面」去找原根文件的位置。</p><h3 id="pitfall-7.1">7.1 一段解释性的注释会让人以为对应的代码在那儿</h3>
 <p><strong>症状</strong>：404 带着 trace_id 发给用户、什么也不写；用户把 trace 贴过来，<strong>查出来是空的</strong>。
 而「贴 trace 就能定位」正是把 trace_id 放进响应的全部理由。

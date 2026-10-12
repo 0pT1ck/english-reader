@@ -147,19 +147,19 @@
 
   <section id="current-operations">
     <div class="sec-head"><h2>现行操作</h2></div>
-    <p class="lede">以 2026-09-20 场地决定、09-26 P12 收尾及这次本地核对为依据。
-    2026-10-09 本次仅整理文档，没有登录生产机重测；版本、开关与机器容量在操作前查实际值。</p>
+    <p class="lede">以 2026-09-20 场地决定、09-26 P12 收尾与 2026-10-12 P13 实际部署为依据。
+    最近上线源码为 <code>ios / 4f3a8fc</code>，两域名健康与迁移已核验；详细结果及生产内容未补齐边界见 <a href="./phase-13.html#release">P13 §11</a>。每次操作仍查实际版本、任务与开关。</p>
     <h3>连接、发版与确认</h3>
     <p><code>ssh aliyun</code>，用户 root，IP <code>47.116.104.62</code>；工程目录
     <code>/opt/appdata/English reader/</code>（空格和大小写照抄），数据在其 <code>data/</code>，挂为容器的 <code>/app/data</code>。
     主入口 <code>https://reader.cntick.top</code>，备用 <code>https://reader.cfoptick.com</code>。</p>
     <ol><li>在获准的提交节点推送代码；远端以 <code>https_proxy=http://127.0.0.1:7890 git pull</code> 拉取。</li>
     <li>按 <code>/root/build-er.sh</code> 重建镜像，再在项目 compose 的位置重建并重启容器。
-    那份脚本已有三条国内取包路径，不改仓库默认源、不给 Docker 守护进程配代理（§5）。</li>
+    那份脚本已有三条国内取包路径，不改仓库默认源、不给 Docker 守护进程配代理（§5）。若 frozen 锁里的文件 URL 仍去 PyPI，源环境变量不能替换这些 URL；先从实际 build 容器短超时取文件验证网络，再只给本次 build 传已有代理，不动锁版本／hash。10-12 如此成功，重启仍使用原 compose，临时 override 随后删除。</li>
     <li>确认容器内确有改动，例如 <code>docker exec english-reader grep -c &lt;新函数名&gt; /app/backend/...</code>，
     答案 0 就是没上去；再查健康与实际端点。仅本地回归绿不能证明手机连的服务更新了。</li></ol>
     <p>客户端发版走 TestFlight，服务器发版走镜像，两边分别验证。契约客户端当前号为 3；
-    服务端下限最后记录为 3（P12，09-26），本次未远程查询。破坏性契约变更先发客户端，再提高下限；
+    服务端下限最后实查为 3（2026-10-12），P13 部署未调整。破坏性契约变更先发客户端，再提高下限；
     只拦客户端接口、缺版本头也拦；误锁可经 SSH 降低下限。</p>
     <h3>数据正本与本地加工</h3>
     <p><b>正本只有阿里云一份；r5s、Windows 的库是过期拷贝，不启动、不取数。</b>
