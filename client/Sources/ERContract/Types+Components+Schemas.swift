@@ -3042,14 +3042,6 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/StudyItemSentences/sentences`.
             public var sentences: [Components.Schemas.SentenceCard]
-            /// 内容生产状态：pending / running / ready / failed；ready 表示完整双语库存达到配置目标，不表示未见考句数量或学习状态
-            ///
-            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/preparation_state`.
-            public var preparation_state: Swift.String?
-            /// 内容准备失败或暂停的安全说明，不含供应商凭证；ready 时为空
-            ///
-            /// - Remark: Generated from `#/components/schemas/StudyItemSentences/preparation_error`.
-            public var preparation_error: Swift.String?
             /// Creates a new `StudyItemSentences`.
             ///
             /// - Parameters:
@@ -3059,17 +3051,13 @@ extension Components {
             ///   - word:
             ///   - sense:
             ///   - sentences: 这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分
-            ///   - preparation_state: 内容生产状态：pending / running / ready / failed；ready 表示完整双语库存达到配置目标，不表示未见考句数量或学习状态
-            ///   - preparation_error: 内容准备失败或暂停的安全说明，不含供应商凭证；ready 时为空
             public init(
                 item_type: Swift.String,
                 item_key: Swift.String,
                 sense_id: Swift.Int,
                 word: Components.Schemas.WordCard? = nil,
                 sense: Components.Schemas.SenseCard? = nil,
-                sentences: [Components.Schemas.SentenceCard],
-                preparation_state: Swift.String? = nil,
-                preparation_error: Swift.String? = nil
+                sentences: [Components.Schemas.SentenceCard]
             ) {
                 self.item_type = item_type
                 self.item_key = item_key
@@ -3077,8 +3065,6 @@ extension Components {
                 self.word = word
                 self.sense = sense
                 self.sentences = sentences
-                self.preparation_state = preparation_state
-                self.preparation_error = preparation_error
             }
             public enum CodingKeys: String, CodingKey {
                 case item_type
@@ -3087,8 +3073,6 @@ extension Components {
                 case word
                 case sense
                 case sentences
-                case preparation_state
-                case preparation_error
             }
         }
         /// 当天的文章与复习，一次拿全。

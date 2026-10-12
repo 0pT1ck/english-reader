@@ -13,6 +13,7 @@ struct ReaderScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var model = ReaderModel()
     @State private var scrolledTo: Int?
+    @State private var viewportHeight: CGFloat = 0
     /// 正文里那个大标题有多高，以及它是不是已经滚出去了——栏里的小标题
     /// 看这个决定出不出现（决定 ⑩ 的 C）。
     @State private var titleHeight: CGFloat = 0
@@ -29,18 +30,6 @@ struct ReaderScreen: View {
 
     var body: some View {
         content
-            .overlay(alignment: .bottom) {
-                GeometryReader { geometry in
-                    if let item = model.lookup, !searching {
-                        ContinuousLookupPanel(item: item, maximumHeight: geometry.size.height - 8,
-                                              onSelect: { model.select($0) },
-                                              onMark: { model.setMark($0, app: app) },
-                                              onDismiss: { model.closeLookup() })
-                            .id(item.target)
-                            .frame(maxHeight: .infinity, alignment: .bottom)
-                    }
-                }
-            }
             // **标题自己画，栏里那个小标题自己管**（P12 决定 ⑩，方案 §7 三的 C）。
             //
             // 原来交给导航栏的大标题（P6 决定 16），为的是「往上滑，大标题缩进栏里
@@ -64,12 +53,10 @@ struct ReaderScreen: View {
                         .lineLimit(1)
                         .opacity(titleScrolledAway ? 1 : 0)
                         .animation(.easeInOut(duration: 0.2), value: titleScrolledAway)
-                        .onTapGesture { model.closeLookup() }
                 }
             }
             .task { await start() }
             .onDisappear {
-                model.closeLookup()
                 model.reportProgress(app: app)
                 // **记完就发。**读到哪一段存在服务端（`progress.sentence_seq`），
                 // 而事件只是落进了发件箱——不发出去的话，下次打开这篇文章
@@ -77,15 +64,20 @@ struct ReaderScreen: View {
                 // 退出一篇文章是个自然的同步点，而且就一条事件。
                 Task { await app.drain() }
             }
-            // Search remains a native sheet; lookup is a nonmodal overlay.
+            // 文内搜索（决定 ㉑）。**跟点词面板挂在同一个视图上**——挂在里层的滚动视图上时，
+            // 2026-09-23 模拟器上它根本弹不出来（外层已经挂着一个 sheet）。
             .sheet(isPresented: $searching) {
                 ArticleSearchSheet(model: model, initialQuery: devSearchQuery) { hit in
                     searching = false
                     jump(to: hit)
                 }
             }
-            .onChange(of: searching) { _, shown in
-                if shown { model.closeLookup() }
+            .sheet(isPresented: lookupBinding) {
+                if let item = model.lookup {
+                    LookupSheet(item: item, maxHeight: viewportHeight / 2,
+                                onSelect: { model.select($0) },
+                                onMark: { model.setMark($0, app: app) })
+                }
             }
     }
 
@@ -125,12 +117,8 @@ struct ReaderScreen: View {
                         paragraph: paragraph,
                         marks: model.markSpans,
                         selected: model.selectedSpan,
-                        phraseSpans: model.phraseSpans,
                         scale: app.preferences.fontScale,
-                        onTap: { seq in
-                            if let seq, !searching { model.tap(seq: seq, app: app) }
-                            else { model.closeLookup() }
-                        }
+                        onTap: { model.tap(seq: $0, app: app) }
                     )
                     .id(paragraph.id)
                 }
@@ -143,14 +131,6 @@ struct ReaderScreen: View {
             // 算（标签栏藏掉之后「读完了」曾被它压住）；它不在了，就回到一个普通的留白。
             // 系统自带的「点状态栏回到顶部」照样能用。
             .padding(.bottom, 40)
-            .background {
-                Color(uiColor: .systemBackground)
-                    .onTapGesture { model.closeLookup() }
-            }
-        }
-        .background {
-            Color(uiColor: .systemBackground)
-                .onTapGesture { model.closeLookup() }
         }
         .scrollPosition(id: $scrolledTo)
         // 面板开着时正文不能滚（决定 24）。
@@ -171,7 +151,11 @@ struct ReaderScreen: View {
         } action: { _, away in
             titleScrolledAway = away
         }
-        // The lookup overlay measures its own safe-area viewport independently.
+        // 面板最高只能占半屏（决定 26），所以要量一下这一屏有多高——
+        // `UIScreen.main` 在 iOS 26 上已经不该再用了。
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+            viewportHeight = $0
+        }
         // **跳回上次位置（决定 15）要等排版量完才对得准。**打开的那一刻每一段的
         // 高度都还没量出来（正文每段是一个 `UITextView`，高度事后才报上来），
         // 那时设的位置是按全是零的高度算的，结果停在顶部。2026-09-23 在 iOS 27
@@ -199,7 +183,6 @@ struct ReaderScreen: View {
     /// **标题在这里**（P12 起），想占几行占几行——原先交给导航栏的大标题，
     /// 而那个是单行截断的。字号用 `.largeTitle` 加粗，就是系统大标题那一档。
     private var header: some View {
-        // Header text is not a lookup target.
         VStack(alignment: .leading, spacing: 6) {
             Text(card.title)
                 .font(.largeTitle.bold())
@@ -227,8 +210,6 @@ struct ReaderScreen: View {
             .foregroundStyle(.secondary)
             Divider().padding(.top, 6)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { model.closeLookup() }
     }
 
     /// 「读完了」。**记账只在这一刻发生**——按下退回列表，那篇当场变已学习
@@ -244,7 +225,6 @@ struct ReaderScreen: View {
         } else {
             Button {
                 model.finish(app: app)
-                model.closeLookup()
                 dismiss()
             } label: {
                 Text("读完了").frame(maxWidth: .infinity)
@@ -281,7 +261,6 @@ struct ReaderScreen: View {
                 Image(systemName: "ellipsis")
             }
             .accessibilityLabel("选项")
-            .simultaneousGesture(TapGesture().onEnded { model.closeLookup() })
         }
     }
 
@@ -317,6 +296,10 @@ struct ReaderScreen: View {
         #endif
     }
 
+    private var lookupBinding: Binding<Bool> {
+        Binding(get: { model.lookup != nil },
+                set: { if !$0 { model.closeLookup() } })
+    }
 
     private func start() async {
         guard model.phase == .loading else { return }
@@ -335,7 +318,7 @@ struct ReaderScreen: View {
                let hit = model.search(model.surface(at: seq) ?? "").first(where: { $0.id == seq }) {
                 jump(to: hit)
             }
-            if let seq = DevLaunch.tapSeq, !searching {
+            if let seq = DevLaunch.tapSeq {
                 model.tap(seq: seq, app: app)
                 if let pick = DevLaunch.pickSense {
                     model.select(.init(inner: DevLaunch.openInner, senseId: pick))
@@ -343,7 +326,6 @@ struct ReaderScreen: View {
                 if DevLaunch.markRequested { model.setMark(DevLaunch.markKind, app: app) }
             }
             #endif
-            await model.refreshIfStale()
         }
     }
 

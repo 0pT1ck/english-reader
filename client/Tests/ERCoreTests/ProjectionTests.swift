@@ -152,43 +152,6 @@ struct ProjectionTests {
         #expect(item?.pool == .reviewing, "还有一种标记在,不许退回")
     }
 
-    @Test("当前改档原子替换旧标记，历史评级、遇见与其他义项不变")
-    func selectingAMarkReplacesOnlyThatSenseWithoutRewritingHistory() throws {
-        var history: [(LoggedEvent.Kind, [String: JSONValue], String)] = [
-            (.marked, ["item_key": .string("municipal"), "sense_id": .int(1),
-                       "kind": .string("unknown")], "2026-01-01T08:00:00+00:00"),
-            (.marked, ["item_key": .string("municipal"), "sense_id": .int(1),
-                       "kind": .string("fuzzy")], "2026-01-01T08:01:00+00:00"),
-            (.marked, ["item_key": .string("municipal"), "sense_id": .int(2),
-                       "kind": .string("unknown")], "2026-01-01T08:02:00+00:00"),
-            (.read, ["article_id": .int(480), "met": .array([
-                .object(["item_key": .string("municipal"), "sense_id": .int(1), "n": .int(3)])
-            ])], "2026-01-01T08:03:00+00:00"),
-            (.answered, ["item_key": .string("municipal"), "sense_id": .int(1),
-                         "passed": .bool(true)], "2026-01-01T09:00:00+00:00"),
-            (.answered, ["item_key": .string("municipal"), "sense_id": .int(1),
-                         "passed": .bool(true)], "2026-01-01T09:01:00+00:00"),
-        ]
-        let key = Self.word("municipal", sense: 1)
-        let prior = Self.replay(history)
-        let remembered = try #require(prior.items[key]?.memory)
-        #expect(prior.items[key]?.marks == [.unknown, .fuzzy])
-        history.append((.marked, OutboxEntry.marked("municipal", senseId: 1, kind: .unknown).payload,
-                        "2026-01-02T08:00:00+00:00"))
-        let unknown = Self.replay(history)
-        #expect(unknown.items[key]?.marks == [.unknown])
-        #expect(unknown.items[key]?.memory == remembered)
-        #expect(unknown.items[key]?.encounters == 3)
-        #expect(unknown.items[Self.word("municipal", sense: 2)] == prior.items[Self.word("municipal", sense: 2)])
-        history.append((.marked, OutboxEntry.marked("municipal", senseId: 1, kind: .fuzzy).payload,
-                        "2026-01-02T08:01:00+00:00"))
-        let fuzzy = Self.replay(history)
-        #expect(fuzzy.items[key]?.marks == [.fuzzy])
-        #expect(fuzzy.items[key]?.memory == remembered)
-        #expect(fuzzy.items[key]?.encounters == 3)
-        #expect(fuzzy.items[key]?.introducedAt == prior.items[key]?.introducedAt)
-    }
-
     /// 词组是一个整体:不认识 `account for` 不说明 `account` 怎么样。
     @Test("词组和它的组成词是两个条目")
     func aPhraseIsItsOwnItem() {

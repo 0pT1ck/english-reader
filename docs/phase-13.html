@@ -96,7 +96,7 @@
 
 <main class="wrap" lang="zh-CN">
   <header class="masthead">
-    <div class="eyebrow">Phase 13 · 本地实现与机器验证完成，尚未人工验收／部署 · 2026-10-10 ／ 11</div>
+    <div class="eyebrow">Phase 13 · 2026-10-13 用户要求 iOS 回退上一发布版 · 未验收</div>
     <h1>派生义项与查词体验</h1>
     <p class="standfirst">一个常用词看得见释义，却标不了；标完的词没有当场备好复习语境；查词面板还在两档之间跳。P13 从真实阅读中遇到的这五件事开始。</p>
     <p class="thesis"><b>补真实义项，不放开义项 0；标记落本地，备句在后台；慢拖自由调高，快甩直接最大化。</b><br>正文保留定稿时的方案与核查依据；本地实施与真实样本验证见 <a href="#implementation">§9</a>，人工验收及上线边界见 <a href="#acceptance">§10</a>。机器结果不代替用户操作。</p>
@@ -379,5 +379,15 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
     <p>启动仍曾缓慢，不能称为快速启动或所有系统资源正常（桌面地图小组件内部仍有问号图块）。完整 Mac 重启／热插拔、生产学习身份和 P13 人工 M1–M5 未验。9 个失效一次性迁移脚本与 fstab 安装模板／卷快照移入 <code>data/p13-handoff/retired-tools-20261013/</code>，未执行；原件、完整官方包、有效镜像、设备数据与诊断证据保留。按 CPU 与运行时长检查，本轮诊断、采样、构建和 shim 查找进程均已结束，正常 SDK 服务与设备保留。此次没有重传 TestFlight、重复部署后端或运行生产内容补缺；流水线及文档收尾按既有发布授权提交推送 ios，不合 main。</p>
   </section>
 
-  <footer><span>English Reader</span><span>Phase 13 · 派生义项与查词体验</span><span>2026-10-10 开谈与定稿 · 已授权实现，尚未验收</span></footer>
+  <section id="rollback">
+    <div class="sec-head"><span class="sec-mark">§12</span><h2>用户要求 iOS 软件与代码回上一版</h2><span class="sec-note">2026-10-13</span></div>
+    <p>用户原话：<b>「新版的ios app太糟糕了，软件版本以及代码都退回上一版」</b>。恢复 <code>12c57dd</code> 的完整 <code>client/</code> 树，对应此前已发布的 <code>0.1 / 202609231319</code>；不是只撤 P13 面板、保留其他新版行为，也不是以 P13 前的 f8955cb 冒充旧发包（后者包含旧包未发布的 ETag 修复）。App、Core、CLI、契约快照、生成物和测试均回到该树；生成器重新运行后逐字节一致，未手改生成物。</p>
+    <p>Apple API 本次实查旧构建 <code>VALID</code>、<code>IN_BETA_TESTING</code>、未过期，到期时间为 2026-12-22 13:48:24（北京时间）。手机需在 TestFlight → English Reader →「以前的构建版本」选择 <code>202609231319</code> 安装；不能声称已经远程回退手机。没有上传新包，没有 expire／删除 <code>202610121345</code>。另查 builds/betaGroups 返回 403，不能把未获权限的关系检查报成成功。</p>
+    <p>当前 P13 后端与生产数据保留，契约号仍为 3；P13 新增响应字段是可选字段，旧客户端可忽略。不逆向 schema、不改内容 id、不清设备日志或生产事件。回退版没有正文 ETag 重校验，服务端改过标注的文章须手动清缓存；P13 的即时上报、连续高度面板、构词提示和双语门槛等客户端行为撤回。</p>
+    <p><b>学习记录边界：</b>P13 新增 <code>replace_marks=true</code> 的替换含义，旧 Core 可读取 payload 但仍累积标记；同义项新版改档后回退，旧版可能显示旧标记或影响当天评级封顶与重放排期。尚未读取手机日志，不能断言用户已产生该序列，也不能宣称降级语义无损。本次严格恢复旧源码，没有擅自加入兼容补丁或改写事实日志。pool-report.json 与新增响应字段被旧版忽略，不构成解码失败。</p>
+    <p><b>验证：</b><code>ci_client.py</code> 9／9（全量 Swift、iOS platform=2、契约逐字节一致）；App 最终 9／9（platform=7、安装、启动并存活），原设备已有数据保留，实际阅读初始页截图中文正常。日志与图在 <code>data/p13-handoff/rollback-client-20261013.log</code>、<code>rollback-app-retry-20261013.log</code>、<code>rollback-app-final-20261013.png</code>。首次 App 验证误与契约生成并行，生成器重建文件时编译报告找不到输入；之后顺序重跑通过。模拟器没有生产学习身份，未据此说线上阅读／复习已验证；手机安装与用户体验仍需用户操作。Linux 本地未验。</p>
+    <p>回退以新提交推送 <code>ios</code>，不改写历史、不强推、不合 main。P13 客户端撤回，Phase 未验收、不结束，不继续开发新版体验；§9／§11 是此前实施与发布事实。</p>
+  </section>
+
+  <footer><span>English Reader</span><span>Phase 13 · 客户端已回退</span><span>2026-10-13 · 未验收，未结束</span></footer>
 </main>

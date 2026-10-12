@@ -114,18 +114,16 @@ struct ParagraphTextView: UIViewRepresentable {
     let marks: [MarkSpan]
     /// 正在被点开的那一段，整段底色——点词组的任一半，亮的是整个词组。
     let selected: ClosedRange<Int>?
-    let phraseSpans: [ClosedRange<Int>]
     /// 字号倍数（P8 决定 17）。**入口在阅读屏的 `···` 里**——调字号要看着正文
     /// 调，在设置页拖一个滑块再退出去看效果，是把两秒的动作做成一分钟。
     ///
     /// 乘在 `UIFontMetrics` 之上，不是取代它：系统的动态字体照旧生效，
     /// 这个倍数只是在它之上再缩放一次。
     var scale: Double = 1.0
-    let onTap: (Int?) -> Void
+    let onTap: (Int) -> Void
 
     func makeUIView(context: Context) -> UITextView {
-        // TextKit 1 exposes actual glyph rectangles, not nearest insertion positions.
-        let view = UITextView(usingTextLayoutManager: false)
+        let view = UITextView()
         view.isEditable = false
         view.isScrollEnabled = false
         view.isSelectable = false          // 选中会抢走点词的手势
@@ -159,31 +157,20 @@ struct ParagraphTextView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     final class Coordinator: NSObject {
-        var onTap: ((Int?) -> Void)?
+        var onTap: ((Int) -> Void)?
 
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard let view = gesture.view as? UITextView,
-                  let text = view.attributedText, text.length > 0 else {
-                onTap?(nil)
-                return
-            }
-            let tap = gesture.location(in: view)
-            let point = CGPoint(x: tap.x - view.textContainerInset.left,
-                                y: tap.y - view.textContainerInset.top)
-            let layout = view.layoutManager
-            let glyph = layout.glyphIndex(for: point, in: view.textContainer)
-            guard glyph < layout.numberOfGlyphs,
-                  layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1),
-                                      in: view.textContainer).contains(point) else {
-                onTap?(nil)
-                return
-            }
-            let offset = layout.characterIndexForGlyph(at: glyph)
-            guard offset < text.length else {
-                onTap?(nil)
-                return
-            }
-            onTap?(text.attribute(.tokenSeq, at: offset, effectiveRange: nil) as? Int)
+                  let text = view.attributedText, text.length > 0 else { return }
+            let point = gesture.location(in: view)
+            // `closestPosition` 走的是 UITextInput，TextKit 1 还是 2 都答得出来；
+            // `layoutManager` 那条路在 TextKit 2 下会是 nil。
+            guard let position = view.closestPosition(to: point) else { return }
+            let offset = view.offset(from: view.beginningOfDocument, to: position)
+            guard offset >= 0, offset < text.length else { return }
+            guard let seq = text.attribute(.tokenSeq, at: offset,
+                                           effectiveRange: nil) as? Int else { return }
+            onTap?(seq)
         }
     }
 
@@ -200,12 +187,6 @@ struct ParagraphTextView: UIViewRepresentable {
                          .foregroundColor: UIColor.label,
                          .paragraphStyle: style])
 
-        // Fill the phrase's internal spaces first; individual glyphs keep their own token identity.
-        for span in phraseSpans {
-            guard let range = range(of: span, length: result.length),
-                  let first = paragraph.tokens.first(where: { span.contains($0.seq) }) else { continue }
-            result.addAttribute(.tokenSeq, value: first.seq, range: range)
-        }
         for token in paragraph.tokens {
             let range = NSRange(location: token.location, length: token.length)
             guard NSMaxRange(range) <= result.length else { continue }
@@ -232,15 +213,12 @@ struct ParagraphTextView: UIViewRepresentable {
     /// 一段 token 在这一段正文里占的范围：**从第一个词的开头到最后一个词的结尾**，
     /// 中间的空格一起算进去——跨 Phase 不变量，词组是一个整体。不在这一段的返回 nil。
     private func range(of seqs: ClosedRange<Int>, length: Int) -> NSRange? {
-        var start: Int?
-        var end: Int?
-        for token in paragraph.tokens where seqs.contains(token.seq) {
-            start = min(start ?? token.location, token.location)
-            let tokenEnd = token.location + token.length
-            end = max(end ?? tokenEnd, tokenEnd)
-        }
-        guard let start, let end else { return nil }
-        let range = NSRange(location: start, length: end - start)
+        let inside = paragraph.tokens.filter { seqs.contains($0.seq) }
+        guard let first = inside.min(by: { $0.location < $1.location }),
+              let last = inside.max(by: { $0.location + $0.length < $1.location + $1.length })
+        else { return nil }
+        let range = NSRange(location: first.location,
+                            length: last.location + last.length - first.location)
         return NSMaxRange(range) <= length ? range : nil
     }
 }

@@ -100,11 +100,11 @@ func usage() {
       ercli mark <编号> <序号> [--fuzzy] [--sense <义项号>]
                                标记；对词组会整体标记。这一处没判出义项时
                                （功能词、标注判「都不贴合」的）要用 --sense 指定标哪条
-      ercli unmark <编号> <序号> [--sense <义项号>] 撤销标记并立即同步
+      ercli unmark <编号> <序号>   撤销标记
       ercli finish <编号>      读完，记账
       ercli review             走一遍今天的复习
       ercli spell              复习走完之后的拼写强化
-      ercli sync               上报日志、最新词池快照并取得复习句子
+      ercli sync               把发件箱里的东西报上去
       ercli cache              看缓存占了多少，清理
       ercli walk               \(Ink.bold("从头到尾走完一天"))——验收用
 
@@ -140,7 +140,6 @@ func record(_ entry: OutboxEntry) throws {
 }
 let articleCache = try ArticleCache(directory: stateDirectory.appendingPathComponent("articles"))
 let dayCache = try DayCache(directory: stateDirectory.appendingPathComponent("day"))
-let sentenceCache = try DayCache(directory: stateDirectory.appendingPathComponent("sentences"))
 
 // **每一条请求都盖上契约版本**（P11 决定 ⑲）。包一层而不是逐处加，
 // 因为要求就是「每一条」——漏掉一条，服务端就有一条路看不出这份客户端多旧，
@@ -149,7 +148,7 @@ let transport: any Transport = VersionedTransport(
     flag("offline") ? OfflineTransport()
                     : URLSessionTransport(baseURL: baseURL, token: token))
 let engine = SyncEngine(transport: transport, outbox: outbox, events: events,
-                        articles: articleCache, day: dayCache, sentences: sentenceCache)
+                        articles: articleCache, day: dayCache)
 
 if let warning = ProxyEnvironment.warning() { print(Ink.yellow(warning)) }
 
@@ -234,14 +233,9 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
     let article = try await engine.article(id)
     let display = ArticleDisplay(article: article)
     let kind: MarkKind = fuzzy ? .fuzzy : .unknown
-    let changed: Projection.Key
 
     switch display.target(at: seq) {
     case .phrase(let phrase):
-        guard phrase.senseId > 0 else {
-            print(Ink.dim("这个词组没有可标记的真实义项")); return
-        }
-        changed = Projection.Key(itemType: "phrase", key: phrase.phrase, senseId: phrase.senseId)
         // 词组是一个整体，就按一个整体标记——点它的任何一半都一样。
         // **而标的是这一处用的那条义项**（P11 决定 ③）：在「另外」那句标了
         // `in addition` 不等于它别的意思也不会——跟单词那边一模一样。
@@ -282,12 +276,10 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
             throw CLIError("义项 \(senseId) 不是「\(headword)」的")
         }
         try record(.marked(headword, senseId: senseId, kind: kind, articleId: id))
-        changed = Projection.Key(itemType: "word", key: headword, senseId: senseId)
         print(Ink.red("标记：\(headword)") + Ink.dim("（义项 \(senseId)，\(kind.rawValue)）"))
     case nil:
-        print(Ink.dim("⟨\(seq)⟩ 这里没有可标记的东西")); return
+        print(Ink.dim("⟨\(seq)⟩ 这里没有可标记的东西"))
     }
-    await syncPoolChange(changed)
 }
 
 /// Take a mark back.
@@ -298,31 +290,18 @@ func mark(_ id: Int, _ seq: Int, fuzzy: Bool) async throws {
 func unmark(_ id: Int, _ seq: Int) async throws {
     let article = try await engine.article(id)
     let display = ArticleDisplay(article: article)
-    let changed: Projection.Key
     switch display.target(at: seq) {
     case .phrase(let phrase):
-        guard phrase.senseId > 0 else {
-            print(Ink.dim("这个词组没有可撤销的真实义项")); return
-        }
-        changed = Projection.Key(itemType: "phrase", key: phrase.phrase, senseId: phrase.senseId)
-        try record(.unmarked(phrase.phrase, senseId: phrase.senseId, itemType: "phrase"))
+        try record(.unmarked(phrase.phrase, itemType: "phrase"))
         print(Ink.green("撤销词组标记：\(phrase.phrase)"))
     case .word(let headword, _):
-        let senseId = option("sense").flatMap(Int.init)
-            ?? (article.tokens ?? []).first { $0.seq == seq }?.sense_id ?? 0
-        guard senseId > 0,
-              article.glossary?.additionalProperties[headword]?.senses.contains(
-                where: { $0.id == senseId }) == true else {
-            print(Ink.dim("没有选中可撤销的真实义项，用 --sense 指定义项")); return
-        }
-        changed = Projection.Key(itemType: "word", key: headword, senseId: senseId)
+        let senseId = (article.tokens ?? []).first { $0.seq == seq }?.sense_id ?? 0
         try record(.unmarked(headword, senseId: senseId))
         print(Ink.green("撤销标记：\(headword)") + Ink.dim("（义项 \(senseId)）"))
     case nil:
-        print(Ink.dim("⟨\(seq)⟩ 这里没有可撤销的东西")); return
+        print(Ink.dim("⟨\(seq)⟩ 这里没有可撤销的东西"))
     }
     print(Ink.dim("条目退回 new，但遇见记录保留——它确实被遇见过"))
-    await syncPoolChange(changed, withdrawn: true)
 }
 
 func finish(_ id: Int) async throws {
@@ -333,54 +312,6 @@ func finish(_ id: Int) async throws {
                                 met: Encounters.met(in: article)))
     print(Ink.green("读完 #\(id)")
         + Ink.dim("——遇见次数 +1，词池位置不动；标记过的才进复习队列"))
-}
-
-func refreshReportedPool() async throws -> Components.Schemas.SentencePoolResponse {
-    let package: DayPackage
-    if let cached = await engine.cachedDay() {
-        package = cached
-    } else {
-        package = try await engine.fetchDay()
-    }
-    guard let settings = package.schedulerSettings else {
-        throw CLIError("没有排期参数，标记保留在本地；联网取得今日包后再同步")
-    }
-    _ = try await engine.pull()
-    let projection = Projection.replay(
-        try events.load(), weightDecay: package.settings.weight_decay, settings: settings)
-    _ = try await engine.reportPoolIfNeeded(
-        PoolSnapshot(projection: projection),
-        reportedAt: ISO8601DateFormatter().string(from: Date()))
-    return try await engine.fetchSentences(allowCachedFallback: false)
-}
-
-func syncPoolChange(_ key: Projection.Key, withdrawn: Bool = false) async {
-    do {
-        let report = try await engine.drain()
-        guard !report.offline else {
-            print(Ink.yellow("标记已保存在本地；联网后 ercli sync 补报并备句。"))
-            return
-        }
-        let pool = try await refreshReportedPool()
-        if withdrawn {
-            print(Ink.green("撤销后的词池快照已上报。"))
-            return
-        }
-        let content = pool.items.first {
-            $0.item_type == key.itemType && $0.item_key == key.key && $0.sense_id == key.senseId
-        }
-        switch content?.preparation_state {
-        case "ready":
-            print(Ink.green("双语复习句子已备好并缓存。"))
-        case "failed":
-            print(Ink.yellow("备句失败：\(content?.preparation_error ?? "服务端未能备齐双语内容")"))
-        default:
-            print(Ink.yellow("已上报并申请双语复习句子，正在准备；稍后 ercli sync 取得内容。"))
-        }
-    } catch {
-        // A failed network operation must not undo a successfully persisted mark.
-        print(Ink.yellow("标记已保存在本地，同步或备句尚未完成：\(error)"))
-    }
 }
 
 /// 把发件箱和事件日志报上去。
@@ -402,14 +333,6 @@ func pushPending() async throws {
         + "失败 \(report.rejected)，还剩 \(report.remaining)")
     if report.remaining > 0 {
         print(Ink.dim("剩下的是服务端没确认的——只删它明确说收下的那几条（决定 11）"))
-    }
-    let pool = try await refreshReportedPool()
-    let preparing = pool.items.filter { $0.preparation_state != "ready" }.count
-    if preparing > 0 {
-        print(Ink.yellow("还有 \(preparing) 个词的双语句子尚未备好。"))
-    }
-    for item in pool.items where item.preparation_state == "failed" {
-        print(Ink.yellow("\(item.item_key)：\(item.preparation_error ?? "备句失败")"))
     }
 }
 
@@ -479,9 +402,8 @@ func reviewDay() async throws -> ReviewDay {
         try events.load(),
         weightDecay: package.settings.weight_decay,
         settings: settings)
-    _ = try await engine.reportPoolIfNeeded(
-        PoolSnapshot(projection: projection),
-        reportedAt: ISO8601DateFormatter().string(from: Date()))
+    try await engine.reportPool(projection.poolSnapshot(),
+                                reportedAt: ISO8601DateFormatter().string(from: Date()))
     return ReviewDay.assemble(pool: try await engine.fetchSentences(),
                               projection: projection,
                               day: localToday(), now: Date())
@@ -514,9 +436,8 @@ func review() async throws {
     try await engine.drain()
     var projection = Projection.replay(try events.load(),
                                        weightDecay: decay, settings: settings)
-    _ = try await engine.reportPoolIfNeeded(
-        PoolSnapshot(projection: projection),
-        reportedAt: ISO8601DateFormatter().string(from: Date()))
+    try await engine.reportPool(projection.poolSnapshot(),
+                                reportedAt: ISO8601DateFormatter().string(from: Date()))
     let pool = try await engine.fetchSentences()
     var day = ReviewDay.assemble(pool: pool, projection: projection,
                                  day: localToday(), now: Date())
@@ -738,21 +659,16 @@ func walk() async throws {
         print(sameFromOtherHalf == .phrase(phrase)
             ? Ink.green("   两半都指向整个词组")
             : Ink.red("   两半指向的不是同一个东西——词组渲染坏了"))
-        try await mark(id, phrase.startSeq, fuzzy: false)
+        try record(.marked(phrase.phrase, kind: .unknown, itemType: "phrase",
+                                  articleId: id))
+        print(Ink.dim("   标记了这个词组（整体）"))
     }
 
-    if let target = (first.tokens ?? []).first(where: { token in
-        guard token.is_target, let senseId = token.sense_id, senseId > 0,
-              let headword = token.headword,
-              first.glossary?.additionalProperties[headword]?.senses.contains(
-                where: { $0.id == senseId }) == true else { return false }
-        if case .word = display.target(at: token.seq) { return true }
-        return false
-    }) {
-        print("\n\(Ink.bold("⑤ 标记一个生词"))：\(target.headword ?? target.surface)")
-        try await mark(id, target.seq, fuzzy: false)
-    } else {
-        print(Ink.dim("⑤ 当前文章没有可标记的真实目标义项，不制造义项 0 的记录。"))
+    if let target = display.tokens.enumerated().first(where: { $0.element.role == .target }),
+       let headword = target.element.headword {
+        let senseId = (first.tokens ?? []).first { $0.seq == target.offset }?.sense_id ?? 0
+        try record(.marked(headword, senseId: senseId, kind: .unknown, articleId: id))
+        print("\n\(Ink.bold("⑤ 标记一个生词"))：\(headword)（义项 \(senseId)）")
     }
 
     try record(.articleFinished(id, sentenceSeq: (first.sentences?.count ?? 1) - 1,
@@ -767,8 +683,8 @@ func walk() async throws {
         try await engine.drain()
         let projection = Projection.replay(try events.load(),
                                            weightDecay: decay, settings: settings)
-        _ = try await engine.reportPoolIfNeeded(
-            PoolSnapshot(projection: projection),
+        try await engine.reportPool(
+            projection.poolSnapshot(),
             reportedAt: ISO8601DateFormatter().string(from: Date()))
         let pool = try await engine.fetchSentences()
         let day = ReviewDay.assemble(pool: pool, projection: projection,

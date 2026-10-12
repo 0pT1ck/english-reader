@@ -133,17 +133,6 @@ public struct SyncReport: Sendable, Equatable {
     }
 }
 
-/// 词池上报版本 pool snapshot: acknowledgement is independent of event delivery.
-public struct PoolSnapshot: Codable, Equatable, Sendable {
-    public let entries: [Projection.PoolEntry]
-    public let throughLocalSequence: Int
-
-    public init(projection: Projection) {
-        entries = projection.poolSnapshot()
-        throughLocalSequence = projection.throughLocalSequence
-    }
-}
-
 public actor SyncEngine {
     /// 一次上报最多带多少条。
     ///
@@ -294,50 +283,9 @@ public actor SyncEngine {
         // than an error — asking for one is normal. Don't cache that: it is a
         // progress report, not an article.
         if decoded.preparing == nil {
-            try articles.storeBody(id, response.body, etag: response.header("ETag"))
+            try articles.storeBody(id, response.body)
         }
         return decoded
-    }
-
-    /// Whether an article's body is on disk — i.e. whether `article(_:)` will
-    /// answer without the network, and a revalidation is worth asking for.
-    public func hasCachedBody(_ id: Int) -> Bool {
-        (try? articles.body(id)) != nil
-    }
-
-    /// Ask the server whether the cached copy of an article is still current.
-    /// Returns the new version when it is not, `nil` when it is — or when there
-    /// is no cached copy, no network, or any other failure.
-    ///
-    /// **Why this exists** (2026-09-24): `article(_:)` returns the cache without
-    /// asking, and the server's copy *does* change — re-annotation, a sense added
-    /// to the inventory. `catalog` was fixed on the server and stayed unmarkable
-    /// on the phone, because the phone never asked again. The reader shows the
-    /// cached copy immediately and calls this beside it; nothing waits on it
-    /// (架构铁律 4), and a 304 costs no body.
-    ///
-    /// Every failure is "no news". This is an opportunistic refresh, and a
-    /// reader that had its article in hand must not lose it to a bad network.
-    public func revalidateArticle(_ id: Int) async -> Components.Schemas.ArticleResponse? {
-        guard (try? articles.body(id)) != nil else { return nil }
-        var headers: [String: String] = [:]
-        if let etag = articles.etag(id) { headers["If-None-Match"] = etag }
-        guard let response = try? await transport.send(
-                HTTPRequest(method: .get, path: "/v1/client/articles/\(id)", headers: headers)),
-              !response.isNotModified, response.isOK,
-              let decoded = try? JSONDecoder().decode(
-                Components.Schemas.ArticleResponse.self, from: response.body),
-              decoded.preparing == nil
-        else { return nil }
-        // Compared decoded, not as bytes: a body that came in the day's package
-        // was re-encoded here, and `JSONEncoder` does not keep key order, so the
-        // same article would look changed every first time. Unchanged content is
-        // still news for the etag (that body has none), but not for the screen.
-        let cached = (try? articles.body(id)).flatMap {
-            try? JSONDecoder().decode(Components.Schemas.ArticleResponse.self, from: $0)
-        }
-        try? articles.storeBody(id, response.body, etag: response.header("ETag"))
-        return cached == decoded ? nil : decoded
     }
 
     /// 这把令牌是谁的。**测试连接用它。**
@@ -471,9 +419,8 @@ public actor SyncEngine {
     ///
     /// **PUT，因为它是替换。** 同一份报两遍和报一遍结果一样，所以重试天然安全。
     @discardableResult
-    public func reportPool(_ snapshot: PoolSnapshot,
+    public func reportPool(_ entries: [Projection.PoolEntry],
                            reportedAt: String) async throws -> Int {
-        let entries = snapshot.entries
         struct Body: Encodable {
             struct Entry: Encodable {
                 let item_type: String
@@ -498,22 +445,7 @@ public actor SyncEngine {
                 status: response.status,
                 body: String(decoding: response.body.prefix(400), as: UTF8.self))
         }
-        // Save the captured revision, never the projection after this await.
-        // A mark made during the request therefore remains dirty.
-        try events?.setReportedPool(snapshot)
         return entries.count
-    }
-
-    public func poolNeedsReport(_ snapshot: PoolSnapshot) -> Bool {
-        events?.reportedPool() != snapshot
-    }
-
-    @discardableResult
-    public func reportPoolIfNeeded(_ snapshot: PoolSnapshot,
-                                  reportedAt: String) async throws -> Bool {
-        guard poolNeedsReport(snapshot) else { return false }
-        _ = try await reportPool(snapshot, reportedAt: reportedAt)
-        return true
     }
 
     /// 在学的那些词的句子——**服务端不分池**（P9 §11）。
@@ -525,8 +457,7 @@ public actor SyncEngine {
     ///
     /// **取回来整份存盘。** 句子是内容，而内容要能离线用（架构铁律 2）：
     /// 这一份和今日包一样，是「拿一次、用一天」的东西。
-    public func fetchSentences(allowCachedFallback: Bool = true) async throws
-        -> Components.Schemas.SentencePoolResponse {
+    public func fetchSentences() async throws -> Components.Schemas.SentencePoolResponse {
         do {
             let response = try await transport.send(
                 HTTPRequest(method: .get, path: "/v1/client/sentences"))
@@ -537,16 +468,13 @@ public actor SyncEngine {
             }
             let decoded = try JSONDecoder().decode(
                 Components.Schemas.SentencePoolResponse.self, from: response.body)
-            if cachedSentencesDecoded?.parsed != decoded {
-                try sentences.store(response.body)
-                cachedSentencesDecoded = (response.body, decoded)
-            }
+            cachedSentencesDecoded = (response.body, decoded)
+            try sentences.store(response.body)
             return decoded
         } catch let error as TransportError {
             // 离线就用盘上那份。**这正是存它的理由**——
             // 而拿不到又没有缓存时照实抛错，不装作「你没在学任何词」。
-            guard allowCachedFallback, case .offline = error,
-                  let cached = sentences.load() else { throw error }
+            guard case .offline = error, let cached = sentences.load() else { throw error }
             if let hit = cachedSentencesDecoded, hit.raw == cached { return hit.parsed }
             let decoded = try JSONDecoder().decode(
                 Components.Schemas.SentencePoolResponse.self, from: cached)

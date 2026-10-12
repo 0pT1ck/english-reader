@@ -148,16 +148,6 @@ public struct Projection: Sendable, Equatable {
         return projection
     }
 
-    /// Reject a gap without advancing the projection. A pulled fact may have
-    /// landed between local appends, so that gap needs replay before continuing.
-    @discardableResult
-    public mutating func applyNext(_ event: LoggedEvent, weightDecay: Double,
-                                   settings: ReviewScheduler.Settings) -> Bool {
-        guard event.localSequence == throughLocalSequence + 1 else { return false }
-        apply(event, weightDecay: weightDecay, settings: settings)
-        return true
-    }
-
     /// 把一条事件叠加到已有状态上。**`replay` 就是从空状态开始逐条调它。**
     ///
     /// 拆出来是为了让调用方能在已有状态上继续叠加新事件——2026-09-19 之前
@@ -174,13 +164,7 @@ public struct Projection: Sendable, Equatable {
             guard let key = Self.key(from: event.payload) else { break }
             var item = items[key] ?? Item()
             if let kind = Self.string(event.payload["kind"]).flatMap(MarkKind.init) {
-                // Current controls select one mark atomically. Historical logs
-                // without this intent retain their original additive semantics.
-                if case .bool(true)? = event.payload["replace_marks"] {
-                    item.marks = [kind]
-                } else {
-                    item.marks.insert(kind)
-                }
+                item.marks.insert(kind)
             }
             // **进复习队列只有这一条路。** 已经 graduated 的不往回拉:
             // 镜像服务端,只有 `reviewing` 这一档被 demote 碰过。
@@ -309,7 +293,7 @@ public struct Projection: Sendable, Equatable {
                 : PoolEntry(itemType: key.itemType, key: key.key,
                             senseId: key.senseId, pool: item.pool)
         }
-        .sorted { ($0.itemType, $0.key, $0.senseId) < ($1.itemType, $1.key, $1.senseId) }
+        .sorted { ($0.key, $0.senseId) < ($1.key, $1.senseId) }
     }
 
     public struct PoolEntry: Sendable, Codable, Equatable {

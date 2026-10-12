@@ -92,7 +92,6 @@ struct LookupSubject: Equatable {
     /// 这个东西各条义项上的标记，按义项 id。**包括这一处之外的**——
     /// 列表每一行都显示自己标过没有，那就是「你标过的另一个意思」。
     var marks: [Int: MarkKind]
-    let derivation: Components.Schemas.Derivation?
 
     var itemType: String { kind == .phrase ? "phrase" : "word" }
 
@@ -124,12 +123,6 @@ struct LookupSubject: Equatable {
 
 /// 点词面板要显示的东西。
 struct LookupItem: Equatable {
-    struct Target: Hashable {
-        let tokenSeq: Int
-        let span: ClosedRange<Int>
-    }
-
-    let target: Target
     /// 滑块现在标的是哪个东西的哪条义项。
     struct Selection: Equatable {
         /// 是不是词组里那个词本身（「这个词本身」那一块里的某一行）。
@@ -157,18 +150,26 @@ struct LookupItem: Equatable {
     }
 }
 
-/// Lookup content / 查词内容: height changes only the viewport, never the sense data.
+/// 第三屏：点词面板。P12 整个重画过（决定 ⑫、⑯）。
+///
+/// **两个状态**：默认那一档是「读到一半想知道这个词」用的，要短——
+/// 词、音标、本句中、有考频的义项，**不带用法**；往上滑到大那一档是查词典，
+/// 每条义项下面贴着它的用法，没考频的也在。展开那一档可以超过半屏（决定 ⑫c），
+/// P6 决定 26 的「最多半屏」只管默认那一档。
+///
+/// **三档滑块钉在底部不跟着滚**（P6 决定 26）。它标的是被选中的那一行。
 struct LookupSheet: View {
     let item: LookupItem
-    let isMaximum: Bool
-    let resizeGesture: AnyGesture<DragGesture.Value>
+    /// 半屏，由阅读器量出来传进来。
+    let maxHeight: CGFloat
     let onSelect: (LookupItem.Selection) -> Void
     let onMark: (MarkKind?) -> Void
-    let onDefaultHeight: (CGFloat) -> Void
-    let onFooterHeight: (CGFloat) -> Void
 
     @Environment(AppModel.self) private var app
     @State private var speaker = Speaker()
+    /// 默认那一段（到有考频的义项、以及词组的「这个词本身」那一行为止）有多高。
+    @State private var defaultBlockHeight: CGFloat = 0
+    @State private var expanded = false
     @State private var innerOpen = false
 
     var body: some View {
@@ -178,14 +179,13 @@ struct LookupSheet: View {
                     VStack(alignment: .leading, spacing: 14) {
                         heading
                         context
-                        formation(item.subject)
                         rows(item.subject.primary, of: item.subject, inner: false,
                              title: item.subject.senses.contains(where: \.hasShare)
                                 ? "常见释义 · 考频" : "释义")
                         if item.inner != nil { innerToggle }
                     }
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        onDefaultHeight($0)
+                        defaultBlockHeight = $0
                     }
 
                     if innerOpen, let inner = item.inner { innerSection(inner) }
@@ -196,32 +196,52 @@ struct LookupSheet: View {
                 .padding(.bottom, 12)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .accessibilityIdentifier("lookup-content")
-            .scrollDisabled(!isMaximum)
-            .simultaneousGesture(resizeGesture)
 
             if showsSlider {
                 Divider()
                 sliderArea
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                        onFooterHeight($0)
-                    }
             }
         }
+        .presentationDragIndicator(.visible)
+        // **默认那一档按内容量，封顶半屏；另一档是大的**（决定 ⑫c）。
+        // 量不准时（面板刚出现、内容还没排完，2026-09-15 真机上撞过）能拖大就不是问题。
+        .presentationDetents([.height(detent), .large], selection: detentBinding)
+        // 背景可点：点下一个词要能穿过面板打到正文上（决定 25）。**只在默认那一档**——
+        // 展开之后是在查词典，那时点不到正文是认下的代价（决定 ⑫c）。
+        .presentationBackgroundInteraction(.enabled(upThrough: .height(detent)))
+        // 点词自动朗读（决定 20），**默认关**。`onChange` 盯着点到的东西本身——
+        // 同一个面板换词时不会重建，只有 `item` 变了。
         .onAppear {
             if app.preferences.speakOnTap { speak() }
             #if DEBUG
+            if DevLaunch.expandLookup { expanded = true }
             if DevLaunch.openInner { innerOpen = true }
             #endif
         }
+        .onChange(of: item.subject.key) { _, _ in
+            expanded = false
+            innerOpen = false
+            if app.preferences.speakOnTap { speak() }
+        }
     }
 
+    private var detentBinding: Binding<PresentationDetent> {
+        Binding(get: { expanded ? .large : .height(detent) },
+                set: { expanded = ($0 == .large) })
+    }
 
     /// 专有名词、没有义项的词没有滑块——它们标不了（决定 ⑯）。
     private var showsSlider: Bool {
         item.subject.isMarkable || item.inner?.isMarkable == true
     }
 
+    /// 默认那一档的高度：量到默认那一段为止，**最多半屏**（P6 决定 26）。
+    private var detent: CGFloat {
+        let slider: CGFloat = showsSlider ? 76 + (item.selection == nil ? 22 : 0) : 0
+        let chrome: CGFloat = 18 + 12 + slider
+        let cap = maxHeight > 0 ? maxHeight : 360
+        return max(180, min(defaultBlockHeight + chrome, cap))
+    }
 
     private func speak() {
         speaker.say(item.subject.key,
@@ -254,20 +274,6 @@ struct LookupSheet: View {
             }
             .buttonStyle(.glass)
             .accessibilityLabel("朗读")
-        }
-    }
-
-    @ViewBuilder
-    private func formation(_ subject: LookupSubject) -> some View {
-        if let derivation = subject.derivation {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("构词").font(.caption).foregroundStyle(.secondary)
-                Text(derivation.root + (derivation.affix.map { " + \($0)" } ?? ""))
-                    .font(.callout)
-                if let explanation = derivation.breakdown_zh, !explanation.isEmpty {
-                    Text(explanation).font(.callout).foregroundStyle(.secondary)
-                }
-            }
         }
     }
 
@@ -357,7 +363,8 @@ struct LookupSheet: View {
                             .monospacedDigit()
                     }
                 }
-                if !row.collocations.isEmpty {
+                // **用法只在展开之后出现，贴在它那条义项下面**（决定 ⑫b）。
+                if expanded, !row.collocations.isEmpty {
                     Text(row.collocations.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -404,7 +411,6 @@ struct LookupSheet: View {
                     Text("/\(phonetic)/").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            formation(inner)
             if inner.senses.isEmpty {
                 if let fallback = inner.fallbackGloss, !fallback.isEmpty {
                     Text(fallback).font(.callout)

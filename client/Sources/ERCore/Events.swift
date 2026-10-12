@@ -2,10 +2,12 @@ import Foundation
 
 /// 事件 the events a client reports.
 ///
-/// These constructors describe observations and user commands, not scheduling.
-/// Projection replays learning state on the device; the server archives the
-/// events. Names and payload shapes live here so both clients record the same
-/// intent.
+/// **The client reports what happened; it never decides what that means.** No
+/// study state is computed here — whether a word enters the review queue, how
+/// often it has been met, whether an article counts as read, all of that is the
+/// server's (架构前提 1). These constructors exist so that event names and field
+/// names are written once rather than at every call site, which is the only
+/// thing about them that could drift.
 ///
 /// **Marking is the one observation this system has.** 跨 Phase 不变量: an item
 /// enters the review queue through a mark and through nothing else. A word you
@@ -74,7 +76,6 @@ extension OutboxEntry {
             "item_type": .string(itemType),
             "sense_id": .int(senseId),
             "kind": .string(kind.rawValue),
-            "replace_marks": .bool(true),
         ]
         if let articleId { payload["article_id"] = .int(articleId) }
         if let sentenceId { payload["sentence_id"] = .int(sentenceId) }
@@ -113,7 +114,7 @@ extension OutboxEntry {
     public static func answered(queueId: Int, passed: Bool, revealed: Int = 0,
                                 sentenceId: Int? = nil, easy: Bool = false,
                                 itemType: String? = nil, itemKey: String? = nil,
-                                senseId: Int? = nil, occurredAt: Date = Date()) -> OutboxEntry {
+                                senseId: Int? = nil) -> OutboxEntry {
         var payload: [String: JSONValue] = [
             "queue_id": .int(queueId),
             "passed": .bool(passed),
@@ -124,7 +125,7 @@ extension OutboxEntry {
         if let itemType { payload["item_type"] = .string(itemType) }
         if let itemKey { payload["item_key"] = .string(itemKey) }
         if let senseId { payload["sense_id"] = .int(senseId) }
-        return OutboxEntry(kind: .answer, payload: payload, occurredAt: occurredAt)
+        return OutboxEntry(kind: .answer, payload: payload)
     }
 
     /// One spelling attempt. **What was typed is stored, not just whether it

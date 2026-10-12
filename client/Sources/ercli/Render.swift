@@ -140,13 +140,14 @@ struct ArticleRenderer {
                 out.append(Ink.dim("  超纲词——暂时不用学会它"))
             case .properNoun:
                 out.append(Ink.dim("  专有名词，可以跳过"))
-            case .derived, .target, .plain:
+            case .derived:
+                if let derivation = entry.derivation {
+                    out.append("  构词：" + (derivation.breakdown_zh ?? derivation.root))
+                    out.append(Ink.dim("  词根 \(derivation.root)"
+                        + (derivation.affix.map { " + \($0)" } ?? "")))
+                }
+            case .target, .plain:
                 break
-            }
-            if let derivation = entry.derivation {
-                out.append("  构词：" + (derivation.breakdown_zh ?? derivation.root))
-                out.append(Ink.dim("  词根 \(derivation.root)"
-                    + (derivation.affix.map { " + \($0)" } ?? "")))
             }
 
             // Layer ① the English concept, ② the dictionary pile, ③ exam counts.

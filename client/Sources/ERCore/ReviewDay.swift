@@ -1,24 +1,6 @@
 import Foundation
 import ERContract
 
-/// 备句 readiness: content is usable offline only when both languages exist.
-public enum SentencePreparation {
-    public static func isBilingual(_ card: Components.Schemas.SentenceCard) -> Bool {
-        guard let translation = card.text_zh else { return false }
-        return !card.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && translation.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
-            && card.blank_start >= 0 && card.blank_end > card.blank_start
-            && card.blank_end <= card.text.count
-    }
-
-    public static func isReady(_ item: Components.Schemas.StudyItemSentences) -> Bool {
-        // Old offline caches lack a factory state. Their actual bilingual
-        // content can still be asked; this does not claim the configured target.
-        (item.preparation_state == "ready" || item.preparation_state == nil)
-            && item.sentences.contains(where: isBilingual)
-    }
-}
-
 /// 今天这一份复习：**内容来自服务端，状态来自重放，分池用本机读过什么**。
 ///
 /// **为什么在 Core 而不在视图模型里。** 两个宿主都要它:手机上那一屏，
@@ -44,16 +26,6 @@ public struct ReviewDay: Sendable {
         /// 代价要说清楚:它带着一个 `queue_id`，而那个字段现在恒为 0——
         /// 见 ``ReviewDay/assemble(pool:projection:day:now:)``。
         public var item: Components.Schemas.ReviewItem
-
-        /// Frozen content may stay on screen, but an old answer must never
-        /// advance a round that another device has already changed.
-        public func acceptsAnswer(in projection: Projection, questionDay: String,
-                                  day: String, now: Date) -> Bool {
-            guard questionDay == day, state.acceptsAnswer,
-                  let latest = projection.todayQueue(day: day, now: now)
-                    .first(where: { $0.key == key }) else { return false }
-            return latest.state == state && latest.bucket == bucket && latest.capped == capped
-        }
     }
 
     public var entries: [Entry] = []
@@ -65,7 +37,6 @@ public struct ReviewDay: Sendable {
     /// 把它算进「共」会让 13/13 永远到不了，而不说出来的话，
     /// 「今天 12 个」和「13 个」的差别没人解释得了。
     public var awaitingContent = 0
-    public var failedContent: [Projection.Key: String] = [:]
 
     /// 服务端手上那份词池快照是什么时候的。nil ＝ 它还没收到过。
     ///
@@ -87,7 +58,7 @@ public struct ReviewDay: Sendable {
     /// 两个池子都走完了。**只有这时候才能说「今天的所有复习」**——
     /// 只做完一张卡就那么说是句假话（P7 决定 20）。
     public var allDone: Bool {
-        awaitingContent == 0 && !entries.isEmpty && entries.allSatisfy { $0.state.done }
+        !entries.isEmpty && entries.allSatisfy { $0.state.done }
     }
 
     /// 拼写那一轮开没开：**当天该复习的全部走完之后才为真**（P3 决定 13）。
@@ -139,14 +110,7 @@ public struct ReviewDay: Sendable {
         let queue = projection.todayQueue(day: day, now: now)
         for entry in queue {
             guard let item = content[entry.key] else { continue }
-            guard SentencePreparation.isReady(item) else {
-                if item.preparation_state == "failed" {
-                    out.failedContent[entry.key] = item.preparation_error ?? "双语句子准备失败"
-                }
-                continue
-            }
-            let bilingual = item.sentences.filter(SentencePreparation.isBilingual)
-            let split = SentencePool.split(bilingual,
+            let split = SentencePool.split(item.sentences,
                                            finished: projection.finishedArticles,
                                            seen: projection.seenSentences)
             out.entries.append(Entry(
