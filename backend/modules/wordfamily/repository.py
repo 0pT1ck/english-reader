@@ -163,13 +163,43 @@ def set_grade(member: str, root: str, grade: str, *, breakdown_zh: str | None = 
     transparent_root.cache_clear()
 
 
+
+def store_dictionary_family(member: str, root: str, affix: str | None, *,
+                            breakdown_zh: str, grade: str = "B") -> None:
+    """Promote an explicit dictionary attachment, not an affix-rule candidate."""
+    conn = get_connection("content")
+    previous = conn.execute(
+        "SELECT grade FROM word_families WHERE member=? AND root=?"
+        " ORDER BY CASE source WHEN 'llm' THEN 0 ELSE 1 END,id LIMIT 1",
+        (member, root),
+    ).fetchone()
+    if previous is not None:
+        # Confirming provenance must not silently change syllabus/target grading.
+        grade = previous["grade"]
+    try:
+        conn.execute(
+            "INSERT INTO word_families (member, root, affix, affix_kind, grade,"
+            " breakdown_zh, source, created_at) VALUES (?,?,?,?,?,?,'dictionary',?)"
+            " ON CONFLICT(member, root, affix) DO UPDATE SET"
+            " breakdown_zh = excluded.breakdown_zh, source = 'dictionary'"
+            " WHERE word_families.source != 'llm'",
+            (member, root, affix or "", "suffix" if affix else None,
+             grade, breakdown_zh, _now()),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    clear_caches()
+
 @lru_cache(maxsize=20000)
 def family_of(member: str) -> dict[str, Any] | None:
     """The breakdown for one word, if we have one."""
     try:
         row = get_connection("content").execute(
             "SELECT member, root, affix, affix_kind, grade, breakdown_zh, source"
-            " FROM word_families WHERE member = ? ORDER BY id LIMIT 1",
+            " FROM word_families WHERE member = ?"
+            " ORDER BY CASE source WHEN 'dictionary' THEN 0 WHEN 'llm' THEN 1 ELSE 2 END, id LIMIT 1",
             (member.lower(),),
         ).fetchone()
     except sqlite3.Error:

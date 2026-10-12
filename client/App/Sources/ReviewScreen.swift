@@ -39,6 +39,14 @@ struct ReviewScreen: View {
         }
         #endif
         .onAppear { if model.needsLoad { Task { await model.load(app) } } }
+        .alert("复习进度已变化", isPresented: Binding(
+            get: { model.answerConflict != nil },
+            set: { if !$0 { model.clearAnswerConflict() } }
+        )) {
+            Button("按最新进度继续") { model.resumeAfterConflict(app) }
+        } message: {
+            Text(model.answerConflict ?? "")
+        }
     }
 
     @ViewBuilder
@@ -47,13 +55,11 @@ struct ReviewScreen: View {
         case .loading:
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         case .offline(let text):
-            // 转圈继续转，旁边写清楚原因（同 P6 决定 33）。
             VStack(spacing: 14) {
-                ProgressView()
                 Text(text).font(.callout).foregroundStyle(.secondary)
+                Button("重试") { Task { await model.load(app) } }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .task { await retry() }
         case .failed(let text):
             ContentUnavailableView("复习打不开", systemImage: "exclamationmark.triangle",
                                    description: Text(text))
@@ -79,10 +85,22 @@ struct ReviewScreen: View {
                     // 那个词没丢（投影里它在），只是还问不了——
                     // 不说出来的话，「今天 12 个」和「13 个」的差别没人解释得了。
                     if model.awaitingContent > 0 {
-                        Text("还有 \(model.awaitingContent) 个词等着句子备好，"
-                             + "联网取一次今日包就会出现")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("还有 \(model.awaitingContent) 个词等待双语句子，不计作已完成")
+                            if !model.today.failedContent.isEmpty {
+                                ForEach(model.today.failedContent.keys.sorted {
+                                    ($0.itemType, $0.key, $0.senseId)
+                                        < ($1.itemType, $1.key, $1.senseId)
+                                }, id: \.self) { key in
+                                    Text("\(key.key)：\(model.today.failedContent[key] ?? "准备失败")")
+                                }
+                            }
+                            if let message = app.preparationMessage { Text(message) }
+                            Button("重试同步与获取") { app.requestPreparation() }
+                                .disabled(app.preparationStatus == .running)
+                        }
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                     }
 
                     if model.spellingEnabled && model.spellingAvailable
@@ -108,13 +126,6 @@ struct ReviewScreen: View {
         Binding(get: { model.bucket != nil }, set: { if !$0 { model.leave() } })
     }
 
-    private func retry() async {
-        while case .offline = model.phase {
-            try? await Task.sleep(for: .seconds(5))
-            if Task.isCancelled { return }
-            await model.load(app)
-        }
-    }
 }
 
 /// 七天打卡条。

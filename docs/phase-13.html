@@ -80,6 +80,11 @@
   .wire b { color:var(--ink); font-weight:500; }
   code { font-family:var(--f-mono); font-size:0.86em; background:var(--surface-sub);
          padding:0.08em 0.32em; border-radius:2px; overflow-wrap:anywhere; }
+  .shots { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1.5rem; }
+  .shot { margin:1rem 0; }
+  .shot img { display:block; width:100%; max-width:20rem; margin:0 auto;
+              border:1px solid var(--rule); border-radius:16px; }
+  .shot figcaption { margin-top:.8rem; color:var(--ink-soft); font-size:.86rem; line-height:1.65; }
   footer { margin-top:4.5rem; padding-top:1.25rem; border-top:1px solid var(--rule);
            font-size:0.8rem; color:var(--ink-soft); display:flex; flex-wrap:wrap;
            gap:0.5rem 1.5rem; font-family:var(--f-mono); }
@@ -91,10 +96,10 @@
 
 <main class="wrap" lang="zh-CN">
   <header class="masthead">
-    <div class="eyebrow">Phase 13 · 方案定稿，已授权开始实现 · 2026-10-10</div>
+    <div class="eyebrow">Phase 13 · 本地实现与机器验证完成，尚未人工验收／部署 · 2026-10-10 ／ 11</div>
     <h1>派生义项与查词体验</h1>
     <p class="standfirst">一个常用词看得见释义，却标不了；标完的词没有当场备好复习语境；查词面板还在两档之间跳。P13 从真实阅读中遇到的这五件事开始。</p>
-    <p class="thesis"><b>补真实义项，不放开义项 0；标记落本地，备句在后台；慢拖自由调高，快甩直接最大化。</b><br>本页记录方案与事实依据，不是验收结果。定稿时尚未编写实现代码、修改生产数据或触发生成任务。</p>
+    <p class="thesis"><b>补真实义项，不放开义项 0；标记落本地，备句在后台；慢拖自由调高，快甩直接最大化。</b><br>正文保留定稿时的方案与核查依据；本地实施与真实样本验证见 <a href="#implementation">§9</a>，人工验收及上线边界见 <a href="#acceptance">§10</a>。机器结果不代替用户操作。</p>
     <p class="parent">功能设计 <a href="./english-reader.html">English Reader</a> ｜ 上一阶段 <a href="./phase-12.html">Phase 12</a> ｜ 相关规则 <a href="./pitfalls.html#pitfalls-5">查词典排坑</a></p>
   </header>
 
@@ -113,6 +118,7 @@
     <a href="#sentences">§3 标记与备句</a><a href="#latest">§4 最新查词</a>
     <a href="#formation">§5 真实拆词</a><a href="#gesture">§6 两种上滑</a>
     <a href="#pending">§7 定稿补充</a><a href="#evidence">§8 核查依据</a>
+    <a href="#implementation">§9 实施与本地验证</a><a href="#acceptance">§10 人工验收与上线边界</a>
   </nav>
 
   <section id="scope">
@@ -256,7 +262,7 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
   </section>
 
   <section id="evidence">
-    <div class="sec-head"><span class="sec-mark">§8</span><h2>查到了什么，没有验什么</h2><span class="sec-note">2026-10-10</span></div>
+    <div class="sec-head"><span class="sec-mark">§8</span><h2>定稿前查到了什么，没有验什么</h2><span class="sec-note">2026-10-10</span></div>
     <div class="table-scroll"><table>
       <thead><tr><th>依据</th><th>核查结果与边界</th></tr></thead><tbody>
         <tr><td>阿里云生产 <code>content.db</code></td><td>以只读连接查询文章 553、相关 token、severe／severely 义项与词族记录。确认 severely 缺独立义项；没有写库、启动服务、改配置或触发生成。</td></tr>
@@ -267,7 +273,84 @@ drought = 一个表示“旱”的部件 + 一个表示“灾”的部件</div>
         <tr><td>既有文档</td><td><a href="./phase-10.html">P10 §4／§5</a> 的分类与身份规则；<a href="./phase-11.html">P11 §9</a> 的词组／用法分界；<a href="./phase-12.html">P12 §4／§14</a> 的真实义项、面板与缓存边界；<a href="./phase-9.html">P9 §17</a> 的真实症状观测要求。</td></tr>
       </tbody>
     </table></div>
-    <p style="margin-top:1.2rem"><b>还没有实施成果或验收数字。</b>本页不声明 P13 功能已实现，也不拿 P12 的 133 项测试、模拟器结果或旧真机记录证明新行为。</p>
+    <p style="margin-top:1.2rem"><b>本节描述动手前，不是现在的实施状态。</b>本次代码与验证见下一节；不拿 P12 的 133 项测试、模拟器结果或旧真机记录证明 P13 新行为。</p>
+  </section>
+
+  <section id="implementation">
+    <div class="sec-head"><span class="sec-mark">§9</span><h2>实施与本地验证</h2><span class="sec-note">2026-10-10 ／ 11</span></div>
+    <p class="lede">方案与上次文档迁移已按用户授权提交并推送 <code>ios</code>：<code>f8955cb</code>。下面的应用实现、回归及实施记录仍在工作区，没有另提交、部署或上传 TestFlight。</p>
+    <h3>五项实现落在什么地方</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>范围</th><th>实现与边界</th></tr></thead><tbody>
+        <tr><td>独立派生义项</td><td><code>senses/derived.py</code> 从真实两版小节内容匹配，不按跨版编号猜；<code>derived_worker.py</code> 只补英文定义；<code>repository.py</code> 独立发号、保存字段与模型来源。迁移 8 保存溯源；重复导入不覆盖已有定义、不退休母词。</td></tr>
+        <tr><td>立即上报与双语备句</td><td><code>AppModel</code> 成功落盘后安排串行后台协调；<code>PoolSnapshot</code> 独立持久确认版本与内容，事件成功、快照失败仍补报。<code>review/preparation.py</code> 合并同三元键在途任务；既有 worker 先复用、补英文、翻译，完整双语库存达到配置目标才 ready。</td></tr>
+        <tr><td>最新查词与点击关闭</td><td><code>ReaderModel</code> 按 token／词组跨度识别目标，<code>ReaderScreen</code> 用目标身份重建面板；别词一次直接替换、重置高度和内容顶部。<code>ArticleText</code> 校验真实 glyph 命中，普通空白关闭，词组内空格仍属整体。</td></tr>
+        <tr><td>真实构词提示</td><td>词典明确关系可作为可信来源下发；新确认不覆盖已有 A／B／C 分级。<code>LookupSheet</code> 与 CLI 都显示 root／affix／说明；没有可靠关系不硬拆。</td></tr>
+        <tr><td>无级调高与快甩</td><td><code>ContinuousLookupPanel</code> 取代 lookup 的原生两档 sheet；普通拖动保留高度，快速向上释放到安全区最大高度，最大后滚动内容。把手、义项、底部标记互不混用；保留非拖动的展开、收起、关闭与辅助功能操作。文内搜索仍为原生 sheet。</td></tr>
+      </tbody>
+    </table></div>
+    <h3>真实样本闭环，不是模型回显假数据</h3>
+    <p>验证使用独立的 <code>data/p13-smoke</code>，素材为生产只读取得的真实文章 553、词典内容与当前提供商配置。没有复制本人的学习日志；夜间生成关闭。模型实际调用 <code>gemini-3.8-flash-high</code>，不是 mock。</p>
+    <div class="steps">
+      <div class="step"><span class="step-n">1</span><span class="step-what"><b>扫描严重地／严厉地两个明确小节</b><span>severely 实际扫描得到两候选、零匹配问题。中文与副词词性来自 2017，小节边界与母义项来自 2012。</span></span></div>
+      <div class="step"><span class="step-n">2</span><span class="step-what"><b>实际补两条英文定义</b><span>任务 1 两项完成。隔离库中独立义项为 39829／39830，母词 severe 仍为 34359／34360／34361；这些号码只是本地样本，不是生产新号。</span></span></div>
+      <div class="step"><span class="step-n">3</span><span class="step-what"><b>只重开受影响的旧 0</b><span>任务 2 一项完成，原 token 265917、位置及 seq 54 不变，sense_id 从 0 标到 39829“严重地”。回归同时守 -1、既有有效义项和其他词不动。</span></span></div>
+      <div class="step"><span class="step-n">4</span><span class="step-what"><b>CLI 真正标记、上报快照、后台备句</b><span>初次小样本词典缺常见词，机器筛选以超纲拒绝新句，状态真实失败而非伪 ready。补齐当前正本词典的一致只读参考后，续跑原任务 3，保留此前有效部分，最终实际 ready：8 条双语，1 条原文＋7 条生成句；其他英文候选不算完整库存、不进入题面。</span></span></div>
+      <div class="step"><span class="step-n">5</span><span class="step-what"><b>内容取得与两向复习实际走通</b><span>CLI sync 取得并缓存内容，review 实际问“英文句中 severely 什么意思”及中文句“空里填哪个词”，两向通过后本机显示此条完成。App 在隔离服务恢复后自行上传此前离线操作的新标记，没有用 CLI 代它上报。</span></span></div>
+    </div>
+    <h3>实现中修掉的边界</h3>
+    <ul>
+      <li>新同步在途时再标词，下一趟不能漏；部分 pull 落盘后后页失败，投影仍协调已收事实，不跨过本地序号缺口。</li>
+      <li>冻结题面与当前轮次分开：远端推进、撤销或跨日后，旧题答案不能误完成新方向；原子序号守卫封住检查与写日志间的竞争，无关事实变化有限重验。</li>
+      <li>当前三档改标记使用单条事件的 <code>replace_marks</code> 明确替换意图，避免 unknown 与 fuzzy 累积导致滑块不能显示新档。旧持久日志保留原语义，已评级记忆、遇见和其他义项不重算；不增加先撤再标的半成功窗口。</li>
+      <li>句子必须确有中文，旧缓存里只有非空英文“译文”不能进队列；旧可问双语内容可复用，但没有服务器 ready 状态不冒称工厂库存达标。</li>
+      <li>备句不足、翻译失败、暂停、花费上限都可见；失败响应仍记录实际阶段用量。明确暂停意图持久化，不在重启窗口自动绕过；共享任务重试排队不返回过期失败。</li>
+      <li>隔离新库暴露旧词组迁移前提：只归档真正存在的本地旧表，rename 不碰 attached ECDICT；混合冲突布局明确拒绝。没有借修复机会清洗生产。</li>
+    </ul>
+    <h3>实际跑过的验证</h3>
+    <div class="table-scroll"><table>
+      <thead><tr><th>验证</th><th>观察到的结果</th></tr></thead><tbody>
+        <tr><td><code>test_derived_senses.py</code></td><td>11 项通过；真实小节、跨版对应、幂等、独立 id、旧 0 定向重开、无语料与既有分级边界。</td></tr>
+        <tr><td><code>test_review_preparation.py</code></td><td>16 项通过；双语门槛、复用、身份限定翻译、部分失败续跑、重复快照、暂停恢复与失败成本。</td></tr>
+        <tr><td><code>test_phrase_migrations.py</code></td><td>4 项通过；新库、旧清单 id、冲突拒绝、旧 verdict 存活且不改 ECDICT。</td></tr>
+        <tr><td>Swift Core</td><td>前次全量 144 项通过；之后受改档与双语边界影响的 44 项通过；最终 <code>ci_client.py</code> 9／9，包括全量 swift test、iOS 产物 platform=2 和契约逐字节一致。没有声称本机验了 Linux。</td></tr>
+        <tr><td>App</td><td><code>ci_app.py</code> 9／9：编译、真实模拟器产物 platform=7、安装、启动并存活。更新后的相同 App 源码又由隔离宿主编译并完成真实操作。</td></tr>
+        <tr><td>真实模拟器操作</td><td>初次三个慢拖中间高度松手后保留；随后快甩最大化／收起／关闭的独立操作通过，最新目标／空白关闭／drought 不硬拆及改档／最大后滚动的两项操作通过。没有把最初在辅助功能值读取处超时的整套自动化称为通过。</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:1.2rem"><b>运行条件：</b>设备为 iPhone 17 模拟器，当前安装的 runtime 是 iOS 27.0；工程部署目标仍为 iOS 26。快甩样本测得向上速度约 2600 pt/s，面板到该模拟器安全区最大 716 pt；不是通用尺寸或真机手感结论。临时手势诊断已经移除，以下图片来自实际运行。</p>
+    <div class="shots">
+      <figure class="shot"><img src="./phase-13/lookup-default.png" alt="severely 独立义项与真实构词提示的默认查词面板"><figcaption>默认高度：本句中独立义项与构词提示；未把母词 id 当作可学义项。</figcaption></figure>
+      <figure class="shot"><img src="./phase-13/lookup-max.png" alt="实际快速上甩后的最大高度面板"><figcaption>实际快甩后最大化；底部标记固定，顶部仍可收起或关闭。</figcaption></figure>
+      <figure class="shot"><img src="./phase-13/lookup-latest.png" alt="一次点击 Many 后重建最新查词面板"><figcaption>一次点击 Many 直接换目标并恢复默认高度，旧 severely 现场不保留。</figcaption></figure>
+      <figure class="shot"><img src="./phase-13/lookup-marked.png" alt="改成模糊后滑块真实显示模糊"><figcaption>改档落盘后的实际模糊状态；不是先撤旧标记再假装新标记成功。</figcaption></figure>
+      <figure class="shot"><img src="./phase-13/lookup-scroll.png" alt="make 在最大高度内滚动长义项列表"><figcaption>最大高度内滚动 make 的长列表，面板控制与标记控件不跟着滚。</figcaption></figure>
+      <figure class="shot"><img src="./phase-13/lookup-drought.png" alt="drought 不显示虚构旱和灾拆解"><figcaption>drought 没有可靠拆解，不编出“旱＋灾”两个部件。</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="acceptance">
+    <div class="sec-head"><span class="sec-mark">§10</span><h2>还没有验收，也没有手机上线</h2><span class="sec-note">边界</span></div>
+    <div class="callout"><b>P13 尚未结束。</b>本地代码与机器结果不是用户真机验收。用户随后授权提前提交推送、上传 TestFlight、更新阿里云后端并安装模拟器，见 §11；该发布授权不等于生产派生义项已经补齐，也不等于人工验收通过。</div>
+    <p>正式补缺使用 <code>scripts/import_derived_senses.py</code> 的 scan／import／reannotate 明确步骤，写入要求 <code>--apply --data-dir</code>，模型任务可续跑。先核对真实匹配与备份；大动作依现行部署规则暂停写入与夜间备稿，保住已有内容身份。不把隔离样本库回写正本。</p>
+    <p>验收安排仍在当前 P13：需要可安装的新客户端与匹配的内容工厂、明确隔离的测试身份／宿主，避免把夹具混进本人的学习日志。本轮已获得提前提交与 TestFlight 上传授权；界面提交仍走 ios，不提前合回 main，不把发布视为新的人工验收例外。</p>
+    <div class="table-scroll"><table>
+      <thead><tr><th>人工项</th><th>实际要看什么</th></tr></thead><tbody>
+        <tr><td>M1 独立派生义项</td><td>在新内容上查 severely，严重地／严厉地分开且能标；母词义项没有替代本词，旧学习记录不失效。</td></tr>
+        <tr><td>M2 即时备句</td><td>在线连续标词立即后台申请，离线标记重启后可补报；真正取得双语句子后进复习，失败或等待清楚，不阻塞阅读。</td></tr>
+        <tr><td>M3 最新目标</td><td>面板任意高度下，点外露空白关闭、点别词一次替换；同词另一处也恢复新语境与默认现场，标记不丢。</td></tr>
+        <tr><td>M4 构词</td><td>真实拆解能帮助理解；不能拆的 drought 不硬拆，词组内部单词展开与整体标记不混淆。</td></tr>
+        <tr><td>M5 手感与可访问性</td><td>拇指慢拖可停任意高度、快甩到最大，最大后滚内容；滑块、按钮不抢手势，大字、安全区和 VoiceOver 操作合理。</td></tr>
+      </tbody>
+    </table></div>
+    <p style="margin-top:1.2rem">人工 M1–M5 未跑；iOS 26 真机手感、全量生产补缺、线上部署与 Linux 编译未由本次结果证明。方案没有获得新的验收例外。</p>
+  </section>
+
+  <section id="release">
+    <div class="sec-head"><span class="sec-mark">§11</span><h2>发布与开发环境迁移</h2><span class="sec-note">2026-10-12 授权</span></div>
+    <p>用户明确要求推送 GitHub、上传 TestFlight、更新阿里云后端、安装到模拟器；模拟器设备与运行时实际存储选择放在 <code>/Volumes/satassd/xcode</code>，而不只是将下载文件放过去。本轮按该授权提前发布，不宣布 P13 验收完成。</p>
+    <p>动手前实查：Xcode 选择路径仍为 <code>/Volumes/satassd/Applications/Xcode.app/Contents/Developer</code>，版本 27.0；当前模拟器运行时与设备均为空，指定目录为空。运行时系统存储迁移需要管理员授权与正确文件所有权，保留回退路径，不静默改成仅外置下载。</p>
+    <p>后端更新范围为源码、镜像与正常版本化迁移；不将隔离样本库回写正本，不擅自执行全量派生义项模型导入或重标。代码部署和正式内容补缺是两件事。</p>
   </section>
 
   <footer><span>English Reader</span><span>Phase 13 · 派生义项与查词体验</span><span>2026-10-10 开谈与定稿 · 已授权实现，尚未验收</span></footer>

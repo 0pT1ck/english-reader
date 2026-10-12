@@ -14,11 +14,12 @@ from pathlib import Path
 
 from backend.admin.templating import add_template_dir
 from backend.core.registry import AdminPage, Module
-from backend.modules.senses import routes, schema, workers
+from backend.modules.senses import derived_worker, routes, schema, workers
 
 add_template_dir(Path(__file__).parent / "templates")
 
 workers.register()
+derived_worker.register()
 
 MODULE = Module(
     name="senses",

@@ -182,7 +182,7 @@
           "client:reading"
         ],
         "summary": "一篇文章的全部内容",
-        "description": "Text, sentences, every token's analysis, every gloss, and your marks.\n\nOne response, then no further requests while reading. An article still being\nprepared comes back with a ``preparing`` block instead of an error — lazy\ningest means asking for one is normal, not a mistake.",
+        "description": "Text, sentences, every token's analysis, every gloss, and your marks.\n\nOne response, then no further requests while reading. An article still being\nprepared comes back with a ``preparing`` block instead of an error — lazy\ningest means asking for one is normal, not a mistake.\n\n**条件请求（2026-09-24 加）。** 设备把正文缓存下来之后就不再问了，\n而正文**会变**：重标注、补义项、拼写回退都会改 token 的义项和 glossary。\n那天 `catalog` 在服务端修好了，手机上照旧标不了——缓存里还是旧的。\n所以客户端打开缓存那份的同时带着它的 ``ETag`` 来问一句，没变就 304、零字节。\n哈希的是整个响应体，跟今日包一个口径：宁可多发一次，也不能把变了的说成没变。",
         "operationId": "article_v1_client_articles__article_id__get",
         "parameters": [
           {
@@ -3216,6 +3216,24 @@
             "type": "array",
             "title": "Sentences",
             "description": "这个词（这个义项）的全部句子，**没有分池**。`source` 与 `sentence_id`／`article_id` 够客户端自己分"
+          },
+          "preparation_state": {
+            "type": "string",
+            "title": "Preparation State",
+            "description": "内容生产状态：pending / running / ready / failed；ready 表示完整双语库存达到配置目标，不表示未见考句数量或学习状态",
+            "default": "pending"
+          },
+          "preparation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preparation Error",
+            "description": "内容准备失败或暂停的安全说明，不含供应商凭证；ready 时为空"
           }
         },
         "type": "object",

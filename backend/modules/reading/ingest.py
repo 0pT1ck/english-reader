@@ -77,9 +77,8 @@ def derivation_for(headword: str | None) -> dict[str, Any] | None:
     "Already known" needs the P3 ability estimate, so P2 shows it for every
     eligible derived word and reserves ``root_known`` in the contract as null.
 
-    *Eligible* means grade C is excluded — the grades already say that showing a
-    drifted derivation misleads — **and the entry was actually reviewed by a
-    model**, not just produced by an affix rule.
+    Eligible relations are model-reviewed or explicitly attached in Collins.
+    Rule-only candidates cannot establish a semantic relationship.
 
     That second condition was added after auditing the rule-only tier, and the
     first version of this filter got it wrong. The assumption was that a purely
@@ -122,7 +121,7 @@ def derivation_for(headword: str | None) -> dict[str, Any] | None:
     grade = (family.get("grade") or "").upper()
     if grade == "C":
         return None
-    if family.get("source") != "llm":
+    if family.get("source") not in {"llm", "dictionary"}:
         return None
     # The reviewer sometimes flags its own answer. Twenty-one entries say
     # 需确认 in their own breakdown — `army <- arm + -y` among them — and an

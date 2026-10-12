@@ -228,4 +228,23 @@ MIGRATIONS = [
         ALTER TABLE review_queue ADD COLUMN capped INTEGER NOT NULL DEFAULT 0;
         """,
     ),
+    Migration(
+        version=5,
+        name="durable bilingual sentence preparation",
+        database="content",
+        apply="""
+        CREATE TABLE review_preparations (
+            item_type TEXT NOT NULL CHECK (item_type IN ('word', 'phrase')),
+            item_key TEXT NOT NULL,
+            sense_id INTEGER NOT NULL,
+            state TEXT NOT NULL DEFAULT 'pending'
+                CHECK (state IN ('pending', 'running', 'ready', 'failed')),
+            error TEXT,
+            job_id INTEGER,
+            seq INTEGER,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (item_type, item_key, sense_id)
+        );
+        """,
+    ),
 ]

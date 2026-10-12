@@ -23,7 +23,7 @@ from backend.core.logging import get_logger
 from backend.core.events import Event
 from backend.core.registry import AdminPage, Module
 from backend.modules.llm import jobs
-from backend.modules.review import repository, routes, sentences, translate
+from backend.modules.review import preparation, repository, routes, sentences, translate
 from backend.modules.review.schema import MIGRATIONS
 
 log = get_logger("review")
@@ -225,6 +225,7 @@ def _register_workers() -> None:
     can be removed as a directory without leaving a dangling job kind."""
     jobs.register_worker(sentences.WORKER)
     jobs.register_worker(translate.WORKER)
+    preparation.resume_interrupted()
 
 
 # `on_word_unmarked` 没有了（P9 §11）。它做的是「撤回标记之后把今天那道题收掉」，
@@ -315,5 +316,6 @@ MODULE = Module(
     ],
     on_startup=_register_workers,
     subscriptions={"article.finished": [on_article_finished],
-                   "progress.pool.reported": [on_pool_reported]},
+                   "progress.pool.reported": [on_pool_reported],
+                   "llm.job.finished": [preparation.on_job_finished]},
 )

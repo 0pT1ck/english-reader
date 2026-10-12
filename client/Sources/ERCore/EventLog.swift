@@ -116,6 +116,7 @@ public struct LoggedEvent: Codable, Equatable, Sendable {
 public enum EventLogError: Error, Equatable {
     case notADirectory(String)
     case cannotOpen(String)
+    case sequenceChanged(expected: Int, actual: Int)
 }
 
 /// 载入一次日志的结果。
@@ -135,6 +136,7 @@ public struct EventLogLoad: Sendable, Equatable {
 public final class EventLog: @unchecked Sendable {
     private let file: URL
     private let cursorFile: URL
+    private let poolReportFile: URL
     private let fileManager: FileManager
     private let lock = NSLock()
     /// 下一条用哪个号。载入时算出来，之后在内存里递增——**不再去数文件**，
@@ -151,6 +153,7 @@ public final class EventLog: @unchecked Sendable {
         }
         self.file = directory.appendingPathComponent("events.jsonl")
         self.cursorFile = directory.appendingPathComponent("cursor.json")
+        self.poolReportFile = directory.appendingPathComponent("pool-report.json")
         if !fileManager.fileExists(atPath: file.path) {
             fileManager.createFile(atPath: file.path, contents: Data())
         }
@@ -168,9 +171,14 @@ public final class EventLog: @unchecked Sendable {
     @discardableResult
     public func append(kind: LoggedEvent.Kind, payload: [String: JSONValue],
                        idemKey: String = UUID().uuidString,
-                       occurredAt: String? = nil) throws -> LoggedEvent {
+                       occurredAt: String? = nil,
+                       expectedLocalSequence: Int? = nil) throws -> LoggedEvent {
         lock.lock()
         defer { lock.unlock() }
+        if let expectedLocalSequence, expectedLocalSequence != nextSequence - 1 {
+            throw EventLogError.sequenceChanged(expected: expectedLocalSequence,
+                                                actual: nextSequence - 1)
+        }
 
         let event = LoggedEvent(
             localSequence: nextSequence,
@@ -195,6 +203,13 @@ public final class EventLog: @unchecked Sendable {
     }
 
     // MARK: 读
+
+    /// O(1) reconciliation guard; inspecting it must not decode the log.
+    public var latestLocalSequence: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return nextSequence - 1
+    }
 
     /// 整份日志，按写入顺序。
     public func load() throws -> EventLogLoad {
@@ -298,6 +313,21 @@ public final class EventLog: @unchecked Sendable {
         try JSONEncoder.contract.encode(cursor).write(to: cursorFile, options: .atomic)
     }
 
+    /// This survives an empty outbox and is safely reconstructed from the log
+    /// when absent or damaged; only a successful pool PUT advances it.
+    public func reportedPool() -> PoolSnapshot? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = fileManager.contents(atPath: poolReportFile.path) else { return nil }
+        return try? JSONDecoder().decode(PoolSnapshot.self, from: data)
+    }
+
+    public func setReportedPool(_ snapshot: PoolSnapshot) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        try JSONEncoder.contract.encode(snapshot).write(to: poolReportFile, options: .atomic)
+    }
+
     /// 还没上报的那些，最旧的在前。
     ///
     /// **顺序就是发出去的顺序。** 复习作答是一个状态机——过了看词想义才解锁
@@ -370,6 +400,7 @@ public final class EventLog: @unchecked Sendable {
         defer { lock.unlock() }
         try Data().write(to: file, options: .atomic)
         try? fileManager.removeItem(at: cursorFile)
+        try? fileManager.removeItem(at: poolReportFile)
         nextSequence = 0
     }
 

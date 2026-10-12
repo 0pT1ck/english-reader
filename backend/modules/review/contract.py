@@ -182,6 +182,15 @@ class StudyItemSentences(BaseModel):
         description="这个词（这个义项）的全部句子，**没有分池**。"
         "`source` 与 `sentence_id`／`article_id` 够客户端自己分"
     )
+    preparation_state: str = Field(
+        default="pending",
+        description="内容生产状态：pending / running / ready / failed；"
+        "ready 表示完整双语库存达到配置目标，不表示未见考句数量或学习状态",
+    )
+    preparation_error: str | None = Field(
+        default=None,
+        description="内容准备失败或暂停的安全说明，不含供应商凭证；ready 时为空",
+    )
 
 
 class SentencePoolResponse(BaseModel):

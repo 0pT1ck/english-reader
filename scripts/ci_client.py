@@ -24,6 +24,7 @@ CI 留着当独立的第二次验证（真的是另一台机器、另一份环�
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import subprocess
@@ -52,6 +53,14 @@ def section(title: str) -> None:
 
 def run(cmd: list[str], cwd: Path | None = None) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+
+
+def contract_snapshot() -> dict[str, str]:
+    """Compare regeneration with the working tree, not an unrelated old commit."""
+    return {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (CLIENT / "Sources" / "ERContract").glob("*.swift")
+    }
 
 
 def main() -> int:
@@ -110,16 +119,19 @@ def main() -> int:
     else:
         check("L1.2", "产物真是给 iOS 的（不是 macOS）", False, "上一步没编出来，跳过")
 
-    section("4. 契约类型重新生成一遍，和提交的逐字节比")
+    section("4. 契约类型重新生成一遍，和当前工作区逐字节比")
+    before_contract = contract_snapshot()
     gen = run(["python3", "scripts/generate_swift_types.py"], cwd=ROOT)
     gen_ok = gen.returncode == 0
     if not gen_ok:
         check("L0.3", "契约生成器跑通", False, gen.stderr[-2000:] or gen.stdout[-2000:])
     else:
-        diff = run(["git", "diff", "--stat", "--", "client/Sources/ERContract"], cwd=ROOT)
-        drift = diff.stdout.strip()
-        check("L0.3", "生成物和提交的一字不差", not drift,
-              "逐字节一致" if not drift else drift)
+        after_contract = contract_snapshot()
+        changed = sorted(name for name in before_contract.keys() | after_contract.keys()
+                         if before_contract.get(name) != after_contract.get(name))
+        check("L0.3", "生成物和当前契约一致", bool(before_contract) and not changed,
+              "逐字节一致" if before_contract and not changed
+              else "、".join(changed) or "生成前没有契约文件")
 
     section("5. 契约快照该有的字段与向量")
     spec = json.loads((CLIENT / "openapi.json").read_text(encoding="utf-8"))

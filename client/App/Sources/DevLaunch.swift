@@ -34,7 +34,7 @@ enum DevLaunch {
     /// 文章打开后滚到第几段（段落 id），看滚过标题之后栏里是什么样。
     static var scrollParagraph: Int? { env["ER_DEV_SCROLL_PARAGRAPH"].flatMap(Int.init) }
 
-    /// 点词面板一出来就是展开那一档（看用法、其他释义）。
+    /// Start at maximum height; this does not simulate or validate a fling.
     static var expandLookup: Bool { env["ER_DEV_EXPAND"] == "1" }
 
     /// 词组面板一出来就打开「这个词本身」。

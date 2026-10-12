@@ -35,17 +35,14 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import Any, Callable
 
 from backend.core import runtime_config
 from backend.core.db import get_connection
-from backend.core.logging import get_logger
 from backend.modules.llm import client, jobs
-from backend.modules.llm.parsing import json_object
+from backend.modules.llm.parsing import ItemFailed, json_object
 from backend.modules.llm.providers import Provider
 from backend.modules.review import repository
-
-log = get_logger("review.translate")
 
 KIND = "review_translate"
 
@@ -84,7 +81,7 @@ def _pending(limit: int | None = None) -> list[dict[str, Any]]:
     """Sentences with no Chinese yet, oldest first."""
     sql = (
         "SELECT id, text, blank_start, blank_end, surface, item_key"
-        "  FROM review_sentences WHERE text_zh IS NULL ORDER BY id"
+        "  FROM review_sentences WHERE text_zh IS NULL OR text_zh NOT GLOB '*[一-鿿]*' ORDER BY id"
     )
     params: tuple[Any, ...] = ()
     if limit:
@@ -153,13 +150,14 @@ def _split_marks(reply: str) -> tuple[str, int | None, int | None]:
     return stripped, start, start + len(inner)
 
 
-def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
+def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any], *,
+         on_completion: Callable[[Any], None] | None = None) -> jobs.ItemOutcome:
     ids = [int(i) for i in payload.get("ids", [])]
     conn = get_connection("content")
     placeholders = ",".join("?" * len(ids))
     rows = [dict(r) for r in conn.execute(  # noqa: S608 - count-built placeholders
         f"SELECT id, text, surface FROM review_sentences"
-        f" WHERE id IN ({placeholders}) AND text_zh IS NULL ORDER BY id",
+        f" WHERE id IN ({placeholders}) AND (text_zh IS NULL OR text_zh NOT GLOB '*[一-鿿]*') ORDER BY id",
         ids,
     ).fetchall()]
     if not rows:
@@ -172,6 +170,8 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         max_tokens=200 * len(rows) + 200,
         temperature=0.2,
     )
+    if on_completion is not None:
+        on_completion(completion)
     answer = json_object(completion.text)
 
     # **The model writes "#1", not "1".** It was told the key is "the number
@@ -189,7 +189,7 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         if not isinstance(reply, str) or not reply.strip():
             continue
         text_zh, start, end = _split_marks(reply)
-        if not text_zh:
+        if not text_zh or not re.search(r"[一-鿿]", text_zh):
             continue
         conn.execute(
             "UPDATE review_sentences SET text_zh = ?, zh_start = ?, zh_end = ? WHERE id = ?",
@@ -202,13 +202,11 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
 
     missed = len(rows) - stored
     if missed:
-        # Not an error: the batch is re-plannable, and whatever stayed NULL will
-        # be picked up next time. Worth a line because a model that keeps
-        # skipping items is a prompt problem, not a transient one.
-        log.warning(
-            "translate.partial",
-            f"这一批 {len(rows)} 句里有 {missed} 句没拿到译文",
-            missing=missed, total=len(rows),
+        # Keep valid partial work, but leave the job resumable instead of
+        # reporting an incomplete bilingual batch as done.
+        raise ItemFailed(
+            f"这一批 {len(rows)} 句里有 {missed} 句没拿到有效中文译文",
+            raw=completion.text,
         )
 
     # **The raw reply, not a summary of it.** `ItemOutcome.result` exists so
@@ -248,7 +246,7 @@ WORKER = jobs.Worker(
 
 def pending_count() -> int:
     return int(get_connection("content").execute(
-        "SELECT COUNT(*) FROM review_sentences WHERE text_zh IS NULL"
+        "SELECT COUNT(*) FROM review_sentences WHERE text_zh IS NULL OR text_zh NOT GLOB '*[一-鿿]*'"
     ).fetchone()[0])
 
 

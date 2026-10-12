@@ -66,24 +66,43 @@ def _archive_legacy_verdicts(conn: sqlite3.Connection) -> None:
     source table is rebuilt in this phase, so a second run must not copy the
     *new* rows in on top of the archived ones.
     """
+    # Fresh installations have no P2 occurrences to archive; never inspect an
+    # attached database for this content-owned legacy table.
+    if not conn.execute(
+        "SELECT 1 FROM main.sqlite_master WHERE type='table' AND name='reading_phrases'"
+    ).fetchone():
+        return
     exists = conn.execute(
-        "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'"
+        "SELECT COUNT(*) FROM main.sqlite_master WHERE type = 'table'"
         " AND name = 'phrase_verdicts_legacy'"
     ).fetchone()[0]
     if exists:
         return
     conn.execute(
         """
-        CREATE TABLE phrase_verdicts_legacy AS
+        CREATE TABLE main.phrase_verdicts_legacy AS
         SELECT id, article_id, sentence_id, phrase, start_seq, end_seq, surface,
                verdict, judged_at, created_at
-        FROM reading_phrases
+        FROM main.reading_phrases
         """
     )
     conn.execute(
         "CREATE INDEX idx_verdicts_legacy_phrase"
         " ON phrase_verdicts_legacy (phrase)"
     )
+
+
+def _rename_legacy_inventory(conn: sqlite3.Connection) -> None:
+    # The current v1 creates phrase_list directly. An unqualified ALTER on a
+    # new install could otherwise rename ECDICT's attached phrases table.
+    tables = {row[0] for row in conn.execute(
+        "SELECT name FROM main.sqlite_master WHERE type='table'"
+        " AND name IN ('phrases','phrase_list')"
+    )}
+    if tables == {"phrases"}:
+        conn.execute("ALTER TABLE main.phrases RENAME TO phrase_list")
+    elif tables != {"phrase_list"}:
+        raise RuntimeError("词组清单表形状冲突，需核对本地旧表与新表，不能自动改写。")
 
 
 MIGRATIONS = [
@@ -236,11 +255,6 @@ MIGRATIONS = [
         version=3,
         name="rename phrases to phrase_list, away from ECDICT's table",
         database="content",
-        apply="""
-        -- 撞名：`dictionary.db` 里 ECDICT 自己就有一张 `phrases`（31.8 万行），
-        -- 而所有库都挂在同一个连接上，不带库名的 `phrases` 解析到哪一张
-        -- 取决于连接是从哪个库开的。**查询照样跑、照样返回行，只是来自另一张表。**
-        ALTER TABLE phrases RENAME TO phrase_list;
-        """,
+        apply=_rename_legacy_inventory,
     ),
 ]

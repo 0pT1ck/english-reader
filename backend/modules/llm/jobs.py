@@ -66,6 +66,16 @@ class ItemOutcome:
     result: str = ""
     tokens_in: int = 0
     tokens_out: int = 0
+    # Composite workers may use a separately configured provider for a stage.
+    cost: float | None = None
+
+
+class ItemFailure(parsing.ItemFailed):
+    """A failed composite attempt with usage from already completed calls."""
+
+    def __init__(self, message: str, *, outcome: ItemOutcome, raw: str = "") -> None:
+        super().__init__(message, raw=raw)
+        self.outcome = outcome
 
 
 @dataclass(frozen=True)
@@ -341,6 +351,7 @@ def start(job_id: int) -> dict[str, Any]:
     with _registry_lock:
         if job_id in _running:
             return get(job_id)
+        _set_status(job_id, "pending", error=None, pause_requested=0)
         entry = _Running(thread=threading.Thread(
             target=_run, args=(job_id,), name=f"llm-job-{job_id}", daemon=True
         ))
@@ -378,13 +389,12 @@ def set_spend_cap(job_id: int, spend_cap: float | None) -> dict[str, Any]:
 
 
 def pause(job_id: int) -> dict[str, Any]:
-    """Ask a running job to stop after the calls in flight finish."""
+    """Persist the intent before waiting for calls in flight to finish."""
     with _registry_lock:
         entry = _running.get(job_id)
-    if entry is None:
-        _set_status(job_id, "paused")
-        return get(job_id)
-    entry.stop.set()
+        _set_status(job_id, "paused", pause_requested=1)
+        if entry is not None:
+            entry.stop.set()
     return get(job_id)
 
 
@@ -472,30 +482,27 @@ def _record_item(job_id: int, seq: int, *, status: str, outcome: ItemOutcome | N
                  raw: str | None = None) -> None:
     with _write_lock:
         conn = get_connection("ops")
+        cumulative = outcome is not None and outcome.cost is not None
+        usage = (
+            (outcome.tokens_in if outcome else 0),
+            (outcome.tokens_out if outcome else 0),
+            cost,
+        )
+        if cumulative:
+            previous = conn.execute(
+                "SELECT tokens_in,tokens_out,cost FROM llm_job_items WHERE job_id=? AND seq=?",
+                (job_id, seq),
+            ).fetchone()
+            usage = tuple(previous[key] + value for key, value in
+                          zip(("tokens_in", "tokens_out", "cost"), usage))
         conn.execute(
             "UPDATE llm_job_items SET status = ?, result = ?, tokens_in = ?,"
             " tokens_out = ?, cost = ?, attempts = ?, error = ?, updated_at = ?"
             " WHERE job_id = ? AND seq = ?",
-            (
-                status,
-                # On failure the raw reply is what makes the failure
-                # diagnosable — "no JSON found" without the text that contained
-                # no JSON forces the call to be reproduced by hand.
-                (outcome.result if outcome else raw),
-                (outcome.tokens_in if outcome else 0),
-                (outcome.tokens_out if outcome else 0),
-                cost,
-                attempts,
-                error,
-                _now(),
-                job_id,
-                seq,
-            ),
+            (status, outcome.result if outcome else raw, *usage, attempts, error, _now(), job_id, seq),
         )
-        # Recomputed from the items rather than incremented. Incrementing drifts
-        # as soon as a failed item is retried successfully — it would have been
-        # counted once as a failure and again as a success — and a cost total
-        # that quietly overstates itself is worse than no total at all. The
+        # Status counts are recomputed so retrying a failed item cannot count it
+        # twice. Composite usage above accumulates actual calls across attempts.
         # (job_id, status) index makes this cheap.
         conn.execute(
             "UPDATE llm_jobs SET"
@@ -569,8 +576,10 @@ def _run(job_id: int) -> None:
                     _record_item(job_id, item["seq"], status="failed", outcome=None,
                                  cost=0.0, error=str(exc), attempts=attempts)
                 except parsing.ItemFailed as exc:
-                    _record_item(job_id, item["seq"], status="failed", outcome=None,
-                                 cost=0.0, error=str(exc), attempts=attempts, raw=exc.raw)
+                    outcome = getattr(exc, "outcome", None)
+                    cost = (outcome.cost if outcome is not None and outcome.cost is not None else 0.0)
+                    _record_item(job_id, item["seq"], status="failed", outcome=outcome,
+                                 cost=cost, error=str(exc), attempts=attempts, raw=exc.raw)
                 except Exception as exc:  # noqa: BLE001 - one bad item must not kill the batch
                     log.exception(
                         "llm.job.item.failed",
@@ -583,7 +592,8 @@ def _run(job_id: int) -> None:
                                  cost=0.0, error=f"{type(exc).__name__}: {exc}",
                                  attempts=attempts)
                 else:
-                    cost = provider.cost_of(outcome.tokens_in, outcome.tokens_out)
+                    cost = (outcome.cost if outcome.cost is not None
+                            else provider.cost_of(outcome.tokens_in, outcome.tokens_out))
                     _record_item(job_id, item["seq"], status="done", outcome=outcome,
                                  cost=cost, error=None, attempts=attempts)
 

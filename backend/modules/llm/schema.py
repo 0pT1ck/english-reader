@@ -102,6 +102,14 @@ MIGRATIONS = [
         database="ops",
         apply=lambda conn: _adopt_provider_settings(conn),
     ),
+    Migration(
+        version=3,
+        name="persist explicit batch pause requests",
+        database="ops",
+        apply="""
+        ALTER TABLE llm_jobs ADD COLUMN pause_requested INTEGER NOT NULL DEFAULT 0;
+        """,
+    ),
 ]
 
 

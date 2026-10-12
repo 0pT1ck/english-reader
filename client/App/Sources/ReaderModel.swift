@@ -58,6 +58,10 @@ final class ReaderModel {
     private(set) var selectedSpan: ClosedRange<Int>?
     private(set) var lookup: LookupItem?
 
+    var phraseSpans: [ClosedRange<Int>] {
+        display?.phrases.map { $0.startSeq...$0.endSeq } ?? []
+    }
+
     /// 顶部那一段。跳回上次位置、报进度都读它。
     var topParagraph: Int?
 
@@ -141,6 +145,8 @@ final class ReaderModel {
     }
 
     private func apply(_ response: Components.Schemas.ArticleResponse) {
+        // A revalidated body may replace sense annotations; do not retain the old lookup selection.
+        closeLookup()
         if let preparing = response.preparing {
             phase = .preparing("还在准备：已标注 \(preparing.annotated) / \(preparing.total)")
             return
@@ -265,15 +271,22 @@ final class ReaderModel {
     /// P6 §7），那笔账这个 Phase 还掉。
     func tap(seq: Int, app: AppModel) {
         guard let display, let target = display.target(at: seq),
-              let token = tokensBySeq[seq] else { return }
+              let token = tokensBySeq[seq] else {
+            closeLookup()
+            return
+        }
         let role = seq < display.tokens.count ? display.tokens[seq].role : nil
 
         switch target {
         case .phrase(let phrase):
             guard let payload = phrasesByStart[phrase.startSeq],
-                  let subject = phraseSubject(payload, contextSenseId: phrase.senseId) else { return }
+                  let subject = phraseSubject(payload, contextSenseId: phrase.senseId) else {
+                closeLookup()
+                return
+            }
             selectedSpan = phrase.startSeq...phrase.endSeq
             lookup = LookupItem(
+                target: .init(tokenSeq: seq, span: phrase.startSeq...phrase.endSeq),
                 subject: subject,
                 // 「这个词本身」：词组里被点的那个词，**永远是挑着标**——
                 // 它自己的标注是在不知道自己在词组里的情况下做的（决定 ②）。
@@ -282,9 +295,13 @@ final class ReaderModel {
                 selection: subject.contextSenseId.map { .init(inner: false, senseId: $0) }
             )
         case .word:
-            guard let subject = wordSubject(token, inPhrase: false) else { return }
+            guard let subject = wordSubject(token, inPhrase: false) else {
+                closeLookup()
+                return
+            }
             selectedSpan = seq...seq
             lookup = LookupItem(
+                target: .init(tokenSeq: seq, span: seq...seq),
                 subject: subject,
                 inner: nil,
                 // 超纲词不在正文做记号，改在面板里单词右边一行小字（决定 28）。
@@ -310,7 +327,8 @@ final class ReaderModel {
             senses: target == .properNoun ? [] : SenseRow.ordered(entry.senses.map(SenseRow.init)),
             fallbackGloss: target == .properNoun ? nil : entry.translation,
             target: target,
-            marks: wordMarks(headword)
+            marks: wordMarks(headword),
+            derivation: target == .properNoun ? nil : entry.derivation
         )
     }
 
@@ -331,7 +349,7 @@ final class ReaderModel {
         }
         return LookupSubject(kind: .phrase, key: phrase.phrase, title: phrase.phrase,
                              phonetic: nil, senses: senses,
-                             fallbackGloss: nil, target: target, marks: marks)
+                             fallbackGloss: nil, target: target, marks: marks, derivation: nil)
     }
 
     /// 在列表里点了一行：滑块改标这一条（决定 ⑯）。

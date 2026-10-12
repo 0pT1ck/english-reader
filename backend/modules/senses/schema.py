@@ -381,4 +381,26 @@ MIGRATIONS = [
         DROP TABLE IF EXISTS senses_p1b;
         """,
     ),
+    Migration(
+        version=8,
+        name="traceable independently identified dictionary run-ons",
+        database="content",
+        apply="""
+        CREATE TABLE derived_sense_sources (
+            source_key TEXT PRIMARY KEY,
+            sense_id INTEGER NOT NULL UNIQUE REFERENCES senses(id),
+            headword TEXT NOT NULL,
+            parent_headword TEXT NOT NULL,
+            parent_block INTEGER NOT NULL,
+            runon_section INTEGER NOT NULL,
+            provenance TEXT NOT NULL,
+            definition_provider TEXT NOT NULL,
+            definition_model TEXT NOT NULL,
+            definition_prompt TEXT NOT NULL,
+            definition_response TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX idx_derived_sense_word ON derived_sense_sources(headword);
+        """,
+    ),
 ]

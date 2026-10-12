@@ -28,19 +28,17 @@ from __future__ import annotations
 import json
 import random
 import re
-from typing import Any
+from typing import Any, Callable
 
 from backend.core import runtime_config
 from backend.core.db import get_connection
-from backend.core.logging import get_logger
-from backend.modules.llm import client, jobs
+from backend.modules.llm import client, jobs, providers
+from backend.modules.llm.parsing import ItemFailed
 from backend.modules.llm.providers import Provider
 from backend.modules.review import repository
 from backend.modules.senses import repository as senses
 from backend.modules.vocabulary import analyzer, syllabus
 from backend.modules.reading.difficulty import WITHIN_CET6
-
-log = get_logger("review.sentences")
 
 KIND = "review_sentences"
 
@@ -50,6 +48,35 @@ NUMBERING = re.compile(r"^\s*(?:\d+[.)、]|[-*•])\s*")
 #: Sentence length bounds. Short enough to answer at a glance, long enough to
 #: carry the context that pins the sense down.
 MIN_WORDS, MAX_WORDS = 8, 30
+
+# Existing rows retain their ids; only complete, correctly located bilingual
+# content counts towards the stock target.
+USABLE_ENGLISH = (
+    "text GLOB '*[A-Za-z]*' AND text NOT GLOB '*[一-鿿]*'"
+    " AND blank_start >= 0 AND blank_end > blank_start AND blank_end <= length(text)"
+    " AND surface = substr(text, blank_start + 1, blank_end - blank_start)"
+)
+COMPLETE_BILINGUAL = USABLE_ENGLISH + " AND text_zh GLOB '*[一-鿿]*'"
+
+
+def pool_target() -> int:
+    return max(1, int(runtime_config.get("review_pool_target")))
+
+
+def bilingual_count(item_key: str, sense_id: int, *, item_type: str = "word") -> int:
+    return int(get_connection("content").execute(
+        "SELECT COUNT(*) FROM review_sentences"
+        " WHERE item_type=? AND item_key=? AND sense_id=? AND " + COMPLETE_BILINGUAL,
+        (item_type, item_key, sense_id),
+    ).fetchone()[0])
+
+
+def _english_count(item_key: str, sense_id: int, item_type: str) -> int:
+    return int(get_connection("content").execute(
+        "SELECT COUNT(*) FROM review_sentences"
+        " WHERE item_type=? AND item_key=? AND sense_id=? AND " + USABLE_ENGLISH,
+        (item_type, item_key, sense_id),
+    ).fetchone()[0])
 
 
 # --------------------------------------------------------------------------- #
@@ -222,52 +249,38 @@ def split_lines(raw: str) -> list[str]:
 
 
 def _plan(params: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
-    """One unit per sense that is short of sentences."""
-    target = int(runtime_config.get("review_pool_target"))
+    """One unit per reported identity short of complete bilingual stock."""
+    from backend.modules.review import preparation
+
     wanted = params.get("senses")
-    if wanted:
+    if wanted is not None:
         pairs = [(str(w.get("item_type") or "word"), str(w["item_key"]),
                   int(w["sense_id"])) for w in wanted]
     else:
-        # **照上报的词池快照挑，不照服务端那份存档**（P9 §7）。
-        #
-        # 造句子是工厂的活，而「哪些词在学」是学习记录——服务端不推它，用设备
-        # 报上来的那个值。存档那一份（`study_states.pool`）现在只由标记事件维护，
-        # 拿它来排生成会给已经毕业的词继续造句，而给真正在学的词漏掉。
-        # **词组也在里面**（P11 决定 ⑤c／⑫）：标了才造，跟单词同一条规矩。
         rows = get_connection("events").execute(
-            """
-            SELECT p.item_type, p.item_key, p.sense_id FROM learner_pool p
-             WHERE p.learner_id = ? AND p.pool = 'reviewing'
-               AND p.sense_id > 0
-               AND (SELECT COUNT(*) FROM review_sentences r
-                     WHERE r.item_type = p.item_type AND r.item_key = p.item_key
-                       AND r.sense_id = p.sense_id) < ?
-             LIMIT ?
-            """,
-            (int(params.get("learner_id", 1)), target, int(params.get("limit", 200))),
+            "SELECT item_type,item_key,sense_id FROM learner_pool"
+            " WHERE learner_id=? AND pool='reviewing' AND sense_id>0"
+            " ORDER BY item_type,item_key,sense_id",
+            (int(params.get("learner_id", 1)),),
         ).fetchall()
         pairs = [(str(r["item_type"] or "word"), r["item_key"], int(r["sense_id"]))
                  for r in rows]
 
     units = []
-    for item_type, item_key, sense_id in pairs:
-        # free sentences first, then ask for the rest
-        harvest(item_key, sense_id, item_type=item_type)
-        have = get_connection("content").execute(
-            "SELECT COUNT(*) FROM review_sentences WHERE item_type=? AND item_key=?"
-            " AND sense_id=? AND source='generated'",
-            (item_type, item_key, sense_id),
-        ).fetchone()[0]
-        if have >= target:
+    for item_type, item_key, sense_id in dict.fromkeys(pairs):
+        if item_type not in ("word", "phrase") or not item_key or sense_id <= 0:
             continue
-        units.append((f"{item_key}#{sense_id}",
-                      {"item_type": item_type, "item_key": item_key,
-                       "sense_id": sense_id}))
+        if bilingual_count(item_key, sense_id, item_type=item_type) >= pool_target():
+            continue
+        if preparation.is_claimed(item_type, item_key, sense_id):
+            continue
+        units.append((f"{item_type}:{item_key}#{sense_id}",
+                      {"item_type": item_type, "item_key": item_key, "sense_id": sense_id}))
     return units
 
 
-def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
+def _generate(provider: Provider, payload: dict[str, Any], params: dict[str, Any], *,
+              on_completion: Callable[[Any], None] | None = None) -> jobs.ItemOutcome:
     item_key, sense_id = payload["item_key"], int(payload["sense_id"])
     item_type = str(payload.get("item_type") or "word")
     if item_type == "phrase":
@@ -279,7 +292,7 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         # id 的地方:词标记在两个月前，而义项集后来重建过。
         sense = senses.sense_by_id(sense_id)
     if not sense:
-        return jobs.ItemOutcome(result="义项不存在，跳过")
+        raise ItemFailed("义项不存在，不能生成复习内容")
 
     try:
         gloss = json.loads(sense["gloss_zh"] or "[]")
@@ -296,6 +309,8 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
         max_tokens=3000,
         temperature=0.8,
     )
+    if on_completion is not None:
+        on_completion(completion)
 
     conn = get_connection("content")
     kept = rejected = 0
@@ -329,10 +344,107 @@ def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) ->
     )
 
 
+def _translate_missing(payload: dict[str, Any],
+                       outcomes: list[tuple[Provider, jobs.ItemOutcome]]) -> None:
+    from backend.modules.review import translate
+
+    item_type = str(payload.get("item_type") or "word")
+    item_key, sense_id = payload["item_key"], int(payload["sense_id"])
+    missing = pool_target() - bilingual_count(item_key, sense_id, item_type=item_type)
+    if missing <= 0:
+        return
+    rows = get_connection("content").execute(
+        "SELECT id FROM review_sentences WHERE item_type=? AND item_key=? AND sense_id=?"
+        " AND " + USABLE_ENGLISH + " AND (text_zh IS NULL OR text_zh NOT GLOB '*[一-鿿]*')"
+        " ORDER BY CASE source WHEN 'corpus' THEN 0 ELSE 1 END,id LIMIT ?",
+        (item_type, item_key, sense_id, missing),
+    ).fetchall()
+    if not rows:
+        return
+    provider_id = jobs.configured_provider(translate.KIND) or translate._default_provider()
+    provider = providers.get(provider_id) if provider_id else providers.default_provider()
+    size = max(1, int(runtime_config.get("review_translate_batch")))
+    for start in range(0, len(rows), size):
+        ids = [int(r["id"]) for r in rows[start:start + size]]
+        before = len(outcomes)
+        with client.thinking(jobs.configured_thinking(translate.KIND)):
+            outcome = translate._run(
+                provider, {"ids": ids}, {},
+                on_completion=lambda completion: _record_completion(outcomes, provider, completion),
+            )
+        if len(outcomes) > before:
+            outcomes[-1] = (provider, outcome)
+
+
+def _record_completion(outcomes: list[tuple[Provider, jobs.ItemOutcome]],
+                       provider: Provider, completion: Any) -> None:
+    # Capture usage before parsing or writing content can fail.
+    outcomes.append((provider, jobs.ItemOutcome(
+        result=json.dumps({"model": completion.model, "reply": completion.text}, ensure_ascii=False),
+        tokens_in=completion.tokens_in,
+        tokens_out=completion.tokens_out,
+    )))
+
+
+def _outcome(outcomes: list[tuple[Provider, jobs.ItemOutcome]], *, stock: int | None = None) -> jobs.ItemOutcome:
+    return jobs.ItemOutcome(
+        result=json.dumps(
+            {"bilingual_stock": stock, "target": pool_target(),
+             "stages": [{"provider": p.id, "result": o.result} for p, o in outcomes]},
+            ensure_ascii=False,
+        ),
+        tokens_in=sum(o.tokens_in for _, o in outcomes),
+        tokens_out=sum(o.tokens_out for _, o in outcomes),
+        cost=sum(p.cost_of(o.tokens_in, o.tokens_out) for p, o in outcomes),
+    )
+
+
+def _run(provider: Provider, payload: dict[str, Any], params: dict[str, Any]) -> jobs.ItemOutcome:
+    from backend.modules.review import preparation
+
+    item_type = str(payload.get("item_type") or "word")
+    item_key, sense_id = payload["item_key"], int(payload["sense_id"])
+    identity = (item_type, item_key, sense_id)
+    outcomes: list[tuple[Provider, jobs.ItemOutcome]] = []
+    stage = "收集已有语料"
+    preparation.set_state(*identity, "running")
+    try:
+        if bilingual_count(item_key, sense_id, item_type=item_type) < pool_target():
+            harvest(item_key, sense_id, item_type=item_type, limit=max(20, pool_target()))
+            stage = "翻译已有句子"
+            _translate_missing(payload, outcomes)
+        if bilingual_count(item_key, sense_id, item_type=item_type) < pool_target():
+            if _english_count(item_key, sense_id, item_type) < pool_target():
+                stage = "生成补缺句子"
+                before = len(outcomes)
+                generated = _generate(
+                    provider, payload, params,
+                    on_completion=lambda completion: _record_completion(outcomes, provider, completion),
+                )
+                if len(outcomes) > before:
+                    outcomes[-1] = (provider, generated)
+            stage = "翻译补缺句子"
+            _translate_missing(payload, outcomes)
+        have = bilingual_count(item_key, sense_id, item_type=item_type)
+        if have < pool_target():
+            stage = f"完整双语库存不足（{have}/{pool_target()}），可在原任务继续"
+            # One over-generation pass per job attempt. The runner's existing
+            # attempt cap bounds retries, rather than an unbounded model loop.
+            raise ItemFailed(stage)
+        preparation.set_state(*identity, "ready")
+    except Exception as exc:
+        failure = jobs.ItemFailure(str(exc), outcome=_outcome(outcomes), raw=getattr(exc, "raw", ""))
+        try:
+            preparation.set_state(*identity, "failed", f"{stage}未完成；内容尚未备好。")
+        finally:
+            raise failure from exc
+    return _outcome(outcomes, stock=have)
+
+
 WORKER = jobs.Worker(
     kind=KIND,
-    title="生成复习例句",
-    description="给进了复习队列的义项凑够句子池：过量生成，逐句机器校验，留够目标条数",
+    title="准备双语复习句子",
+    description="先复用已有语料，只补不足的生成与翻译；完整双语库存达到配置目标才完成",
     plan=_plan,
     run_item=_run,
     default_provider=lambda: str(runtime_config.get("review_gen_provider")) or None,
@@ -341,17 +453,10 @@ WORKER = jobs.Worker(
 
 def start_for(senses_wanted: list[dict[str, Any]] | None = None, *,
               learner_id: int = 1, provider_id: str | None = None) -> int | None:
-    """Queue and start generation. ``None`` when every pool is already full."""
-    params: dict[str, Any] = {"learner_id": learner_id}
-    if senses_wanted:
-        params["senses"] = senses_wanted
-    try:
-        job_id = jobs.create(KIND, params=params, provider_id=provider_id)
-    except Exception as exc:  # noqa: BLE001 - "nothing to generate" is a normal outcome
-        log.info("review.generate.nothing", f"没有需要生成句子的义项：{exc}")
-        return None
-    jobs.start(job_id)
-    return job_id
+    """Prepare bilingual content; return None only for full or claimed stock."""
+    from backend.modules.review import preparation
+
+    return preparation.start(senses_wanted, learner_id=learner_id, provider_id=provider_id)
 
 
 # --------------------------------------------------------------------------- #

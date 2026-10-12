@@ -35,15 +35,8 @@ final class AppModel {
     /// 事件日志（P9）。**设备上学习记录的第一副本**，屏幕上的每个数都由重放它算出来。
     private(set) var events: EventLog?
 
-    /// 重放出来的投影。记一条事件就重算一次。
-    ///
-    /// **「重放是毫秒级的」这句话曾经写在这里，而它没有一直成立**
-    /// （2026-09-19 真机上栽的:399 条事件、格式器与日历现建、日历那半再
-    /// 重复重放,单次日历计算实测 1135ms）。修完格式器缓存和真正的增量重放，
-    /// 单次全量重放现在确实是几十毫秒级——但那是「算得快」,不是「不用算」。
-    /// **投影本身依然每次重算,不缓存**：它的输入(整份日志)和输出都在内存里,
-    /// 一次会话里最多算一次,这个便宜。真正值得存盘的是下面日历那份——
-    /// 它要在两百多个空日子上重复求值,便宜的操作乘以四百天就不便宜了。
+    /// 投影 projection: apply local facts incrementally; replay after a pull or
+    /// changed scheduler settings. The log remains the only source of truth.
     private(set) var projection = Projection()
 
     /// 排期参数，今日包带下来的那一份。
@@ -62,6 +55,38 @@ final class AppModel {
     /// 上一次同步的结果。`SyncReport` 早就返回这四个数，**至今没人显示过**——
     /// 设置页的存储那一区是它第一个读者。
     private(set) var lastSync: SyncReport?
+
+    enum PreparationStatus: Equatable {
+        case idle
+        case running
+        case waiting
+        case failed(String)
+        case offline
+    }
+
+    private(set) var preparationStatus: PreparationStatus = .idle
+    private(set) var reviewPool: Components.Schemas.SentencePoolResponse?
+    @ObservationIgnored private var reviewUpdate: (@MainActor () -> Void)?
+
+    func observeReviewUpdates(_ update: @escaping @MainActor () -> Void) {
+        reviewUpdate = update
+    }
+
+    func adoptSentences(_ pool: Components.Schemas.SentencePoolResponse) {
+        guard reviewPool != pool else { return }
+        reviewPool = pool
+        reviewUpdate?()
+    }
+
+    var preparationMessage: String? {
+        switch preparationStatus {
+        case .idle: nil
+        case .running: "正在上报标记并准备双语句子"
+        case .waiting: "双语句子还在准备，稍后重试或回到前台会继续获取"
+        case .failed(let message): message
+        case .offline: "网络暂不可用；标记已保存在本机，联网后回到前台会继续"
+        }
+    }
 
     /// 起不来的原因。存储建不起来是唯一一种「App 没法用」的失败，
     /// 所以它要说得出话，而不是让每一屏各自转圈。
@@ -128,8 +153,8 @@ final class AppModel {
             file.minimumLevel = preferences.verboseLog ? .debug : .info
             log = file
             storageFailure = nil
-            refreshPendingCount()
             refreshProjection()
+            refreshPendingCount()
         } catch {
             storageFailure = "本地存储建不起来：\(error.localizedDescription)"
             // 日志本身可能就是没建起来的那个，所以这条要两头都说：
@@ -169,8 +194,8 @@ final class AppModel {
     /// 记一条事件。**先落盘再说成功**——反过来的话用户会看见「已标记」
     /// 而它其实没写进去。
     @discardableResult
-    func record(_ entry: OutboxEntry) -> Bool {
-        guard let outbox else { return false }
+    func record(_ entry: OutboxEntry, expectingSequence: Int? = nil) -> Bool {
+        guard let outbox, storageFailure == nil else { return false }
         do {
             // **五种事件只进日志，遥测只进发件箱——不再两处都写。**
             //
@@ -181,17 +206,34 @@ final class AppModel {
             // 一条事件只有一个家。映射在 Core 里（`OutboxEntry.loggedKind`），
             // 和 `ercli` 共用一份。
             if let kind = entry.loggedKind, let events {
-                try events.append(kind: kind, payload: entry.payload,
-                                  idemKey: entry.idemKey, occurredAt: entry.occurredAt)
+                let event = try events.append(kind: kind, payload: entry.payload,
+                                              idemKey: entry.idemKey,
+                                              occurredAt: entry.occurredAt,
+                                              expectedLocalSequence: expectingSequence)
+                // The durable append supplies the new fact. Do not decode the
+                // whole log again on every slider movement or review answer.
+                if projection.applyNext(event, weightDecay: weightDecay,
+                                        settings: schedulerSettings ?? Self.unusableSettings) {
+                    if lastLoad != nil { lastLoad?.events.append(event) }
+                } else {
+                    refreshProjection()
+                }
             } else {
                 try outbox.append(entry)
             }
             refreshPendingCount()
-            refreshProjection()
             log?.write(.debug, "outbox.recorded", "记下一条事件",
                        fields: ["kind": entry.kind.rawValue, "pending": String(pendingEvents)])
+            reviewUpdate?()
+            if entry.loggedKind == .marked || entry.loggedKind == .unmarked {
+                requestPreparation()
+            }
             return true
         } catch {
+            if let logError = error as? EventLogError, case .sequenceChanged = logError {
+                reconcileProjection()
+                return false
+            }
             // **这一条必须记。**写不进发件箱意味着那次标记消失了，而屏幕上
             // 什么都不会说——正是「静默失败」那一类里最贵的一种。
             log?.write(.error, "outbox.record.failed", "事件没能落盘",
@@ -201,36 +243,8 @@ final class AppModel {
         }
     }
 
-    /// 把词池快照报上去。
-    ///
-    /// **失败不作声，下一趟再来**——同发件箱那条纪律。快照是可重算的值，
-    /// 报晚一点的后果是生成那一轮可能把一个在学的词当生词，
-    /// 而那比「把界面卡在一个报不上去的请求上」轻得多。日志里要说，
-    /// 因为「服务端手上那份是什么时候的」只有这里查得到。
-    private func reportPool(_ engine: SyncEngine) async {
-        let entries = projection.poolSnapshot()
-        let stamp = ISO8601DateFormatter().string(from: Date())
-        do {
-            let count = try await engine.reportPool(entries, reportedAt: stamp)
-            log?.write(.info, "progress.pool.reported", "报了词池快照",
-                       fields: ["entries": String(count)])
-        } catch {
-            log?.write(.warn, "progress.pool.report.failed", "词池快照没报上去",
-                       fields: ["entries": String(entries.count),
-                                "error": error.localizedDescription])
-        }
-    }
-
-    /// 重放一次日志。记一条事件之后、以及启动时各一次。
-    ///
-    /// **算不了排期就不算，但照样重放。** 没有 `schedulerSettings` 时
-    /// 记忆状态那一半是空的，而词池、遇见次数、当天那一轮照样对——
-    /// 半个投影比一个用猜来的参数算出来的完整投影有用得多。
-    /// 上一次重放用的那份日志。**日历复用它**——同一份东西读两遍是白读，
-    /// 而它在 799 条的时候就已经看得出来了。
-    ///
-    /// 它总是新的:唯一往日志里写东西的路径（`record()`、`pull()`、重置）
-    /// 写完都会调 `refreshProjection()`。
+    /// Retain the decoded log for calendar calculation and pending counts.
+    /// Local appends extend it; pulls and scheduler changes replay it once.
     private var lastLoad: EventLogLoad?
 
     func refreshProjection() {
@@ -253,6 +267,13 @@ final class AppModel {
                                 "torn_tail": load.tornTail ? "yes" : "no",
                                 "events": String(load.events.count)])
         }
+        reviewUpdate?()
+    }
+
+    func reconcileProjection() {
+        guard events?.latestLocalSequence != projection.throughLocalSequence else { return }
+        refreshProjection()
+        refreshPendingCount()
     }
 
     /// 服务端还没下发排期参数时用的占位。
@@ -391,9 +412,8 @@ final class AppModel {
 
             let discarded = try events.load().events.count
             try events.reset()
-            let adopted = try await engine.pull()
             refreshProjection()
-            refreshPendingCount()
+            let adopted = try await pullAndReconcile(engine)
             log?.write(.warn, "events.log.reset", "本地日志整份重拉了",
                        fields: ["discarded": String(discarded),
                                 "adopted": String(adopted)])
@@ -405,7 +425,7 @@ final class AppModel {
         }
     }
 
-    /// 待发条数。**只数文件，不读文件。**
+    /// Count telemetry files and the decoded log; never decode event history here.
     ///
     /// 2026-09-16 修：这里一度顺手调了 `outbox.pending()` 去数损坏条目，
     /// 而那个方法会**读取并解码发件箱里的每一个文件**——它是给上报用的。
@@ -418,8 +438,12 @@ final class AppModel {
         // 否则标了一个词、待发数显示 0，而它其实还没送出去。
         // `decided` 不算:它还没有去处（端点是 §6 的活），算进去就是永远非零的噪音。
         var unsent = 0
-        if let events, let pending = try? events.unreported(kinds: LoggedEvent.sendableKinds) {
-            unsent = pending.count
+        if let events, let load = lastLoad {
+            let cursor = events.cursor()
+            unsent = load.events.count {
+                LoggedEvent.sendableKinds.contains($0.kind)
+                    && !cursor.isReported($0.localSequence)
+            }
         }
         pendingEvents = (outbox?.count ?? 0) + unsent
     }
@@ -461,78 +485,158 @@ final class AppModel {
         return damaged.count
     }
 
-    /// 正在跑的那一趟同步。**并发进来的调用等它，不另起一趟。**
-    private var inFlightDrain: Task<SyncReport?, Never>?
+    @ObservationIgnored private var inFlightDrain: Task<SyncReport?, Never>?
+    @ObservationIgnored private var drainRequested = false
 
-    /// 把攒着的事件发出去。**界面上失败不作声**——发件箱的全部意义就是失败了
-    /// 可以再来；但日志里要说，那是「我标的东西传上去了没有」唯一查得到的地方。
-    ///
-    /// **单飞:同一时刻只有一趟**（2026-09-18 真机上栽的）。
-    /// 这个类是 `@MainActor`，而 **MainActor 不防重入**——`await` 一让出去，
-    /// 第二个调用就从头跑起来了。而调用方有七处:启动的 `.task`、
-    /// `scenePhase == .active`、阅读屏、复习屏、拼写屏、设置屏、开发者选项。
-    /// 启动那一下 `.task` 和 `.active` 几乎同时到，于是两趟并发。
-    ///
-    /// 后果不是「多打一次请求」:两趟 `pull()` 各自在开头取一次「已知幂等键」的
-    /// 快照，于是**同一批事件被写进日志两遍**（真机上 399 条变 798 条），
-    /// 而两边的 `markReported` 各读各写游标、互相覆盖，那 798 条大半又算成
-    /// 「还没上报」。日志里每一行都是双份，那正是认出这件事的地方。
-    ///
-    /// **等它而不是丢掉它**:`await app.drain()` 的含义是「一趟同步完成了」，
-    /// 直接返回 nil 会让调用方以为同步过了而其实没有。
+    /// Owned by the app, not a reader/view task: leaving a screen must not
+    /// cancel the already-durable mark's content request.
+    func requestPreparation() {
+        drainRequested = true
+        guard inFlightDrain == nil else { return }
+        Task { await drain() }
+    }
+
     @discardableResult
     func drain() async -> SyncReport? {
         if let running = inFlightDrain { return await running.value }
-        let task = Task { await performDrain() }
+        drainRequested = true
+        let task = Task { await performRequestedDrains() }
         inFlightDrain = task
         let report = await task.value
         inFlightDrain = nil
+        // A request can arrive after the task finishes but before this waiter
+        // clears its handle. Give that request a new owner rather than lose it.
+        if drainRequested { requestPreparation() }
+        return report
+    }
+
+    private func performRequestedDrains() async -> SyncReport? {
+        var report: SyncReport?
+        repeat {
+            drainRequested = false
+            report = await performDrain()
+        } while drainRequested
         return report
     }
 
     private func performDrain() async -> SyncReport? {
         guard let engine else { return nil }
         let before = pendingEvents
+        preparationStatus = .running
         do {
             let report = try await engine.drain()
-            // **先推后拉。** 顺序有意义:推完再拉，自己刚推上去的那些会在同一趟
-            // 回来（游标是「大于某个号」），按幂等键跳过——而反过来的话，
-            // 这一趟拉不到自己刚做的事，下一趟才拉到，中间那段时间另一台设备的
-            // 变化看得见、自己的看不见，那种半态最难解释。
-            let adopted = (try? await engine.pull()) ?? 0
+            lastSync = report
+            refreshPendingCount()
+            guard !report.offline else {
+                preparationStatus = .offline
+                return report
+            }
+            let adopted = try await pullAndReconcile(engine)
             if adopted > 0 {
                 log?.write(.info, "sync.pulled", "收下了别处做的事",
                            fields: ["adopted": String(adopted)])
-                refreshProjection()
             }
-            // **词池变了才报**（P9 §7）。词池是事件的函数，事件没动它就没动——
-            // 所以只在这一趟真的推上去或拉下来了东西时报一次。
-            // 每次 drain 都报也不贵（实测 30 条），但那会让日志里
-            // 「什么时候变过」看不出来。
-            if report.landed > 0 || adopted > 0 {
-                await reportPool(engine)
+            // A new local mark during push/pull must go through the next push
+            // before we describe its latest snapshot to the content factory.
+            guard !drainRequested else { return report }
+            let snapshot = PoolSnapshot(projection: projection)
+            if try await engine.reportPoolIfNeeded(
+                snapshot, reportedAt: ISO8601DateFormatter().string(from: Date())) {
+                log?.write(.info, "progress.pool.reported", "报了词池快照",
+                           fields: ["entries": String(snapshot.entries.count),
+                                    "through": String(snapshot.throughLocalSequence)])
             }
-            lastSync = report
-            refreshPendingCount()
-            // 上报把游标推了，待发数跟着变；投影不受影响（上报不改事实），
-            // 所以这里只刷数，不重放。
-
             if before > 0 || report.landed > 0 {
                 log?.write(report.rejected > 0 ? .warn : .info, "sync.drained", "上报了一批",
                            fields: ["landed": String(report.landed),
                                     "duplicates": String(report.duplicates),
                                     "rejected": String(report.rejected),
-                                    "remaining": String(report.remaining),
-                                    "offline": report.offline ? "yes" : "no"])
+                                    "remaining": String(report.remaining)])
             }
+            guard !drainRequested else { return report }
+            await acquirePreparedSentences(engine, snapshot: snapshot)
             return report
         } catch {
-            log?.write(.warn, "sync.drain.failed", "这一批没送出去",
-                       fields: ["pending": String(before),
-                                "error": error.localizedDescription])
+            notePreparationFailure(error)
             refreshPendingCount()
             return nil
         }
+    }
+
+    private func pullAndReconcile(_ engine: SyncEngine) async throws -> Int {
+        defer {
+            // Earlier pages remain durable when a later page fails. Reconcile
+            // even on that failure, before any future local incremental append.
+            reconcileProjection()
+            refreshPendingCount()
+        }
+        return try await engine.pull()
+    }
+
+    private func acquirePreparedSentences(_ engine: SyncEngine,
+                                          snapshot: PoolSnapshot) async {
+        let required = Set(snapshot.entries.filter { $0.pool == .reviewing }.map {
+            Projection.Key(itemType: $0.itemType, key: $0.key, senseId: $0.senseId)
+        })
+        let deadline = Date().addingTimeInterval(45)
+        do {
+            for attempt in 0..<24 {
+                guard !drainRequested else { return }
+                guard Date() < deadline else { break }
+                let pool = try await engine.fetchSentences(allowCachedFallback: false)
+                // The cache is already durable before observers see this pool.
+                adoptSentences(pool)
+                guard !drainRequested else { return }
+                let items = pool.items.filter {
+                    required.contains(Projection.Key(itemType: $0.item_type,
+                                                     key: $0.item_key, senseId: $0.sense_id))
+                }
+                let ready = Set(items.filter {
+                    $0.preparation_state == "ready" && SentencePreparation.isReady($0)
+                }.map {
+                    Projection.Key(itemType: $0.item_type, key: $0.item_key, senseId: $0.sense_id)
+                })
+                if required.isSubset(of: ready) {
+                    preparationStatus = .idle
+                    return
+                }
+                let failed = items.filter { $0.preparation_state == "failed" }
+                let failedKeys = Set(failed.map {
+                    Projection.Key(itemType: $0.item_type, key: $0.item_key, senseId: $0.sense_id)
+                })
+                if required.isSubset(of: ready.union(failedKeys)), let first = failed.first {
+                    preparationStatus = .failed(
+                        first.preparation_error ?? "双语句子准备失败，请稍后重试")
+                    return
+                }
+                preparationStatus = .running
+                if attempt < 23 {
+                    try await Task.sleep(for: .seconds(2))
+                }
+            }
+            preparationStatus = .waiting
+        } catch {
+            notePreparationFailure(error)
+        }
+    }
+
+    private func notePreparationFailure(_ error: Error) {
+        if let transport = error as? TransportError {
+            switch transport {
+            case .offline:
+                preparationStatus = .offline
+            case .server(let status, _):
+                preparationStatus = .failed("同步或获取句子失败（HTTP \(status)），请稍后重试")
+            case .upgradeRequired:
+                preparationStatus = .failed("请更新 App 后继续同步")
+            case .malformed:
+                preparationStatus = .failed("服务器的句子或同步响应无法读取，请稍后重试")
+            }
+        } else {
+            preparationStatus = .failed("同步或保存句子失败，请稍后重试")
+        }
+        log?.write(.warn, "review.preparation.failed", "同步或备句未完成",
+                   fields: ["error": error.localizedDescription])
     }
 }
 

@@ -22,7 +22,7 @@ from backend.core.db import get_connection
 from backend.core.logging import get_logger
 from backend.modules.reading import repository as reading_repository
 from backend.modules.review import (
-    clock, repository, sentences, session, translate,
+    clock, preparation, repository, sentences, session, translate,
 )
 from backend.modules.progress import module as progress_module
 from backend.modules.review.contract import (
@@ -145,6 +145,7 @@ async def sentence_pool(device_id: DeviceId) -> dict[str, Any]:
             "sentences": [sentences.as_card(s)
                           for s in sentences._rows(item_key, sense_id,
                                                    item_type=item_type)],
+            **preparation.status(item_type, item_key, sense_id),
         })
 
     log.info(

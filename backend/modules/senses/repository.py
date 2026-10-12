@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from uuid import uuid4
 from datetime import datetime, timezone
 from typing import Any
 
@@ -243,8 +244,7 @@ def store_dictionary_senses(headword: str, senses: list[dict[str, Any]], *,
 
     inserted = updated = stored_examples = 0
     try:
-        # ① Retire first, which also frees the ordinals — otherwise renumbering
-        #    below collides with UNIQUE (headword, ordinal).
+        # Retire only rows owned by this source.
         for sense_id in retired_ids:
             _retire(conn, sense_id, f"not in {source_dict}")
 
@@ -255,8 +255,16 @@ def store_dictionary_senses(headword: str, senses: list[dict[str, Any]], *,
             (headword, source_dict),
         )
 
-        # ③ Update or insert, renumbering 1..N in document order.
-        for ordinal, (sense, key) in enumerate(zip(senses, assigned), start=1):
+        # Ordinals are presentation positions shared by every source of a word.
+        occupied = {r[0] for r in conn.execute(
+            "SELECT ordinal FROM senses WHERE headword = ?"
+            " AND COALESCE(source_dict, '') != ?", (headword, source_dict),
+        )}
+        ordinal = 0
+        for sense, key in zip(senses, assigned):
+            ordinal += 1
+            while ordinal in occupied:
+                ordinal += 1
             block = int(sense["source_block"])
             row = existing.get(block)
             values = (
@@ -313,6 +321,117 @@ def store_dictionary_senses(headword: str, senses: list[dict[str, Any]], *,
         events.emit("senses.replaced", headword=headword,
                     previous_ids=retired_ids, count=len(senses))
     return (inserted, updated, len(retired_ids), stored_examples)
+
+
+DERIVED_SOURCE = "collins-derived-2012-2017"
+
+
+def derived_sense(source_key: str) -> dict[str, Any] | None:
+    row = get_connection("content").execute(
+        "SELECT d.*, s.concept_en FROM derived_sense_sources d"
+        " JOIN senses s ON s.id = d.sense_id WHERE d.source_key = ?", (source_key,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def derived_sense_for(payload: dict[str, Any]) -> dict[str, Any] | None:
+    existing = derived_sense(payload["source_key"])
+    if existing:
+        original = json.loads(existing["provenance"])
+        incoming = json.loads(json.dumps(payload))
+        original["dictionary_files"] = sorted((original.get("dictionary_files") or {}).values())
+        incoming["dictionary_files"] = sorted((incoming.get("dictionary_files") or {}).values())
+        for field in ("headword", "parent", "parent_block", "section", "dictionary_files",
+                      "parent_2012", "runon_2012", "parent_2017", "runon_2017"):
+            if original.get(field) != incoming.get(field):
+                raise ValueError(f"{payload['source_key']} 的词典来源改变，需显式核对映射，不重写已有义项")
+    return existing
+
+
+def reopen_derived_zero_tokens(headwords: list[str]) -> list[int]:
+    """Reopen only the newly learnable zero annotations; ids/positions survive."""
+    conn = get_connection("content")
+    reopened = []
+    try:
+        for word in headwords:
+            owned = [s["id"] for s in senses_of(word)
+                     if s.get("source_dict") == DERIVED_SOURCE]
+            if not owned or not any(conn.execute(
+                "SELECT 1 FROM derived_sense_sources WHERE sense_id = ?", (sense_id,),
+            ).fetchone() for sense_id in owned):
+                continue
+            ids = [r[0] for r in conn.execute(
+                "SELECT id FROM reading_tokens"
+                " WHERE headword = ? AND kind = 'content' AND sense_id = 0", (word,),
+            )]
+            conn.execute(
+                "UPDATE reading_tokens SET sense_id = NULL, sense_ordinal = NULL"
+                " WHERE headword = ? AND kind = 'content' AND sense_id = 0", (word,),
+            )
+            reopened.extend(ids)
+        conn.commit()
+        return reopened
+    except Exception:
+        conn.rollback()
+        raise
+
+
+def store_derived_sense(payload: dict[str, Any], concept_en: str, *,
+                        provider: str, model: str, prompt: str, response: str) -> int:
+    """Append one resolved attachment; never replace any word's inventory."""
+    conn = get_connection("content")
+    word = payload["headword"]
+    fields = payload["runon_2017"]
+    if not all(str(fields.get(k) or "").strip() for k in ("pos", "pos_zh", "gloss_zh")):
+        raise ValueError("派生小节缺少词典字段")
+    if not concept_en.strip():
+        raise ValueError("派生义项缺少英文定义")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = derived_sense_for(payload)
+        if existing:
+            conn.commit()
+            return int(existing["sense_id"])
+        if conn.execute(
+            "SELECT 1 FROM senses WHERE headword = ?"
+            " AND COALESCE(source_dict, '') != ? LIMIT 1", (word, DERIVED_SOURCE),
+        ).fetchone():
+            raise ValueError(f"{word} 已有主词义项，不覆盖或混入补缺义项")
+        ordinal = conn.execute(
+            "SELECT COALESCE(MAX(ordinal), 0) + 1 FROM senses WHERE headword = ?", (word,),
+        ).fetchone()[0]
+        block = conn.execute(
+            "SELECT COALESCE(MAX(source_block), -1) + 1 FROM senses"
+            " WHERE headword = ? AND source_dict = ?", (word, DERIVED_SOURCE),
+        ).fetchone()[0]
+        cursor = conn.execute(
+            "INSERT INTO senses (headword, ordinal, concept_en, gloss_zh, pos, pos_zh,"
+            " sense_key, source_dict, source_block, model, created_at)"
+            " VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (word, ordinal, concept_en.strip(), fields["gloss_zh"], fields["pos"],
+             fields["pos_zh"], f"derived:{uuid4().hex}", DERIVED_SOURCE, block, model, _now()),
+        )
+        sense_id = int(cursor.lastrowid)
+        conn.execute(
+            "INSERT INTO derived_sense_sources (source_key, sense_id, headword,"
+            " parent_headword, parent_block, runon_section, provenance,"
+            " definition_provider, definition_model, definition_prompt,"
+            " definition_response, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            (payload["source_key"], sense_id, word, payload["parent"], payload["parent_block"],
+             payload["section"], json.dumps(payload, ensure_ascii=False),
+             provider, model, prompt, response, _now()),
+        )
+        conn.executemany(
+            "INSERT INTO sense_examples (sense_id, text_en, gloss_zh, source, created_at)"
+            " VALUES (?,?,?,?,?)",
+            [(sense_id, en, zh or None, "collins-cobuild-2012-runon", _now())
+             for en, zh in payload["runon_2012"]["examples"]],
+        )
+        conn.commit()
+        return sense_id
+    except Exception:
+        conn.rollback()
+        raise
 
 
 def sense_by_id(sense_id: int) -> dict[str, Any] | None:
